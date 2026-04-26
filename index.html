@@ -535,7 +535,10 @@ let filtrosAtuais = {}
 window.addEventListener('load', () => {
   document.getElementById('lCpf').addEventListener('input', e => {
     let v = e.target.value.replace(/\D/g,'')
-    if(v.length<=11) e.target.value = v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4').replace(/(\d{3})(\d{3})(\d{0,3})/,'$1.$2.$3').replace(/(\d{3})(\d{0,3})/,'$1.$2')
+    if(v.length<=3) e.target.value = v
+    else if(v.length<=6) e.target.value = v.slice(0,3)+'.'+v.slice(3)
+    else if(v.length<=9) e.target.value = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6)
+    else e.target.value = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9,11)
   })
   document.getElementById('lSenha').addEventListener('keydown', e => { if(e.key==='Enter') fazerLogin() })
   verificarConexao()
@@ -584,7 +587,7 @@ async function fazerLogin() {
 
     const u = data[0]
     if(u.senha_hash !== senha) { mostrarErro('Senha incorreta.'); return }
-    if(setorial !== 'ADMIN' && u.perfil !== 'superadmin' && u.setorial_id !== setorial) {
+    if(u.perfil !== "superadmin" && u.setorial_id !== setorial) {
       mostrarErro('Você não tem acesso a esta setorial.')
       return
     }
