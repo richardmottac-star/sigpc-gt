@@ -1108,7 +1108,8 @@ async function prodCarregar() {
     })
 
     // Buscar grupos do estoque
-    const { data: estGrupos } = await db.from('estoque').select('tecnico_nome,grupo').eq('setorial_id', sid||'FCEE').not('tecnico_nome','is',null)
+    const { data: estGruposRaw } = await db.from('estoque').select('tecnico_nome,grupo').eq('setorial_id', sid||'FCEE')
+    const estGrupos = (estGruposRaw||[]).filter(r => r.tecnico_nome)
     const mapaGrupo = {}
     ;(estGrupos||[]).forEach(r => { if(r.tecnico_nome && !mapaGrupo[r.tecnico_nome]) mapaGrupo[r.tecnico_nome] = r.grupo })
 
