@@ -1124,11 +1124,11 @@ async function prodCarregar() {
       }
     })
 
-    // Buscar grupos do estoque
-    const { data: estGruposRaw } = await db.from('estoque').select('tecnico_nome,grupo').eq('setorial_id', sid||'FCEE')
-    const estGrupos = (estGruposRaw||[]).filter(r => r.tecnico_nome)
+    // Buscar grupos por analista via rota dedicada
+    const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
+    const jGrupos = await rGrupos.json()
     const mapaGrupo = {}
-    ;(estGrupos||[]).forEach(r => { if(r.tecnico_nome && !mapaGrupo[r.tecnico_nome]) mapaGrupo[r.tecnico_nome] = r.grupo })
+    ;(jGrupos.data||[]).forEach(r => { mapaGrupo[r.tecnico_nome] = r.grupo })
 
     const COORD = {1:'Nayara',2:'Zadir',3:'FCEE'}
     _prodDados = users.map(u => {
@@ -1669,9 +1669,8 @@ async function buscarPlan() {
   const busca = document.getElementById('plBusca')?.value.trim()||''
   const sit   = document.getElementById('plSit')?.value||''
   const pag   = window._planPag||0
-  const from  = pag*PP, to = from+PP-1
+  const from  = pag*PP
 
-  // Nome na planilha = mapeamento correto
   const MAPA_PLANILHA = {
     'Sandra Paul':'Sandra Paul', 'Sandra Rocha':'Sandra Rocha',
     'Ana Claudia':'Ana Claudia', 'Ana Leticia':'Ana Leticia',
@@ -1681,26 +1680,27 @@ async function buscarPlan() {
     'Zadir Teresinha Machado Ferreira':'Zadir',
   }
   const nomeNaPlanilha = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
-  console.log('DEBUG busca planilha:', nomeNaPlanilha, '| U.nome:', U.nome)
 
   try {
-    let q = db.from('planilha_analista')
-      .select('*',{count:'exact'})
-      .ilike('analista', nomeNaPlanilha+'%')
-    if(sit) q = q.eq('situacao', sit)
-    if(busca) q = q.or(`entidade.ilike.%${busca}%,tr.ilike.%${busca}%,sgpe.ilike.%${busca}%`)
-    q = q.order('tr').order('parcela').range(from,to)
+    // Usar rota /completa que faz JOIN com estoque para trazer todos os campos
+    const params = new URLSearchParams({
+      analista: nomeNaPlanilha,
+      setorial_id: U.setorialFiltro || 'FCEE',
+      limit: PP,
+      offset: from,
+    })
+    if(sit) params.set('situacao', sit)
+    if(busca) params.set('busca', busca)
 
-    const { data, count, error } = await q
-    console.log('DEBUG resultado:', {count, dataLen: data?.length, error: error?.message})
-    if(error) throw error
+    const r = await fetch(`${API_URL}/planilha_analista/completa?${params}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
-    window._planTot = count||0
-    renderPlan(data||[])
+    window._planTot = j.count||0
+    renderPlan(j.data||[])
     planRenderPag()
 
-    // Stats de produtividade
-    const baixadas = (data||[]).filter(r=>r.baixada).length
+    const baixadas = (j.data||[]).filter(r=>r.baixada).length
     document.getElementById('planCont').textContent = `${window._planTot} registros`
     document.getElementById('planInfo').textContent = `${baixadas} baixadas nesta página — Situações que contam: Parecer Regular, Parecer com Ressalva, Parecer Irregular`
   } catch(e) {
@@ -1724,14 +1724,19 @@ function renderPlan(rows) {
   tbody.innerHTML = rows.map((r,i) => {
     const sitOpts = SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
     const bx = r.baixada ? '<span class="bdg bdg-livre">✓ Sim</span>' : '<span class="bdg bdg-analise">Não</span>'
+    // campos do JOIN com estoque
+    const entidade = r.entidade || r.beneficiario || '—'
+    const sgpe = r.sgpe || r.processo_sgp || '—'
+    const procMae = r.processo_mae || '—'
+    const vlRepasse = r.valor_repasse ? `R$ ${parseFloat(r.valor_repasse).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'
     return `<tr id="planRow${r.id}" ${r.baixada?'style="background:#F0FAF4;"':''}>
       <td style="font-size:10px;color:var(--ct);">${(window._planPag*PP)+i+1}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;" title="${r.entidade||''}">${r.entidade||'—'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;" title="${entidade}">${entidade}</td>
       <td style="font-size:11px;font-weight:600;">${r.tr||'—'}</td>
-      <td style="font-size:10px;">${r.sgpe||'—'}</td>
+      <td style="font-size:10px;">${sgpe}</td>
       <td style="text-align:center;">${r.parcela||'—'}</td>
-      <td style="font-size:10px;">${r.processo_mae||'—'}</td>
-      <td style="font-size:10px;white-space:nowrap;">${r.valor_repasse||'—'}</td>
+      <td style="font-size:10px;">${procMae}</td>
+      <td style="font-size:10px;white-space:nowrap;">${vlRepasse}</td>
       <td style="font-size:10px;white-space:nowrap;">${r.valor_parcial||'—'}</td>
       <td>
         <select style="border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:11px;font-family:Barlow,sans-serif;min-width:160px;"
