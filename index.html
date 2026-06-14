@@ -390,7 +390,7 @@ class QueryBuilder {
     this._tabela = tabela
     this._filters = {}
     this._orFilter = null
-    this._order = null
+    this._orders = []
     this._limitVal = null
     this._offsetVal = null
     this._selectCols = '*'
@@ -419,13 +419,18 @@ class QueryBuilder {
 
   or(expr) {
     // Exemplo: "tr.ilike.%texto%,beneficiario.ilike.%texto%"
-    const match = expr.match(/(\w+)\.ilike\.%(.+)%/)
-    if (match) this._filters['busca'] = match[2]
+    const termos = [...String(expr).matchAll(/\w+\.ilike\.%([^%]+)%/g)]
+      .map(m => m[1])
+      .filter(Boolean)
+    if (termos.length) this._filters['busca'] = termos[0]
     return this
   }
 
   in(col, vals) { this._filters[col] = { op:'in', vals }; return this }
-  order(col, opts) { this._order = col; return this }
+  order(col, opts={}) {
+    this._orders.push(opts.ascending === false ? `-${col}` : col)
+    return this
+  }
   limit(n) { this._limitVal = n; return this }
   range(from, to) {
     this._offsetVal = from
@@ -444,17 +449,18 @@ class QueryBuilder {
   async _execute() {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(this._filters)) {
-      if (typeof v === 'object' && v.op === 'ilike') {
+      if (v && typeof v === 'object' && v.op === 'ilike') {
         params.set(k, v.val)  // passa o valor de busca como parâmetro com o nome do campo
         params.set('_ilike_'+k, '1')  // sinaliza que é ilike
       }
-      else if (typeof v === 'object' && v.op === 'gte') params.set('_gte_'+k, v.val)
-      else if (typeof v === 'object' && v.op === 'in') params.set(k, v.vals.join(','))
+      else if (v && typeof v === 'object' && v.op === 'gte') params.set('_gte_'+k, v.val)
+      else if (v && typeof v === 'object' && v.op === 'in') params.set(k, v.vals.join(','))
       else params.set(k, v)
     }
     if (this._limitVal) params.set('limit', this._limitVal)
     else params.set('limit', '9999')  // sem limit explícito = buscar tudo
     if (this._offsetVal !== null) params.set('offset', this._offsetVal)
+    if (this._orders.length) params.set('order', this._orders.join(','))
 
     let url = `${API_URL}/${this._tabela}`
     if (this._id) url += `/${this._id}`
@@ -659,10 +665,10 @@ function renderSB() {
       <div class="sb-item" id="mi-repo" onclick="irRepo()">
         <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Repositório
       </div>
-      ${isCoordi ? `<div class="sb-item" id="mi-rel" onclick="irRel()">
+      <div class="sb-item" id="mi-rel" onclick="irRel()">
         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
-        ${U.perfil==='superadmin'?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADMIN</span>':''}
-      </div>` : ''}
+        ${isCoordi?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADM</span>':''}
+      </div>
     </div>
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
@@ -726,13 +732,17 @@ async function carregarContadores() {
       return q
     }
 
+    // Contagem NLs baixadas via fetch direto para garantir compatibilidade com a API
+    const nlBxPromise = fetch(`${API_URL}/notas_liquidacao?baixada=true&limit=1`)
+      .then(r=>r.json()).then(j=>({count: j.count||0})).catch(()=>({count:0}))
+
     const [r1,r2,r3,r4,r5,r6] = await Promise.all([
       fq('estoque'),
       fq('estoque', q=>q.eq('status','livre')),
       fq('estoque', q=>q.eq('status','analise')),
       fq('estoque', q=>q.eq('status','dev_pendente')),
       db.from('repositorio').select('id',{count:'exact',head:true}),
-      fq('notas_liquidacao', q=>q.eq('baixada',true))
+      nlBxPromise
     ])
 
     DASH = {
@@ -807,7 +817,7 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="Digite..." style="width:200px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="Digite..." style="width:200px;" onkeydown="if(event.key==='Enter')novaBusca()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
@@ -817,7 +827,7 @@ function irEst() {
         </select>
       </div>
       ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
-      <button class="btn-buscar" onclick="buscar()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
+      <button class="btn-buscar" onclick="novaBusca()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
       <button class="btn-limpar" onclick="limparF()">✕ Limpar</button>
     </div>
     <div class="tbl-wrap">
@@ -937,7 +947,12 @@ function renderPag() {
   document.getElementById('btnPrx').disabled = PAG>=total-1
 }
 
-function pg(d) { PAG+=d; buscar() }
+function novaBusca() { PAG = 0; buscar() }
+function pg(d) {
+  const total = Math.ceil(TOT/PP)||1
+  PAG = Math.min(Math.max(PAG + d, 0), total - 1)
+  buscar()
+}
 function limparF() {
   ['fBusca','fSt','fSec'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
   PAG=0; buscar()
@@ -1060,10 +1075,18 @@ const MAPA_PROD = {
 
 async function irProd() {
   ativarMenu('prod')
+  const isAdmin = U.setorialAcesso === 'ADMIN'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:16px;font-weight:700;">Produtividade (NL)</div>
       <div style="display:flex;gap:6px;align-items:center;">
+        ${isAdmin?`<div class="fg"><label style="font-size:10px;">Setorial</label>
+          <select id="prodFiltSetorial" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
+            <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
+            <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
+          </select>
+        </div>`:''}
         <div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
           <select id="prodFiltGrupo" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
             <option value="">Todos</option>
@@ -1100,12 +1123,12 @@ async function prodCarregar() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
-    const sid = U.setorialFiltro
+    const sid = U.setorialFiltro || document.getElementById('prodFiltSetorial')?.value || 'FCEE'
     const grupoF = document.getElementById('prodFiltGrupo')?.value||''
-    let q = db.from('usuarios').select('*').eq('ativo',true).eq('perfil','analista')
-    if(sid) q = q.eq('setorial_id',sid)
-    const { data: users } = await q
-    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
+    const isAdmin = U.setorialAcesso === 'ADMIN'
+    let q = db.from('usuarios').select('*').eq('ativo',true)
+    if(sid && !isAdmin) q = q.eq('setorial_id',sid)
+    const { data: todosUsers } = await q
 
     // Buscar toda planilha_analista de uma vez
     const { data: todaPlan } = await db.from('planilha_analista').select('analista,baixada,situacao').eq('setorial_id', sid||'FCEE')
@@ -1123,6 +1146,14 @@ async function prodCarregar() {
         else mapaStats[a].analise++
       }
     })
+
+    // Incluir analistas da setorial e usuários mapeados que tenham produção nela (ex: superadmin que também analisa)
+    const users = (todosUsers||[]).filter(u => {
+      const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
+      const ehAnalistaSetorial = u.perfil === 'analista' && (!sid || u.setorial_id === sid)
+      return ehAnalistaSetorial || !!mapaStats[nomePlan]
+    })
+    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
 
     // Buscar grupos por analista via rota dedicada
     const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
@@ -1156,7 +1187,7 @@ function prodRender(dados) {
           <div class="prod-nome">${u.nome.split(' ')[0]}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
         </div>
-        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">FCEE — Técnico/Analista</div>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">${u.setorial_id||sid} — Técnico/Analista</div>
         <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct}%;background:${cor}"></div></div>
         <div class="prod-nums" style="margin-top:5px;">
           <span>📋 ${total} assumidas</span>
@@ -1226,6 +1257,7 @@ function prodRender(dados) {
 
 function prodExportExcel() {
   const dados = _prodDados
+  if(!dados.length) { toast('Não há dados de produtividade para exportar.','err'); return }
   let csv = '\uFEFF#;Analista;Grupo;Coordenador;Total;Baixadas;Em Análise;Diligência;Pendentes;% Concluído\n'
   dados.forEach((d,i) => {
     csv += `${i+1};${d.u.nome.split(' ')[0]};${d.grupo||'—'};${d.coord};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.total-d.baixadas};${d.pct}%\n`
@@ -1238,6 +1270,8 @@ function prodExportExcel() {
 
 function prodExportPDF() {
   const dados = _prodDados
+  if(!dados.length) { toast('Não há dados de produtividade para exportar.','err'); return }
+  const sid = U.setorialFiltro || document.getElementById('prodFiltSetorial')?.value || 'FCEE'
   const dt = new Date().toLocaleDateString('pt-BR')
   const linhas = dados.map((d,i) => {
     const cor = d.pct>70?'#E8F5EE':d.pct>40?'#FFF8E1':'#FFEBEE'
@@ -1257,7 +1291,7 @@ function prodExportPDF() {
     td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
     tfoot tr{background:#F5F8F6;font-weight:bold;}</style></head><body>
     <h2>SIGPC-GT — Produtividade por Analista</h2>
-    <p>Gerado em ${dt} | FCEE | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
+    <p>Gerado em ${dt} | ${sid} | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
     <table><thead><tr><th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
     <th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Pendentes</th><th>%</th></tr></thead>
     <tbody>${linhas}</tbody>
@@ -1265,10 +1299,7 @@ function prodExportPDF() {
     <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${totTotal-totBx}</td>
     <td>${totTotal>0?Math.round(totBx/totTotal*100):0}%</td></tr></tfoot>
     </table></body></html>`
-  const w = window.open('','_blank')
-  w.document.write(html)
-  w.document.close()
-  w.print()
+  imprimirHtml(html)
 }
 
 // ══════════════════════════════════════
@@ -1321,12 +1352,16 @@ function irRel() {
   ativarMenu('rel')
   const isAdmin = U.perfil==='superadmin'
   const isCoordi = U.perfil==='coordenador'
-  if(!isAdmin && !isCoordi) {
-    document.getElementById('BODY').innerHTML='<div style="padding:40px;text-align:center;color:var(--ct);">⛔ Acesso restrito ao Superadmin e Coordenadores.</div>'
-    return
-  }
   document.getElementById('BODY').innerHTML = `
-    <div style="font-size:16px;font-weight:700;margin-bottom:14px;">📊 Relatórios — SIGPC-GT</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:16px;font-weight:700;">📊 Relatórios — SIGPC-GT</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="relMudaAba('geral')" id="relAbaGeral" style="padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;border-radius:6px;cursor:pointer;">Analítico</button>
+        ${(isAdmin||isCoordi)?`<button onclick="relMudaAba('cge')" id="relAbaCGE" style="padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;">CGE</button>`:''}
+      </div>
+    </div>
+    <!-- PAINEL ANALÍTICO -->
+    <div id="relPainelGeral">
     <!-- FILTROS -->
     <div class="filtros" style="flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div class="fg"><label>Tipo de Relatório</label>
@@ -1409,8 +1444,189 @@ function irRel() {
     <div id="relMsg" style="text-align:center;color:var(--ct);padding:30px;font-size:13px;">
       Selecione os filtros e clique em <strong>Gerar</strong> para visualizar o relatório.
     </div>
+    </div>
+    <!-- PAINEL CGE -->
+    <div id="relPainelCGE" style="display:none;">
+      <div style="background:#fff;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--te);margin-bottom:10px;">Relatório CGE — Situação Geral das Prestações de Contas</div>
+        <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">Formato consolidado para envio à Controladoria Geral do Estado. Exibe totais por analista, situação e percentual de conclusão.</div>
+        <div class="filtros" style="gap:10px;flex-wrap:wrap;">
+          <div class="fg"><label>Setorial</label>
+            <select id="cgeSetorial" style="min-width:140px;">
+              <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
+              <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
+              <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px;">
+            <button class="btn-buscar" onclick="cgeGerar()">📊 Gerar Relatório CGE</button>
+            <button onclick="cgeExportExcel()" style="background:#1B5E20;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;height:32px;">📥 Excel CGE</button>
+            <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;height:32px;">📄 PDF CGE</button>
+          </div>
+        </div>
+      </div>
+      <div id="cgeCont"><div style="text-align:center;color:var(--ct);padding:30px;">Clique em <strong>Gerar Relatório CGE</strong> para visualizar.</div></div>
+    </div>
   `
   relCarregarAnalistas()
+}
+
+let _relAbaAtual = 'geral'
+function relMudaAba(aba) {
+  _relAbaAtual = aba
+  document.getElementById('relPainelGeral').style.display = aba==='geral' ? '' : 'none'
+  document.getElementById('relPainelCGE').style.display = aba==='cge' ? '' : 'none'
+  const bG = document.getElementById('relAbaGeral')
+  const bC = document.getElementById('relAbaCGE')
+  if(bG) { bG.style.background = aba==='geral'?'var(--v)':'#fff'; bG.style.color = aba==='geral'?'#fff':'var(--ct)'; bG.style.border = aba==='geral'?'none':'1.5px solid var(--cb)' }
+  if(bC) { bC.style.background = aba==='cge'?'var(--az)':'#fff'; bC.style.color = aba==='cge'?'#fff':'var(--ct)'; bC.style.border = aba==='cge'?'none':'1.5px solid var(--cb)' }
+}
+
+let _cgeDados = []
+async function cgeGerar() {
+  const cont = document.getElementById('cgeCont')
+  const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
+  try {
+    const { data } = await db.from('planilha_analista').select('*').eq('setorial_id', sid)
+    if(!data||!data.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
+
+    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+    const mapaAn = {}
+    data.forEach(r => {
+      const a = r.analista||'—'
+      if(!mapaAn[a]) mapaAn[a] = {analista:a, total:0, baixadas:0, analise:0, dilig:0, ctrl:0}
+      mapaAn[a].total++
+      if(SITS_BAIXA.has(r.situacao)) mapaAn[a].baixadas++
+      else {
+        const sit = (r.situacao||'').toLowerCase()
+        if(sit.includes('diligên')||sit.includes('diligenc')) mapaAn[a].dilig++
+        else if(sit.includes('controle')) mapaAn[a].ctrl++
+        else mapaAn[a].analise++
+      }
+    })
+    _cgeDados = Object.values(mapaAn).sort((a,b)=>a.analista.localeCompare(b.analista))
+    const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
+    const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+    const totAn = _cgeDados.reduce((s,d)=>s+d.analise,0)
+    const totDil = _cgeDados.reduce((s,d)=>s+d.dilig,0)
+    const totCtrl = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
+    const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
+    const dt = new Date().toLocaleDateString('pt-BR')
+
+    cont.innerHTML = `
+      <div style="background:linear-gradient(135deg,#1B5E20,#2E7D32);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;">RELATÓRIO CGE — ${sid}</div>
+          <div style="font-size:11px;opacity:.8;">Gerado em ${dt} | SIGPC-GT v2.1</div>
+        </div>
+        <div style="display:flex;gap:16px;text-align:center;">
+          <div><strong style="font-size:22px;">${totTotal}</strong><div style="font-size:9px;opacity:.8;">TOTAL</div></div>
+          <div><strong style="font-size:22px;">${totBx}</strong><div style="font-size:9px;opacity:.8;">CONCLUÍDAS</div></div>
+          <div><strong style="font-size:22px;">${totPct}%</strong><div style="font-size:9px;opacity:.8;">CONCLUÍDO</div></div>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <div style="overflow-x:auto;"><table id="cgeTabela"><thead><tr>
+          <th>#</th><th>Analista</th><th style="text-align:center;">Total PC</th>
+          <th style="text-align:center;color:var(--v);">Concluídas</th>
+          <th style="text-align:center;color:var(--az);">Em Análise</th>
+          <th style="text-align:center;color:var(--am);">Diligência</th>
+          <th style="text-align:center;color:#283593;">Ctrl. Interno</th>
+          <th style="text-align:center;">% Concluído</th>
+          <th style="text-align:center;">Andamento</th>
+        </tr></thead><tbody>
+          ${_cgeDados.map((d,i)=>{
+            const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
+            const cor = pct>=70?'var(--v)':pct>=40?'var(--am)':'var(--r)'
+            const bg = pct>=70?'#E8F5EE':pct>=40?'#FFF8E1':'#FFEBEE'
+            return `<tr style="background:${bg}">
+              <td style="font-size:10px;color:var(--ct);">${i+1}</td>
+              <td style="font-weight:700;font-size:12px;">${d.analista}</td>
+              <td style="text-align:center;font-size:12px;font-weight:700;">${d.total}</td>
+              <td style="text-align:center;font-size:12px;font-weight:800;color:var(--v);">${d.baixadas}</td>
+              <td style="text-align:center;font-size:12px;color:var(--az);">${d.analise}</td>
+              <td style="text-align:center;font-size:12px;color:var(--am);">${d.dilig}</td>
+              <td style="text-align:center;font-size:12px;color:#283593;">${d.ctrl}</td>
+              <td style="text-align:center;font-weight:800;color:${cor};">${pct}%</td>
+              <td style="min-width:100px;">
+                <div style="background:#E8EEEB;border-radius:6px;height:8px;">
+                  <div style="height:8px;border-radius:6px;background:${cor};width:${pct}%;transition:width .5s;"></div>
+                </div>
+              </td>
+            </tr>`}).join('')}
+        </tbody><tfoot><tr style="background:#F5F8F6;font-weight:700;border-top:2px solid var(--cb);">
+          <td colspan="2" style="font-size:11px;padding:8px 11px;">TOTAL GERAL — ${_cgeDados.length} analistas</td>
+          <td style="text-align:center;">${totTotal}</td>
+          <td style="text-align:center;color:var(--v);">${totBx}</td>
+          <td style="text-align:center;color:var(--az);">${totAn}</td>
+          <td style="text-align:center;color:var(--am);">${totDil}</td>
+          <td style="text-align:center;color:#283593;">${totCtrl}</td>
+          <td style="text-align:center;">${totPct}%</td>
+          <td></td>
+        </tr></tfoot></table></div>
+      </div>`
+  } catch(e) { cont.innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
+}
+
+function cgeExportExcel() {
+  if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
+  const sid = document.getElementById('cgeSetorial')?.value||'FCEE'
+  const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
+  const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
+  const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+  let csv = `\uFEFFRELATÓRIO CGE — SIGPC-GT v2.1\nSetorial: ${sid}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\n`
+  csv += '#;Analista;Total PC;Concluídas;Em Análise;Diligência;Ctrl. Interno;% Concluído\n'
+  _cgeDados.forEach((d,i)=>{
+    const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
+    csv += `${i+1};${d.analista};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.ctrl};${pct}%\n`
+  })
+  csv += `TOTAL;${_cgeDados.length} analistas;${totTotal};${totBx};;;;\n`
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
+  a.download=`relatorio_cge_${sid}_${dt}.csv`; a.click()
+}
+
+function cgeExportPDF() {
+  if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
+  const sid = document.getElementById('cgeSetorial')?.value||'FCEE'
+  const dt = new Date().toLocaleDateString('pt-BR')
+  const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
+  const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+  const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
+  const linhas = _cgeDados.map((d,i)=>{
+    const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
+    const bg = pct>=70?'#E8F5EE':pct>=40?'#FFF8E1':'#FFEBEE'
+    return `<tr style="background:${bg}"><td>${i+1}</td><td><b>${d.analista}</b></td>
+      <td>${d.total}</td><td style="color:#006B3C;font-weight:700;">${d.baixadas}</td>
+      <td>${d.analise}</td><td>${d.dilig}</td><td>${d.ctrl}</td><td><b>${pct}%</b></td></tr>`
+  }).join('')
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório CGE — ${sid}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}
+    .hdr{background:#1B5E20;color:#fff;padding:14px 18px;border-radius:6px;margin-bottom:14px;}
+    .hdr h2{margin:0 0 4px;font-size:16px;} .hdr p{margin:0;font-size:10px;opacity:.8;}
+    .stats{display:flex;gap:16px;margin-bottom:14px;}
+    .stat{background:#f5f5f5;border-radius:6px;padding:10px 16px;text-align:center;}
+    .stat strong{display:block;font-size:20px;} .stat span{font-size:9px;color:#666;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;}
+    th{background:#1B5E20;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}
+    td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
+    tfoot tr{background:#F5F8F6;font-weight:bold;}
+  </style></head><body>
+  <div class="hdr"><h2>RELATÓRIO CGE — SIGPC-GT v2.1 — ${sid}</h2>
+  <p>Gerado em ${dt} | ${_cgeDados.length} analistas | ${totBx}/${totTotal} concluídas (${totPct}%)</p></div>
+  <table><thead><tr><th>#</th><th>Analista</th><th>Total PC</th><th>Concluídas</th>
+    <th>Em Análise</th><th>Diligência</th><th>Ctrl. Interno</th><th>% Concluído</th></tr></thead>
+  <tbody>${linhas}</tbody>
+  <tfoot><tr><td colspan="2">TOTAL GERAL — ${_cgeDados.length} analistas</td>
+    <td>${totTotal}</td><td>${totBx}</td>
+    <td>${_cgeDados.reduce((s,d)=>s+d.analise,0)}</td>
+    <td>${_cgeDados.reduce((s,d)=>s+d.dilig,0)}</td>
+    <td>${_cgeDados.reduce((s,d)=>s+d.ctrl,0)}</td>
+    <td>${totPct}%</td></tr></tfoot>
+  </table></body></html>`
+  imprimirHtml(html)
 }
 
 async function relCarregarAnalistas() {
@@ -1537,7 +1753,11 @@ function relRenderTabela() {
   document.getElementById('relBtnPrx').disabled = _relPag>=totPag-1
 }
 
-function relPg(d) { _relPag += d; relRenderTabela() }
+function relPg(d) {
+  const total = Math.ceil(_relDados.length/REL_PP)||1
+  _relPag = Math.min(Math.max(_relPag + d, 0), total - 1)
+  relRenderTabela()
+}
 function relLimpar() {
   ['relTipo','relAnalista','relGrupo','relTR','relStatus','relSit'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value=''
@@ -1550,6 +1770,7 @@ function relLimpar() {
 }
 
 function relExportExcel() {
+  if(!_relDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
   let csv = '\uFEFF#;Analista;TR;Parcela;Processo SGP;Beneficiário;Situação;Baixada\n'
   _relDados.forEach((r,i) => {
@@ -1561,6 +1782,7 @@ function relExportExcel() {
 }
 
 function relExportPDF() {
+  if(!_relDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const dt = new Date().toLocaleDateString('pt-BR')
   const baixadas = _relDados.filter(r=>r.baixada).length
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório SIGPC-GT</title>
@@ -1578,7 +1800,7 @@ function relExportPDF() {
     <td>${r.processo_sgp||'—'}</td><td>${(r.beneficiario||'—').substring(0,50)}</td>
     <td>${r.situacao||'—'}</td><td class="${r.baixada?'bx':''}">${r.baixada?'✓ Sim':'Não'}</td>
   </tr>`).join('')}</tbody></table></body></html>`
-  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
+  imprimirHtml(html)
 }
 
 
@@ -1611,15 +1833,30 @@ async function primAcesso() {
 // ══════════════════════════════════════
 async function irPlanilha() {
   ativarMenu('plan')
-  const nomeAnalista = U.nome.split(' ')[0] // primeiro nome para match
   document.getElementById('BODY').innerHTML = `
-    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Minha Planilha de Análise</div>
-    <div style="font-size:12px;color:var(--ct);margin-bottom:12px;">Analista: <strong>${U.nome}</strong> — somente seus registros</div>
-    <div class="filtros">
-      <div class="fg"><label>Buscar Entidade / TR / SGPE</label><input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">Minha Planilha de Análise</div>
+        <div style="font-size:11px;color:var(--ct);">Analista: <strong>${U.nome}</strong></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="planMudaVis('lista')" id="planVisLista" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;border-radius:6px;cursor:pointer;">☰ Lista</button>
+        <button onclick="planMudaVis('cards')" id="planVisCards" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;">⊞ Cards</button>
+      </div>
+    </div>
+    <!-- Resumo estatístico -->
+    <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;"></div>
+    <!-- Filtros -->
+    <div class="filtros" style="margin-bottom:12px;">
+      <div class="fg"><label>Buscar Entidade / TR / SGPE</label>
+        <input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')novaBuscaPlan()">
+      </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
           <option value="">Todas</option>
+          <option value="ativo">▶ Em Andamento</option>
+          <option value="baixado">✓ Concluídas</option>
+          <option disabled>──────────</option>
           <option>Analisar</option><option>Análise</option><option>Diligência</option>
           <option>Reanalise</option><option>Reanálise</option>
           <option>Encaminhado para o Controle Interno</option>
@@ -1629,47 +1866,50 @@ async function irPlanilha() {
           <option>Parecer Irregular</option>
         </select>
       </div>
-      <button class="btn-buscar" onclick="buscarPlan()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
-      <button class="btn-limpar" onclick="limparPlan()">✕</button>
+      <button class="btn-buscar" onclick="novaBuscaPlan()">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar
+      </button>
+      <button class="btn-limpar" onclick="limparPlan()">✕ Limpar</button>
     </div>
-    <div class="tbl-wrap">
-      <div class="tbl-header"><strong id="planCont">Carregando...</strong><span id="planInfo" style="font-size:11px;color:var(--ct);"></span></div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead><tr>
-            <th>#</th><th>Entidade</th><th>TR (SIGEF)</th><th>SGPE</th><th>Parcela</th>
-            <th>Proc. Mãe</th><th>Vl. Repasse</th><th>Vl. Parcial</th>
-            <th>Situação</th><th>Nº Dilig.</th><th>Prazo Dilig.</th>
-            <th>Parecer</th><th>Ctrl. Interno</th><th>Baixa Sec.</th>
-            <th>Vl. Glosa</th><th>Motivo Glosa</th><th>Baixada?</th>
-          </tr></thead>
-          <tbody id="planBody"><tr><td colspan="17"><div class="loading"><div class="spin"></div>Carregando seus registros...</div></td></tr></tbody>
-        </table>
-      </div>
-      <div class="paginacao">
-        <span class="pag-info" id="planPagInf">—</span>
-        <div class="pag-btns">
-          <button class="pag-btn" id="planBtnAnt" onclick="planPg(-1)" disabled>◀</button>
-          <span id="planPagNum" style="padding:4px 8px;font-size:11px;color:var(--ct);">1</span>
-          <button class="pag-btn" id="planBtnPrx" onclick="planPg(1)">▶</button>
-        </div>
+    <!-- Área de conteúdo -->
+    <div id="planConteudo">
+      <div class="loading"><div class="spin"></div>Carregando seus registros...</div>
+    </div>
+    <!-- Paginação -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;margin-top:8px;" id="planPagArea">
+      <span class="pag-info" id="planPagInf">—</span>
+      <div class="pag-btns">
+        <button class="pag-btn" id="planBtnAnt" onclick="planPg(-1)" disabled>◀ Anterior</button>
+        <span id="planPagNum" style="padding:4px 8px;font-size:11px;color:var(--ct);">1</span>
+        <button class="pag-btn" id="planBtnPrx" onclick="planPg(1)">Próximo ▶</button>
       </div>
     </div>
   `
   window._planPag = 0
   window._planTot = 0
+  window._planVis = 'lista'
   buscarPlan()
 }
 
+function planMudaVis(vis) {
+  window._planVis = vis
+  const bL = document.getElementById('planVisLista')
+  const bC = document.getElementById('planVisCards')
+  if(bL) { bL.style.background = vis==='lista'?'var(--v)':'#fff'; bL.style.color = vis==='lista'?'#fff':'var(--ct)'; bL.style.border = vis==='lista'?'none':'1.5px solid var(--cb)' }
+  if(bC) { bC.style.background = vis==='cards'?'var(--v)':'#fff'; bC.style.color = vis==='cards'?'#fff':'var(--ct)'; bC.style.border = vis==='cards'?'none':'1.5px solid var(--cb)' }
+  // Re-render com os dados já carregados
+  if(window._planDadosCache) renderPlan(window._planDadosCache)
+}
+
 async function buscarPlan() {
-  const tbody = document.getElementById('planBody')
-  if(!tbody) return
-  tbody.innerHTML = '<tr><td colspan="17"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
+  const cont = document.getElementById('planConteudo')
+  if(!cont) return
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
   const busca = document.getElementById('plBusca')?.value.trim()||''
-  const sit   = document.getElementById('plSit')?.value||''
-  const pag   = window._planPag||0
-  const from  = pag*PP
+  let sit = document.getElementById('plSit')?.value||''
+  const pag = window._planPag||0
+  const from = pag*PP
 
   const MAPA_PLANILHA = {
     'Sandra Paul':'Sandra Paul', 'Sandra Rocha':'Sandra Rocha',
@@ -1681,13 +1921,17 @@ async function buscarPlan() {
   }
   const nomeNaPlanilha = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
 
+  // Filtros especiais
+  const filtroAtivo = sit === 'ativo'
+  const filtroBaixado = sit === 'baixado'
+  if(filtroAtivo || filtroBaixado) sit = ''
+
   try {
-    // Usar rota /completa que faz JOIN com estoque para trazer todos os campos
     const params = new URLSearchParams({
       analista: nomeNaPlanilha,
       setorial_id: U.setorialFiltro || 'FCEE',
-      limit: PP,
-      offset: from,
+      limit: 9999,
+      offset: 0,
     })
     if(sit) params.set('situacao', sit)
     if(busca) params.set('busca', busca)
@@ -1696,97 +1940,314 @@ async function buscarPlan() {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
-    window._planTot = j.count||0
-    renderPlan(j.data||[])
-    planRenderPag()
+    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+    let todos = j.data||[]
 
-    const baixadas = (j.data||[]).filter(r=>r.baixada).length
-    document.getElementById('planCont').textContent = `${window._planTot} registros`
-    document.getElementById('planInfo').textContent = `${baixadas} baixadas nesta página — Situações que contam: Parecer Regular, Parecer com Ressalva, Parecer Irregular`
+    // Filtrar por tipo (ativo/baixado)
+    if(filtroAtivo) todos = todos.filter(r => !SITS_BAIXA.has(r.situacao))
+    if(filtroBaixado) todos = todos.filter(r => SITS_BAIXA.has(r.situacao))
+
+    // Ordenar: ativos primeiro (por prioridade de situação), depois concluídos
+    const PRIO = {'Analisar':1,'Análise':2,'Diligência':3,'Reanalise':4,'Reanálise':4,'Encaminhado para o Controle Interno':5}
+    todos.sort((a,b) => {
+      const ba = SITS_BAIXA.has(a.situacao), bb = SITS_BAIXA.has(b.situacao)
+      if(ba !== bb) return ba ? 1 : -1
+      const pa = PRIO[a.situacao]||6, pb = PRIO[b.situacao]||6
+      return pa !== pb ? pa - pb : (a.tr||'').localeCompare(b.tr||'')
+    })
+
+    window._planTot = todos.length
+    window._planDadosCache = todos
+
+    // Paginação client-side
+    const pagData = todos.slice(from, from + PP)
+    renderPlan(pagData, todos)
+    planRenderPag()
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="17" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+    cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
 }
 
-function renderPlan(rows) {
-  const tbody = document.getElementById('planBody')
-  if(!tbody) return
+const PLAN_SITS = ['Analisar','Análise','Diligência','Reanalise','Reanálise',
+  'Encaminhado para o Controle Interno',
+  'Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular']
+const PLAN_SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+
+const PLAN_STATUS_STYLE = {
+  'Analisar':       {bg:'#E3F2FD',cor:'#1565C0',label:'ANALISAR',icone:'🔵'},
+  'Análise':        {bg:'#E3F2FD',cor:'#1565C0',label:'ANÁLISE', icone:'🔵'},
+  'Diligência':     {bg:'#FFF8E1',cor:'#E65100',label:'DILIGÊNCIA',icone:'🟡'},
+  'Reanalise':      {bg:'#F3E5F5',cor:'#6A1B9A',label:'REANÁLISE',icone:'🔴'},
+  'Reanálise':      {bg:'#F3E5F5',cor:'#6A1B9A',label:'REANÁLISE',icone:'🔴'},
+  'Encaminhado para o Controle Interno': {bg:'#E8EAF6',cor:'#283593',label:'CTRL. INTERNO',icone:'📋'},
+  'Parecer Regular':           {bg:'#E8F5EE',cor:'#006B3C',label:'✓ REGULAR',   icone:'✅'},
+  'Parecer Regular com Ressalva':  {bg:'#E8F5EE',cor:'#1B5E20',label:'✓ RESSALVA',icone:'✅'},
+  'Parecer Regular com Ressalvas': {bg:'#E8F5EE',cor:'#1B5E20',label:'✓ RESSALVAS',icone:'✅'},
+  'Parecer Irregular': {bg:'#FFEBEE',cor:'#C62828',label:'✗ IRREGULAR',icone:'❌'},
+}
+
+function renderPlan(rows, todos) {
+  const cont = document.getElementById('planConteudo')
+  if(!cont) return
+
+  // Atualizar resumo estatístico com totais globais
+  const base = todos || rows
+  const totAtivos = base.filter(r => !PLAN_SITS_BAIXA.has(r.situacao)).length
+  const totBx = base.filter(r => PLAN_SITS_BAIXA.has(r.situacao)).length
+  const totDilig = base.filter(r => r.situacao==='Diligência').length
+  const totAn = base.filter(r => r.situacao==='Análise'||r.situacao==='Analisar').length
+  const pct = base.length>0?Math.round(totBx/base.length*100):0
+  const resumo = document.getElementById('planResumo')
+  if(resumo) resumo.innerHTML = `
+    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+      <div style="font-size:22px;font-weight:800;color:var(--te);">${base.length}</div>
+      <div style="font-size:10px;color:var(--ct);">Total</div>
+    </div>
+    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
+      <div style="font-size:22px;font-weight:800;color:#1565C0;">${totAn}</div>
+      <div style="font-size:10px;color:var(--ct);">Em Análise</div>
+    </div>
+    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
+      <div style="font-size:22px;font-weight:800;color:var(--am);">${totDilig}</div>
+      <div style="font-size:10px;color:var(--ct);">Diligência</div>
+    </div>
+    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--r);">
+      <div style="font-size:22px;font-weight:800;color:var(--r);">${totAtivos}</div>
+      <div style="font-size:10px;color:var(--ct);">Em Andamento</div>
+    </div>
+    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+      <div style="font-size:22px;font-weight:800;color:var(--v);">${totBx} <span style="font-size:13px;">(${pct}%)</span></div>
+      <div style="font-size:10px;color:var(--ct);">Concluídas</div>
+    </div>`
+
   if(!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:20px;color:var(--ct);">Nenhum registro encontrado.</td></tr>'
+    cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum registro encontrado.</div>'
     return
   }
 
-  const SITS = ['Analisar','Análise','Diligência','Reanalise','Reanálise',
-    'Encaminhado para o Controle Interno',
-    'Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular']
-  const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+  const vis = window._planVis || 'lista'
+  if(vis === 'cards') {
+    renderPlanCards(rows)
+  } else {
+    renderPlanLista(rows)
+  }
+}
 
-  tbody.innerHTML = rows.map((r,i) => {
-    const sitOpts = SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
-    const bx = r.baixada ? '<span class="bdg bdg-livre">✓ Sim</span>' : '<span class="bdg bdg-analise">Não</span>'
-    // campos do JOIN com estoque
+function renderPlanCards(rows) {
+  const cont = document.getElementById('planConteudo')
+  if(!cont) return
+  const offset = (window._planPag||0)*PP
+
+  // Separar ativos e concluídos
+  const ativos = rows.filter(r => !PLAN_SITS_BAIXA.has(r.situacao))
+  const concluidos = rows.filter(r => PLAN_SITS_BAIXA.has(r.situacao))
+
+  const mkCard = (r, idx) => {
+    const st = PLAN_STATUS_STYLE[r.situacao] || {bg:'#F5F5F5',cor:'#666',label:r.situacao||'—',icone:'○'}
     const entidade = r.entidade || r.beneficiario || '—'
     const sgpe = r.sgpe || r.processo_sgp || '—'
-    const procMae = r.processo_mae || '—'
-    const vlRepasse = r.valor_repasse ? `R$ ${parseFloat(r.valor_repasse).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'
-    return `<tr id="planRow${r.id}" ${r.baixada?'style="background:#F0FAF4;"':''}>
-      <td style="font-size:10px;color:var(--ct);">${(window._planPag*PP)+i+1}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;" title="${entidade}">${entidade}</td>
-      <td style="font-size:11px;font-weight:600;">${r.tr||'—'}</td>
-      <td style="font-size:10px;">${sgpe}</td>
-      <td style="text-align:center;">${r.parcela||'—'}</td>
-      <td style="font-size:10px;">${procMae}</td>
-      <td style="font-size:10px;white-space:nowrap;">${vlRepasse}</td>
-      <td style="font-size:10px;white-space:nowrap;">${r.valor_parcial||'—'}</td>
+    const vlRepasse = r.valor_repasse ? `R$ ${parseFloat(r.valor_repasse).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null
+    const sitOpts = PLAN_SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
+    return `
+    <div id="planRow${r.id}" style="background:#fff;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;border-left:4px solid ${st.cor};">
+      <div style="background:${st.bg};padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="font-size:10px;font-weight:800;color:${st.cor};letter-spacing:.5px;">${st.icone} ${st.label}</span>
+        <span style="font-size:9px;background:#fff;color:var(--ct);padding:2px 6px;border-radius:6px;font-weight:600;">#${offset+idx+1}</span>
+      </div>
+      <div style="padding:10px 12px;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${entidade}">${entidade}</div>
+        <div style="font-size:11px;color:var(--az);font-weight:600;margin-bottom:6px;">${r.tr||'—'} — Parcela ${r.parcela||'—'}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;color:var(--ct);margin-bottom:8px;">
+          <span>SGPE: <strong>${sgpe}</strong></span>
+          ${vlRepasse?`<span>Repasse: <strong style="color:var(--v);">${vlRepasse}</strong></span>`:'<span></span>'}
+          ${r.prazo_diligencia?`<span>Prazo Dilig.: <strong style="color:var(--am);">${r.prazo_diligencia}</strong></span>`:'<span></span>'}
+          ${r.num_diligencias?`<span>Nº Dilig.: <strong>${r.num_diligencias}</strong></span>`:'<span></span>'}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:9px;font-weight:700;color:var(--ct);min-width:55px;text-transform:uppercase;letter-spacing:.3px;">Situação:</span>
+            <select style="flex:1;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;min-width:0;"
+              onchange="salvarCampo(${r.id},'situacao',this.value)">${sitOpts}</select>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <div style="flex:1;"><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Nº Dilig.</span>
+              <input type="text" value="${r.num_diligencias||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
+                onblur="salvarCampo(${r.id},'num_diligencias',this.value)">
+            </div>
+            <div style="flex:2;"><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Prazo Diligência</span>
+              <input type="text" value="${r.prazo_diligencia||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
+                onblur="salvarCampo(${r.id},'prazo_diligencia',this.value)" placeholder="dd/mm/aaaa">
+            </div>
+          </div>
+          <div><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Parecer</span>
+            <input type="text" value="${r.parecer||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
+              onblur="salvarCampo(${r.id},'parecer',this.value)">
+          </div>
+        </div>
+      </div>
+    </div>`
+  }
+
+  let html = ''
+  if(ativos.length) {
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="background:var(--r);color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:800;">▲ EM ANDAMENTO — ${ativos.length}</div>
+      <div style="font-size:10px;color:var(--ct);">ordenados por prioridade de situação</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:14px;">
+      ${ativos.map((r,i)=>mkCard(r,i)).join('')}
+    </div>`
+  }
+  if(concluidos.length) {
+    html += `<details ${ativos.length?'':'open'}>
+      <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:8px;list-style:none;">
+        <div style="background:var(--v);color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:800;">✓ CONCLUÍDAS — ${concluidos.length}</div>
+        <span style="font-size:10px;color:var(--ct);">(clique para expandir/recolher)</span>
+      </summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:14px;">
+        ${concluidos.map((r,i)=>mkCard(r,ativos.length+i)).join('')}
+      </div>
+    </details>`
+  }
+  cont.innerHTML = html
+}
+
+function renderPlanLista(rows) {
+  const cont = document.getElementById('planConteudo')
+  if(!cont) return
+  const offset = (window._planPag||0)*PP
+
+  const ativos = rows.filter(r => !PLAN_SITS_BAIXA.has(r.situacao))
+  const concluidos = rows.filter(r => PLAN_SITS_BAIXA.has(r.situacao))
+
+  const mkLinhas = (lista, startIdx) => lista.map((r, i) => {
+    const st = PLAN_STATUS_STYLE[r.situacao] || {bg:'#F5F5F5',cor:'#999',label:r.situacao||'—',icone:'○'}
+    const entidade = r.entidade || r.beneficiario || '—'
+    const sgpe = r.sgpe || r.processo_sgp || '—'
+    const sitOpts = PLAN_SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
+    return `<tr id="planRow${r.id}" style="background:${st.bg};">
+      <td style="font-size:10px;color:var(--ct);text-align:center;">${offset+startIdx+i+1}</td>
+      <td style="padding:0;">
+        <div style="width:5px;height:100%;min-height:40px;background:${st.cor};"></div>
+      </td>
       <td>
-        <select style="border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:11px;font-family:Barlow,sans-serif;min-width:160px;"
+        <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${st.cor};color:${st.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${st.icone} ${st.label}</span>
+      </td>
+      <td style="max-width:170px;">
+        <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${entidade}">${entidade}</div>
+        <div style="font-size:10px;color:var(--ct);">${sgpe}</div>
+      </td>
+      <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}<br><span style="font-size:9px;color:var(--ct);">Parc. ${r.parcela||'—'}</span></td>
+      <td>
+        <select style="border:1.5px solid ${st.cor};border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;min-width:130px;background:#fff;"
           onchange="salvarCampo(${r.id},'situacao',this.value)">${sitOpts}</select>
       </td>
-      <td><input type="text" value="${r.num_diligencias||''}" style="width:50px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'num_diligencias',this.value)"></td>
-      <td><input type="text" value="${r.prazo_diligencia||''}" style="width:90px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'prazo_diligencia',this.value)" placeholder="dd/mm/aaaa"></td>
-      <td><input type="text" value="${r.parecer||''}" style="width:130px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'parecer',this.value)"></td>
-      <td><input type="text" value="${r.controle_interno||''}" style="width:120px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'controle_interno',this.value)"></td>
-      <td><input type="text" value="${r.baixa_secretario||''}" style="width:80px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'baixa_secretario',this.value)"></td>
-      <td style="font-size:10px;">${r.valor_glosa||'—'}</td>
-      <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${r.motivo_glosa||''}">${r.motivo_glosa||'—'}</td>
-      <td>${bx}</td>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;gap:4px;align-items:center;">
+          <input type="text" value="${r.num_diligencias||''}" style="width:38px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;text-align:center;" title="Nº Diligências"
+            onblur="salvarCampo(${r.id},'num_diligencias',this.value)" placeholder="Nº">
+          <input type="text" value="${r.prazo_diligencia||''}" style="width:80px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;" title="Prazo Diligência"
+            onblur="salvarCampo(${r.id},'prazo_diligencia',this.value)" placeholder="Prazo">
+        </div>
+      </td>
+      <td><input type="text" value="${r.parecer||''}" style="width:120px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;"
+        onblur="salvarCampo(${r.id},'parecer',this.value)" placeholder="Parecer"></td>
+      <td><input type="text" value="${r.controle_interno||''}" style="width:90px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;"
+        onblur="salvarCampo(${r.id},'controle_interno',this.value)" placeholder="Ctrl. Interno"></td>
+      <td style="text-align:center;">${r.baixada?'<span class="bdg bdg-livre" style="font-size:9px;">✓ Sim</span>':'<span class="bdg bdg-analise" style="font-size:9px;">Não</span>'}</td>
     </tr>`
   }).join('')
+
+  const mkGrupo = (titulo, cor, lista, startIdx) => `
+    <tr><td colspan="10" style="background:${cor};padding:5px 12px;">
+      <span style="font-size:10px;font-weight:800;color:#fff;">${titulo} — ${lista.length} registros</span>
+    </td></tr>
+    ${mkLinhas(lista, startIdx)}`
+
+  let tbodyHtml = ''
+  if(ativos.length) tbodyHtml += mkGrupo('▲ EM ANDAMENTO', 'var(--r)', ativos, 0)
+  if(concluidos.length) tbodyHtml += mkGrupo('✓ CONCLUÍDAS', 'var(--v)', concluidos, ativos.length)
+
+  cont.innerHTML = `
+    <div class="tbl-wrap">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th style="width:30px;">#</th>
+            <th style="width:5px;padding:0;"></th>
+            <th style="min-width:110px;">Status</th>
+            <th>Entidade / SGPE</th>
+            <th>TR / Parcela</th>
+            <th style="min-width:140px;">Situação PC</th>
+            <th style="min-width:130px;">Diligência</th>
+            <th style="min-width:120px;">Parecer</th>
+            <th style="min-width:100px;">Ctrl. Interno</th>
+            <th>Baixada?</th>
+          </tr></thead>
+          <tbody>${tbodyHtml}</tbody>
+        </table>
+      </div>
+    </div>`
 }
 
 async function salvarCampo(id, campo, valor) {
   try {
-    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
     const upd = { [campo]: valor, atualizado_em: new Date().toISOString(), atualizado_por: U.nome }
-    if(campo === 'situacao') upd.baixada = SITS_BAIXA.has(valor)
+    if(campo === 'situacao') upd.baixada = PLAN_SITS_BAIXA.has(valor)
     const { error } = await db.from('planilha_analista').update(upd).eq('id', id)
     if(error) throw error
     toast('Salvo!','ok')
-    // Atualizar visual da linha se situação mudou
     if(campo === 'situacao') {
-      const row = document.getElementById('planRow'+id)
-      if(row) {
-        if(SITS_BAIXA.has(valor)) { row.style.background='#F0FAF4'; row.querySelector('td:last-child').innerHTML='<span class="bdg bdg-livre">✓ Sim</span>' }
-        else { row.style.background=''; row.querySelector('td:last-child').innerHTML='<span class="bdg bdg-analise">Não</span>' }
-      }
+      // Recarregar a planilha para atualizar ordenação e visual corretamente
+      setTimeout(() => {
+        const dados = window._planDadosCache||[]
+        const rec = dados.find(r=>r.id===id)
+        if(rec) { rec.situacao = valor; rec.baixada = PLAN_SITS_BAIXA.has(valor) }
+        // Reordenar
+        const PRIO = {'Analisar':1,'Análise':2,'Diligência':3,'Reanalise':4,'Reanálise':4,'Encaminhado para o Controle Interno':5}
+        dados.sort((a,b) => {
+          const ba = PLAN_SITS_BAIXA.has(a.situacao), bb = PLAN_SITS_BAIXA.has(b.situacao)
+          if(ba !== bb) return ba ? 1 : -1
+          const pa = PRIO[a.situacao]||6, pb = PRIO[b.situacao]||6
+          return pa !== pb ? pa - pb : (a.tr||'').localeCompare(b.tr||'')
+        })
+        const from = (window._planPag||0)*PP
+        renderPlan(dados.slice(from, from+PP), dados)
+      }, 400)
     }
   } catch(e) { toast('Erro ao salvar: '+e.message,'err') }
 }
 
 function planRenderPag() {
-  const total = Math.ceil(window._planTot/PP)||1
-  document.getElementById('planPagInf').textContent = `Pág. ${(window._planPag||0)+1} de ${total} — ${window._planTot} registros`
-  document.getElementById('planPagNum').textContent = `${(window._planPag||0)+1}/${total}`
-  document.getElementById('planBtnAnt').disabled = (window._planPag||0) === 0
-  document.getElementById('planBtnPrx').disabled = (window._planPag||0) >= total-1
+  const total = Math.ceil((window._planTot||0)/PP)||1
+  const pInf = document.getElementById('planPagInf')
+  const pNum = document.getElementById('planPagNum')
+  const bAnt = document.getElementById('planBtnAnt')
+  const bPrx = document.getElementById('planBtnPrx')
+  if(pInf) pInf.textContent = `Pág. ${(window._planPag||0)+1} de ${total} — ${window._planTot} registros`
+  if(pNum) pNum.textContent = `${(window._planPag||0)+1}/${total}`
+  if(bAnt) bAnt.disabled = (window._planPag||0) === 0
+  if(bPrx) bPrx.disabled = (window._planPag||0) >= total-1
 }
-function planPg(d) { window._planPag = (window._planPag||0)+d; buscarPlan() }
-function limparPlan() { document.getElementById('plBusca').value=''; document.getElementById('plSit').value=''; window._planPag=0; buscarPlan() }
+function novaBuscaPlan() {
+  window._planPag = 0
+  buscarPlan()
+}
+function planPg(d) {
+  const total = Math.ceil((window._planTot||0)/PP)||1
+  window._planPag = Math.min(Math.max((window._planPag||0) + d, 0), total - 1)
+  const dados = window._planDadosCache||[]
+  const from = window._planPag*PP
+  renderPlan(dados.slice(from, from+PP), dados)
+  planRenderPag()
+  document.getElementById('planConteudo')?.scrollIntoView({behavior:'smooth',block:'start'})
+}
+function limparPlan() {
+  document.getElementById('plBusca').value=''
+  document.getElementById('plSit').value=''
+  window._planPag=0
+  buscarPlan()
+}
 
 
 // ══════════════════════════════════════
@@ -1855,6 +2316,7 @@ async function verProdDetalhe(nome, setorial) {
   try {
     const { data, count } = await db.from('planilha_analista')
       .select('*',{count:'exact'})
+      .eq('setorial_id', setorial || U.setorialFiltro || 'FCEE')
       .ilike('analista', nome.split(' ')[0]+'%')
       .order('tr').order('parcela')
     const baixadas = (data||[]).filter(r=>r.baixada)
@@ -1894,6 +2356,14 @@ async function verProdDetalhe(nome, setorial) {
 //  UTILITÁRIOS
 // ══════════════════════════════════════
 function fm(id) { document.getElementById(id).classList.remove('open') }
+
+function imprimirHtml(html) {
+  const w = window.open('','_blank')
+  if(!w) { toast('Permita pop-ups para imprimir/exportar PDF.','err'); return }
+  w.document.write(html)
+  w.document.close()
+  w.print()
+}
 
 function toast(msg, tipo='ok') {
   const el = document.getElementById('toast')
