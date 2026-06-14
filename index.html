@@ -390,7 +390,7 @@ class QueryBuilder {
     this._tabela = tabela
     this._filters = {}
     this._orFilter = null
-    this._order = null
+    this._orders = []
     this._limitVal = null
     this._offsetVal = null
     this._selectCols = '*'
@@ -419,13 +419,18 @@ class QueryBuilder {
 
   or(expr) {
     // Exemplo: "tr.ilike.%texto%,beneficiario.ilike.%texto%"
-    const match = expr.match(/(\w+)\.ilike\.%(.+)%/)
-    if (match) this._filters['busca'] = match[2]
+    const termos = [...String(expr).matchAll(/\w+\.ilike\.%([^%]+)%/g)]
+      .map(m => m[1])
+      .filter(Boolean)
+    if (termos.length) this._filters['busca'] = termos[0]
     return this
   }
 
   in(col, vals) { this._filters[col] = { op:'in', vals }; return this }
-  order(col, opts) { this._order = col; return this }
+  order(col, opts={}) {
+    this._orders.push(opts.ascending === false ? `-${col}` : col)
+    return this
+  }
   limit(n) { this._limitVal = n; return this }
   range(from, to) {
     this._offsetVal = from
@@ -444,17 +449,18 @@ class QueryBuilder {
   async _execute() {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(this._filters)) {
-      if (typeof v === 'object' && v.op === 'ilike') {
+      if (v && typeof v === 'object' && v.op === 'ilike') {
         params.set(k, v.val)  // passa o valor de busca como parâmetro com o nome do campo
         params.set('_ilike_'+k, '1')  // sinaliza que é ilike
       }
-      else if (typeof v === 'object' && v.op === 'gte') params.set('_gte_'+k, v.val)
-      else if (typeof v === 'object' && v.op === 'in') params.set(k, v.vals.join(','))
+      else if (v && typeof v === 'object' && v.op === 'gte') params.set('_gte_'+k, v.val)
+      else if (v && typeof v === 'object' && v.op === 'in') params.set(k, v.vals.join(','))
       else params.set(k, v)
     }
     if (this._limitVal) params.set('limit', this._limitVal)
     else params.set('limit', '9999')  // sem limit explícito = buscar tudo
     if (this._offsetVal !== null) params.set('offset', this._offsetVal)
+    if (this._orders.length) params.set('order', this._orders.join(','))
 
     let url = `${API_URL}/${this._tabela}`
     if (this._id) url += `/${this._id}`
@@ -811,7 +817,7 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="Digite..." style="width:200px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="Digite..." style="width:200px;" onkeydown="if(event.key==='Enter')novaBusca()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
@@ -821,7 +827,7 @@ function irEst() {
         </select>
       </div>
       ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
-      <button class="btn-buscar" onclick="buscar()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
+      <button class="btn-buscar" onclick="novaBusca()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
       <button class="btn-limpar" onclick="limparF()">✕ Limpar</button>
     </div>
     <div class="tbl-wrap">
@@ -941,7 +947,12 @@ function renderPag() {
   document.getElementById('btnPrx').disabled = PAG>=total-1
 }
 
-function pg(d) { PAG+=d; buscar() }
+function novaBusca() { PAG = 0; buscar() }
+function pg(d) {
+  const total = Math.ceil(TOT/PP)||1
+  PAG = Math.min(Math.max(PAG + d, 0), total - 1)
+  buscar()
+}
 function limparF() {
   ['fBusca','fSt','fSec'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
   PAG=0; buscar()
@@ -1064,10 +1075,18 @@ const MAPA_PROD = {
 
 async function irProd() {
   ativarMenu('prod')
+  const isAdmin = U.setorialAcesso === 'ADMIN'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:16px;font-weight:700;">Produtividade (NL)</div>
       <div style="display:flex;gap:6px;align-items:center;">
+        ${isAdmin?`<div class="fg"><label style="font-size:10px;">Setorial</label>
+          <select id="prodFiltSetorial" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
+            <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
+            <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
+          </select>
+        </div>`:''}
         <div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
           <select id="prodFiltGrupo" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
             <option value="">Todos</option>
@@ -1104,17 +1123,12 @@ async function prodCarregar() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
-    const sid = U.setorialFiltro
+    const sid = U.setorialFiltro || document.getElementById('prodFiltSetorial')?.value || 'FCEE'
     const grupoF = document.getElementById('prodFiltGrupo')?.value||''
+    const isAdmin = U.setorialAcesso === 'ADMIN'
     let q = db.from('usuarios').select('*').eq('ativo',true)
-    if(sid) q = q.eq('setorial_id',sid)
+    if(sid && !isAdmin) q = q.eq('setorial_id',sid)
     const { data: todosUsers } = await q
-    // Incluir analistas E qualquer usuário que esteja no MAPA_PROD (ex: superadmin que também analisa)
-    const users = (todosUsers||[]).filter(u =>
-      u.perfil === 'analista' ||
-      Object.keys(MAPA_PROD).some(k => k.toLowerCase().trim() === u.nome.toLowerCase().trim())
-    )
-    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
 
     // Buscar toda planilha_analista de uma vez
     const { data: todaPlan } = await db.from('planilha_analista').select('analista,baixada,situacao').eq('setorial_id', sid||'FCEE')
@@ -1132,6 +1146,14 @@ async function prodCarregar() {
         else mapaStats[a].analise++
       }
     })
+
+    // Incluir analistas da setorial e usuários mapeados que tenham produção nela (ex: superadmin que também analisa)
+    const users = (todosUsers||[]).filter(u => {
+      const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
+      const ehAnalistaSetorial = u.perfil === 'analista' && (!sid || u.setorial_id === sid)
+      return ehAnalistaSetorial || !!mapaStats[nomePlan]
+    })
+    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
 
     // Buscar grupos por analista via rota dedicada
     const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
@@ -1165,7 +1187,7 @@ function prodRender(dados) {
           <div class="prod-nome">${u.nome.split(' ')[0]}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
         </div>
-        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">FCEE — Técnico/Analista</div>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">${u.setorial_id||sid} — Técnico/Analista</div>
         <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct}%;background:${cor}"></div></div>
         <div class="prod-nums" style="margin-top:5px;">
           <span>📋 ${total} assumidas</span>
@@ -1235,6 +1257,7 @@ function prodRender(dados) {
 
 function prodExportExcel() {
   const dados = _prodDados
+  if(!dados.length) { toast('Não há dados de produtividade para exportar.','err'); return }
   let csv = '\uFEFF#;Analista;Grupo;Coordenador;Total;Baixadas;Em Análise;Diligência;Pendentes;% Concluído\n'
   dados.forEach((d,i) => {
     csv += `${i+1};${d.u.nome.split(' ')[0]};${d.grupo||'—'};${d.coord};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.total-d.baixadas};${d.pct}%\n`
@@ -1247,6 +1270,8 @@ function prodExportExcel() {
 
 function prodExportPDF() {
   const dados = _prodDados
+  if(!dados.length) { toast('Não há dados de produtividade para exportar.','err'); return }
+  const sid = U.setorialFiltro || document.getElementById('prodFiltSetorial')?.value || 'FCEE'
   const dt = new Date().toLocaleDateString('pt-BR')
   const linhas = dados.map((d,i) => {
     const cor = d.pct>70?'#E8F5EE':d.pct>40?'#FFF8E1':'#FFEBEE'
@@ -1266,7 +1291,7 @@ function prodExportPDF() {
     td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
     tfoot tr{background:#F5F8F6;font-weight:bold;}</style></head><body>
     <h2>SIGPC-GT — Produtividade por Analista</h2>
-    <p>Gerado em ${dt} | FCEE | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
+    <p>Gerado em ${dt} | ${sid} | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
     <table><thead><tr><th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
     <th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Pendentes</th><th>%</th></tr></thead>
     <tbody>${linhas}</tbody>
@@ -1274,10 +1299,7 @@ function prodExportPDF() {
     <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${totTotal-totBx}</td>
     <td>${totTotal>0?Math.round(totBx/totTotal*100):0}%</td></tr></tfoot>
     </table></body></html>`
-  const w = window.open('','_blank')
-  w.document.write(html)
-  w.document.close()
-  w.print()
+  imprimirHtml(html)
 }
 
 // ══════════════════════════════════════
@@ -1604,7 +1626,7 @@ function cgeExportPDF() {
     <td>${_cgeDados.reduce((s,d)=>s+d.ctrl,0)}</td>
     <td>${totPct}%</td></tr></tfoot>
   </table></body></html>`
-  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
+  imprimirHtml(html)
 }
 
 async function relCarregarAnalistas() {
@@ -1731,7 +1753,11 @@ function relRenderTabela() {
   document.getElementById('relBtnPrx').disabled = _relPag>=totPag-1
 }
 
-function relPg(d) { _relPag += d; relRenderTabela() }
+function relPg(d) {
+  const total = Math.ceil(_relDados.length/REL_PP)||1
+  _relPag = Math.min(Math.max(_relPag + d, 0), total - 1)
+  relRenderTabela()
+}
 function relLimpar() {
   ['relTipo','relAnalista','relGrupo','relTR','relStatus','relSit'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value=''
@@ -1744,6 +1770,7 @@ function relLimpar() {
 }
 
 function relExportExcel() {
+  if(!_relDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
   let csv = '\uFEFF#;Analista;TR;Parcela;Processo SGP;Beneficiário;Situação;Baixada\n'
   _relDados.forEach((r,i) => {
@@ -1755,6 +1782,7 @@ function relExportExcel() {
 }
 
 function relExportPDF() {
+  if(!_relDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const dt = new Date().toLocaleDateString('pt-BR')
   const baixadas = _relDados.filter(r=>r.baixada).length
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório SIGPC-GT</title>
@@ -1772,7 +1800,7 @@ function relExportPDF() {
     <td>${r.processo_sgp||'—'}</td><td>${(r.beneficiario||'—').substring(0,50)}</td>
     <td>${r.situacao||'—'}</td><td class="${r.baixada?'bx':''}">${r.baixada?'✓ Sim':'Não'}</td>
   </tr>`).join('')}</tbody></table></body></html>`
-  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
+  imprimirHtml(html)
 }
 
 
@@ -1821,7 +1849,7 @@ async function irPlanilha() {
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar Entidade / TR / SGPE</label>
-        <input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
+        <input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')novaBuscaPlan()">
       </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
@@ -1838,7 +1866,7 @@ async function irPlanilha() {
           <option>Parecer Irregular</option>
         </select>
       </div>
-      <button class="btn-buscar" onclick="buscarPlan()">
+      <button class="btn-buscar" onclick="novaBuscaPlan()">
         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar
       </button>
       <button class="btn-limpar" onclick="limparPlan()">✕ Limpar</button>
@@ -2201,8 +2229,13 @@ function planRenderPag() {
   if(bAnt) bAnt.disabled = (window._planPag||0) === 0
   if(bPrx) bPrx.disabled = (window._planPag||0) >= total-1
 }
+function novaBuscaPlan() {
+  window._planPag = 0
+  buscarPlan()
+}
 function planPg(d) {
-  window._planPag = (window._planPag||0)+d
+  const total = Math.ceil((window._planTot||0)/PP)||1
+  window._planPag = Math.min(Math.max((window._planPag||0) + d, 0), total - 1)
   const dados = window._planDadosCache||[]
   const from = window._planPag*PP
   renderPlan(dados.slice(from, from+PP), dados)
@@ -2283,6 +2316,7 @@ async function verProdDetalhe(nome, setorial) {
   try {
     const { data, count } = await db.from('planilha_analista')
       .select('*',{count:'exact'})
+      .eq('setorial_id', setorial || U.setorialFiltro || 'FCEE')
       .ilike('analista', nome.split(' ')[0]+'%')
       .order('tr').order('parcela')
     const baixadas = (data||[]).filter(r=>r.baixada)
@@ -2322,6 +2356,14 @@ async function verProdDetalhe(nome, setorial) {
 //  UTILITÁRIOS
 // ══════════════════════════════════════
 function fm(id) { document.getElementById(id).classList.remove('open') }
+
+function imprimirHtml(html) {
+  const w = window.open('','_blank')
+  if(!w) { toast('Permita pop-ups para imprimir/exportar PDF.','err'); return }
+  w.document.write(html)
+  w.document.close()
+  w.print()
+}
 
 function toast(msg, tipo='ok') {
   const el = document.getElementById('toast')
