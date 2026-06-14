@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIGPC-GT v2.1 — Sistema de Gestão de Prestações de Contas</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
 :root{
@@ -376,12 +376,115 @@ tr:last-child td{border-bottom:none;}
 
 <script>
 // ══════════════════════════════════════
-//  CONFIG SUPABASE
+//  CONFIG API RAILWAY
 // ══════════════════════════════════════
-const SUPABASE_URL = 'https://rbfnpianxcswcibtfdnw.supabase.co'
-const SUPABASE_KEY = 'sb_publishable_ul4MasKnN8xH5zut9pOpkQ_zbbP13Ar'
-const { createClient } = supabase
-const db = createClient(SUPABASE_URL, SUPABASE_KEY)
+const API_URL = 'https://sigpc-api-production.up.railway.app'
+
+// Camada de compatibilidade — imita a interface do Supabase
+const db = {
+  from: (tabela) => new QueryBuilder(tabela)
+}
+
+class QueryBuilder {
+  constructor(tabela) {
+    this._tabela = tabela
+    this._filters = {}
+    this._orFilter = null
+    this._order = null
+    this._limitVal = null
+    this._offsetVal = null
+    this._selectCols = '*'
+    this._countOnly = false
+    this._method = 'GET'
+    this._body = null
+    this._id = null
+    this._op = 'select'
+  }
+
+  select(cols, opts) {
+    this._selectCols = cols || '*'
+    if (opts && opts.count === 'exact' && opts.head) this._countOnly = true
+    return this
+  }
+
+  eq(col, val) { this._filters[col] = val; return this }
+  ilike(col, val) { this._filters[col] = { op:'ilike', val: val.replace(/%/g,'') }; return this }
+
+  or(expr) {
+    // Exemplo: "tr.ilike.%texto%,beneficiario.ilike.%texto%"
+    const match = expr.match(/(\w+)\.ilike\.%(.+)%/)
+    if (match) this._filters['busca'] = match[2]
+    return this
+  }
+
+  in(col, vals) { this._filters[col] = { op:'in', vals }; return this }
+  order(col, opts) { this._order = col; return this }
+  limit(n) { this._limitVal = n; return this }
+  range(from, to) {
+    this._offsetVal = from
+    this._limitVal = (to - from + 1)
+    return this
+  }
+
+  insert(data) { this._op = 'insert'; this._body = data; return this }
+  update(data) { this._op = 'update'; this._body = data; return this }
+
+  async then(resolve, reject) {
+    try { resolve(await this._execute()) }
+    catch(e) { reject(e) }
+  }
+
+  async _execute() {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(this._filters)) {
+      if (typeof v === 'object' && v.op === 'ilike') params.set(k.includes('nome')||k==='analista' ? k : k, v.val)
+      else if (typeof v === 'object' && v.op === 'in') params.set(k, v.vals.join(','))
+      else params.set(k, v)
+    }
+    if (this._limitVal) params.set('limit', this._limitVal)
+    if (this._offsetVal !== null) params.set('offset', this._offsetVal)
+
+    let url = `${API_URL}/${this._tabela}`
+    if (this._id) url += `/${this._id}`
+
+    if (this._op === 'select' || this._op === 'count') {
+      url += '?' + params.toString()
+      const r = await fetch(url)
+      const j = await r.json()
+      if (this._countOnly) return { count: j.count, data: null, error: j.error }
+      return { data: j.data, count: j.count, error: j.error }
+    }
+    if (this._op === 'insert') {
+      const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this._body) })
+      const j = await r.json()
+      return { data: j.data, error: j.error }
+    }
+    if (this._op === 'update') {
+      const r = await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this._body) })
+      const j = await r.json()
+      return { data: j.data, error: j.error }
+    }
+  }
+}
+
+// Extensão para suportar .update().eq() encadeado
+const _origFrom = db.from.bind(db)
+db.from = (tabela) => {
+  const qb = new QueryBuilder(tabela)
+  const origUpdate = qb.update.bind(qb)
+  qb.update = (data) => {
+    qb._op = 'update'
+    qb._body = data
+    const origEq = qb.eq.bind(qb)
+    qb.eq = (col, val) => {
+      if (col === 'id') qb._id = val
+      else qb._filters[col] = val
+      return qb
+    }
+    return qb
+  }
+  return qb
+}
 
 // ══════════════════════════════════════
 //  ESTADO GLOBAL
