@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIGPC-GT v2.1 — Sistema de Gestão de Prestações de Contas</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
@@ -625,6 +626,7 @@ function iniciarApp() {
   renderSB()
   irDash()
   carregarContadores()
+  setTimeout(atualizarBadgeAlertas, 1500)
 }
 
 function sair() {
@@ -647,11 +649,15 @@ function renderSB() {
       <div class="sb-item on" id="mi-dash" onclick="irDash()">
         <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>Dashboard
       </div>
+      <div class="sb-item" id="mi-board" onclick="irBoard()">
+        <svg viewBox="0 0 24 24"><path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2.5 2.1h-15V5h15v14.1zm0-16.1h-15c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>Board / Gráficos
+      </div>
       <div class="sb-item" id="mi-est" onclick="irEst()">
         <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Estoque TRs
       </div>
-      <div class="sb-item" id="mi-plan" onclick="irPlanilha()">
+      <div class="sb-item" id="mi-plan" onclick="irPlanilha()" style="position:relative;">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Minha Planilha
+        <span id="planAlertBadge" style="display:none;background:var(--r);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:auto;"></span>
       </div>
       <div class="sb-item" id="mi-prod" onclick="irProd()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Produtividade (NL)
@@ -1062,6 +1068,24 @@ const MAPA_PROD = {
   'Zadir Teresinha Machado Ferreira':'Zadir',
 }
 
+// Grupos fixos conforme Relatório CGE — Plano de Ação FCEE GT-PC
+const GRUPOS_FIXOS = {
+  // Grupo 1 — Coordenadora: Nayara
+  'Aline':1,'Andressa':1,'Cris':1,'Daiana':1,'Daniela':1,'Gabriele':1,
+  'Guilherme':1,'Ivonete':1,'Marcelo':1,'Marisa':1,'Sandra':1,
+  'Sandra Paul':1,'Sandra Rocha':1,'Tatiana':1,'Valderi':1,
+  // Grupo 2 — Coordenadora: Zadir
+  'Ana Claudia':2,'Ana Leticia':2,'Ana Letícia':2,'Elisandra':2,'Geisa':2,
+  'Gislainy':2,'Grace Oliveira':2,'Grace':2,'Isabel':2,'Marilza':2,
+  'Miriam':2,'Noici':2,'Perla':2,'Rita':2,'Simone':2,'Tanimeri':2,
+  // Grupo 3 — FCEE
+  'Caroline':3,'Claudia':3,'Clodoaldo':3,'Elquier':3,'Scheila':3,'Everaldo':3,
+  'Goreti':3,'Graciane':3,'Grazielly':3,'Higor':3,'Janaina':3,'Janaína':3,
+  'Juliana':3,'Luis Filipe':3,'Marlene':3,'Rafael':3,'Richard':3,
+  'Samoel':3,'Willian':3,
+}
+const COORD_GRUPO = {1:'Nayara',2:'Zadir',3:'FCEE'}
+
 async function irProd() {
   ativarMenu('prod')
   document.getElementById('BODY').innerHTML = `
@@ -1133,19 +1157,20 @@ async function prodCarregar() {
       }
     })
 
-    // Buscar grupos por analista via rota dedicada
-    const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
-    const jGrupos = await rGrupos.json()
-    const mapaGrupo = {}
-    ;(jGrupos.data||[]).forEach(r => { mapaGrupo[r.tecnico_nome] = r.grupo })
+    // Grupos: GRUPOS_FIXOS como primário (API como complemento se disponível)
+    const mapaGrupo = {...GRUPOS_FIXOS}
+    try {
+      const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
+      const jGrupos = await rGrupos.json()
+      ;(jGrupos.data||[]).forEach(r => { if(r.tecnico_nome && r.grupo) mapaGrupo[r.tecnico_nome] = r.grupo })
+    } catch(e) {}
 
-    const COORD = {1:'Nayara',2:'Zadir',3:'FCEE'}
     _prodDados = users.map(u => {
       const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
       const stats = mapaStats[nomePlan] || {total:0,baixadas:0,dilig:0,analise:0}
       const grupo = mapaGrupo[nomePlan] || mapaGrupo[u.nome.split(' ')[0]] || null
       const pct = stats.total>0 ? Math.round(stats.baixadas/stats.total*100) : 0
-      return {u, nomePlan, grupo, coord: COORD[grupo]||'—', ...stats, pct}
+      return {u, nomePlan, grupo, coord: COORD_GRUPO[grupo]||'—', ...stats, pct}
     }).filter(d => !grupoF || String(d.grupo) === grupoF)
       .sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
@@ -1278,6 +1303,216 @@ function prodExportPDF() {
   w.document.write(html)
   w.document.close()
   w.print()
+}
+
+// ══════════════════════════════════════
+//  BOARD / GRÁFICOS
+// ══════════════════════════════════════
+let _boardCharts = []
+
+function boardDestroyCharts() {
+  _boardCharts.forEach(c => { try { c.destroy() } catch(e) {} })
+  _boardCharts = []
+}
+
+async function irBoard() {
+  ativarMenu('board')
+  boardDestroyCharts()
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:16px;font-weight:700;">📊 Board — Visão Gerencial</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div class="fg"><label style="font-size:10px;">Setorial</label>
+          <select id="boardSid" onchange="boardCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:4px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <option value="FCEE" ${(!U.setorialFiltro||U.setorialFiltro==='FCEE')?'selected':''}>FCEE</option>
+            <option value="FCC" ${U.setorialFiltro==='FCC'?'selected':''}>FCC</option>
+            <option value="SED" ${U.setorialFiltro==='SED'?'selected':''}>SED</option>
+            <option value="SES" ${U.setorialFiltro==='SES'?'selected':''}>SES</option>
+          </select>
+        </div>
+        <button onclick="boardCarregar()" class="btn-buscar" style="height:32px;">↺ Atualizar</button>
+      </div>
+    </div>
+    <div id="boardCont"><div class="loading"><div class="spin"></div>Carregando dados...</div></div>`
+  await boardCarregar()
+}
+
+async function boardCarregar() {
+  boardDestroyCharts()
+  const cont = document.getElementById('boardCont')
+  if(!cont) return
+  const sid = document.getElementById('boardSid')?.value || U.setorialFiltro || 'FCEE'
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
+  try {
+    const { data } = await db.from('planilha_analista').select('*').eq('setorial_id', sid)
+    if(!data) throw new Error('Sem dados')
+
+    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+    const total = data.length
+    const baixadas = data.filter(r=>r.baixada||SITS_BAIXA.has(r.situacao)).length
+    const dilig = data.filter(r=>(r.situacao||'').toLowerCase().includes('diligên')||(r.situacao||'').toLowerCase().includes('diligenc')).length
+    const analise = data.filter(r=>r.situacao==='Análise'||r.situacao==='Analisar').length
+    const reanalise = data.filter(r=>r.situacao==='Reanálise'||r.situacao==='Reanalise').length
+    const ctrl = data.filter(r=>(r.situacao||'').toLowerCase().includes('controle')).length
+    const pct = total>0?Math.round(baixadas/total*100):0
+
+    // Stats por grupo
+    const grupos = {1:{total:0,bx:0,dilig:0,nome:'G1 — Nayara'},2:{total:0,bx:0,dilig:0,nome:'G2 — Zadir'},3:{total:0,bx:0,dilig:0,nome:'G3 — FCEE'}}
+    data.forEach(r => {
+      const g = GRUPOS_FIXOS[r.analista] || GRUPOS_FIXOS[(r.analista||'').split(' ')[0]]
+      if(g && grupos[g]) {
+        grupos[g].total++
+        if(r.baixada||SITS_BAIXA.has(r.situacao)) grupos[g].bx++
+        if((r.situacao||'').toLowerCase().includes('diligên')||(r.situacao||'').toLowerCase().includes('diligenc')) grupos[g].dilig++
+      }
+    })
+
+    // Stats por analista (top analistas para o gráfico)
+    const mapaAn = {}
+    data.forEach(r => {
+      const a = r.analista||'—'
+      if(!mapaAn[a]) mapaAn[a] = {total:0,bx:0}
+      mapaAn[a].total++
+      if(r.baixada||SITS_BAIXA.has(r.situacao)) mapaAn[a].bx++
+    })
+    const analistas = Object.entries(mapaAn)
+      .map(([n,v]) => ({nome:n,...v,pct:v.total>0?Math.round(v.bx/v.total*100):0}))
+      .sort((a,b) => b.bx - a.bx)
+      .slice(0, 20)
+
+    cont.innerHTML = `
+      <!-- Cards resumo -->
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;">
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+          <div style="font-size:26px;font-weight:800;color:var(--te);">${total}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Total PCs</div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+          <div style="font-size:26px;font-weight:800;color:var(--v);">${baixadas}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluídas</div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
+          <div style="font-size:26px;font-weight:800;color:#1565C0;">${analise}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Em Análise</div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
+          <div style="font-size:26px;font-weight:800;color:var(--am);">${dilig}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Diligência</div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #6A1B9A;">
+          <div style="font-size:26px;font-weight:800;color:#6A1B9A;">${reanalise}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Reanálise</div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1A237E;">
+          <div style="font-size:26px;font-weight:800;color:var(--v);">${pct}%</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluído</div>
+        </div>
+      </div>
+
+      <!-- Barra de progresso geral -->
+      <div style="background:#fff;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:13px;font-weight:700;">Progresso Geral — ${sid}</div>
+          <div style="font-size:12px;color:var(--ct);">${baixadas} de ${total} PCs concluídas</div>
+        </div>
+        <div style="background:#E8EEEB;border-radius:10px;height:14px;overflow:hidden;">
+          <div style="height:14px;border-radius:10px;background:linear-gradient(90deg,var(--v),var(--vc));width:${pct}%;transition:width 1s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--ct);">
+          <span>0%</span><span style="font-weight:700;color:var(--v);">${pct}% concluído</span><span>100%</span>
+        </div>
+      </div>
+
+      <!-- Cards por grupo + gráficos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        ${[1,2,3].map(g => {
+          const gr = grupos[g]
+          const gpct = gr.total>0?Math.round(gr.bx/gr.total*100):0
+          const gcor = gpct>=70?'var(--v)':gpct>=40?'var(--am)':'var(--r)'
+          return `<div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+            <div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--te);">${gr.nome}</div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+              <span>Total: <strong>${gr.total}</strong></span>
+              <span style="color:var(--v);">✓ ${gr.bx}</span>
+              <span style="color:var(--am);">⚠ ${gr.dilig}</span>
+            </div>
+            <div style="background:#E8EEEB;border-radius:8px;height:10px;overflow:hidden;margin-bottom:4px;">
+              <div style="height:10px;border-radius:8px;background:${gcor};width:${gpct}%;"></div>
+            </div>
+            <div style="text-align:right;font-size:11px;font-weight:800;color:${gcor};">${gpct}%</div>
+          </div>`
+        }).join('')}
+      </div>
+
+      <!-- Gráficos lado a lado -->
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:14px;">
+        <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+          <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Produtividade por Analista (Top 20)</div>
+          <div style="height:320px;"><canvas id="chartBarras"></canvas></div>
+        </div>
+        <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+          <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Distribuição por Situação</div>
+          <div style="height:220px;"><canvas id="chartPizza"></canvas></div>
+          <div style="margin-top:10px;font-size:10px;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#006B3C;flex-shrink:0;"></span> Concluídas: <strong>${baixadas}</strong></div>
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#1565C0;flex-shrink:0;"></span> Em Análise: <strong>${analise}</strong></div>
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#F57F17;flex-shrink:0;"></span> Diligência: <strong>${dilig}</strong></div>
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#6A1B9A;flex-shrink:0;"></span> Reanálise: <strong>${reanalise}</strong></div>
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#283593;flex-shrink:0;"></span> Ctrl. Interno: <strong>${ctrl}</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>`
+
+    // Inicializar gráficos com Chart.js
+    requestAnimationFrame(() => {
+      // Gráfico de barras
+      const ctxBar = document.getElementById('chartBarras')?.getContext('2d')
+      if(ctxBar && window.Chart) {
+        const c1 = new Chart(ctxBar, {
+          type: 'bar',
+          data: {
+            labels: analistas.map(a => a.nome),
+            datasets: [
+              { label: 'Concluídas', data: analistas.map(a => a.bx), backgroundColor: '#006B3C', borderRadius: 4 },
+              { label: 'Pendentes', data: analistas.map(a => a.total - a.bx), backgroundColor: '#E8EEEB', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', labels: { font: { family: 'Barlow', size: 11 } } } },
+            scales: {
+              x: { stacked: true, ticks: { font: { family: 'Barlow', size: 9 }, maxRotation: 45 } },
+              y: { stacked: true, ticks: { font: { family: 'Barlow', size: 10 } } }
+            }
+          }
+        })
+        _boardCharts.push(c1)
+      }
+      // Gráfico de pizza
+      const ctxPie = document.getElementById('chartPizza')?.getContext('2d')
+      if(ctxPie && window.Chart) {
+        const pendOther = total - baixadas - analise - dilig - reanalise - ctrl
+        const c2 = new Chart(ctxPie, {
+          type: 'doughnut',
+          data: {
+            labels: ['Concluídas','Em Análise','Diligência','Reanálise','Ctrl. Interno','Outros'],
+            datasets: [{ data: [baixadas,analise,dilig,reanalise,ctrl,Math.max(0,pendOther)],
+              backgroundColor: ['#006B3C','#1565C0','#F57F17','#6A1B9A','#283593','#BDBDBD'],
+              borderWidth: 2, borderColor: '#fff' }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+          }
+        })
+        _boardCharts.push(c2)
+      }
+    })
+  } catch(e) {
+    cont.innerHTML = `<div style="color:var(--r);padding:20px;">Erro ao carregar: ${e.message}</div>`
+  }
 }
 
 // ══════════════════════════════════════
@@ -1425,25 +1660,38 @@ function irRel() {
     </div>
     <!-- PAINEL CGE -->
     <div id="relPainelCGE" style="display:none;">
-      <div style="background:#fff;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:700;color:var(--te);margin-bottom:10px;">Relatório CGE — Situação Geral das Prestações de Contas</div>
-        <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">Formato consolidado para envio à Controladoria Geral do Estado. Exibe totais por analista, situação e percentual de conclusão.</div>
-        <div class="filtros" style="gap:10px;flex-wrap:wrap;">
+      <div style="background:#fff;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid #1B5E20;">
+        <div style="font-size:13px;font-weight:800;color:var(--te);margin-bottom:4px;">Parâmetros do Relatório CGE</div>
+        <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Preencha o período de monitoramento e as metas conforme o Plano de Ação aprovado junto à CGE.</div>
+        <div class="filtros" style="gap:10px;flex-wrap:wrap;padding:0;background:none;border-radius:0;box-shadow:none;">
           <div class="fg"><label>Setorial</label>
-            <select id="cgeSetorial" style="min-width:140px;">
+            <select id="cgeSetorial" style="min-width:110px;">
               <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
               <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
               <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
             </select>
           </div>
-          <div style="display:flex;align-items:flex-end;gap:6px;">
-            <button class="btn-buscar" onclick="cgeGerar()">📊 Gerar Relatório CGE</button>
-            <button onclick="cgeExportExcel()" style="background:#1B5E20;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;height:32px;">📥 Excel CGE</button>
-            <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;height:32px;">📄 PDF CGE</button>
+          <div class="fg"><label>Data Início Monitoramento</label>
+            <input type="date" id="cgeDtInicio" value="2025-08-01" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div class="fg"><label>Data de Corte (Fim)</label>
+            <input type="date" id="cgeDtCorte" value="${new Date().toISOString().split('T')[0]}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div class="fg"><label>Meta/Técnico/Mês (PCs)</label>
+            <input type="number" id="cgeMetaMes" value="10" min="1" max="50" style="width:70px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div class="fg"><label>Nº Técnicos</label>
+            <input type="number" id="cgeNumTec" value="43" min="1" style="width:60px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div class="fg"><label>Total PCs Estoque (Plano)</label>
+            <input type="number" id="cgeTotalPlano" value="9632" min="1" style="width:90px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
           </div>
         </div>
       </div>
-      <div id="cgeCont"><div style="text-align:center;color:var(--ct);padding:30px;">Clique em <strong>Gerar Relatório CGE</strong> para visualizar.</div></div>
+      <div id="cgeCont"><div style="text-align:center;color:var(--ct);padding:30px;">Preencha os parâmetros e clique em <strong>Gerar Relatório CGE</strong>.</div></div>
     </div>
   `
   relCarregarAnalistas()
@@ -1461,9 +1709,25 @@ function relMudaAba(aba) {
 }
 
 let _cgeDados = []
+let _cgeParams = {}
+
 async function cgeGerar() {
   const cont = document.getElementById('cgeCont')
   const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+  const dtInicio = document.getElementById('cgeDtInicio')?.value || ''
+  const dtCorte  = document.getElementById('cgeDtCorte')?.value  || ''
+  const metaMes  = parseFloat(document.getElementById('cgeMetaMes')?.value) || 10
+  const totalPlano = parseInt(document.getElementById('cgeTotalPlano')?.value) || 9632
+  const numTec   = parseInt(document.getElementById('cgeNumTec')?.value) || 43
+
+  // Calcular número de meses no período
+  let meses = 0
+  if(dtInicio && dtCorte) {
+    const d1 = new Date(dtInicio), d2 = new Date(dtCorte)
+    meses = Math.round((d2 - d1) / (1000*60*60*24*30.44))
+  }
+  _cgeParams = { sid, dtInicio, dtCorte, metaMes, totalPlano, numTec, meses }
+
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
     const { data } = await db.from('planilha_analista').select('*').eq('setorial_id', sid)
@@ -1473,77 +1737,159 @@ async function cgeGerar() {
     const mapaAn = {}
     data.forEach(r => {
       const a = r.analista||'—'
-      if(!mapaAn[a]) mapaAn[a] = {analista:a, total:0, baixadas:0, analise:0, dilig:0, ctrl:0}
+      if(!mapaAn[a]) mapaAn[a] = {analista:a, grupo:GRUPOS_FIXOS[a]||GRUPOS_FIXOS[a.split(' ')[0]]||null, total:0, baixadas:0, analise:0, dilig:0, reanalise:0, ctrl:0}
       mapaAn[a].total++
-      if(SITS_BAIXA.has(r.situacao)) mapaAn[a].baixadas++
+      if(r.baixada||SITS_BAIXA.has(r.situacao)) mapaAn[a].baixadas++
       else {
         const sit = (r.situacao||'').toLowerCase()
         if(sit.includes('diligên')||sit.includes('diligenc')) mapaAn[a].dilig++
+        else if(sit.includes('reanál')||sit.includes('reanalise')) mapaAn[a].reanalise++
         else if(sit.includes('controle')) mapaAn[a].ctrl++
         else mapaAn[a].analise++
       }
     })
-    _cgeDados = Object.values(mapaAn).sort((a,b)=>a.analista.localeCompare(b.analista))
+    _cgeDados = Object.values(mapaAn)
+      .sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.analista.localeCompare(b.analista))
+
+    const metaAcum = meses > 0 ? numTec * metaMes * meses : 0
     const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
-    const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
-    const totAn = _cgeDados.reduce((s,d)=>s+d.analise,0)
-    const totDil = _cgeDados.reduce((s,d)=>s+d.dilig,0)
-    const totCtrl = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
-    const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
+    const totBx    = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+    const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
+    const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
+    const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
+    const totCtrl  = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
+    const totPctMeta = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1) : '—'
+    const totPctEst  = totalPlano>0 ? (totBx/totalPlano*100).toFixed(1) : '—'
     const dt = new Date().toLocaleDateString('pt-BR')
+    const periodoTxt = dtInicio && dtCorte
+      ? `${new Date(dtInicio).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
+      : 'Período não definido'
+
+    // Renderizar quadros
+    const q2linhas = _cgeDados.map((d,i) => {
+      const metaInd = meses > 0 ? metaMes * meses : '—'
+      const pctMeta = metaAcum>0 && meses>0 ? (d.baixadas / (metaMes*meses) * 100).toFixed(0)+'%' : '—'
+      const emAndamento = d.total - d.baixadas
+      const cor = d.baixadas >= (metaMes*meses*0.7) ? '#E8F5EE' : d.baixadas >= (metaMes*meses*0.4) ? '#FFF8E1' : ''
+      return `<tr style="background:${cor}">
+        <td>${i+1}</td>
+        <td style="font-weight:700;">${d.analista}</td>
+        <td style="text-align:center;">${COORD_GRUPO[d.grupo]||'—'}</td>
+        <td style="text-align:center;">${metaInd}</td>
+        <td style="text-align:center;">0</td>
+        <td style="text-align:center;color:var(--v);font-weight:700;">${d.baixadas}</td>
+        <td style="text-align:center;font-weight:700;">${d.baixadas}</td>
+        <td style="text-align:center;font-weight:700;">${pctMeta}</td>
+      </tr>`
+    }).join('')
+
+    const q4linhas = _cgeDados.map((d,i) => {
+      const emAnd = d.analise + d.dilig + d.reanalise + d.ctrl
+      if(!emAnd) return ''
+      return `<tr>
+        <td>${i+1}</td>
+        <td style="font-weight:700;">${d.analista}</td>
+        <td style="text-align:center;">${COORD_GRUPO[d.grupo]||'—'}</td>
+        <td style="text-align:center;color:#1565C0;">${d.analise}</td>
+        <td style="text-align:center;color:var(--am);">${d.dilig}</td>
+        <td style="text-align:center;color:#6A1B9A;">${d.reanalise}</td>
+        <td style="text-align:center;color:#283593;">${d.ctrl}</td>
+        <td style="text-align:center;font-weight:700;">${emAnd}</td>
+      </tr>`
+    }).join('')
 
     cont.innerHTML = `
-      <div style="background:linear-gradient(135deg,#1B5E20,#2E7D32);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div>
-          <div style="font-size:15px;font-weight:800;">RELATÓRIO CGE — ${sid}</div>
-          <div style="font-size:11px;opacity:.8;">Gerado em ${dt} | SIGPC-GT v2.1</div>
+      <!-- Cabeçalho institucional -->
+      <div style="background:#fff;border-radius:10px;padding:16px 20px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid #1B5E20;">
+        <div style="text-align:center;margin-bottom:6px;">
+          <div style="font-size:11px;font-weight:700;color:var(--ct);letter-spacing:1px;">ESTADO DE SANTA CATARINA</div>
+          <div style="font-size:12px;font-weight:800;color:var(--te);">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL — GABINETE DA PRESIDÊNCIA</div>
+          <div style="font-size:11px;color:var(--ct);">SETOR DE PRESTAÇÃO DE CONTAS</div>
         </div>
-        <div style="display:flex;gap:16px;text-align:center;">
-          <div><strong style="font-size:22px;">${totTotal}</strong><div style="font-size:9px;opacity:.8;">TOTAL</div></div>
-          <div><strong style="font-size:22px;">${totBx}</strong><div style="font-size:9px;opacity:.8;">CONCLUÍDAS</div></div>
-          <div><strong style="font-size:22px;">${totPct}%</strong><div style="font-size:9px;opacity:.8;">CONCLUÍDO</div></div>
+        <div style="text-align:center;background:#F5F8F6;border-radius:8px;padding:10px;margin:8px 0;">
+          <div style="font-size:14px;font-weight:800;color:var(--v);">RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO</div>
+          <div style="font-size:12px;font-weight:700;color:var(--te);">ANÁLISE DE PRESTAÇÕES DE CONTAS</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-top:8px;">
+          <div><strong>Órgão/Entidade:</strong> FCEE - Fundação Catarinense de Educação Especial - UG 450021</div>
+          <div><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</div>
+          <div><strong>Processo:</strong> CGE nº 727/2025</div>
+          <div><strong>Período de Monitoramento:</strong> ${periodoTxt}</div>
+          <div><strong>Número PCs Total:</strong> ${totalPlano.toLocaleString('pt-BR')} PCs (conforme Plano de Ação)</div>
+          <div><strong>Servidores GT-PC:</strong> ${numTec} técnicos | Meta: ${metaMes} PCs/técnico/mês</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+          <button onclick="cgeExportExcel()" style="background:#1B5E20;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
+          <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
         </div>
       </div>
-      <div class="tbl-wrap">
-        <div style="overflow-x:auto;"><table id="cgeTabela"><thead><tr>
-          <th>#</th><th>Analista</th><th style="text-align:center;">Total PC</th>
-          <th style="text-align:center;color:var(--v);">Concluídas</th>
-          <th style="text-align:center;color:var(--az);">Em Análise</th>
-          <th style="text-align:center;color:var(--am);">Diligência</th>
-          <th style="text-align:center;color:#283593;">Ctrl. Interno</th>
-          <th style="text-align:center;">% Concluído</th>
-          <th style="text-align:center;">Andamento</th>
-        </tr></thead><tbody>
-          ${_cgeDados.map((d,i)=>{
-            const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
-            const cor = pct>=70?'var(--v)':pct>=40?'var(--am)':'var(--r)'
-            const bg = pct>=70?'#E8F5EE':pct>=40?'#FFF8E1':'#FFEBEE'
-            return `<tr style="background:${bg}">
-              <td style="font-size:10px;color:var(--ct);">${i+1}</td>
-              <td style="font-weight:700;font-size:12px;">${d.analista}</td>
-              <td style="text-align:center;font-size:12px;font-weight:700;">${d.total}</td>
-              <td style="text-align:center;font-size:12px;font-weight:800;color:var(--v);">${d.baixadas}</td>
-              <td style="text-align:center;font-size:12px;color:var(--az);">${d.analise}</td>
-              <td style="text-align:center;font-size:12px;color:var(--am);">${d.dilig}</td>
-              <td style="text-align:center;font-size:12px;color:#283593;">${d.ctrl}</td>
-              <td style="text-align:center;font-weight:800;color:${cor};">${pct}%</td>
-              <td style="min-width:100px;">
-                <div style="background:#E8EEEB;border-radius:6px;height:8px;">
-                  <div style="height:8px;border-radius:6px;background:${cor};width:${pct}%;transition:width .5s;"></div>
-                </div>
-              </td>
-            </tr>`}).join('')}
-        </tbody><tfoot><tr style="background:#F5F8F6;font-weight:700;border-top:2px solid var(--cb);">
-          <td colspan="2" style="font-size:11px;padding:8px 11px;">TOTAL GERAL — ${_cgeDados.length} analistas</td>
-          <td style="text-align:center;">${totTotal}</td>
+
+      <!-- Quadro 1 -->
+      <div class="tbl-wrap" style="margin-bottom:12px;">
+        <div class="tbl-header"><strong>1. QUADRO GERAL DE METAS</strong></div>
+        <div style="overflow-x:auto;"><table><thead><tr>
+          <th>Período</th><th style="text-align:center;">Meta Acumulada</th>
+          <th style="text-align:center;">Execução (PCs Baixadas)</th>
+          <th style="text-align:center;">% Meta</th>
+          <th style="text-align:center;">Estoque Total</th>
+          <th style="text-align:center;">% Total/Estoque</th>
+        </tr></thead><tbody><tr>
+          <td style="font-weight:700;">${periodoTxt}</td>
+          <td style="text-align:center;font-weight:700;">${metaAcum||'—'}</td>
+          <td style="text-align:center;font-weight:800;color:var(--v);">${totBx}</td>
+          <td style="text-align:center;font-weight:800;color:${parseFloat(totPctMeta)>=70?'var(--v)':parseFloat(totPctMeta)>=40?'var(--am)':'var(--r)'};">${totPctMeta}%</td>
+          <td style="text-align:center;">${totalPlano.toLocaleString('pt-BR')}</td>
+          <td style="text-align:center;font-weight:700;">${totPctEst}%</td>
+        </tr></tbody></table></div>
+        <div style="padding:8px 12px;font-size:10px;color:var(--ct);background:#F5F8F6;">
+          Nota: Meta acumulada calculada com base em ${numTec} técnicos × ${metaMes} PCs/mês × ${meses||'?'} meses. Gerado em ${dt} via SIGPC-GT v2.1.
+        </div>
+      </div>
+
+      <!-- Quadro 2 -->
+      <div class="tbl-wrap" style="margin-bottom:12px;">
+        <div class="tbl-header"><strong>2. DESEMPENHO INDIVIDUAL DOS SERVIDORES DO GT-PC</strong></div>
+        <div style="overflow-x:auto;"><table><thead><tr>
+          <th>#</th><th>Servidor</th><th>Coordenador</th>
+          <th style="text-align:center;">Meta Acum.</th>
+          <th style="text-align:center;">Bx. Secretário</th>
+          <th style="text-align:center;">Bx. Técnico</th>
+          <th style="text-align:center;">Total Baixas</th>
+          <th style="text-align:center;">% Meta</th>
+        </tr></thead>
+        <tbody>${q2linhas}</tbody>
+        <tfoot><tr style="background:#F5F8F6;font-weight:700;">
+          <td colspan="3">TOTAL GERAL — ${_cgeDados.length} servidores</td>
+          <td style="text-align:center;">${metaAcum||'—'}</td>
+          <td style="text-align:center;">0</td>
           <td style="text-align:center;color:var(--v);">${totBx}</td>
-          <td style="text-align:center;color:var(--az);">${totAn}</td>
+          <td style="text-align:center;">${totBx}</td>
+          <td style="text-align:center;">${totPctMeta}%</td>
+        </tr></tfoot></table></div>
+      </div>
+
+      <!-- Quadro 4 -->
+      <div class="tbl-wrap" style="margin-bottom:12px;">
+        <div class="tbl-header"><strong>4. PROCESSOS POR TÉCNICO — EM ANÁLISE, DILIGÊNCIA E REANÁLISE</strong><span style="font-size:11px;color:var(--ct);">Data de corte: ${dtCorte ? new Date(dtCorte).toLocaleDateString('pt-BR') : 'Atual'}</span></div>
+        <div style="overflow-x:auto;"><table><thead><tr>
+          <th>#</th><th>Servidor</th><th>Coordenador</th>
+          <th style="text-align:center;color:#1565C0;">Análise</th>
+          <th style="text-align:center;color:var(--am);">Diligência</th>
+          <th style="text-align:center;color:#6A1B9A;">Reanálise</th>
+          <th style="text-align:center;color:#283593;">Ctrl. Interno</th>
+          <th style="text-align:center;">Total em Andamento</th>
+        </tr></thead>
+        <tbody>${q4linhas||'<tr><td colspan="8" style="text-align:center;color:var(--ct);padding:16px;">Todos os processos estão concluídos.</td></tr>'}</tbody>
+        <tfoot><tr style="background:#F5F8F6;font-weight:700;">
+          <td colspan="3">TOTAL GERAL</td>
+          <td style="text-align:center;color:#1565C0;">${totAn}</td>
           <td style="text-align:center;color:var(--am);">${totDil}</td>
+          <td style="text-align:center;color:#6A1B9A;">${totRean}</td>
           <td style="text-align:center;color:#283593;">${totCtrl}</td>
-          <td style="text-align:center;">${totPct}%</td>
-          <td></td>
+          <td style="text-align:center;">${totAn+totDil+totRean+totCtrl}</td>
         </tr></tfoot></table></div>
       </div>`
+
   } catch(e) { cont.innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
 
@@ -1801,6 +2147,103 @@ async function primAcesso() {
 }
 
 // ══════════════════════════════════════
+//  SISTEMA DE ALERTAS
+// ══════════════════════════════════════
+function parseDateBR(str) {
+  if(!str) return null
+  // Suporta dd/mm/aaaa ou aaaa-mm-dd
+  if(str.includes('/')) { const [d,m,a] = str.split('/'); return new Date(`${a}-${m}-${d}`) }
+  return new Date(str)
+}
+
+function calcularAlertas(dados) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0)
+  const em5 = new Date(hoje); em5.setDate(hoje.getDate() + 5)
+  const ha30 = new Date(hoje); ha30.setDate(hoje.getDate() - 30)
+  const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+
+  const vencidos = [], urgentes = [], semMov = []
+  dados.forEach(r => {
+    if(SITS_BAIXA.has(r.situacao)) return
+    const prazo = parseDateBR(r.prazo_diligencia)
+    if(prazo) {
+      if(prazo < hoje) vencidos.push({...r, prazoDate: prazo})
+      else if(prazo <= em5) urgentes.push({...r, prazoDate: prazo})
+    }
+    // Sem movimentação: assumido há > 30 dias sem baixa
+    const assumido = r.assumido_em ? new Date(r.assumido_em) : null
+    const atualizado = r.atualizado_em ? new Date(r.atualizado_em) : assumido
+    if(atualizado && atualizado < ha30 && !prazo) semMov.push(r)
+  })
+  return { vencidos, urgentes, semMov }
+}
+
+async function atualizarBadgeAlertas() {
+  try {
+    const MAPA_PLANILHA = {
+      'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
+      'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
+      'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
+      'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara','Zadir Teresinha Machado Ferreira':'Zadir',
+    }
+    const nomePlan = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
+    const params = new URLSearchParams({ analista: nomePlan, setorial_id: U.setorialFiltro||'FCEE', limit: 9999, offset: 0 })
+    const r = await fetch(`${API_URL}/planilha_analista/completa?${params}`)
+    const j = await r.json()
+    const { vencidos, urgentes } = calcularAlertas(j.data||[])
+    const total = vencidos.length + urgentes.length
+    const badge = document.getElementById('planAlertBadge')
+    if(badge) {
+      badge.style.display = total > 0 ? '' : 'none'
+      badge.textContent = total
+    }
+  } catch(e) {}
+}
+
+function renderAlertasPanel(alertas) {
+  const { vencidos, urgentes, semMov } = alertas
+  if(!vencidos.length && !urgentes.length && !semMov.length) return ''
+  const total = vencidos.length + urgentes.length + semMov.length
+
+  const mkItem = (r, tipo) => {
+    const cor = tipo==='vencido'?'var(--r)':tipo==='urgente'?'var(--am)':'#555'
+    const icon = tipo==='vencido'?'🔴':tipo==='urgente'?'🟡':'🔵'
+    const prazoTxt = r.prazo_diligencia ? `Prazo: ${r.prazo_diligencia}` : 'Sem prazo'
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cb);">
+      <span style="font-size:14px;">${icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:700;color:${cor};">${r.tr||'—'} P${r.parcela||'—'}</div>
+        <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||r.beneficiario||'—'} — ${r.situacao||'—'}</div>
+      </div>
+      <span style="font-size:9px;white-space:nowrap;color:${cor};font-weight:700;">${prazoTxt}</span>
+    </div>`
+  }
+
+  return `
+  <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);margin-bottom:12px;overflow:hidden;">
+    <div style="background:${vencidos.length?'#FFEBEE':urgentes.length?'#FFF8E1':'#E3F2FD'};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;">${vencidos.length?'🔴':urgentes.length?'🟡':'🔵'}</span>
+        <div>
+          <div style="font-size:12px;font-weight:800;color:${vencidos.length?'var(--r)':urgentes.length?'var(--am)':'#1565C0'};">⚠ ${total} Alerta${total>1?'s':'!'} de Prazo</div>
+          <div style="font-size:10px;color:var(--ct);">
+            ${vencidos.length?`<span style="color:var(--r);font-weight:700;">${vencidos.length} vencidos</span> · `:''}
+            ${urgentes.length?`<span style="color:var(--am);font-weight:700;">${urgentes.length} vencem em 5 dias</span> · `:''}
+            ${semMov.length?`<span style="color:#555;">${semMov.length} sem movimentação</span>`:''}
+          </div>
+        </div>
+      </div>
+      <span style="font-size:11px;color:var(--ct);">▼ clique para expandir</span>
+    </div>
+    <div style="padding:8px 14px;max-height:250px;overflow-y:auto;">
+      ${vencidos.length?`<div style="font-size:10px;font-weight:800;color:var(--r);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">PRAZOS VENCIDOS (${vencidos.length})</div>${vencidos.map(r=>mkItem(r,'vencido')).join('')}`:''}
+      ${urgentes.length?`<div style="font-size:10px;font-weight:800;color:var(--am);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">VENCEM EM 5 DIAS (${urgentes.length})</div>${urgentes.map(r=>mkItem(r,'urgente')).join('')}`:''}
+      ${semMov.length?`<div style="font-size:10px;font-weight:800;color:#555;padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">SEM MOVIMENTAÇÃO +30 DIAS (${semMov.length})</div>${semMov.map(r=>mkItem(r,'semMov')).join('')}`:''}
+    </div>
+  </div>`
+}
+
+// ══════════════════════════════════════
 //  TELA ANALISTA — PLANILHA
 // ══════════════════════════════════════
 async function irPlanilha() {
@@ -1930,6 +2373,22 @@ async function buscarPlan() {
 
     window._planTot = todos.length
     window._planDadosCache = todos
+
+    // Calcular e exibir alertas
+    const alertas = calcularAlertas(todos)
+    const alertTotal = alertas.vencidos.length + alertas.urgentes.length
+    const badge = document.getElementById('planAlertBadge')
+    if(badge) { badge.style.display = alertTotal>0?'':'none'; badge.textContent = alertTotal }
+
+    // Inserir painel de alertas antes do resumo (se ainda não existe)
+    let alertDiv = document.getElementById('planAlertPanel')
+    if(!alertDiv) {
+      alertDiv = document.createElement('div')
+      alertDiv.id = 'planAlertPanel'
+      const resumo = document.getElementById('planResumo')
+      if(resumo) resumo.parentNode.insertBefore(alertDiv, resumo)
+    }
+    alertDiv.innerHTML = renderAlertasPanel(alertas)
 
     // Paginação client-side
     const pagData = todos.slice(from, from + PP)
