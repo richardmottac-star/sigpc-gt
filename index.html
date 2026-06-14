@@ -1913,44 +1913,426 @@ function cgeExportExcel() {
 
 function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
-  const sid = document.getElementById('cgeSetorial')?.value||'FCEE'
-  const dt = new Date().toLocaleDateString('pt-BR')
-  const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
-  const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
-  const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
-  const linhas = _cgeDados.map((d,i)=>{
-    const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
-    const bg = pct>=70?'#E8F5EE':pct>=40?'#FFF8E1':'#FFEBEE'
-    return `<tr style="background:${bg}"><td>${i+1}</td><td><b>${d.analista}</b></td>
-      <td>${d.total}</td><td style="color:#006B3C;font-weight:700;">${d.baixadas}</td>
-      <td>${d.analise}</td><td>${d.dilig}</td><td>${d.ctrl}</td><td><b>${pct}%</b></td></tr>`
+
+  const { sid='FCEE', dtInicio='', dtCorte='', metaMes=10, totalPlano=9632, numTec=43, meses=0 } = _cgeParams||{}
+  const totBx   = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+  const totAn   = _cgeDados.reduce((s,d)=>s+d.analise,0)
+  const totDil  = _cgeDados.reduce((s,d)=>s+d.dilig,0)
+  const totRean = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
+  const totCtrl = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
+  const totEmAnd= totAn+totDil+totRean+totCtrl
+  const metaAcum= meses>0 ? numTec*metaMes*meses : 0
+  const pctMeta = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1)+'%' : '—'
+  const pctEst  = totalPlano>0 ? (totBx/totalPlano*100).toFixed(1)+'%' : '—'
+  const metaTrim= meses>0 ? numTec*metaMes : 0
+
+  const fmtMes = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
+  const fmtMesAbrev = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.',' ').replace(' de','') }
+  const periodoTxt = dtInicio&&dtCorte ? `${fmtMes(dtInicio)} a ${fmtMes(dtCorte)}` : 'Período não definido'
+  const periodoAbrev = dtInicio&&dtCorte ? `${fmtMesAbrev(dtInicio)} a ${fmtMesAbrev(dtCorte)}` : '—'
+  const dtGerado = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})
+  const mesCorte = dtCorte ? new Date(dtCorte).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : 'período atual'
+  const cidade = 'São José'
+
+  // Grupos
+  const gList = (g) => _cgeDados.filter(d => (GRUPOS_FIXOS[d.analista]||GRUPOS_FIXOS[(d.analista||'').split(' ')[0]]||0)===g)
+  const gStats = (arr) => ({
+    total:arr.reduce((s,d)=>s+d.total,0), bx:arr.reduce((s,d)=>s+d.baixadas,0),
+    acima:arr.filter(d=>d.baixadas>=(metaMes*(meses||1))).length,
+    abaixo:arr.filter(d=>d.baixadas<(metaMes*(meses||1))).length
+  })
+  const g1=gStats(gList(1)), g2=gStats(gList(2)), g3=gStats(gList(3))
+
+  // Quadro 2 — layout 2 colunas como no original
+  const metaInd = meses>0 ? metaMes*meses : '—'
+  const q2Rows = (arr) => arr.map(d => {
+    const pct = metaAcum>0&&meses>0 ? Math.round(d.baixadas/(metaMes*meses)*100)+'%' : '—'
+    return `<tr>
+      <td style="padding:3px 6px;border:1px solid #ccc;">${d.analista}</td>
+      <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;">${metaInd}</td>
+      <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;">0</td>
+      <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-weight:700;">${d.baixadas}</td>
+      <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-weight:700;">${d.baixadas}</td>
+      <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-weight:700;">${pct}</td>
+    </tr>`
   }).join('')
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório CGE — ${sid}</title>
-  <style>
-    body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}
-    .hdr{background:#1B5E20;color:#fff;padding:14px 18px;border-radius:6px;margin-bottom:14px;}
-    .hdr h2{margin:0 0 4px;font-size:16px;} .hdr p{margin:0;font-size:10px;opacity:.8;}
-    .stats{display:flex;gap:16px;margin-bottom:14px;}
-    .stat{background:#f5f5f5;border-radius:6px;padding:10px 16px;text-align:center;}
-    .stat strong{display:block;font-size:20px;} .stat span{font-size:9px;color:#666;}
-    table{width:100%;border-collapse:collapse;margin-top:8px;}
-    th{background:#1B5E20;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}
-    td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
-    tfoot tr{background:#F5F8F6;font-weight:bold;}
-  </style></head><body>
-  <div class="hdr"><h2>RELATÓRIO CGE — SIGPC-GT v2.1 — ${sid}</h2>
-  <p>Gerado em ${dt} | ${_cgeDados.length} analistas | ${totBx}/${totTotal} concluídas (${totPct}%)</p></div>
-  <table><thead><tr><th>#</th><th>Analista</th><th>Total PC</th><th>Concluídas</th>
-    <th>Em Análise</th><th>Diligência</th><th>Ctrl. Interno</th><th>% Concluído</th></tr></thead>
-  <tbody>${linhas}</tbody>
-  <tfoot><tr><td colspan="2">TOTAL GERAL — ${_cgeDados.length} analistas</td>
-    <td>${totTotal}</td><td>${totBx}</td>
-    <td>${_cgeDados.reduce((s,d)=>s+d.analise,0)}</td>
-    <td>${_cgeDados.reduce((s,d)=>s+d.dilig,0)}</td>
-    <td>${_cgeDados.reduce((s,d)=>s+d.ctrl,0)}</td>
-    <td>${totPct}%</td></tr></tfoot>
-  </table></body></html>`
-  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
+
+  const metaTot = meses>0 ? numTec*metaMes*meses : '—'
+  const pctTotQ2 = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1)+'%' : '—'
+
+  // Quadro 4
+  const q4dados = _cgeDados
+    .map(d=>({...d, emAnd:d.analise+d.dilig+d.reanalise+d.ctrl}))
+    .sort((a,b)=>b.emAnd-a.emAnd)
+
+  const q4Rows = q4dados.map(d => `<tr>
+    <td style="padding:3px 8px;border:1px solid #ccc;font-weight:${d.emAnd>0?'700':'400'};">${d.analista}</td>
+    <td style="padding:3px 8px;border:1px solid #ccc;text-align:center;font-weight:${d.emAnd>0?'700':'400'};">${d.emAnd}</td>
+  </tr>`).join('')
+
+  // Header institucional (repetido em cada página)
+  const HDR = `<div class="page-header">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:2px;">
+      <tr>
+        <td style="width:60px;text-align:center;vertical-align:middle;border:2px solid #006B3C;padding:4px;">
+          <div style="font-size:7px;font-weight:900;color:#006B3C;line-height:1.2;">ESTADO DE<br>SANTA<br>CATARINA</div>
+        </td>
+        <td style="text-align:center;vertical-align:middle;padding:4px 0;">
+          <div style="font-size:10px;font-weight:700;color:#333;">ESTADO DE SANTA CATARINA</div>
+          <div style="font-size:12px;font-weight:900;color:#006B3C;">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL</div>
+          <div style="font-size:10px;font-weight:700;color:#333;">GABINETE DA PRESIDÊNCIA</div>
+          <div style="font-size:10px;color:#555;">SETOR DE PRESTAÇÃO DE CONTAS</div>
+        </td>
+        <td style="width:60px;text-align:center;vertical-align:middle;border:2px solid #006B3C;padding:4px;">
+          <div style="font-size:7px;font-weight:900;color:#006B3C;line-height:1.2;">SIGPC-GT<br>v2.1</div>
+        </td>
+      </tr>
+    </table>
+    <div style="border-top:3px solid #006B3C;border-bottom:1px solid #006B3C;margin:2px 0;"></div>
+  </div>`
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório CGE — ${sid} — ${periodoTxt}</title>
+<style>
+  @page { size:A4; margin:1.5cm 2cm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,sans-serif; font-size:11px; color:#111; line-height:1.5; }
+  .page { padding:0; }
+  .page-break { page-break-before:always; padding-top:0; }
+  .page-header { margin-bottom:12px; }
+  h2 { font-size:12px; font-weight:900; text-align:center; margin:10px 0 4px; text-transform:uppercase; }
+  h3 { font-size:11px; font-weight:700; margin:10px 0 4px; }
+  .ficha { border:1px solid #999; padding:8px 12px; margin:8px 0 12px; font-size:10.5px; }
+  .ficha div { margin-bottom:2px; }
+  p { text-align:justify; margin-bottom:8px; font-size:11px; }
+  table { width:100%; border-collapse:collapse; margin:6px 0 10px; font-size:10px; }
+  th { background:#006B3C; color:#fff; padding:5px 6px; text-align:center; border:1px solid #004D2B; font-size:9.5px; font-weight:700; }
+  td { padding:4px 6px; border:1px solid #ccc; font-size:10px; }
+  tr:nth-child(even) td { background:#F8FBF9; }
+  .tfoot-row td { background:#E8F5EE !important; font-weight:700; border-top:2px solid #006B3C; }
+  .nota { font-size:9px; color:#555; margin-top:4px; text-align:justify; font-style:italic; }
+  .secao-titulo { font-size:10.5px; font-weight:900; text-transform:uppercase; color:#006B3C; border-bottom:1px solid #006B3C; padding-bottom:2px; margin:12px 0 6px; }
+  .quadro-titulo { font-size:10.5px; font-weight:700; margin:10px 0 4px; }
+  .assinatura-bloco { margin-top:30px; }
+  .ass-linha { display:inline-block; text-align:center; width:45%; vertical-align:top; }
+  .ass-linha .linha { border-top:1px solid #333; margin-top:40px; padding-top:4px; }
+  .ass-linha .nome { font-weight:700; font-size:10.5px; }
+  .ass-linha .cargo { font-size:9.5px; color:#555; }
+  .q3-table td:first-child { font-weight:700; width:25%; background:#F0F7F0; }
+  li { margin-left:16px; margin-bottom:3px; }
+  .afastamento-titulo { font-size:10px; font-weight:900; text-transform:uppercase; text-align:center; margin:10px 0 4px; }
+  @media print { .no-print { display:none; } }
+</style></head><body>
+
+<!-- ════ PÁGINA 1 — CAPA + CONTEXTUALIZAÇÃO ════ -->
+<div class="page">
+${HDR}
+
+<h2>RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO<br>ANÁLISE DE PRESTAÇÕES DE CONTAS</h2>
+
+<div class="ficha">
+  <div><strong>Órgão/Entidade:</strong> FCEE - Fundação Catarinense de Educação Especial - UG 450021</div>
+  <div><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</div>
+  <div><strong>Processo:</strong> CGE nº 727/2025</div>
+  <div><strong>Período de Monitoramento:</strong> ${periodoTxt}</div>
+  <div><strong>Número PCs Total:</strong> ${totalPlano.toLocaleString('pt-BR')} PCs (conforme Plano de Ação)</div>
+  <div><strong>Número de servidores GT-PC:</strong> ${numTec+2} servidores (${numTec} técnicos + 2 coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</div>
+</div>
+
+<div class="secao-titulo">1. Contextualização</div>
+<p>O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.</p>
+
+<h3>1.1 Cronograma e Metas Mensais</h3>
+<p>Conforme o Plano de Ação aprovado, a meta global para o período foi de ${metaTrim.toLocaleString('pt-BR')} prestações de contas analisadas, correspondendo à meta de ${metaMes} prestações de contas por técnico/mês${meses>0?`, totalizando ${metaMes*meses} processos por técnico no período`:''}.
+Foram considerados os ${numTec} técnicos disponíveis para o cálculo, sendo que alguns registraram afastamentos no respectivo período.</p>
+<p>Os resultados consolidados do período são apresentados no Quadro 1, que demonstra a execução acumulada e o percentual de cumprimento das metas.</p>
+
+<div class="quadro-titulo">1. QUADRO GERAL DE METAS</div>
+<table>
+  <thead>
+    <tr>
+      <th rowspan="3">Período (1)</th>
+      <th rowspan="3">Meta (2)</th>
+      <th rowspan="3">Execução Meta % (3)</th>
+      <th colspan="4">Técnico</th>
+      <th colspan="2">Secretário</th>
+      <th rowspan="3">Total (10)</th>
+      <th rowspan="3">Estoque (11)</th>
+      <th rowspan="3">Total / Estoque % (12)</th>
+    </tr>
+    <tr>
+      <th colspan="2">Parcial</th>
+      <th colspan="2">Final</th>
+      <th rowspan="2">Regular (8)</th>
+      <th rowspan="2">Irregular (9)</th>
+    </tr>
+    <tr>
+      <th>Regular (4)</th><th>Irregular (5)</th>
+      <th>Regular (6)</th><th>Irregular (7)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="font-weight:700;">Resultado — ${periodoTxt}</td>
+      <td style="text-align:center;font-weight:700;">${metaAcum.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:700;color:${parseFloat(pctMeta)>=70?'#006B3C':parseFloat(pctMeta)>=40?'#E65100':'#C8102E'};">${pctMeta}</td>
+      <td style="text-align:center;">${totBx}</td>
+      <td style="text-align:center;">0</td>
+      <td style="text-align:center;">0</td>
+      <td style="text-align:center;">0</td>
+      <td style="text-align:center;">0</td>
+      <td style="text-align:center;">0</td>
+      <td style="text-align:center;font-weight:900;">${totBx.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;">${totalPlano.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:700;">${pctEst}</td>
+    </tr>
+  </tbody>
+</table>
+<div class="nota">Nota: O cumprimento da meta foi apurado com base no total de PCs baixadas (Secretária + Técnico), conforme metodologia do Plano de Ação e controle de distribuição das PCs no âmbito do GT-PC. Dados extraídos do SIGPC-GT em ${dtGerado}.</div>
+</div>
+
+<!-- ════ PÁGINA 2 — QUADRO 2 (DESEMPENHO INDIVIDUAL) ════ -->
+<div class="page page-break">
+${HDR}
+
+<div class="secao-titulo">1.2 Desempenho Individual dos Servidores do GT-PC</div>
+<p>O monitoramento individual da produtividade tem como objetivo verificar a contribuição de cada membro do Grupo de Trabalho para o cumprimento da meta global de análise de prestações de contas, permitindo identificar variações de desempenho, necessidades de capacitação técnica e oportunidades de ajuste na distribuição das análises. Os resultados estão apresentados no Quadro 2.</p>
+
+<div class="quadro-titulo">Quadro 2: Desempenho dos servidores do Grupo GT-PC*</div>
+<table>
+  <thead>
+    <tr>
+      <th>Servidor</th>
+      <th>Meta por técnico<br>${periodoAbrev}<br>(1)</th>
+      <th>Qt Baixas<br>Secretário c/<br>rev. técnico (2)</th>
+      <th>Qt Baixas<br>Técnico (3)</th>
+      <th>Qt Total<br>Baixas (4)</th>
+      <th>Cumprimento<br>da Meta % (5)</th>
+      <th>Servidor</th>
+      <th>Meta por técnico<br>${periodoAbrev}<br>(1)</th>
+      <th>Qt Baixas<br>Secretário c/<br>rev. técnico (2)</th>
+      <th>Qt Baixas<br>Técnico (3)</th>
+      <th>Qt Total<br>Baixas (4)</th>
+      <th>Cumprimento<br>da Meta % (5)</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${(() => {
+      const half = Math.ceil(_cgeDados.length/2)
+      const left = _cgeDados.slice(0,half)
+      const right = _cgeDados.slice(half)
+      return left.map((d,i) => {
+        const r = right[i]
+        const pctL = metaAcum>0&&meses>0 ? Math.round(d.baixadas/(metaMes*meses)*100)+'%' : '—'
+        const pctR = r&&metaAcum>0&&meses>0 ? Math.round(r.baixadas/(metaMes*meses)*100)+'%' : ''
+        const bgL = d.baixadas>=(metaMes*(meses||1)) ? '#E8F5EE' : ''
+        const bgR = r&&r.baixadas>=(metaMes*(meses||1)) ? '#E8F5EE' : ''
+        return `<tr>
+          <td style="background:${bgL};font-weight:700;">${d.analista}</td>
+          <td style="background:${bgL};text-align:center;">${metaInd}</td>
+          <td style="background:${bgL};text-align:center;">0</td>
+          <td style="background:${bgL};text-align:center;">${d.baixadas}</td>
+          <td style="background:${bgL};text-align:center;font-weight:700;">${d.baixadas}</td>
+          <td style="background:${bgL};text-align:center;font-weight:700;">${pctL}</td>
+          ${r ? `
+          <td style="background:${bgR};font-weight:700;">${r.analista}</td>
+          <td style="background:${bgR};text-align:center;">${metaInd}</td>
+          <td style="background:${bgR};text-align:center;">0</td>
+          <td style="background:${bgR};text-align:center;">${r.baixadas}</td>
+          <td style="background:${bgR};text-align:center;font-weight:700;">${r.baixadas}</td>
+          <td style="background:${bgR};text-align:center;font-weight:700;">${pctR}</td>` : '<td colspan="6"></td>'}
+        </tr>`
+      }).join('')
+    })()}
+    <tr class="tfoot-row">
+      <td colspan="3" style="font-weight:700;">Total Geral</td>
+      <td style="text-align:center;font-weight:900;">${totBx.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:900;">${totBx.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:900;">${pctTotQ2}</td>
+      <td colspan="6"></td>
+    </tr>
+  </tbody>
+</table>
+<div class="nota">(1) A Meta por Técnico Acumulada corresponde ao somatório das metas individuais no período (${periodoTxt}).
+(2) O total de PCs baixadas pelo Secretário corresponde às revisões administrativas.
+(3) O total de PCs baixadas pelo Técnico corresponde às análises técnicas concluídas.
+(4) O total de PCs baixadas corresponde à soma das colunas (2) e (3).
+(5) O percentual de cumprimento da meta corresponde à relação entre as PCs baixadas e a meta acumulada.</div>
+</div>
+
+<!-- ════ PÁGINA 3 — ANÁLISE QUALITATIVA INDIVIDUAL ════ -->
+<div class="page page-break">
+${HDR}
+
+<div class="secao-titulo">Análise do Desempenho Individual e Avaliação Técnica</div>
+<p>A partir dos dados apresentados no Quadro 2, observa-se que nem todos os integrantes do grupo de trabalho atingiram sua meta no volume de prestações de contas baixadas. Em muitos casos isso ocorre por estarem em diligência conforme Quadro 4, refletindo também diferenças quanto à complexidade dos processos analisados, dependência de retorno documental por parte dos convenentes, como também a diferença de situações no sistema SIGEF, em que em alguns casos um parecer impacta na baixa de apenas 1 PC e em outros casos esse parecer resulta na baixa de múltiplas PCs. Essa situação causa uma complexidade ao analisar os dados de maneira isolada e pensar em produção por si só, devendo essas situações sempre serem levadas em consideração.</p>
+
+<p>Em relação aos motivos que impactam diretamente na celeridade do processo e nas baixas decorrem de:</p>
+<ul>
+  <li>Ausência ou incompletude de documentos comprobatórios;</li>
+  <li>Necessidade de regularização de encargos trabalhistas e previdenciários;</li>
+  <li>Inconsistências nos registros do SIGEF;</li>
+  <li>Pendências relacionadas à aplicação financeira e extratos bancários;</li>
+  <li>Falhas na identificação dos instrumentos de parceria.</li>
+</ul>
+<br>
+<p>Esses fatores impactaram diretamente o tempo médio de tramitação dos processos, exigindo reiterações de diligência e reanálises sucessivas. Ressalta-se que o acúmulo de prestações de contas sem análise em período anterior gera recebimento elevado de diligências, e as entidades convenentes com esta Fundação não possuem grande corpo administrativo, causando impacto no envio das respostas e pedidos sucessivos de aumento de prazo.</p>
+
+<p>Apesar de a meta não ter sido integralmente cumprida, verifica-se aumento considerável nas baixas efetuadas, demonstrando comprometimento do grupo e melhoria contínua nas análises por estarem criando cada vez mais expertise no processo.</p>
+
+<h3>Análise por Grupo</h3>
+
+<p><strong>Grupo 1</strong> — coordenado por Nayara Limas<br>
+O Grupo 1 ${g1.acima>0?`apresentou bom desempenho com ${g1.acima} técnico(s) atingindo ou superando a meta estabelecida`:'está em processo de evolução de desempenho'}. O grupo registrou ${g1.bx} PCs concluídas no período. ${g1.abaixo>0?`Alguns técnicos apresentam percentual menor em virtude de processos mais complexos, causando morosidade nas análises e consequentemente nas respectivas baixas.`:''}</p>
+
+<p><strong>Grupo 2</strong> — coordenado por Zadir Teresinha<br>
+O Grupo 2 registrou ${g2.bx} PCs concluídas, ${g2.acima>0?`com ${g2.acima} técnico(s) atingindo ou superando a meta prevista`:' com desempenho em evolução'}. Apresenta volume de processos em fase de diligência no período avaliado, evidenciando dependência do retorno tempestivo de documentação por parte das entidades parceiras.</p>
+
+<p><strong>Grupo 3</strong> — FCEE<br>
+O Grupo 3 registrou ${g3.bx} PCs concluídas. O grupo demonstrou desempenho gradual, sendo que em sua maioria cada parcial está relacionada a apenas 1 PC, impactando diretamente o resultado quantitativo. Os técnicos vêm criando expertise crescente na função de convênios e prestações de contas, refletindo na melhora contínua da produtividade.</p>
+
+<h3>1.3 Análise Qualitativa e Ações Corretivas</h3>
+<p>A análise qualitativa permite identificar aspectos relevantes quanto à organização do trabalho, à padronização dos procedimentos e à efetividade das ações desenvolvidas pelo Grupo de Trabalho de Prestação de Contas (GT-PC) no período de monitoramento.</p>
+
+<p><strong>Justificativas Complementares sobre o Desempenho no Período:</strong></p>
+<p>A análise dos resultados apresentados nos Quadros 1 e 2 deve ser interpretada à luz das especificidades operacionais verificadas no período monitorado, as quais impactaram diretamente o ritmo de tramitação e conclusão das prestações de contas, destacando-se:</p>
+<p>a) Prorrogação de prazos para atendimento às diligências, solicitada pelas entidades conveniadas em razão do acúmulo de diligências recebidas, o que resultou no adiamento da apresentação de documentos complementares;</p>
+<p>b) Reiteração de diligências em razão da ausência ou incompletude documental, bem como do não cumprimento dos prazos por parte de determinadas instituições, exigindo novas solicitações e reanálises;</p>
+<p>c) Dificuldades relacionadas à mudança de pessoal nas entidades conveniadas, com falta de conhecimento por parte dos novos colaboradores sobre as pendências e procedimentos;</p>
+<p>d) Existência de processos condicionados à apresentação de documentos financeiros essenciais, tais como extratos bancários e balancetes, cuja obtenção se tornou inviável pelo longo prazo transcorrido;</p>
+<p>e) Heterogeneidade e complexidade das prestações de contas analisadas, considerando diferenças quanto aos valores envolvidos, volume de movimentações financeiras e grau de detalhamento exigido.</p>
+<p>Ressalta-se que a equipe manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, priorizando a qualidade e a segurança jurídica dos pareceres emitidos. As informações encontram-se detalhadas no Quadro 3.</p>
+</div>
+
+<!-- ════ PÁGINA 4 — QUADRO 3 + QUADRO 4 ════ -->
+<div class="page page-break">
+${HDR}
+
+<div class="quadro-titulo">Quadro 3 – Avaliação Qualitativa do Processo</div>
+<table class="q3-table">
+  <thead><tr><th style="width:25%;">Aspecto Avaliado</th><th>Observações e Ações</th></tr></thead>
+  <tbody>
+    <tr><td>Atividades Desenvolvidas</td><td>
+      • Estruturação do trabalho em três grupos operacionais.<br>
+      • Distribuição equilibrada das análises entre os grupos.<br>
+      • Coordenação descentralizada com acompanhamento individualizado.<br>
+      • Reuniões com CGE, PGE e Tribunal de Contas.<br>
+      • Atuação da Consultoria Jurídica da FCEE na emissão de parecer técnico.</td></tr>
+    <tr><td>Comunicação e Alinhamento</td><td>
+      • Reuniões virtuais periódicas com os grupos.<br>
+      • Criação de grupo institucional de comunicação.<br>
+      • Compartilhamento contínuo de orientações técnicas.</td></tr>
+    <tr><td>Análise Técnica</td><td>
+      • Priorização de processos em estoque.<br>
+      • Identificação sistemática de inconsistências.<br>
+      • Registro formal das análises no SIGPC-GT.</td></tr>
+    <tr><td>Padronização dos Procedimentos</td><td>
+      • Elaboração de modelos de pareceres.<br>
+      • Planejamento de capacitações técnicas.<br>
+      • Uniformização dos fluxos internos.</td></tr>
+    <tr><td>Principais Dificuldades</td><td>
+      • Elevada complexidade dos processos.<br>
+      • Dependência do retorno documental das entidades.<br>
+      • Impacto de recesso e férias no período.<br>
+      • Dificuldade na conferência de cálculos de rendimentos.<br>
+      • Instabilidade em sistemas de apoio.</td></tr>
+    <tr><td>Ações Corretivas Implementadas</td><td>
+      • Ajuste no acesso ao SIGPC-GT por usuário individual.<br>
+      • Reuniões mensais de alinhamento.<br>
+      • Monitoramento sistemático da produtividade.<br>
+      • Redistribuição de processos complexos.</td></tr>
+    <tr><td>Resultados das Ações</td><td>
+      • Eliminação de perda de dados.<br>
+      • Melhoria gradual na uniformidade dos pareceres.<br>
+      • Redução de inconsistências recorrentes.<br>
+      • Fortalecimento do controle interno.</td></tr>
+    <tr><td>Propostas de Aperfeiçoamento</td><td>
+      • Intensificação das capacitações técnicas.<br>
+      • Implementação de revisão cruzada quinzenal.<br>
+      • Ampliação dos mecanismos preventivos.<br>
+      • Aumento do quantitativo de servidores nos Núcleos de Gestão de Convênios.</td></tr>
+    <tr><td>Planilha / SIGPC-GT</td><td>
+      • Sistema SIGPC-GT implementado para monitoramento individual da produtividade.<br>
+      • Campos específicos evidenciam a produtividade por servidor.<br>
+      • Maior transparência, rastreabilidade e precisão na avaliação do desempenho.</td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top:8px;">Segue planilha com situações de processos em análise e diligenciados:</p>
+<div class="quadro-titulo">Quadro 4 – Processos por técnico – em análise, diligência e reanálise:</div>
+<table style="width:60%;margin:0 auto;">
+  <thead>
+    <tr>
+      <th style="text-align:left;">Servidor</th>
+      <th>Qtd. em análise, diligência ou reanálise — ${mesCorte}</th>
+    </tr>
+  </thead>
+  <tbody>${q4Rows}</tbody>
+  <tr class="tfoot-row">
+    <td style="font-weight:700;">TOTAL GERAL</td>
+    <td style="text-align:center;font-weight:900;">${totEmAnd}</td>
+  </tr>
+</table>
+</div>
+
+<!-- ════ PÁGINA 5 — CONCLUSÃO + ASSINATURAS ════ -->
+<div class="page page-break">
+${HDR}
+
+<div class="secao-titulo">Análise Qualitativa Consolidada</div>
+<p>Durante o período monitorado, o GT-PC concentrou esforços nos pontos de dificuldade dos técnicos, realizou reuniões de alinhamento com participação da coordenação, visando demonstrar a importância desse trabalho e a necessidade do cumprimento das metas pactuadas com a CGE.</p>
+<p>A emissão de parecer jurídico pela Consultoria da FCEE contribuiu para conferir maior segurança técnica às análises e dirimir pontos questionados, procurando a melhor conclusão possível para o atendimento público. Reuniões com o TCE demonstraram que o grupo está no caminho correto, buscando a redução do estoque em conformidade com a legislação vigente, pautando-se no princípio da razoabilidade e no nexo de causalidade entre a documentação apresentada e o atendimento do objeto pactuado.</p>
+<p>Verifica-se, assim, evolução gradual do desempenho institucional, com perspectivas de melhora no cumprimento das metas nos períodos subsequentes, especialmente com a implementação do sistema SIGPC-GT que proporciona maior transparência e controle das atividades.</p>
+
+<div class="secao-titulo">1.4 Conclusão</div>
+<p>Diante dos dados apresentados, constata-se o cumprimento parcial das metas estabelecidas no Plano de Ação para o período de ${periodoTxt}. Foram registradas ${totBx.toLocaleString('pt-BR')} PCs concluídas, correspondendo a ${pctMeta} de cumprimento da meta acumulada de ${metaAcum.toLocaleString('pt-BR')} PCs.</p>
+<p>O desempenho observado foi impactado, principalmente, pela elevada complexidade de parte dos processos analisados, pela predominância de pendências de natureza documental e formal, pela dependência de retorno tempestivo das entidades conveniadas e pelas reiterações de diligências, fatores que influenciaram diretamente a capacidade operacional e o tempo médio de finalização dos processos.</p>
+<p>Ressalta-se, contudo, que, mesmo diante das limitações verificadas, o Grupo de Trabalho manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, com observância aos normativos vigentes e à preservação da segurança jurídica dos pareceres emitidos.</p>
+<p>Destaca-se que está sendo implementado o sistema SIGPC-GT para monitoramento e acompanhamento tanto da coordenação como dos técnicos, dando mais transparência e controle nas atividades. Quanto ao impacto no resultado global, o desempenho do período não inviabiliza o alcance dos objetivos estabelecidos no Plano de Ação, desde que mantidas e aperfeiçoadas as estratégias de gestão, capacitação técnica, padronização dos procedimentos e acompanhamento sistemático.</p>
+<p>Por fim, ressalta-se o comprometimento da equipe do GT-PC com a execução das atividades de análise de prestações de contas e a importância de preservar a continuidade do monitoramento, mantendo o alinhamento permanente com as orientações técnicas da Controladoria-Geral do Estado, com vistas ao fortalecimento do controle interno, à melhoria dos indicadores institucionais e à preservação do interesse público.</p>
+
+<br><br>
+<p style="text-align:center;">São José, ${dtGerado}.</p>
+<br><br>
+
+<div class="assinatura-bloco" style="display:flex;justify-content:space-between;">
+  <div class="ass-linha">
+    <div class="linha">
+      <div class="nome">Nayara Limas Ferreira</div>
+      <div class="cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
+      <div class="cargo">Portaria FCEE nº 170 – 24/06/2025</div>
+    </div>
+  </div>
+  <div class="ass-linha">
+    <div class="linha">
+      <div class="nome">Zadir Teresinha Machado Ferreira</div>
+      <div class="cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
+      <div class="cargo">Portaria FCEE nº 170 – 24/06/2025</div>
+    </div>
+  </div>
+</div>
+<br><br>
+<div style="text-align:center;">
+  <div class="linha" style="border-top:1px solid #333;width:40%;margin:40px auto 0;padding-top:4px;">
+    <div class="nome">Jeane Rauh Probst Leite</div>
+    <div class="cargo">Presidente da FCEE</div>
+  </div>
+</div>
+
+<br>
+<div style="text-align:center;font-size:8px;color:#999;border-top:1px solid #ddd;padding-top:6px;margin-top:20px;">
+  Relatório gerado automaticamente pelo SIGPC-GT v2.1 em ${dtGerado} | Dados extraídos do sistema em tempo real
+</div>
+</div>
+
+</body></html>`
+
+  const w = window.open('', '_blank')
+  if(!w) { toast('Permita pop-ups para gerar o PDF.','err'); return }
+  w.document.write(html)
+  w.document.close()
+  setTimeout(() => w.print(), 800)
 }
 
 async function relCarregarAnalistas() {
