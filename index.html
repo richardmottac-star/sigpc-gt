@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIGPC-GT v2.1 — Sistema de Gestão de Prestações de Contas</title>
- 
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
 :root{
@@ -638,7 +638,7 @@ function renderSB() {
       <div class="sb-item" id="mi-est" onclick="irEst()">
         <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Estoque TRs
       </div>
-      <div class="sb-item" id="mi-plan" onclick="irPlanilha()" style="${U&&(U.modoAnalista||U.perfil==='tecnico'||U.perfil==='analista')?'':''}">
+      <div class="sb-item" id="mi-plan" onclick="irPlanilha()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Minha Planilha
       </div>
       <div class="sb-item" id="mi-prod" onclick="irProd()">
@@ -647,16 +647,44 @@ function renderSB() {
       <div class="sb-item" id="mi-repo" onclick="irRepo()">
         <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Repositório
       </div>
-      <div class="sb-item" id="mi-rel" onclick="irRel()">
-        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios CGE
-      </div>
+      ${isCoordi ? `<div class="sb-item" id="mi-rel" onclick="irRel()">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
+        ${U.perfil==='superadmin'?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADMIN</span>':''}
+      </div>` : ''}
     </div>
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
       <div class="sb-grupo">${U.setorialAcesso === 'ADMIN' ? 'ADMIN ●' : U.setorialAcesso + ' ●'}</div>
     </div>
+    <div class="sb-sec" id="sbOnline">
+      <div class="sb-lbl">Online agora</div>
+      <div id="sbOnlineLista" style="padding:4px 14px;font-size:10px;color:var(--ct);">Carregando...</div>
+    </div>
   `
+  carregarOnline()
 }
+
+async function carregarOnline() {
+  try {
+    // Registrar acesso do usuário atual
+    await db.from('usuarios').update({ultimo_acesso: new Date().toISOString()}).eq('id', U.id)
+    // Buscar quem acessou nos últimos 30 min
+    const limite = new Date(Date.now() - 30*60*1000).toISOString()
+    const { data } = await db.from('usuarios').select('nome,perfil').gte('ultimo_acesso', limite).eq('ativo',true).order('ultimo_acesso',{ascending:false})
+    const lista = document.getElementById('sbOnlineLista')
+    if(!lista) return
+    if(!data||!data.length) { lista.innerHTML='<span style="color:var(--ct);">Nenhum usuário online</span>'; return }
+    lista.innerHTML = data.map(u =>
+      `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#4CAF50;flex-shrink:0;"></span>
+        <span style="font-size:10px;${u.nome===U.nome?'font-weight:700;color:var(--v);':''}">${u.nome.split(' ')[0]}${u.nome===U.nome?' (você)':''}</span>
+      </div>`
+    ).join('')
+  } catch(e) {}
+}
+
+// Atualizar online a cada 5 minutos
+setInterval(() => { if(U) carregarOnline() }, 5*60*1000)
 
 function ativarMenu(id) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('on'))
@@ -1004,55 +1032,225 @@ async function carregarNLs(tr, parcela) {
 // ══════════════════════════════════════
 //  PRODUTIVIDADE
 // ══════════════════════════════════════
+const MAPA_PROD = {
+  'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
+  'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
+  'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
+  'Richard Motta Coelho':'Richard',
+  'Nayara Limas Ferreira':'Nayara',
+  'Zadir Teresinha Machado Ferreira':'Zadir',
+}
+
 async function irProd() {
   ativarMenu('prod')
   document.getElementById('BODY').innerHTML = `
-    <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Produtividade (NL)</div>
-    <div class="prod-cards" id="prodCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:16px;font-weight:700;">Produtividade (NL)</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
+          <select id="prodFiltGrupo" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <option value="">Todos</option>
+            <option value="1">Grupo 1 — Nayara</option>
+            <option value="2">Grupo 2 — Zadir</option>
+            <option value="3">Grupo 3 — FCEE</option>
+          </select>
+        </div>
+        <div style="display:flex;border:1.5px solid var(--cb);border-radius:6px;overflow:hidden;">
+          <button id="prodTabCards" onclick="prodAba('cards')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;cursor:pointer;">🃏 Cards</button>
+          <button id="prodTabTabela" onclick="prodAba('tabela')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:none;cursor:pointer;">📊 Tabela</button>
+        </div>
+      </div>
+    </div>
+    <div id="prodCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
   `
+  await prodCarregar()
+}
+
+let _prodAba = 'cards'
+let _prodDados = []
+
+function prodAba(aba) {
+  _prodAba = aba
+  document.getElementById('prodTabCards').style.background = aba==='cards' ? 'var(--v)' : '#fff'
+  document.getElementById('prodTabCards').style.color = aba==='cards' ? '#fff' : 'var(--ct)'
+  document.getElementById('prodTabTabela').style.background = aba==='tabela' ? 'var(--v)' : '#fff'
+  document.getElementById('prodTabTabela').style.color = aba==='tabela' ? '#fff' : 'var(--ct)'
+  prodRender(_prodDados)
+}
+
+async function prodCarregar() {
+  const cont = document.getElementById('prodCont')
+  if(!cont) return
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
     const sid = U.setorialFiltro
+    const grupoF = document.getElementById('prodFiltGrupo')?.value||''
     let q = db.from('usuarios').select('*').eq('ativo',true).eq('perfil','analista')
     if(sid) q = q.eq('setorial_id',sid)
     const { data: users } = await q
+    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
 
-    if(!users||!users.length) { document.getElementById('prodCont').innerHTML='<p style="color:var(--ct);">Nenhum técnico/analista encontrado.</p>'; return }
+    // Buscar toda planilha_analista de uma vez
+    const { data: todaPlan } = await db.from('planilha_analista').select('analista,baixada,situacao').eq('setorial_id', sid||'FCEE')
 
-    const MAPA_PROD = {
-      'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
-      'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
-      'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
-      'Richard Motta Coelho':'Richard',
-      'Nayara Limas Ferreira':'Nayara',
-      'Zadir Teresinha Machado Ferreira':'Zadir',
-    }
-    const cards = await Promise.all(users.map(async u => {
+    // Montar mapa: analista → {total, baixadas, dilig, analise}
+    const mapaStats = {}
+    ;(todaPlan||[]).forEach(r => {
+      const a = r.analista
+      if(!mapaStats[a]) mapaStats[a] = {total:0,baixadas:0,dilig:0,analise:0}
+      mapaStats[a].total++
+      if(r.baixada) mapaStats[a].baixadas++
+      else {
+        const sit = (r.situacao||'').toLowerCase()
+        if(sit.includes('diligên')||sit.includes('diligenc')) mapaStats[a].dilig++
+        else mapaStats[a].analise++
+      }
+    })
+
+    // Buscar grupos do estoque
+    const { data: estGrupos } = await db.from('estoque').select('tecnico_nome,grupo').eq('setorial_id', sid||'FCEE').not('tecnico_nome','is',null)
+    const mapaGrupo = {}
+    ;(estGrupos||[]).forEach(r => { if(r.tecnico_nome && !mapaGrupo[r.tecnico_nome]) mapaGrupo[r.tecnico_nome] = r.grupo })
+
+    const COORD = {1:'Nayara',2:'Zadir',3:'FCEE'}
+    _prodDados = users.map(u => {
       const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
-      const { data: dT } = await db.from('planilha_analista').select('baixada').ilike('analista', nomePlan+'%')
-      const total = dT ? dT.length : 0
-      const baixadas = dT ? dT.filter(r=>r.baixada).length : 0
-      const pct = total>0?Math.round(baixadas/total*100):0
-      return {u,total,baixadas,pct}
-    }))
+      const stats = mapaStats[nomePlan] || {total:0,baixadas:0,dilig:0,analise:0}
+      const grupo = mapaGrupo[nomePlan] || mapaGrupo[u.nome.split(' ')[0]] || null
+      const pct = stats.total>0 ? Math.round(stats.baixadas/stats.total*100) : 0
+      return {u, nomePlan, grupo, coord: COORD[grupo]||'—', ...stats, pct}
+    }).filter(d => !grupoF || String(d.grupo) === grupoF)
+      .sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
-    document.getElementById('prodCont').innerHTML = cards.map(({u,total,baixadas,pct})=>`
-      <div class="prod-card" style="cursor:pointer;" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    prodRender(_prodDados)
+  } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
+}
+
+function prodRender(dados) {
+  const cont = document.getElementById('prodCont')
+  if(!cont) return
+  if(_prodAba === 'cards') {
+    cont.innerHTML = `<div class="prod-cards">${dados.map(d => {
+      const {u,total,baixadas,dilig,analise,pct,grupo,coord} = d
+      const cor = pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'
+      return `<div class="prod-card" style="cursor:pointer;" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
           <div class="prod-nome">${u.nome.split(' ')[0]}</div>
-          <span style="font-size:10px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">${u.grupo||u.setorial_id}</span>
+          <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
         </div>
         <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">FCEE — Técnico/Analista</div>
-        <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct}%;background:${pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'}"></div></div>
+        <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct}%;background:${cor}"></div></div>
         <div class="prod-nums" style="margin-top:5px;">
-          <span>📋 ${total} parcelas assumidas</span>
-          <span style="font-weight:700;color:${pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'}">✓ ${baixadas} baixadas (${pct}%)</span>
+          <span>📋 ${total} assumidas</span>
+          <span style="font-weight:700;color:${cor}">✓ ${baixadas} baixadas (${pct}%)</span>
         </div>
-        <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;">
-          ⏳ ${total-baixadas} pendentes &nbsp;|&nbsp; Clique para ver detalhes
+        <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;display:flex;gap:8px;">
+          <span>🔵 ${analise} análise</span><span>🟡 ${dilig} dilig.</span><span>⏳ ${total-baixadas} pend.</span>
         </div>
+      </div>`
+    }).join('')}</div>`
+  } else {
+    // TABELA
+    const linhas = dados.map((d,i) => {
+      const {u,total,baixadas,dilig,analise,pct,grupo,coord} = d
+      const cor = pct>70?'#E8F5EE':pct>40?'#FFF8E1':'#FFEBEE'
+      const corT = pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'
+      return `<tr style="background:${cor}">
+        <td style="font-size:11px;color:var(--ct);text-align:center;">${i+1}</td>
+        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">${u.nome.split(' ')[0]}</td>
+        <td style="font-size:11px;text-align:center;">${grupo||'—'}</td>
+        <td style="font-size:11px;">${coord}</td>
+        <td style="font-size:12px;font-weight:700;text-align:center;">${total}</td>
+        <td style="font-size:12px;font-weight:700;text-align:center;color:var(--v);">${baixadas}</td>
+        <td style="font-size:12px;text-align:center;color:var(--az);">${analise}</td>
+        <td style="font-size:12px;text-align:center;color:var(--am);">${dilig}</td>
+        <td style="font-size:12px;text-align:center;color:var(--r);">${total-baixadas}</td>
+        <td style="text-align:center;">
+          <span style="font-weight:800;font-size:12px;color:${corT};">${pct}%</span>
+          <div style="background:#E8EEEB;border-radius:4px;height:4px;margin-top:3px;"><div style="height:4px;border-radius:4px;background:${corT};width:${pct}%"></div></div>
+        </td>
+      </tr>`
+    }).join('')
+
+    const totTotal = dados.reduce((a,d)=>a+d.total,0)
+    const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+    const totDil = dados.reduce((a,d)=>a+d.dilig,0)
+    const totAn = dados.reduce((a,d)=>a+d.analise,0)
+    const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
+
+    cont.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
+        <button onclick="prodExportExcel()" style="background:var(--v);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
+        <button onclick="prodExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF</button>
       </div>
-    `).join('')
-  } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);">Erro: ${e.message}</p>` }
+      <div class="tbl-wrap"><div style="overflow-x:auto;">
+      <table id="prodTabela"><thead><tr>
+        <th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
+        <th style="text-align:center;">Total</th>
+        <th style="text-align:center;color:var(--v);">Baixadas ✓</th>
+        <th style="text-align:center;color:var(--az);">Análise</th>
+        <th style="text-align:center;color:var(--am);">Diligência</th>
+        <th style="text-align:center;color:var(--r);">Pendentes</th>
+        <th style="text-align:center;">% Concluído</th>
+      </tr></thead><tbody>${linhas}</tbody>
+      <tfoot><tr style="background:#F5F8F6;font-weight:700;">
+        <td colspan="4" style="font-size:11px;padding:8px 11px;">TOTAL GERAL — ${dados.length} analistas</td>
+        <td style="text-align:center;font-size:12px;">${totTotal}</td>
+        <td style="text-align:center;font-size:12px;color:var(--v);">${totBx}</td>
+        <td style="text-align:center;font-size:12px;color:var(--az);">${totAn}</td>
+        <td style="text-align:center;font-size:12px;color:var(--am);">${totDil}</td>
+        <td style="text-align:center;font-size:12px;color:var(--r);">${totTotal-totBx}</td>
+        <td style="text-align:center;font-size:12px;font-weight:800;">${totPct}%</td>
+      </tr></tfoot>
+      </table></div></div>`
+  }
+}
+
+function prodExportExcel() {
+  const dados = _prodDados
+  let csv = '\uFEFF#;Analista;Grupo;Coordenador;Total;Baixadas;Em Análise;Diligência;Pendentes;% Concluído\n'
+  dados.forEach((d,i) => {
+    csv += `${i+1};${d.u.nome.split(' ')[0]};${d.grupo||'—'};${d.coord};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.total-d.baixadas};${d.pct}%\n`
+  })
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'})
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+  a.download = `produtividade_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`
+  a.click()
+}
+
+function prodExportPDF() {
+  const dados = _prodDados
+  const dt = new Date().toLocaleDateString('pt-BR')
+  const linhas = dados.map((d,i) => {
+    const cor = d.pct>70?'#E8F5EE':d.pct>40?'#FFF8E1':'#FFEBEE'
+    return `<tr style="background:${cor}">
+      <td>${i+1}</td><td><b>${d.u.nome.split(' ')[0]}</b></td><td>${d.grupo||'—'}</td><td>${d.coord}</td>
+      <td>${d.total}</td><td><b style="color:#006B3C">${d.baixadas}</b></td>
+      <td>${d.analise}</td><td>${d.dilig}</td><td>${d.total-d.baixadas}</td>
+      <td><b>${d.pct}%</b></td></tr>`
+  }).join('')
+  const totTotal = dados.reduce((a,d)=>a+d.total,0)
+  const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Produtividade SIGPC-GT</title>
+    <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}
+    h2{color:#006B3C;margin-bottom:4px;}p{color:#666;font-size:10px;margin-bottom:12px;}
+    table{width:100%;border-collapse:collapse;}th{background:#006B3C;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}
+    td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
+    tfoot tr{background:#F5F8F6;font-weight:bold;}</style></head><body>
+    <h2>SIGPC-GT — Produtividade por Analista</h2>
+    <p>Gerado em ${dt} | FCEE | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
+    <table><thead><tr><th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
+    <th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Pendentes</th><th>%</th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr><td colspan="4">TOTAL</td><td>${totTotal}</td><td>${totBx}</td><td>${dados.reduce((a,d)=>a+d.analise,0)}</td>
+    <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${totTotal-totBx}</td>
+    <td>${totTotal>0?Math.round(totBx/totTotal*100):0}%</td></tr></tfoot>
+    </table></body></html>`
+  const w = window.open('','_blank')
+  w.document.write(html)
+  w.document.close()
+  w.print()
 }
 
 // ══════════════════════════════════════
@@ -1103,19 +1301,266 @@ async function salvarRepo() {
 // ══════════════════════════════════════
 function irRel() {
   ativarMenu('rel')
+  const isAdmin = U.perfil==='superadmin'
+  const isCoordi = U.perfil==='coordenador'
+  if(!isAdmin && !isCoordi) {
+    document.getElementById('BODY').innerHTML='<div style="padding:40px;text-align:center;color:var(--ct);">⛔ Acesso restrito ao Superadmin e Coordenadores.</div>'
+    return
+  }
   document.getElementById('BODY').innerHTML = `
-    <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Relatórios CGE</div>
-    <div style="display:grid;gap:10px;">
-      <div style="background:#fff;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);display:flex;align-items:center;gap:14px;cursor:pointer;" onclick="irEst()">
-        <div style="width:40px;height:40px;background:var(--vbg);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">📊</div>
-        <div><div style="font-size:14px;font-weight:600;">Estoque Geral</div><div style="font-size:12px;color:var(--ct);">Situação atual de todas as TRs</div></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px;">📊 Relatórios — SIGPC-GT</div>
+    <!-- FILTROS -->
+    <div class="filtros" style="flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div class="fg"><label>Tipo de Relatório</label>
+        <select id="relTipo" onchange="relMudaTipo()" style="min-width:200px;">
+          <option value="analista">Por Analista</option>
+          <option value="grupo">Por Grupo</option>
+          <option value="tr">Por TR</option>
+          <option value="status">Por Status</option>
+          <option value="geral">Geral — Todos</option>
+        </select>
       </div>
-      <div style="background:#fff;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);display:flex;align-items:center;gap:14px;cursor:pointer;" onclick="irProd()">
-        <div style="width:40px;height:40px;background:var(--azbg);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">📈</div>
-        <div><div style="font-size:14px;font-weight:600;">Produtividade por Técnico/Analista</div><div style="font-size:12px;color:var(--ct);">NLs baixadas por analista</div></div>
+      <div class="fg" id="relFiltAnalista"><label>Analista</label>
+        <select id="relAnalista" style="min-width:160px;">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="fg" id="relFiltGrupo" style="display:none"><label>Grupo</label>
+        <select id="relGrupo">
+          <option value="">Todos</option>
+          <option value="1">Grupo 1 — Nayara</option>
+          <option value="2">Grupo 2 — Zadir</option>
+          <option value="3">Grupo 3 — FCEE</option>
+        </select>
+      </div>
+      <div class="fg" id="relFiltTR" style="display:none"><label>Número TR</label>
+        <input type="text" id="relTR" placeholder="Ex: 2022TR000251" style="width:180px;">
+      </div>
+      <div class="fg" id="relFiltStatus" style="display:none"><label>Status</label>
+        <select id="relStatus">
+          <option value="">Todos</option>
+          <option value="livre">Livre</option>
+          <option value="analise">Em Análise</option>
+          <option value="diligencia">Diligência</option>
+          <option value="baixado">Baixado</option>
+        </select>
+      </div>
+      <div class="fg"><label>Situação PC</label>
+        <select id="relSit">
+          <option value="">Todas</option>
+          <option>Analisar</option>
+          <option>Análise</option>
+          <option>Diligência</option>
+          <option>Reanálise</option>
+          <option>Parecer Regular</option>
+          <option>Parecer Regular com Ressalvas</option>
+          <option>Parecer Irregular</option>
+          <option>Encaminhado para o Controle Interno</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:6px;">
+        <button class="btn-buscar" onclick="relBuscar()">🔍 Gerar</button>
+        <button class="btn-limpar" onclick="relLimpar()">✕</button>
       </div>
     </div>
+    <!-- SUMÁRIO -->
+    <div id="relSumario" style="display:none;background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;" id="relSumCont"></div>
+    </div>
+    <!-- TABELA -->
+    <div class="tbl-wrap" id="relTblWrap" style="display:none;">
+      <div class="tbl-header" style="justify-content:space-between;">
+        <strong id="relTblTit">—</strong>
+        <div style="display:flex;gap:6px;">
+          <button onclick="relExportExcel()" style="background:var(--v);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
+          <button onclick="relExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;"><table id="relTabela">
+        <thead id="relThead"></thead>
+        <tbody id="relTbody"></tbody>
+      </table></div>
+      <div class="paginacao"><span class="pag-info" id="relPagInf">—</span>
+        <div class="pag-btns">
+          <button class="pag-btn" id="relBtnAnt" onclick="relPg(-1)" disabled>◀</button>
+          <span id="relPagNum" style="padding:4px 8px;font-size:11px;color:var(--ct);">1</span>
+          <button class="pag-btn" id="relBtnPrx" onclick="relPg(1)">▶</button>
+        </div>
+      </div>
+    </div>
+    <div id="relMsg" style="text-align:center;color:var(--ct);padding:30px;font-size:13px;">
+      Selecione os filtros e clique em <strong>Gerar</strong> para visualizar o relatório.
+    </div>
   `
+  relCarregarAnalistas()
+}
+
+async function relCarregarAnalistas() {
+  const sel = document.getElementById('relAnalista')
+  if(!sel) return
+  try {
+    const { data } = await db.from('usuarios').select('nome').eq('perfil','analista').eq('ativo',true).order('nome')
+    if(data) data.forEach(u => {
+      const o = document.createElement('option')
+      o.value = u.nome; o.textContent = u.nome.split(' ')[0]
+      sel.appendChild(o)
+    })
+  } catch(e) {}
+}
+
+function relMudaTipo() {
+  const tipo = document.getElementById('relTipo')?.value
+  document.getElementById('relFiltAnalista').style.display = ['analista','geral'].includes(tipo) ? '' : 'none'
+  document.getElementById('relFiltGrupo').style.display = ['grupo','geral'].includes(tipo) ? '' : 'none'
+  document.getElementById('relFiltTR').style.display = tipo==='tr' ? '' : 'none'
+  document.getElementById('relFiltStatus').style.display = ['status','geral'].includes(tipo) ? '' : 'none'
+}
+
+let _relDados = []
+let _relPag = 0
+const REL_PP = 50
+
+async function relBuscar() {
+  _relPag = 0
+  document.getElementById('relMsg').style.display='none'
+  document.getElementById('relTblWrap').style.display='none'
+  document.getElementById('relSumario').style.display='none'
+  const tipo = document.getElementById('relTipo')?.value||'analista'
+  const analista = document.getElementById('relAnalista')?.value||''
+  const grupo = document.getElementById('relGrupo')?.value||''
+  const tr = document.getElementById('relTR')?.value.trim()||''
+  const status = document.getElementById('relStatus')?.value||''
+  const sit = document.getElementById('relSit')?.value||''
+  const sid = U.setorialFiltro || 'FCEE'
+
+  document.getElementById('relMsg').style.display='block'
+  document.getElementById('relMsg').innerHTML='<div class="loading"><div class="spin"></div>Gerando relatório...</div>'
+
+  try {
+    let q = db.from('planilha_analista').select('*').eq('setorial_id', sid)
+    if(analista) { const nomePlan = MAPA_PROD[analista]||analista.split(' ')[0]; q = q.ilike('analista', nomePlan+'%') }
+    if(sit) q = q.eq('situacao', sit)
+    if(tr) q = q.ilike('tr', '%'+tr+'%')
+    q = q.order('analista').order('tr').order('parcela')
+    const { data, error } = await q
+    if(error) throw error
+
+    let dados = data||[]
+
+    // Filtrar por grupo via estoque
+    if(grupo) {
+      const { data: estGrp } = await db.from('estoque').select('tr,parcela,grupo,status').eq('setorial_id',sid).eq('grupo',parseInt(grupo))
+      const chaves = new Set((estGrp||[]).map(r=>r.tr+'|'+r.parcela))
+      dados = dados.filter(r => chaves.has(r.tr+'|'+r.parcela))
+    }
+
+    // Filtrar por status via estoque
+    if(status) {
+      const { data: estSt } = await db.from('estoque').select('tr,parcela,status').eq('setorial_id',sid).eq('status',status)
+      const chaves = new Set((estSt||[]).map(r=>r.tr+'|'+r.parcela))
+      dados = dados.filter(r => chaves.has(r.tr+'|'+r.parcela))
+    }
+
+    _relDados = dados
+    relRenderTabela()
+
+  } catch(e) {
+    document.getElementById('relMsg').innerHTML=`<p style="color:var(--r);">Erro: ${e.message}</p>`
+  }
+}
+
+function relRenderTabela() {
+  const dados = _relDados
+  const from = _relPag * REL_PP
+  const pag = dados.slice(from, from+REL_PP)
+  const total = dados.length
+  const baixadas = dados.filter(r=>r.baixada).length
+  const dilig = dados.filter(r=>(r.situacao||'').toLowerCase().includes('diligên')||
+    (r.situacao||'').toLowerCase().includes('diligenc')).length
+  const analise = total - baixadas - dilig
+
+  // Sumário
+  document.getElementById('relSumario').style.display='block'
+  document.getElementById('relSumCont').innerHTML = `
+    <div style="background:var(--cl);border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;">${total}</div><div style="font-size:10px;color:var(--ct);">Total Registros</div></div>
+    <div style="background:#E0F2E9;border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas}</div><div style="font-size:10px;color:var(--ct);">Baixadas ✓</div></div>
+    <div style="background:var(--azbg);border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;color:var(--az);">${analise}</div><div style="font-size:10px;color:var(--ct);">Em Análise</div></div>
+    <div style="background:var(--ambg);border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;color:var(--am);">${dilig}</div><div style="font-size:10px;color:var(--ct);">Diligência</div></div>
+    <div style="background:var(--cl);border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;color:var(--r);">${total>0?Math.round(baixadas/total*100):0}%</div><div style="font-size:10px;color:var(--ct);">Concluído</div></div>
+  `
+
+  // Tabela
+  document.getElementById('relMsg').style.display='none'
+  document.getElementById('relTblWrap').style.display='block'
+  document.getElementById('relTblTit').textContent = `${total} registros encontrados`
+  document.getElementById('relThead').innerHTML = `<tr>
+    <th>#</th><th>Analista</th><th>TR (SIGEF)</th><th>Parcela</th>
+    <th>Processo SGP</th><th>Beneficiário</th><th>Situação</th><th>Baixada</th>
+  </tr>`
+  document.getElementById('relTbody').innerHTML = pag.map((r,i) => {
+    const cor = r.baixada?'#F0FAF4':''
+    return `<tr style="background:${cor}">
+      <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
+      <td style="font-size:11px;font-weight:600;">${r.analista||'—'}</td>
+      <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
+      <td style="text-align:center;font-size:11px;">${r.parcela||'—'}</td>
+      <td style="font-size:10px;">${r.processo_sgp||'—'}</td>
+      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.beneficiario||''}">${r.beneficiario||'—'}</td>
+      <td><span class="bdg ${r.baixada?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.situacao||'—'}</span></td>
+      <td style="text-align:center;">${r.baixada?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
+    </tr>`
+  }).join('')
+
+  // Paginação
+  const totPag = Math.ceil(total/REL_PP)||1
+  document.getElementById('relPagInf').textContent = `Pág. ${_relPag+1} de ${totPag} — ${total} registros`
+  document.getElementById('relPagNum').textContent = `${_relPag+1}/${totPag}`
+  document.getElementById('relBtnAnt').disabled = _relPag===0
+  document.getElementById('relBtnPrx').disabled = _relPag>=totPag-1
+}
+
+function relPg(d) { _relPag += d; relRenderTabela() }
+function relLimpar() {
+  ['relTipo','relAnalista','relGrupo','relTR','relStatus','relSit'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value=''
+  })
+  _relDados=[]; _relPag=0
+  document.getElementById('relTblWrap').style.display='none'
+  document.getElementById('relSumario').style.display='none'
+  document.getElementById('relMsg').style.display='block'
+  document.getElementById('relMsg').innerHTML='Selecione os filtros e clique em <strong>Gerar</strong>.'
+}
+
+function relExportExcel() {
+  const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
+  let csv = '\uFEFF#;Analista;TR;Parcela;Processo SGP;Beneficiário;Situação;Baixada\n'
+  _relDados.forEach((r,i) => {
+    csv += `${i+1};"${r.analista||''}";${r.tr||''};${r.parcela||''};"${r.processo_sgp||''}";"${(r.beneficiario||'').replace(/"/g,"'")}";${r.situacao||''};${r.baixada?'Sim':'Não'}\n`
+  })
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
+  a.download=`relatorio_sigpc_${dt}.csv`; a.click()
+}
+
+function relExportPDF() {
+  const dt = new Date().toLocaleDateString('pt-BR')
+  const baixadas = _relDados.filter(r=>r.baixada).length
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório SIGPC-GT</title>
+  <style>body{font-family:Arial,sans-serif;font-size:10px;margin:20px;}
+  h2{color:#006B3C;}p{color:#666;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:#006B3C;color:#fff;padding:5px 7px;text-align:left;font-size:9px;}
+  td{padding:4px 7px;border-bottom:1px solid #eee;font-size:10px;}
+  .bx{color:#006B3C;font-weight:bold;}</style></head><body>
+  <h2>SIGPC-GT — Relatório de Prestações de Contas</h2>
+  <p>Gerado em ${dt} | Total: ${_relDados.length} registros | Baixadas: ${baixadas} (${_relDados.length>0?Math.round(baixadas/_relDados.length*100):0}%)</p>
+  <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>Parcela</th><th>Processo SGP</th><th>Beneficiário</th><th>Situação</th><th>Baixada</th></tr></thead>
+  <tbody>${_relDados.map((r,i)=>`<tr style="${r.baixada?'background:#F0FAF4':''}">
+    <td>${i+1}</td><td>${r.analista||'—'}</td><td>${r.tr||'—'}</td><td>${r.parcela||'—'}</td>
+    <td>${r.processo_sgp||'—'}</td><td>${(r.beneficiario||'—').substring(0,50)}</td>
+    <td>${r.situacao||'—'}</td><td class="${r.baixada?'bx':''}">${r.baixada?'✓ Sim':'Não'}</td>
+  </tr>`).join('')}</tbody></table></body></html>`
+  const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
 }
 
 
@@ -1208,21 +1653,22 @@ async function buscarPlan() {
   const pag   = window._planPag||0
   const from  = pag*PP, to = from+PP-1
 
-  // Nome na planilha = primeiro nome do usuário
-  // Exceções: nomes compostos que precisam ser exatos
+  // Nome na planilha = mapeamento correto
   const MAPA_PLANILHA = {
     'Sandra Paul':'Sandra Paul', 'Sandra Rocha':'Sandra Rocha',
     'Ana Claudia':'Ana Claudia', 'Ana Leticia':'Ana Leticia',
-    'Grace Oliveira':'Grace Oliveira'
+    'Grace Oliveira':'Grace Oliveira', 'Janaína':'Janaína',
+    'Richard Motta Coelho':'Richard',
+    'Nayara Limas Ferreira':'Nayara',
+    'Zadir Teresinha Machado Ferreira':'Zadir',
   }
-  const primeiroNome = U.nome.trim().split(' ')[0]
-  const nomeNaPlanilha = MAPA_PLANILHA[U.nome.trim()] || primeiroNome
+  const nomeNaPlanilha = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
   console.log('DEBUG busca planilha:', nomeNaPlanilha, '| U.nome:', U.nome)
 
   try {
     let q = db.from('planilha_analista')
       .select('*',{count:'exact'})
-      .eq('analista', nomeNaPlanilha)
+      .ilike('analista', nomeNaPlanilha+'%')
     if(sit) q = q.eq('situacao', sit)
     if(busca) q = q.or(`entidade.ilike.%${busca}%,tr.ilike.%${busca}%,sgpe.ilike.%${busca}%`)
     q = q.order('tr').order('parcela').range(from,to)
