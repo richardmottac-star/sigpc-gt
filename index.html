@@ -509,7 +509,7 @@ async function verificarConexao() {
   try {
     const { data, error } = await db.from('setoriais').select('id').limit(1)
     if(error) throw error
-    setSt('ok','Supabase OK — banco de dados conectado')
+    setSt('ok','API Railway OK — banco de dados conectado')
   } catch(e) {
     setSt('err','Erro de conexão: ' + e.message)
   }
@@ -694,7 +694,7 @@ async function carregarContadores() {
       total: r1.count||0, livres: r2.count||0, analise: r3.count||0,
       dev: r4.count||0, repo: r5.count||0, nlBx: r6.count||0
     }
-    setSt('ok','Supabase OK — '+DASH.total+' registros carregados')
+    setSt('ok','API Railway OK — '+DASH.total+' registros carregados')
     // Sempre atualizar tela se elementos existirem
     renderDashNums()
   } catch(e) {
@@ -1012,7 +1012,7 @@ async function irProd() {
   `
   try {
     const sid = U.setorialFiltro
-    let q = db.from('usuarios').select('*').eq('ativo',true).eq('perfil','tecnico')
+    let q = db.from('usuarios').select('*').eq('ativo',true).eq('perfil','analista')
     if(sid) q = q.eq('setorial_id',sid)
     const { data: users } = await q
 
@@ -1021,11 +1021,14 @@ async function irProd() {
     const MAPA_PROD = {
       'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
       'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
-      'Grace Oliveira':'Grace Oliveira'
+      'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
+      'Richard Motta Coelho':'Richard',
+      'Nayara Limas Ferreira':'Nayara',
+      'Zadir Teresinha Machado Ferreira':'Zadir',
     }
     const cards = await Promise.all(users.map(async u => {
       const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
-      const { data: dT } = await db.from('planilha_analista').select('baixada').eq('analista', nomePlan)
+      const { data: dT } = await db.from('planilha_analista').select('baixada').ilike('analista', nomePlan+'%')
       const total = dT ? dT.length : 0
       const baixadas = dT ? dT.filter(r=>r.baixada).length : 0
       const pct = total>0?Math.round(baixadas/total*100):0
