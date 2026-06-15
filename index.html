@@ -409,7 +409,11 @@ class QueryBuilder {
     return this
   }
 
-  eq(col, val) { this._filters[col] = val; return this }
+  eq(col, val) {
+    // Para select: filtra normalmente. Para update: _id é setado no wrapper abaixo.
+    this._filters[col] = val
+    return this
+  }
   ilike(col, val) { 
     // Extrair o termo de busca removendo os % das bordas
     const termo = val.replace(/^%|%$/g,'')
@@ -475,7 +479,7 @@ class QueryBuilder {
       const r = await fetch(url)
       const j = await r.json()
       if (this._countOnly) return { count: j.count, data: null, error: j.error }
-      return { data: j.data, count: j.count, error: j.error }
+      return { data: j.data ?? [], count: j.count ?? 0, error: j.error ?? null }
     }
     if (this._op === 'insert') {
       const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this._body) })
@@ -919,8 +923,19 @@ async function renderEst(rows) {
     })
   } catch(e) {}
 
-  const isMeuTR = (r) => r.tecnico_nome && r.tecnico_nome.toLowerCase().includes(U.nome.split(' ')[0].toLowerCase())
-  const podeAssumir = U.perfil !== 'superadmin' || U.setorialAcesso !== 'ADMIN'
+  const MAPA_PLAN_EST = {
+    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
+    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
+    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
+    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+  }
+  const meuNomePlan = MAPA_PLAN_EST[U.nome.trim()] || U.nome.trim().split(' ')[0]
+  const isMeuTR = (r) => r.tecnico_nome && (
+    r.tecnico_nome.toLowerCase() === meuNomePlan.toLowerCase() ||
+    r.tecnico_nome.toLowerCase().includes(meuNomePlan.toLowerCase())
+  )
+  // superadmin em modo ADMIN não assume (só gerencia); em modo analista (FCEE etc.) pode assumir
+  const podeAssumir = U.setorialAcesso !== 'ADMIN'
 
   tbody.innerHTML = rows.map(r => {
     const k = r.tr+'|'+r.parcela
@@ -947,14 +962,18 @@ async function renderEst(rows) {
     const bdgClass = {livre:'bdg-livre',analise:'bdg-analise',dev_pendente:'bdg-dev'}[r.status]||'bdg-devolvido'
     const bdgTxt = {livre:'Livre',analise:'Análise',dev_pendente:'Aguard.Dev.'}[r.status]||r.status||'—'
     const prazo = r.prazo_analise ? new Date(r.prazo_analise).toLocaleDateString('pt-BR') : '—'
+    // Destaque de NL: se houver múltiplas parcelas com mesmo processo_sgp, mostrar badge
+    const nlRows = rows.filter(x => x.processo_sgp && x.processo_sgp === r.processo_sgp)
+    const nlGrupo = nlRows.length > 1
+      ? `<div style="font-weight:700;color:var(--az);font-size:11px;cursor:pointer;" title="Clique para filtrar esta NL" onclick="document.getElementById('fBusca').value='${(r.processo_sgp||'').replace(/'/g,"\\'")}';PAG=0;buscar()">${r.processo_sgp}</div>
+         <span style="background:#E3F2FD;color:#1565C0;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;">🔗 ${nlRows.length} parcelas</span>`
+      : r.processo_sgp ? `<div style="font-size:11px;color:var(--az);">${r.processo_sgp}</div>` : '<span style="color:var(--ct);font-size:11px;">—</span>'
 
     return `<tr>
       <td><strong style="font-size:11px;">${r.tr||'—'}</strong></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.beneficiario||''}">${r.beneficiario||'—'}</td>
       <td style="text-align:center;">${r.parcela||'—'}</td>
-      <td style="font-size:11px;">
-        ${r.processo_sgp ? `<div style="font-weight:600;color:var(--az);">${r.processo_sgp}</div>` : '<span style="color:var(--ct);">—</span>'}
-      </td>
+      <td style="font-size:11px;">${nlGrupo}</td>
       <td>${nlTxt}</td>
       <td>${tecH}</td>
       <td style="font-size:11px;">${prazo}</td>
@@ -988,52 +1007,69 @@ async function abrirAss(id, tr, parcela, benef) {
     <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
     <strong>Beneficiário:</strong> ${benef}<br>
     <strong>Técnico/Analista:</strong> ${U.nome}<br>
-    <span style="font-size:10px;color:var(--ct);">Verificando NLs agrupadas...</span>
+    <span style="font-size:10px;color:var(--ct);">⏳ Verificando parcelas da mesma NL...</span>
   `
   document.getElementById('mAssNL').innerHTML = ''
 
-  // Buscar qual é o processo_sgp desta TR (NL)
-  const { data: trData } = await db.from('estoque').select('processo_sgp').eq('id', id).limit(1)
-  const nl = trData?.[0]?.processo_sgp
+  try {
+    // Buscar dados completos via fetch direto
+    const rEst = await fetch(`${API_URL}/estoque/${id}`)
+    const jEst = await rEst.json()
+    const est  = jEst.data || jEst
+    const nl   = est?.processo_sgp || ''
 
-  // Buscar quantas parcelas livres existem com a mesma NL
-  let parcelasMesmaNL = []
-  if(nl && nl.trim()) {
-    const { data: irmans } = await db.from('estoque')
-      .select('id,tr,parcela,beneficiario').eq('tr', tr).eq('processo_sgp', nl).eq('status', 'livre')
-    parcelasMesmaNL = irmans || []
-  }
+    // Buscar parcelas da mesma NL (mesmo processo_sgp + mesma TR + livres)
+    let parcelasMesmaNL = []
+    if(nl && nl.trim()) {
+      try {
+        const rNL = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&processo_sgp=${encodeURIComponent(nl)}&status=livre&limit=200`)
+        const jNL = await rNL.json()
+        parcelasMesmaNL = jNL.data || []
+      } catch(e) { parcelasMesmaNL = [] }
+    }
 
-  const qtdNL = parcelasMesmaNL.length || 1
-  const alertaGrupo = qtdNL > 1
-    ? `<div style="background:#FFF3CD;border:1px solid #F57F17;border-radius:7px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#7A4800;">
-        <strong>⚠️ AGRUPAMENTO POR NL — ${qtdNL} parcelas serão assumidas juntas!</strong><br>
-        NL: <strong>${nl}</strong><br>
-        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">
-          ${parcelasMesmaNL.map(p=>`<span style="background:#fff;border:1px solid #F57F17;border-radius:10px;padding:2px 7px;font-size:10px;">Parcela ${p.parcela}</span>`).join('')}
+    const qtd = parcelasMesmaNL.length
+    let alertaGrupo = ''
+    if(qtd > 1) {
+      alertaGrupo = `<div style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;color:#7A4800;">
+        <div style="font-weight:800;margin-bottom:6px;">⚠️ AGRUPAMENTO POR NL — ${qtd} parcelas serão assumidas juntas!</div>
+        <div style="font-size:10px;margin-bottom:6px;">NL/Processo: <strong>${nl}</strong></div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+          ${parcelasMesmaNL.map(p=>`<span style="background:#fff;border:1px solid #F57F17;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;">Parc. ${p.parcela}</span>`).join('')}
         </div>
-        <div style="margin-top:6px;font-size:10px;color:#666;">Ao assumir, todas serão atribuídas a você e migradas para sua planilha.</div>
+        <div style="font-size:10px;color:#5D4037;">✅ Ao confirmar, todas serão assumidas e migradas para sua planilha automaticamente.</div>
       </div>`
-    : `<div style="background:var(--vbg);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:var(--vdk);">
-        Esta parcela não tem outras parcelas vinculadas à mesma NL disponíveis.
+    } else if(nl) {
+      alertaGrupo = `<div style="background:var(--vbg);border-radius:7px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--vdk);">
+        NL: <strong>${nl}</strong> — apenas esta parcela disponível (as demais já foram assumidas ou não existem).
       </div>`
+    }
 
-  document.getElementById('mAssI').innerHTML = `
-    <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
-    <strong>Beneficiário:</strong> ${benef}<br>
-    <strong>Técnico/Analista:</strong> ${U.nome}
-  `
+    document.getElementById('mAssI').innerHTML = `
+      <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
+      <strong>Beneficiário:</strong> ${benef}<br>
+      <strong>Técnico/Analista:</strong> ${U.nome}
+    `
 
-  // Buscar NLs do Anexo IV desta parcela específica
-  const nls = await carregarNLs(tr, parcela)
-  let nlH = alertaGrupo
-  if(nls.length) {
-    nlH += `<div style="background:var(--azbg);border-radius:7px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#0F3D6E;">
-      <strong>${nls.length} NL${nls.length!==1?'s':''} Anexo IV vinculada${nls.length!==1?'s':''}</strong> — contará como <strong>${nls.length}</strong> na produtividade ao baixar.<br>`
-    nls.forEach((n,x) => { nlH += `<span style="color:var(--ct)">${x+1}. ${n.codigo_pc||'—'} — R$ ${(n.valor_pgto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span><br>` })
-    nlH += `</div>`
+    // NLs do Anexo IV desta parcela
+    const nls = await carregarNLs(tr, parcela)
+    let nlH = alertaGrupo
+    if(nls.length) {
+      nlH += `<div style="background:var(--azbg);border-radius:7px;padding:10px 12px;font-size:11px;color:#0F3D6E;">
+        <strong>${nls.length} NL${nls.length!==1?'s':''} Anexo IV</strong> — contará como <strong>${nls.length}</strong> na produtividade.<br>`
+      nls.forEach((n,x) => { nlH += `<span style="color:var(--ct)">${x+1}. ${n.codigo_pc||'—'} — R$ ${(n.valor_pgto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span><br>` })
+      nlH += `</div>`
+    }
+    document.getElementById('mAssNL').innerHTML = nlH
+  } catch(e) {
+    document.getElementById('mAssI').innerHTML = `
+      <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
+      <strong>Beneficiário:</strong> ${benef}<br>
+      <strong>Técnico/Analista:</strong> ${U.nome}
+    `
+    document.getElementById('mAssNL').innerHTML = `<div style="color:var(--am);font-size:11px;">⚠️ Não foi possível verificar o agrupamento de NLs. Você pode prosseguir.</div>`
+    console.warn('abrirAss erro ao buscar NL:', e.message)
   }
-  document.getElementById('mAssNL').innerHTML = nlH
 }
 
 // ══════════════════════════════════════
@@ -1042,30 +1078,55 @@ async function abrirAss(id, tr, parcela, benef) {
 async function migrarParaPlanilha(id, tr, parcela, benef, processoSgp) {
   if(!confirm(`Migrar TR ${tr} Parcela ${parcela} para sua planilha de análise?\n\nEsta ação cria o registro na sua planilha sem alterar o estoque.`)) return
   try {
-    const nomeAnalista = U.nome.split(' ')[0]
+    const MAPA_PLAN = {
+      'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
+      'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
+      'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
+      'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+    }
+    const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
     const setorial = U.setorial_id || 'FCEE'
     const agora = new Date().toISOString()
 
-    // Verificar se já existe na planilha
-    const { data: existe } = await db.from('planilha_analista')
-      .select('id').eq('tr', tr).eq('parcela', parcela).limit(1)
-    if(existe && existe.length > 0) {
+    // Verificar se já existe na planilha (fetch direto)
+    const rEx = await fetch(`${API_URL}/planilha_analista?tr=${encodeURIComponent(tr)}&parcela=${parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
+    const jEx = await rEx.json()
+    if(jEx.data && jEx.data.length > 0) {
       toast('Esta TR já está na sua planilha!', 'err')
       return
     }
 
-    const { error } = await db.from('planilha_analista').insert({
-      tr, parcela, entidade: benef, sgpe: processoSgp||null,
-      processo_sgp: processoSgp||null,
-      situacao: 'Analisar', analista: nomeAnalista,
-      analista_id: U.id, setorial_id: setorial,
-      baixada: false, assumido_em: agora,
-      criado_em: agora, atualizado_em: agora
+    // Buscar dados completos do estoque para essa TR/parcela
+    const rEst = await fetch(`${API_URL}/estoque/${id}`)
+    const jEst = await rEst.json()
+    const est = jEst.data || jEst
+
+    const rIns = await fetch(`${API_URL}/planilha_analista`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tr, parcela,
+        entidade:    est.beneficiario || benef || null,
+        cnpj_cpf:    est.cnpj_cpf    || null,
+        sgpe:        processoSgp     || est.processo_sgp || null,
+        processo_sgp:processoSgp     || est.processo_sgp || null,
+        valor_repasse:est.valor_repasse || null,
+        prazo_analise:est.prazo_analise || null,
+        situacao:    'Analisar',
+        analista:    nomeAnalista,
+        analista_id: U.id,
+        setorial_id: setorial,
+        baixada:     false,
+        assumido_em: agora,
+        criado_em:   agora,
+        atualizado_em:agora
+      })
     })
-    if(error) throw error
+    const jIns = await rIns.json()
+    if(jIns.error) throw new Error(jIns.error.message || JSON.stringify(jIns.error))
     toast(`✓ TR ${tr} P${parcela} migrada para sua planilha!`, 'ok')
     setTimeout(atualizarBadgeAlertas, 800)
-  } catch(e) { toast('Erro ao migrar: '+e.message,'err') }
+  } catch(e) { toast('Erro ao migrar: '+e.message,'err'); console.error('migrar erro:', e) }
 }
 
 async function confAss() {
@@ -1073,76 +1134,125 @@ async function confAss() {
   const btn = document.getElementById('btnConfAss')
   btn.disabled=true; btn.textContent='Salvando...'
   try {
-    // 1) Buscar dados da TR selecionada
-    const { data: selRows } = await db.from('estoque').select('*').eq('id', SEL).limit(1)
-    const selTR = selRows?.[0]
-    if(!selTR) throw new Error('TR não encontrada')
+    // 1) Buscar dados da TR selecionada via fetch direto (mais robusto)
+    const r1 = await fetch(`${API_URL}/estoque/${SEL}`)
+    const j1 = await r1.json()
+    const selTR = j1.data || j1
+    if(!selTR || !selTR.tr) throw new Error('TR não encontrada no estoque (id: '+SEL+')')
 
-    const tr = selTR.tr
-    const nl = selTR.processo_sgp   // NL identificada pelo processo_sgp (campo NLS)
-
-    // 2) LÓGICA DE AGRUPAMENTO POR NL:
-    //    Todas as parcelas que têm o mesmo processo_sgp (NL) devem ser assumidas juntas
-    //    Se não tiver NL, assume só a parcela selecionada
-    let idsParaAssumir = [SEL]
-    if(nl && nl.trim()) {
-      const { data: parcelasMesmaNL } = await db.from('estoque')
-        .select('id').eq('tr', tr).eq('processo_sgp', nl).eq('status', 'livre')
-      if(parcelasMesmaNL && parcelasMesmaNL.length > 0) {
-        idsParaAssumir = parcelasMesmaNL.map(r => r.id)
-      }
-    }
-
+    const tr    = selTR.tr
+    const nl    = selTR.processo_sgp   // NL = processo_sgp identifica o grupo de parcelas
     const agora = new Date().toISOString()
-    const nomeAnalista = U.nome.split(' ')[0]  // ex: "Richard"
+    // Nome do analista na planilha (mapeamento)
+    const MAPA_PLAN = {
+      'Richard Motta Coelho':'Richard',
+      'Nayara Limas Ferreira':'Nayara',
+      'Zadir Teresinha Machado Ferreira':'Zadir',
+      'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
+      'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
+      'Grace Oliveira':'Grace Oliveira',
+    }
+    const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
+    const setorial     = U.setorial_id || 'FCEE'
 
-    // 3) Assumir TODAS as parcelas desta NL no estoque
-    for(const rid of idsParaAssumir) {
-      const { error: eUpd } = await db.from('estoque').update({
-        status:'analise', tecnico_nome: nomeAnalista, tecnico_id: U.id,
-        assumido_em: agora, atualizado_em: agora
-      }).eq('id', rid)
-      if(eUpd) console.warn('Erro assumindo id '+rid, eUpd)
+    // 2) AGRUPAMENTO POR NL — buscar todas as parcelas livres da mesma NL+TR
+    let parcelasParaAssumir = [selTR]  // começa com a selecionada
+    if(nl && nl.trim()) {
+      try {
+        const rNL = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&processo_sgp=${encodeURIComponent(nl)}&status=livre&limit=200`)
+        const jNL = await rNL.json()
+        if(jNL.data && jNL.data.length > 0) {
+          parcelasParaAssumir = jNL.data
+        }
+      } catch(eNL) { console.warn('Fallback NL:', eNL.message) }
     }
 
-    // 4) Migrar para planilha_analista — buscar todas as parcelas assumidas
-    const { data: estOk } = await db.from('estoque').select('*').in('id', idsParaAssumir)
-    const setorial = U.setorial_id || 'FCEE'
-    const inserts = (estOk||[]).map(r => ({
-      tr: r.tr,
-      parcela: r.parcela,
-      entidade: r.beneficiario,
-      cnpj_cpf: r.cnpj_cpf || null,
-      sgpe: r.processo_sgp || null,
-      processo_sgp: r.processo_sgp || null,
-      valor_repasse: r.valor_repasse || null,
-      prazo_analise: r.prazo_analise || null,
-      situacao: 'Analisar',
-      analista: nomeAnalista,
-      analista_id: U.id,
-      setorial_id: setorial,
-      baixada: false,
-      assumido_em: agora,
-      criado_em: agora,
-      atualizado_em: agora
-    }))
+    let errosAssumindo = []
+    let errosMigrando  = []
+    let assumidas = 0
+    let migradas  = 0
 
-    // Inserir na planilha (ignorar duplicatas se já existir)
-    for(const ins of inserts) {
+    // 3) Para cada parcela: assumir no estoque + migrar para planilha
+    for(const est of parcelasParaAssumir) {
+      // 3a) Assumir no estoque
       try {
-        await db.from('planilha_analista').insert(ins)
-      } catch(e2) {
-        // Ignorar erro de duplicata (TR já migrada)
-        console.warn('Planilha insert ignorado:', e2.message)
-      }
+        const rUpd = await fetch(`${API_URL}/estoque/${est.id}`, {
+          method: 'PATCH',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            status: 'analise',
+            tecnico_nome: nomeAnalista,
+            tecnico_id: U.id,
+            assumido_em: agora,
+            atualizado_em: agora
+          })
+        })
+        const jUpd = await rUpd.json()
+        if(jUpd.error) errosAssumindo.push(`P${est.parcela}: ${jUpd.error.message||jUpd.error}`)
+        else assumidas++
+      } catch(eU) { errosAssumindo.push(`P${est.parcela}: ${eU.message}`) }
+
+      // 3b) Verificar se já existe na planilha
+      try {
+        const rEx = await fetch(`${API_URL}/planilha_analista?tr=${encodeURIComponent(est.tr)}&parcela=${est.parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
+        const jEx = await rEx.json()
+        if(jEx.data && jEx.data.length > 0) {
+          migradas++  // já existe, conta como ok
+          continue
+        }
+      } catch(eEx) { console.warn('Check existência:', eEx.message) }
+
+      // 3c) Inserir na planilha_analista
+      try {
+        const rIns = await fetch(`${API_URL}/planilha_analista`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            tr:          est.tr,
+            parcela:     est.parcela,
+            entidade:    est.beneficiario || null,
+            cnpj_cpf:    est.cnpj_cpf    || null,
+            sgpe:        est.processo_sgp || null,
+            processo_sgp:est.processo_sgp || null,
+            valor_repasse:est.valor_repasse|| null,
+            prazo_analise:est.prazo_analise|| null,
+            situacao:    'Analisar',
+            analista:    nomeAnalista,
+            analista_id: U.id,
+            setorial_id: setorial,
+            baixada:     false,
+            assumido_em: agora,
+            criado_em:   agora,
+            atualizado_em:agora
+          })
+        })
+        const jIns = await rIns.json()
+        if(jIns.error) errosMigrando.push(`P${est.parcela}: ${jIns.error.message||jIns.error}`)
+        else migradas++
+      } catch(eI) { errosMigrando.push(`P${est.parcela}: ${eI.message}`) }
     }
 
     fm('moAss'); SEL=null
-    const qtd = idsParaAssumir.length
-    toast(`✓ ${qtd} parcela${qtd>1?'s':''} assumida${qtd>1?'s':''} e migrada${qtd>1?'s':''} para sua planilha!`, 'ok')
     PAG=0; buscar(); carregarContadores()
     setTimeout(atualizarBadgeAlertas, 1000)
-  } catch(e) { toast('Erro: '+e.message,'err') }
+
+    // Feedback detalhado
+    const total = parcelasParaAssumir.length
+    if(errosAssumindo.length === 0 && errosMigrando.length === 0) {
+      toast(`✓ ${total} parcela${total>1?'s':''} assumida${total>1?'s':''} e migrada${total>1?'s':''} para sua planilha!`, 'ok')
+    } else if(assumidas > 0) {
+      const msg = `⚠️ ${assumidas}/${total} assumidas, ${migradas} migradas.` +
+        (errosMigrando.length ? ' Erros migração: '+errosMigrando.join(' | ') : '')
+      toast(msg, 'err')
+      console.error('Erros assumindo:', errosAssumindo)
+      console.error('Erros migrando:', errosMigrando)
+    } else {
+      throw new Error('Nenhuma parcela foi assumida. ' + errosAssumindo.join(' | '))
+    }
+  } catch(e) {
+    toast('Erro: '+e.message, 'err')
+    console.error('confAss erro:', e)
+  }
   finally { btn.disabled=false; btn.textContent='✓ Assumir' }
 }
 
