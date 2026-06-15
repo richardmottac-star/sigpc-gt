@@ -700,6 +700,7 @@ function renderSB() {
   carregarOnline()
 }
 
+
 async function carregarOnline() {
   try {
     // Registrar acesso do usuário atual
@@ -832,27 +833,85 @@ function irDash() {
 function irEst() {
   ativarMenu('est')
   const isAdmin = U.setorialAcesso === 'ADMIN'
+  const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   document.getElementById('BODY').innerHTML = `
-    <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
-    <div class="filtros">
-      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="Digite..." style="width:200px;" onkeydown="if(event.key==='Enter')buscar()"></div>
-      <div class="fg"><label>Status</label>
-        <select id="fSt">
-          <option value="">Todos</option>
-          <option value="livre">Livre</option>
-          <option value="analise">Em Análise</option>
-          <option value="dev_pendente">Aguard. Dev.</option>
-        </select>
-      </div>
-      ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
-      <button class="btn-buscar" onclick="buscar()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
-      <button class="btn-limpar" onclick="limparF()">✕ Limpar</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:16px;font-weight:700;">📦 Estoque de TRs</div>
+      <span id="estCont" style="font-size:12px;color:var(--ct);font-weight:600;"></span>
     </div>
+
+    <!-- FILTROS REDESENHADOS -->
+    <div style="background:#fff;border-radius:10px;padding:14px 16px;box-shadow:var(--sombra);margin-bottom:14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+
+        <!-- Busca texto -->
+        <div style="flex:2;min-width:180px;">
+          <label style="font-size:10px;font-weight:700;color:var(--ct);display:block;margin-bottom:4px;">🔍 TR / BENEFICIÁRIO / SGPE</label>
+          <input type="text" id="fBusca" placeholder="Digite TR, nome ou SGPE..." 
+            style="width:100%;padding:7px 10px;border:1.5px solid var(--cb);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;outline:none;"
+            onkeydown="if(event.key==='Enter')buscar()" oninput="if(this.value==='')buscar()">
+        </div>
+
+        <!-- Status -->
+        <div style="flex:1;min-width:130px;">
+          <label style="font-size:10px;font-weight:700;color:var(--ct);display:block;margin-bottom:4px;">📌 STATUS</label>
+          <select id="fSt" onchange="PAG=0;buscar()"
+            style="width:100%;padding:7px 10px;border:1.5px solid var(--cb);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;background:#fff;">
+            <option value="">Todos</option>
+            <option value="livre">🟢 Livre</option>
+            <option value="analise">🔵 Em Análise</option>
+            <option value="dev_pendente">🟡 Aguard. Dev.</option>
+          </select>
+        </div>
+
+        <!-- Técnico (coordenador/admin) -->
+        ${isCoordi ? `<div style="flex:1;min-width:130px;">
+          <label style="font-size:10px;font-weight:700;color:var(--ct);display:block;margin-bottom:4px;">👤 TÉCNICO</label>
+          <input type="text" id="fTec" placeholder="Nome do técnico..."
+            style="width:100%;padding:7px 10px;border:1.5px solid var(--cb);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;"
+            onkeydown="if(event.key==='Enter'){PAG=0;buscar()}" oninput="if(this.value===''){PAG=0;buscar()}">
+        </div>` : ''}
+
+        <!-- Setorial (admin) -->
+        ${isAdmin ? `<div style="flex:1;min-width:110px;">
+          <label style="font-size:10px;font-weight:700;color:var(--ct);display:block;margin-bottom:4px;">🏛 SETORIAL</label>
+          <select id="fSec" onchange="PAG=0;buscar()"
+            style="width:100%;padding:7px 10px;border:1.5px solid var(--cb);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;background:#fff;">
+            <option value="">Todas</option>
+            <option>FCEE</option><option>FCC</option><option>FESPORTE</option>
+            <option>SED</option><option>SIE</option><option>SES</option><option>SAS</option>
+          </select>
+        </div>` : ''}
+
+        <!-- Botões -->
+        <div style="display:flex;gap:6px;align-items:flex-end;">
+          <button onclick="PAG=0;buscar()" style="background:var(--v);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;display:flex;align-items:center;gap:5px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            Buscar
+          </button>
+          <button onclick="limparF()" style="background:#f5f5f5;color:var(--ct);border:1.5px solid var(--cb);border-radius:7px;padding:8px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">
+            ✕ Limpar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABELA -->
     <div class="tbl-wrap">
-      <div class="tbl-header"><strong id="estCont">Carregando...</strong><span id="estSec">—</span></div>
-      <div style="overflow-x:auto;"><table><thead><tr>
-        <th>TR</th><th>Beneficiário</th><th>Parc.</th><th>Processo SGP</th><th>NLs</th><th>Técnico/Analista</th><th>Prazo</th><th>Status</th><th>Ações</th>
-      </tr></thead><tbody id="estBody"><tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody></table></div>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr>
+          <th style="min-width:130px;">TR</th>
+          <th style="min-width:220px;">Beneficiário</th>
+          <th style="text-align:center;width:55px;">Parc.</th>
+          <th style="min-width:160px;">Processo SGP</th>
+          <th style="text-align:center;width:60px;">NLs</th>
+          <th style="min-width:100px;">Técnico</th>
+          <th style="min-width:85px;">Prazo</th>
+          <th style="width:90px;">Status</th>
+          <th style="min-width:120px;">Ações</th>
+        </tr></thead>
+        <tbody id="estBody"><tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
+      </table></div>
       <div class="paginacao">
         <span class="pag-info" id="pagInf">—</span>
         <div class="pag-btns">
@@ -872,26 +931,28 @@ async function buscar() {
   tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
 
   const busca = document.getElementById('fBusca')?.value.trim()||''
-  const st = document.getElementById('fSt')?.value||''
-  const secF = document.getElementById('fSec')?.value||''
-  const sid = U.setorialFiltro
+  const st    = document.getElementById('fSt')?.value||''
+  const secF  = document.getElementById('fSec')?.value||''
+  const tec   = document.getElementById('fTec')?.value.trim()||''
+  const sid   = U.setorialFiltro
 
   try {
     const from = PAG*PP, to = from+PP-1
     let q = db.from('estoque').select('*',{count:'exact'})
-    if(sid) q = q.eq('setorial_id',sid)
-    else if(secF) q = q.eq('setorial_id',secF)
-    if(st) q = q.eq('status',st)
-    if(busca) q = q.or(`tr.ilike.%${busca}%,beneficiario.ilike.%${busca}%`)
-    q = q.order('tr').range(from,to)
+    if(sid)  q = q.eq('setorial_id', sid)
+    else if(secF) q = q.eq('setorial_id', secF)
+    if(st)   q = q.eq('status', st)
+    if(tec)  q = q.ilike('tecnico_nome', '%'+tec+'%')
+    if(busca) q = q.or(`tr.ilike.%${busca}%,beneficiario.ilike.%${busca}%,processo_sgp.ilike.%${busca}%`)
+    q = q.order('tr').range(from, to)
 
     const { data, count, error } = await q
     if(error) throw error
     TOT = count||0
     renderEst(data||[])
     renderPag()
-    document.getElementById('estCont').textContent = TOT+' registros encontrados'
-    document.getElementById('estSec').textContent = sid||secF||'Todas as Setoriais'
+    const contEl = document.getElementById('estCont')
+    if(contEl) contEl.textContent = TOT.toLocaleString('pt-BR')+' registros encontrados'
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="9" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
   }
@@ -945,7 +1006,7 @@ async function renderEst(rows) {
 
     return `<tr>
       <td><strong style="font-size:11px;">${r.tr||'—'}</strong></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.beneficiario||''}">${r.beneficiario||'—'}</td>
+      <td style="min-width:200px;max-width:280px;white-space:normal;word-break:break-word;line-height:1.35;font-size:11px;">${r.beneficiario||'—'}</td>
       <td style="text-align:center;">${r.parcela||'—'}</td>
       <td style="font-size:11px;">${r.processo_sgp||'—'}</td>
       <td>${nlTxt}</td>
@@ -967,7 +1028,7 @@ function renderPag() {
 
 function pg(d) { PAG+=d; buscar() }
 function limparF() {
-  ['fBusca','fSt','fSec'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
+  ['fBusca','fSt','fSec','fTec'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
   PAG=0; buscar()
 }
 
@@ -1056,6 +1117,7 @@ function abrirDev(id, tr, parcela) {
   document.getElementById('devJust').value = ''
   document.getElementById('moDev').classList.add('open')
 }
+
 
 async function confDev() {
   const mot = document.getElementById('devMotivo').value
@@ -1872,9 +1934,6 @@ async function irCoord() {
   } catch(e) { document.getElementById('coordCont').innerHTML=`<p style="color:var(--r);">Erro: ${e.message}</p>` }
 }
 
-// ══════════════════════════════════════
-//  RELATÓRIOS
-// ══════════════════════════════════════
 function irRel() {
   ativarMenu('rel')
   const isAdmin = U.perfil==='superadmin'
