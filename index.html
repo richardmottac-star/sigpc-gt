@@ -1140,9 +1140,9 @@ async function confAss() {
     const selTR = j1.data || j1
     if(!selTR || !selTR.tr) throw new Error('TR não encontrada no estoque (id: '+SEL+')')
 
-    const tr    = selTR.tr
-    const nl    = selTR.processo_sgp   // NL = processo_sgp identifica o grupo de parcelas
-    const agora = new Date().toISOString()
+    const tr      = selTR.tr
+    const parcela = selTR.parcela
+    const agora   = new Date().toISOString()
     // Nome do analista na planilha (mapeamento)
     const MAPA_PLAN = {
       'Richard Motta Coelho':'Richard',
@@ -1155,17 +1155,15 @@ async function confAss() {
     const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
     const setorial     = U.setorial_id || 'FCEE'
 
-    // 2) AGRUPAMENTO POR NL — buscar todas as parcelas livres da mesma NL+TR
+    // 2) buscar TODAS as linhas do estoque com o mesmo tr e parcela do registro selecionado
     let parcelasParaAssumir = [selTR]  // começa com a selecionada
-    if(nl && nl.trim()) {
-      try {
-        const rNL = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&processo_sgp=${encodeURIComponent(nl)}&status=livre&limit=200`)
-        const jNL = await rNL.json()
-        if(jNL.data && jNL.data.length > 0) {
-          parcelasParaAssumir = jNL.data
-        }
-      } catch(eNL) { console.warn('Fallback NL:', eNL.message) }
-    }
+    try {
+      const rTP = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&parcela=${encodeURIComponent(parcela)}&limit=200`)
+      const jTP = await rTP.json()
+      if(jTP.data && jTP.data.length > 0) {
+        parcelasParaAssumir = jTP.data
+      }
+    } catch(eTP) { console.warn('Fallback tr+parcela:', eTP.message) }
 
     let errosAssumindo = []
     let errosMigrando  = []
@@ -3771,7 +3769,6 @@ async function admSalvarUsuario() {
       nome, cpf, perfil,
       setorial_id: setorial,
       grupo: grupo ? parseInt(grupo) : null,
-      email: email||null, obs: obs||null,
       ativo,
       atualizado_em: new Date().toISOString()
     }
