@@ -461,6 +461,92 @@ label, .lbl-campo {
 .toast.ok  { background:var(--verde-primario); color:#fff; }
 .toast.err { background:var(--vermelho); color:#fff; }
 .toast.atn { background:var(--ambar); color:#3A2503; }
+
+/* ═══════════════════════════════════════════════════════════
+   CAMADA DE ACABAMENTO VISUAL — todo o sistema (só CSS)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Cartões e blocos: regra geral ── */
+.card, .painel, .bloco, .prod-card, .repo-card, .tbl-wrap, .filtros {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(6,20,14,.06);
+  transition: all 200ms ease;
+}
+.card, .painel, .bloco, .prod-card, .tbl-wrap, .filtros {
+  border: 1px solid #E6EAE8;
+}
+.card:hover, .painel:hover, .bloco:hover, .prod-card:hover, .repo-card:hover, .tbl-wrap:hover, .filtros:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -8px rgba(6,20,14,.18);
+}
+.card:hover, .painel:hover, .bloco:hover, .prod-card:hover, .tbl-wrap:hover, .filtros:hover {
+  border-color: #C4E6D3;
+}
+/* .repo-card já tem borda esquerda colorida (var(--az)) — só some com os outros 3 lados */
+.repo-card { border-top: 1px solid #E6EAE8; border-right: 1px solid #E6EAE8; border-bottom: 1px solid #E6EAE8; }
+.repo-card:hover { border-top-color: #C4E6D3; border-right-color: #C4E6D3; border-bottom-color: #C4E6D3; }
+
+/* ── Cartões de indicador (.card = Total PCs, Em Análise, etc.): barra do topo 3px → 4px, hover 5px ── */
+/* border-top-color reforçado pq a regra genérica de borda (acima) sobrescreveria a cor do acento */
+.card { border-top-width: 4px; border-top-color: var(--v); }
+.card:hover { border-top-width: 5px; }
+
+/* ── Cards de analista (Produtividade NL): borda esquerda por grupo ── */
+.prod-card[data-grupo="1"] { border-left: 4px solid #1565C0; }
+.prod-card[data-grupo="2"] { border-left: 4px solid #6A1B9A; }
+.prod-card[data-grupo="3"] { border-left: 4px solid #006B3C; }
+.prod-card[data-grupo="1"]:hover { border-left-width: 6px; }
+.prod-card[data-grupo="2"]:hover { border-left-width: 6px; }
+.prod-card[data-grupo="3"]:hover { border-left-width: 6px; }
+
+/* ── Linhas de tabela ── */
+tbody tr { transition: background 150ms; }
+tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
+
+/* ── Botões: sombra mais forte no hover, reduzida no active ── */
+.btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
+.btn-secundario, .mccn, .btn-limpar, .btn-neutro, .btn-perigo, .mcok.rv {
+  transition: all 150ms ease;
+}
+.btn-primario:hover, button.primario:hover, .mcok:hover, .btn-rap:hover,
+.btn-buscar:hover, .btn-secundario:hover, .mccn:hover, .btn-limpar:hover,
+.btn-neutro:hover, .btn-perigo:hover, .mcok.rv:hover {
+  box-shadow: 0 10px 22px -8px rgba(6,20,14,.28), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.btn-primario:active, button.primario:active, .mcok:active, .btn-rap:active,
+.btn-buscar:active, .btn-secundario:active, .mccn:active, .btn-limpar:active,
+.btn-neutro:active, .btn-perigo:active, .mcok.rv:active {
+  box-shadow: 0 1px 3px rgba(6,20,14,.15);
+}
+
+/* ── Chips de status: borda na cor do texto a 25% ── */
+.st-livre      { border: 1px solid rgba(75,85,99,.25); }
+.st-analise    { border: 1px solid rgba(3,105,161,.25); }
+.st-diligencia { border: 1px solid rgba(180,83,9,.25); }
+.st-coord      { border: 1px solid rgba(154,52,18,.25); }
+.st-ci         { border: 1px solid rgba(67,56,202,.25); }
+.st-baixada    { border: 1px solid rgba(6,95,70,.25); }
+.st-concluida  { border: 1px solid rgba(21,128,61,.25); }
+.st-irregular  { border: 1px solid rgba(153,27,27,.25); }
+
+/* ── Sidebar ── */
+.sb-item { transition: all 150ms; }
+.sb-item:hover { transform: translateX(3px); }
+.sb-item.on { border-left: 3px solid #fff; }
+
+/* ── Campos de formulário ── */
+input, select, textarea { transition: border-color 150ms, box-shadow 150ms; }
+input:focus, select:focus, textarea:focus { border-color: #00A05A; box-shadow: 0 0 0 3px rgba(0,160,90,.15); }
+
+/* ── Modais: entrada com fade + slide ── */
+@keyframes moFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mcSlideUp { from { transform: translateY(12px); } to { transform: translateY(0); } }
+.mo.open { animation: moFade 200ms ease; }
+.mo.open .mc { animation: mcSlideUp 250ms ease; }
+
+/* ── Barras de progresso ── */
+.prog, .prod-bar-wrap { height: 8px; border-radius: 9999px; }
+.prog > i, .prod-bar { transition: width 400ms ease; background: linear-gradient(90deg, #006B3C, #00A05A); }
 </style>
 <style>
 /* ═══ AJUSTES VISUAIS APROVADOS — fase 2 ═══ */
@@ -1890,7 +1976,7 @@ function prodRender(dados) {
     cont.innerHTML = `<div class="prod-cards">${dados.map(d => {
       const {u,total,baixadas,dilig,analise,pct,grupo,coord} = d
       const cor = pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'
-      return `<div class="prod-card" style="cursor:pointer;" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">
+      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
           <div class="prod-nome">${u.nome.split(' ')[0]}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
