@@ -380,6 +380,7 @@ label, .lbl-campo {
 .st-livre      { background:var(--chip-cinza-bg);     color:var(--chip-cinza-tx); }
 .st-analise    { background:var(--chip-sky-bg);       color:var(--chip-sky-tx); }
 .st-diligencia { background:var(--chip-ambar-bg);     color:var(--chip-ambar-tx); }
+.st-reanalise  { background:var(--chip-roxo-bg);      color:var(--chip-roxo-tx); }
 .st-coord      { background:var(--chip-laranja-bg);   color:var(--chip-laranja-tx); }
 .st-ci         { background:var(--chip-indigo-bg);    color:var(--chip-indigo-tx); }
 .st-baixada    { background:var(--chip-esmeralda-bg); color:var(--chip-esmeralda-tx); }
@@ -523,6 +524,7 @@ tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
 .st-livre      { border: 1px solid rgba(75,85,99,.25); }
 .st-analise    { border: 1px solid rgba(3,105,161,.25); }
 .st-diligencia { border: 1px solid rgba(180,83,9,.25); }
+.st-reanalise  { border: 1px solid rgba(126,34,206,.25); }
 .st-coord      { border: 1px solid rgba(154,52,18,.25); }
 .st-ci         { border: 1px solid rgba(67,56,202,.25); }
 .st-baixada    { border: 1px solid rgba(6,95,70,.25); }
@@ -1619,8 +1621,8 @@ async function abrirTR(tr) {
     const totalNls = new Set(pcs.map(p=>p.codigo_nl).filter(Boolean)).size
     const totalBaixadas = pcs.filter(p=>p.baixada).length
 
-    const bdgClassPC = {livre:'st-livre',analise:'st-analise',baixada:'st-baixada'}
-    const bdgTxtPC = {livre:'Livre',analise:'Em Análise',baixada:'Baixada'}
+    const bdgClassPC = {livre:'st-livre',analise:'st-analise',diligencia:'st-diligencia',reanalise:'st-reanalise',baixada:'st-baixada'}
+    const bdgTxtPC = {livre:'Livre',analise:'Em Análise',diligencia:'Diligência',reanalise:'Reanálise',baixada:'Baixada'}
 
     const tdS = 'padding:5px 8px;font-size:13px;'
     const linhas = pcs.map(p => {
