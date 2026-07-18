@@ -325,6 +325,37 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- ══ MODAL DETALHE TR ══ -->
+<div class="mo" id="moTR">
+  <div class="mc lg">
+    <div class="mch v"><h3 id="moTRT">Detalhe da TR</h3><button class="mcx" onclick="fm('moTR')">✕</button></div>
+    <div class="mcb" id="moTRB"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL REGISTRAR PARECER ══ -->
+<div class="mo" id="moParecer">
+  <div class="mc">
+    <div class="mch v"><h3>📝 Registrar Parecer</h3><button class="mcx" onclick="fm('moParecer')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="mParecerI"></div>
+      <div id="mParecerAviso"></div>
+      <div class="mc-campo"><label>Tipo de Parecer *</label>
+        <select id="parecerTipo">
+          <option value="">Selecione...</option>
+          <option>Parecer Regular</option>
+          <option>Parecer Regular com Ressalva(s)</option>
+          <option>Parecer Irregular</option>
+        </select>
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moParecer')">Cancelar</button>
+        <button class="mcok" id="btnConfParecer" onclick="confirmarParecer()">✓ Registrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL REPO ══ -->
 <div class="mo" id="moRepo">
   <div class="mc">
@@ -917,11 +948,24 @@ function renderEst(rows) {
   // superadmin em modo ADMIN não assume (só gerencia); em modo analista (FCEE etc.) pode assumir
   const podeAssumir = U.setorialAcesso !== 'ADMIN'
   const bdgClass = {'Livre':'bdg-livre','Em análise':'bdg-analise','Concluída':'bdg-concluida'}
+  const MAPA_PLAN_EST = {
+    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
+    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
+    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
+    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+  }
+  const meuNomePlan = MAPA_PLAN_EST[U.nome.trim()] || U.nome.trim().split(' ')[0]
+  const isMeuTR = (t) => t.analista_nome && t.analista_nome.toLowerCase() === meuNomePlan.toLowerCase()
 
   tbody.innerHTML = rows.map(t => {
-    const acoes = (t.statusDerivado==='Livre' && podeAssumir)
-      ? `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
-      : '<span style="color:var(--ct);font-size:10px;">—</span>'
+    let acoes
+    if(t.statusDerivado==='Livre' && podeAssumir) {
+      acoes = `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
+    } else if(isMeuTR(t)) {
+      acoes = `<button class="btn-acao btn-ver" onclick="abrirTR('${t.tr}')">Ver</button>`
+    } else {
+      acoes = '<span style="color:var(--ct);font-size:10px;">—</span>'
+    }
     const analistaH = t.analista_nome
       ? `<span class="tec-chip">${t.analista_nome.split(' ')[0]}</span>`
       : '<span style="color:var(--ct)">—</span>'
@@ -1062,6 +1106,14 @@ async function confirmarAssumirTR() {
     return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
   }
 
+  const MAPA_PLAN = {
+    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
+    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
+    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
+    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+  }
+  const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
+
   try {
     let ok = 0
     let erros = []
@@ -1070,7 +1122,7 @@ async function confirmarAssumirTR() {
         const r = await fetchTO(`${API_URL}/prestacoes_contas/${encodeURIComponent(pc.codigo_pc)}`, {
           method: 'PATCH',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ analista_nome: U.nome, analista_id: U.id, status: 'analise' })
+          body: JSON.stringify({ analista_nome: nomeAnalista, analista_id: U.id, status: 'analise' })
         })
         const j = await r.json()
         if(j.error) erros.push(`${pc.codigo_pc}: ${j.error.message||j.error}`)
@@ -1094,6 +1146,138 @@ async function confirmarAssumirTR() {
     btn.disabled=false; btn.textContent='✓ Assumir'
     fm('moAss'); TR_ASSUMIR=null; PCS_ASSUMIR=[]
     PAG=0; buscar(); carregarContadores()
+  }
+}
+
+// ══════════════════════════════════════
+//  DETALHE DA TR / REGISTRAR PARECER
+// ══════════════════════════════════════
+let TR_DETALHE_ATUAL = null
+
+async function abrirTR(tr) {
+  TR_DETALHE_ATUAL = tr
+  document.getElementById('moTR').classList.add('open')
+  document.getElementById('moTRT').textContent = `Detalhe da TR ${tr}`
+  document.getElementById('moTRB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
+
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    const pcs = j.data || []
+    if(!pcs.length) throw new Error('Nenhuma PC encontrada para esta TR')
+
+    const entidade = pcs[0].entidade || '—'
+    const totalPcs = pcs.length
+    const totalNls = new Set(pcs.map(p=>p.codigo_nl).filter(Boolean)).size
+    const totalBaixadas = pcs.filter(p=>p.baixada).length
+
+    const bdgClassPC = {livre:'bdg-livre',analise:'bdg-analise',baixada:'bdg-concluida'}
+    const bdgTxtPC = {livre:'Livre',analise:'Em Análise',baixada:'Baixada'}
+
+    const linhas = pcs.map(p => {
+      const acao = !p.baixada
+        ? `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
+        : '<span style="color:var(--ct);font-size:10px;">—</span>'
+      const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+      return `<tr>
+        <td style="font-size:11px;">${p.codigo_pc||'—'}</td>
+        <td style="text-align:center;font-size:11px;">${p.tipo||'—'}</td>
+        <td style="font-size:11px;">${p.codigo_nl||'—'}</td>
+        <td style="text-align:right;font-size:11px;">${valorFmt}</td>
+        <td><span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span></td>
+        <td>${acao}</td>
+      </tr>`
+    }).join('')
+
+    document.getElementById('moTRB').innerHTML = `
+      <div class="mci" style="margin-bottom:12px;">
+        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
+        <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
+      </div>
+      <div style="overflow-x:auto;"><table><thead><tr>
+        <th>Código PC</th><th>Tipo</th><th>NL</th><th>Valor</th><th>Status</th><th>Ação</th>
+      </tr></thead><tbody>${linhas}</tbody></table></div>
+    `
+  } catch(e) {
+    document.getElementById('moTRB').innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+    console.error('abrirTR erro:', e)
+  }
+}
+
+let PARECER_ALVO = null
+
+async function registrarParecer(codigo_pc) {
+  PARECER_ALVO = codigo_pc
+  document.getElementById('moParecer').classList.add('open')
+  document.getElementById('mParecerI').innerHTML = `<strong>PC:</strong> ${codigo_pc}<br><span style="font-size:10px;color:var(--ct);">⏳ Verificando NL compartilhada...</span>`
+  document.getElementById('mParecerAviso').innerHTML = ''
+  document.getElementById('parecerTipo').value = ''
+
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/nl_compartilhada?codigo_pc=${encodeURIComponent(codigo_pc)}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    const outras = j.data?.outras_nao_baixadas || 0
+
+    document.getElementById('mParecerI').innerHTML = `<strong>PC:</strong> ${codigo_pc}`
+
+    document.getElementById('mParecerAviso').innerHTML = outras > 0 ? `
+      <div style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;color:#7A4800;">
+        <div style="font-weight:800;margin-bottom:6px;">⚠️ Esta NL está em outras ${outras} PC${outras>1?'s':''}. Baixar todas juntas conta ${outras+1} na sua produtividade.</div>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer;">
+          <input type="checkbox" id="parecerBaixarNL" checked>
+          Baixar as ${outras+1} PCs desta NL
+        </label>
+      </div>` : ''
+  } catch(e) {
+    document.getElementById('mParecerI').innerHTML = `<strong>PC:</strong> ${codigo_pc}<br><span style="color:var(--r);font-size:11px;">Erro ao verificar NL: ${e.message}</span>`
+    console.warn('registrarParecer erro:', e.message)
+  }
+}
+
+async function confirmarParecer() {
+  if(!PARECER_ALVO) return
+  const parecerTipo = document.getElementById('parecerTipo').value
+  if(!parecerTipo) { toast('Selecione o tipo de parecer', 'err'); return }
+  const chkBaixarNL = document.getElementById('parecerBaixarNL')
+  const baixarNlCompleta = chkBaixarNL ? chkBaixarNL.checked : false
+
+  const MAPA_PLAN = {
+    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
+    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
+    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
+    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+  }
+  const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
+
+  const btn = document.getElementById('btnConfParecer')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/registrar_parecer`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        codigo_pc: PARECER_ALVO,
+        parecer_tipo: parecerTipo,
+        analista_nome: nomeAnalista,
+        analista_id: U.id,
+        baixar_nl_completa: baixarNlCompleta
+      })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    const n = j.count || 0
+    toast(`✓ ${n} PC${n>1?'s':''} baixada${n>1?'s':''}!`, 'ok')
+    fm('moParecer')
+    if(TR_DETALHE_ATUAL) abrirTR(TR_DETALHE_ATUAL)
+    PAG=0; buscar(); carregarContadores()
+  } catch(e) {
+    toast('Erro: '+e.message, 'err')
+    console.error('confirmarParecer erro:', e)
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Registrar'
+    PARECER_ALVO = null
   }
 }
 
