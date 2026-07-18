@@ -22,7 +22,7 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .screen{display:none;min-height:100vh;}
 .screen.ativa{display:flex;}
 #sLogin{background:linear-gradient(135deg,var(--vdk) 0%,var(--v) 55%,#1565C0 100%);align-items:center;justify-content:center;flex-direction:column;}
-.login-box{background:#fff;border-radius:16px;padding:36px 40px;width:400px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-box{background:#FCFDFC;border-radius:16px;padding:36px 40px;width:400px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .login-logo{text-align:center;margin-bottom:24px;display:flex;flex-direction:column;align-items:center;}
 .logo-sc{display:inline-flex;align-items:center;gap:8px;background:var(--v);border-radius:10px;padding:8px 14px;margin-bottom:0;}
 .logo-circle{width:32px;height:32px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10px;color:var(--v);}
@@ -90,7 +90,7 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .bnum strong{font-size:22px;font-weight:800;display:block;}
 .bnum span{font-size:9px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;}
 .cards4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
-.card{background:#fff;border-radius:10px;padding:14px 16px;border-top:3px solid var(--v);box-shadow:var(--sombra);}
+.card{background:#FCFDFC;border-radius:10px;padding:14px 16px;border-top:3px solid var(--v);box-shadow:var(--sombra);}
 .card.az{border-top-color:var(--az);}
 .card.am{border-top-color:var(--am);}
 .card.rv{border-top-color:var(--r);}
@@ -103,7 +103,7 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .btn-rap svg{width:20px;height:20px;fill:#fff;}
 
 /* ══ ESTOQUE ══ */
-.filtros{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--sombra);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+.filtros{background:#FCFDFC;border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--sombra);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
 .fg{display:flex;flex-direction:column;gap:3px;}
 .fg label{font-size:10px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.4px;}
 .fg input,.fg select{border:1.5px solid var(--cb);border-radius:6px;padding:6px 10px;font-size:13px;font-family:'Barlow',sans-serif;color:var(--te);outline:none;}
@@ -111,7 +111,7 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .btn-buscar{background:var(--v);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;height:32px;display:flex;align-items:center;gap:6px;}
 .btn-buscar svg{width:15px;height:15px;fill:#fff;}
 .btn-limpar{background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;padding:7px 12px;font-size:12px;font-family:'Barlow',sans-serif;cursor:pointer;height:32px;}
-.tbl-wrap{background:#fff;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;}
+.tbl-wrap{background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;}
 .tbl-header{padding:11px 14px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;}
 .tbl-header strong{font-size:13px;}
 .tbl-header span{font-size:12px;color:var(--ct);}
@@ -146,7 +146,7 @@ tr:last-child td{border-bottom:none;}
 
 /* ══ PRODUTIVIDADE ══ */
 .prod-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:16px;}
-.prod-card{background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);}
+.prod-card{background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);}
 .prod-nome{font-weight:700;font-size:13px;margin-bottom:6px;}
 .prod-bar-wrap{background:#E8EEEB;border-radius:10px;height:7px;overflow:hidden;margin:5px 0;}
 .prod-bar{height:7px;border-radius:10px;background:var(--v);transition:width .5s;}
@@ -154,7 +154,7 @@ tr:last-child td{border-bottom:none;}
 
 /* ══ REPOSITÓRIO ══ */
 .repo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}
-.repo-card{background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);border-left:3px solid var(--az);}
+.repo-card{background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);border-left:3px solid var(--az);}
 .repo-card h4{font-size:13px;margin-bottom:4px;}
 .repo-card p{font-size:11px;color:var(--ct);margin-bottom:8px;}
 .repo-tipo{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;background:var(--azbg);color:var(--az);margin-bottom:5px;text-transform:uppercase;}
@@ -461,6 +461,66 @@ label, .lbl-campo {
 .toast.ok  { background:var(--verde-primario); color:#fff; }
 .toast.err { background:var(--vermelho); color:#fff; }
 .toast.atn { background:var(--ambar); color:#3A2503; }
+</style>
+<style>
+/* ═══ AJUSTES VISUAIS APROVADOS — fase 2 ═══ */
+
+/* 1) Dashboard — cartão do topo */
+.banner{background:linear-gradient(135deg, #00512D, #006B3C 60%, #00A05A);}
+.bnum strong{color:#fff;}
+.bnum span{color:#C4E6D3;opacity:1;}
+
+/* 2) Botão "Produtividade (NL)" igual ao "Estoque de TRs" */
+.btn-rap.az{background:linear-gradient(180deg, #006B3C, #00512D);}
+
+/* 3) Sidebar */
+.sb{background:#00512D;}
+.sb-item{color:#C4E6D3;}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;}
+.sb-item.on{background:#006B3C;color:#fff;font-weight:500;}
+.sb-lbl{color:#93D2B0;font-size:11px;text-transform:uppercase;font-weight:600;}
+
+/* 4) Botões — acabamento padrão SEGOV */
+.btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar {
+  background:linear-gradient(180deg, #006B3C, #00512D);
+  font-weight:600;
+  border:1px solid rgba(0,0,0,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26), 0 6px 16px -6px rgba(0,160,90,.24), 0 2px 5px rgba(6,20,14,.14);
+  transition:150ms;
+}
+.btn-secundario {
+  background:linear-gradient(180deg, #E8F5EE, #C4E6D3);
+  color:#00512D;
+  font-weight:700;
+  border:1px solid #93D2B0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+  transition:150ms;
+}
+.mccn, .btn-limpar, .btn-neutro {
+  background:#fff;
+  border:1px solid #D4DBD8;
+  color:#4E5A56;
+  font-weight:600;
+  transition:150ms;
+}
+.btn-perigo, .mcok.rv {
+  background:linear-gradient(180deg, #DC2626, #991B1B);
+  font-weight:600;
+  border:1px solid rgba(0,0,0,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26), 0 6px 16px -6px rgba(0,160,90,.24), 0 2px 5px rgba(6,20,14,.14);
+  transition:150ms;
+}
+.btn-primario:hover, button.primario:hover, .mcok:hover, .btn-rap:hover,
+.btn-buscar:hover, .btn-secundario:hover, .mccn:hover, .btn-limpar:hover,
+.btn-neutro:hover, .btn-perigo:hover, .mcok.rv:hover { transform:translateY(-1px); }
+.btn-primario:active, button.primario:active, .mcok:active, .btn-rap:active,
+.btn-buscar:active, .btn-secundario:active, .mccn:active, .btn-limpar:active,
+.btn-neutro:active, .btn-perigo:active, .mcok.rv:active { transform:translateY(0); }
+
+/* 5) Fundos off-white */
+body { background:#F5F8F6; }
+.mc { background:#FCFDFC; }
+tbody tr:nth-child(even) { background:#F5F8F6; }
 </style>
 </head>
 <body>
@@ -2028,34 +2088,34 @@ async function boardCarregar() {
     cont.innerHTML = `
       <!-- Cards resumo -->
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;">
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
           <div style="font-size:26px;font-weight:800;color:var(--te);">${total}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Total PCs</div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
           <div style="font-size:26px;font-weight:800;color:var(--v);">${baixadas}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluídas</div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
           <div style="font-size:26px;font-weight:800;color:#1565C0;">${analise}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Em Análise</div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
           <div style="font-size:26px;font-weight:800;color:var(--am);">${dilig}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Diligência</div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #6A1B9A;">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #6A1B9A;">
           <div style="font-size:26px;font-weight:800;color:#6A1B9A;">${reanalise}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Reanálise</div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1A237E;">
+        <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1A237E;">
           <div style="font-size:26px;font-weight:800;color:var(--v);">${pct}%</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluído</div>
         </div>
       </div>
 
       <!-- Barra de progresso geral -->
-      <div style="background:#fff;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);margin-bottom:14px;">
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);margin-bottom:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-size:13px;font-weight:700;">Progresso Geral — ${sid}</div>
           <div style="font-size:12px;color:var(--ct);">${baixadas} de ${total} PCs concluídas</div>
@@ -2074,7 +2134,7 @@ async function boardCarregar() {
           const gr = grupos[g]
           const gpct = gr.total>0?Math.round(gr.bx/gr.total*100):0
           const gcor = gpct>=70?'var(--v)':gpct>=40?'var(--am)':'var(--r)'
-          return `<div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+          return `<div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
             <div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--te);">${gr.nome}</div>
             <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
               <span>Total: <strong>${gr.total}</strong></span>
@@ -2091,11 +2151,11 @@ async function boardCarregar() {
 
       <!-- Gráficos lado a lado -->
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:14px;">
-        <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+        <div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
           <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Produtividade por Analista (Top 20)</div>
           <div style="height:320px;"><canvas id="chartBarras"></canvas></div>
         </div>
-        <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
+        <div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
           <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Distribuição por Situação</div>
           <div style="height:220px;"><canvas id="chartPizza"></canvas></div>
           <div style="margin-top:10px;font-size:10px;">
@@ -2275,7 +2335,7 @@ function irRel() {
       </div>
     </div>
     <!-- SUMÁRIO -->
-    <div id="relSumario" style="display:none;background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sombra);margin-bottom:12px;">
+    <div id="relSumario" style="display:none;background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);margin-bottom:12px;">
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;" id="relSumCont"></div>
     </div>
     <!-- TABELA -->
@@ -2305,7 +2365,7 @@ function irRel() {
     </div>
     <!-- PAINEL CGE -->
     <div id="relPainelCGE" style="display:none;">
-      <div style="background:#fff;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
+      <div style="background:#FCFDFC;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
         <div style="font-size:13px;font-weight:800;color:var(--te);margin-bottom:4px;">Parâmetros do Relatório CGE</div>
         <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Preencha o período de monitoramento e as metas conforme o Plano de Ação aprovado junto à CGE.</div>
         <div class="filtros" style="gap:10px;flex-wrap:wrap;padding:0;background:none;border-radius:0;box-shadow:none;">
@@ -2445,7 +2505,7 @@ async function cgeGerar() {
 
     cont.innerHTML = `
       <!-- Cabeçalho institucional -->
-      <div style="background:#fff;border-radius:10px;padding:16px 20px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
+      <div style="background:#FCFDFC;border-radius:10px;padding:16px 20px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
         <div style="text-align:center;margin-bottom:6px;">
           <div style="font-size:11px;font-weight:700;color:var(--ct);letter-spacing:1px;">ESTADO DE SANTA CATARINA</div>
           <div style="font-size:12px;font-weight:800;color:var(--te);">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL — GABINETE DA PRESIDÊNCIA</div>
@@ -3216,7 +3276,7 @@ function renderAlertasPanel(alertas) {
   }
 
   return `
-  <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);margin-bottom:12px;overflow:hidden;">
+  <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);margin-bottom:12px;overflow:hidden;">
     <div style="background:${vencidos.length?'#FFEBEE':urgentes.length?'#FFF8E1':'#E3F2FD'};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:16px;">${vencidos.length?'🔴':urgentes.length?'🟡':'🔵'}</span>
@@ -3426,23 +3486,23 @@ function renderPlan(rows, todos) {
   const pct = base.length>0?Math.round(totBx/base.length*100):0
   const resumo = document.getElementById('planResumo')
   if(resumo) resumo.innerHTML = `
-    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
       <div style="font-size:22px;font-weight:800;color:var(--te);">${base.length}</div>
       <div style="font-size:10px;color:var(--ct);">Total</div>
     </div>
-    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
       <div style="font-size:22px;font-weight:800;color:#1565C0;">${totAn}</div>
       <div style="font-size:10px;color:var(--ct);">Em Análise</div>
     </div>
-    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
       <div style="font-size:22px;font-weight:800;color:var(--am);">${totDilig}</div>
       <div style="font-size:10px;color:var(--ct);">Diligência</div>
     </div>
-    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--r);">
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--r);">
       <div style="font-size:22px;font-weight:800;color:var(--r);">${totAtivos}</div>
       <div style="font-size:10px;color:var(--ct);">Em Andamento</div>
     </div>
-    <div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
       <div style="font-size:22px;font-weight:800;color:var(--v);">${totBx} <span style="font-size:13px;">(${pct}%)</span></div>
       <div style="font-size:10px;color:var(--ct);">Concluídas</div>
     </div>`
@@ -3476,7 +3536,7 @@ function renderPlanCards(rows) {
     const vlRepasse = r.valor_repasse ? `R$ ${parseFloat(r.valor_repasse).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null
     const sitOpts = PLAN_SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
     return `
-    <div id="planRow${r.id}" style="background:#fff;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;border-left:4px solid ${st.cor};">
+    <div id="planRow${r.id}" style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;border-left:4px solid ${st.cor};">
       <div style="background:${st.bg};padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <span style="font-size:10px;font-weight:800;color:${st.cor};letter-spacing:.5px;">${st.icone} ${st.label}</span>
         <span style="font-size:9px;background:#fff;color:var(--ct);padding:2px 6px;border-radius:6px;font-weight:600;">#${offset+idx+1}</span>
@@ -3758,7 +3818,7 @@ async function gestCarregar() {
     Object.entries(grupos).sort().forEach(([g,gr]) => {
       const gpct = gr.total>0?Math.round(gr.baixadas/gr.total*100):0
       const gcor = gpct>=70?'var(--v)':gpct>=40?'var(--am)':'var(--r)'
-      cardsHtml += `<div style="background:#fff;border-radius:10px;padding:12px 14px;box-shadow:var(--sombra);border-left:4px solid ${gcor};">
+      cardsHtml += `<div style="background:#FCFDFC;border-radius:10px;padding:12px 14px;box-shadow:var(--sombra);border-left:4px solid ${gcor};">
         <div style="font-size:11px;font-weight:800;color:var(--te);margin-bottom:6px;">Grupo ${g} — ${gr.nome}</div>
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;">
           <span>Total: <strong>${gr.total}</strong></span>
@@ -4010,7 +4070,7 @@ function adminRenderCounters() {
   const admins = _admUsers.filter(u=>u.perfil==='superadmin').length
   const el = document.getElementById('admCounters')
   if(!el) return
-  const mk = (num, lbl, cor) => `<div style="background:#fff;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid ${cor};">
+  const mk = (num, lbl, cor) => `<div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid ${cor};">
     <div style="font-size:22px;font-weight:800;color:${cor};">${num}</div>
     <div style="font-size:9px;color:var(--ct);text-transform:uppercase;">${lbl}</div>
   </div>`
