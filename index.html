@@ -166,6 +166,7 @@ tr:last-child td{border-bottom:none;}
 .mo.open{display:flex;}
 .mc{background:#fff;border-radius:14px;width:480px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .mc.lg{width:580px;}
+#moTR .mc{width:min(1100px,95vw);}
 .mch{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--cb);}
 .mch.v{background:var(--vbg);}
 .mch.am{background:var(--ambg);}
@@ -1175,28 +1176,31 @@ async function abrirTR(tr) {
     const bdgClassPC = {livre:'bdg-livre',analise:'bdg-analise',baixada:'bdg-concluida'}
     const bdgTxtPC = {livre:'Livre',analise:'Em Análise',baixada:'Baixada'}
 
+    const tdS = 'padding:5px 8px;font-size:13px;'
     const linhas = pcs.map(p => {
       const acao = !p.baixada
         ? `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
         : '<span style="color:var(--ct);font-size:10px;">—</span>'
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
-        <td style="font-size:11px;">${p.codigo_pc||'—'}</td>
-        <td style="text-align:center;font-size:11px;">${p.tipo||'—'}</td>
-        <td style="font-size:11px;">${p.codigo_nl||'—'}</td>
-        <td style="text-align:right;font-size:11px;">${valorFmt}</td>
-        <td><span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span></td>
-        <td>${acao}</td>
+        <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
+        <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
+        <td style="${tdS}">${p.codigo_nl||'—'}</td>
+        <td style="${tdS}text-align:right;">${valorFmt}</td>
+        <td style="${tdS}"><span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span></td>
+        <td style="${tdS}">${acao}</td>
       </tr>`
     }).join('')
 
+    const thS = 'position:sticky;top:0;background:#F5F8F6;padding:6px 8px;font-size:13px;z-index:1;'
     document.getElementById('moTRB').innerHTML = `
       <div class="mci" style="margin-bottom:12px;">
         <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
         <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
       </div>
-      <div style="overflow-x:auto;"><table><thead><tr>
-        <th>Código PC</th><th>Tipo</th><th>NL</th><th>Valor</th><th>Status</th><th>Ação</th>
+      <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
+        <th style="${thS}white-space:nowrap;">Código PC</th><th style="${thS}">Tipo</th><th style="${thS}">NL</th>
+        <th style="${thS}text-align:right;">Valor</th><th style="${thS}">Status</th><th style="${thS}">Ação</th>
       </tr></thead><tbody>${linhas}</tbody></table></div>
     `
   } catch(e) {
@@ -1222,12 +1226,17 @@ async function registrarParecer(codigo_pc) {
 
     document.getElementById('mParecerI').innerHTML = `<strong>PC:</strong> ${codigo_pc}`
 
+    const totalNL = outras + 1
+    const msgAviso = outras === 1
+      ? `Esta NL está em mais 1 PC. Baixar as duas juntas conta 2 na sua produtividade.`
+      : `Esta NL está em mais ${outras} PCs. Baixar todas juntas conta ${totalNL} na sua produtividade.`
+
     document.getElementById('mParecerAviso').innerHTML = outras > 0 ? `
       <div style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;color:#7A4800;">
-        <div style="font-weight:800;margin-bottom:6px;">⚠️ Esta NL está em outras ${outras} PC${outras>1?'s':''}. Baixar todas juntas conta ${outras+1} na sua produtividade.</div>
+        <div style="font-weight:800;margin-bottom:6px;">⚠️ ${msgAviso}</div>
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer;">
           <input type="checkbox" id="parecerBaixarNL" checked>
-          Baixar as ${outras+1} PCs desta NL
+          Baixar as ${totalNL} PCs desta NL
         </label>
       </div>` : ''
   } catch(e) {
