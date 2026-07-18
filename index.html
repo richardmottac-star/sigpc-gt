@@ -744,38 +744,31 @@ function ativarMenu(id) {
 // ══════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════
-let DASH = {total:0,livres:0,analise:0,dev:0,repo:0,nlBx:0}
+let DASH = {total:0,livres:0,analise:0,baixadas:0}
 
 async function carregarContadores() {
   try {
     const sid = U.setorialFiltro
-    const isAdmin = !sid
 
-    const fq = (tabela, extra) => {
-      let q = db.from(tabela).select('id',{count:'exact',head:true})
-      if(sid) q = q.eq('setorial_id', sid)
-      if(extra) q = extra(q)
-      return q
+    // Contagem via GET /prestacoes_contas?...&limit=1, lendo só o campo count
+    // (evita trazer as ~13 mil linhas da tabela)
+    const contar = (extra) => {
+      const p = new URLSearchParams({ limit: '1' })
+      if(sid) p.set('setorial_id', sid)
+      if(extra) for(const [k,v] of Object.entries(extra)) p.set(k, v)
+      return fetch(`${API_URL}/prestacoes_contas?${p.toString()}`)
+        .then(r=>r.json()).then(j=>j.count||0).catch(()=>0)
     }
 
-    // Contagem NLs baixadas via fetch direto para garantir compatibilidade com a API
-    const nlBxPromise = fetch(`${API_URL}/notas_liquidacao?baixada=true&limit=1`)
-      .then(r=>r.json()).then(j=>({count: j.count||0})).catch(()=>({count:0}))
-
-    const [r1,r2,r3,r4,r5,r6] = await Promise.all([
-      fq('estoque'),
-      fq('estoque', q=>q.eq('status','livre')),
-      fq('estoque', q=>q.eq('status','analise')),
-      fq('estoque', q=>q.eq('status','dev_pendente')),
-      db.from('repositorio').select('id',{count:'exact',head:true}),
-      nlBxPromise
+    const [total, analise, livres, baixadas] = await Promise.all([
+      contar(),
+      contar({status:'analise'}),
+      contar({status:'livre'}),
+      contar({baixada:'true', estornada:'false'})
     ])
 
-    DASH = {
-      total: r1.count||0, livres: r2.count||0, analise: r3.count||0,
-      dev: r4.count||0, repo: r5.count||0, nlBx: r6.count||0
-    }
-    setSt('ok','API Railway OK — '+DASH.total+' registros carregados')
+    DASH = { total, analise, livres, baixadas }
+    setSt('ok','API Railway OK — '+DASH.total+' PCs carregadas')
     // Sempre atualizar tela se elementos existirem
     renderDashNums()
   } catch(e) {
@@ -786,15 +779,13 @@ async function carregarContadores() {
 function renderDashNums() {
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val }
   set('d-total', DASH.total)
-  set('d-livres', DASH.livres)
   set('d-analise', DASH.analise)
-  set('d-dev', DASH.dev)
-  set('d-repo', DASH.repo)
-  set('d-nlbx', DASH.nlBx)
+  set('d-nlbx', DASH.baixadas)
+  set('d-dev', DASH.livres)
   set('d-bnParcelas', DASH.total)
   set('d-bnLivres', DASH.livres)
   set('d-bnAnalise', DASH.analise)
-  set('d-bnRepo', DASH.repo)
+  set('d-bnRepo', DASH.baixadas)
 }
 
 function irDash() {
@@ -806,17 +797,17 @@ function irDash() {
         <p>${U.setorialAcesso==='ADMIN'?'Acesso Geral — Todas as Setoriais':'Setorial '+U.setorialAcesso}</p>
       </div>
       <div class="banner-nums">
-        <div class="bnum"><strong id="d-bnParcelas">—</strong><span>Parcelas</span></div>
+        <div class="bnum"><strong id="d-bnParcelas">—</strong><span>PCs</span></div>
         <div class="bnum"><strong id="d-bnLivres">—</strong><span>Livres</span></div>
-        <div class="bnum"><strong id="d-bnAnalise">—</strong><span>Análise</span></div>
-        <div class="bnum"><strong id="d-bnRepo">—</strong><span>Repositório</span></div>
+        <div class="bnum"><strong id="d-bnAnalise">—</strong><span>Em Análise</span></div>
+        <div class="bnum"><strong id="d-bnRepo">—</strong><span>Baixadas</span></div>
       </div>
     </div>
     <div class="cards4">
-      <div class="card"><div class="card-num" id="d-total">—</div><div class="card-lbl">Total Estoque</div></div>
+      <div class="card"><div class="card-num" id="d-total">—</div><div class="card-lbl">Total PCs</div></div>
       <div class="card az"><div class="card-num" id="d-analise">—</div><div class="card-lbl">Em Análise</div></div>
-      <div class="card am"><div class="card-num" id="d-nlbx">—</div><div class="card-lbl">NLs Baixadas</div></div>
-      <div class="card rv"><div class="card-num" id="d-dev">—</div><div class="card-lbl">Dev. Pendentes</div></div>
+      <div class="card am"><div class="card-num" id="d-nlbx">—</div><div class="card-lbl">PCs baixadas</div></div>
+      <div class="card rv"><div class="card-num" id="d-dev">—</div><div class="card-lbl">Livres</div></div>
     </div>
     <div class="btns-rap">
       <button class="btn-rap" onclick="irEst()">
