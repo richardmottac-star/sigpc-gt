@@ -961,9 +961,50 @@ let TOT = 0        // total registros
 const PP = 50      // por página
 
 // ══════════════════════════════════════
+//  SESSÃO (persistência local)
+// ══════════════════════════════════════
+const SESSAO_KEY = 'sigpc_sessao'
+const SESSAO_DURACAO_MS = 2 * 60 * 60 * 1000 // 2 horas
+
+function salvarSessao() {
+  if(!U) return
+  const sessao = {
+    id: U.id,
+    nome: U.nome,
+    cpf: U.cpf,
+    perfil: U.perfil,
+    setorial_id: U.setorial_id,
+    setorialAcesso: U.setorialAcesso,
+    grupo: U.grupo,
+    modoAnalista: U.modoAnalista,
+    setorialFiltro: U.setorialFiltro,
+    expira_em: Date.now() + SESSAO_DURACAO_MS
+  }
+  localStorage.setItem(SESSAO_KEY, JSON.stringify(sessao))
+}
+
+function restaurarSessao() {
+  try {
+    const raw = localStorage.getItem(SESSAO_KEY)
+    if(!raw) return false
+    const sessao = JSON.parse(raw)
+    if(!sessao || !sessao.expira_em || sessao.expira_em <= Date.now()) {
+      localStorage.removeItem(SESSAO_KEY)
+      return false
+    }
+    U = { ...sessao }
+    return true
+  } catch(e) {
+    localStorage.removeItem(SESSAO_KEY)
+    return false
+  }
+}
+
+// ══════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════
 window.addEventListener('load', () => {
+  if(restaurarSessao()) iniciarApp()
   verificarConexao()
   document.querySelectorAll('.mo').forEach(m => {
     m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open') })
@@ -1065,6 +1106,7 @@ function mostrarErro(msg) {
 }
 
 function iniciarApp() {
+  salvarSessao()
   document.getElementById('sLogin').classList.remove('ativa')
   document.getElementById('sPainel').classList.add('ativa')
 
@@ -1082,6 +1124,7 @@ function iniciarApp() {
 }
 
 function sair() {
+  localStorage.removeItem(SESSAO_KEY)
   U = null; PAG = 0
   document.getElementById('sPainel').classList.remove('ativa')
   document.getElementById('sLogin').classList.add('ativa')
@@ -1177,6 +1220,7 @@ function ativarMenu(id) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('on'))
   const el = document.getElementById('mi-'+id)
   if(el) el.classList.add('on')
+  salvarSessao()
 }
 
 // ══════════════════════════════════════
