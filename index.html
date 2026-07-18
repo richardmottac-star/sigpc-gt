@@ -1167,6 +1167,13 @@ async function confAss() {
     let assumidas = 0
     let migradas  = 0
 
+    // Fetch com timeout de 8s (evita requisição pendurada travando o botão)
+    const fetchTO = (url, opts={}, ms=8000) => {
+      const ctrl  = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), ms)
+      return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
+    }
+
     // 3) Para cada parcela: assumir no estoque + migrar para planilha
     for(const est of parcelasParaAssumir) {
       // 3a) Assumir no estoque
@@ -1189,7 +1196,7 @@ async function confAss() {
 
       // 3b) Verificar se já existe na planilha
       try {
-        const rEx = await fetch(`${API_URL}/planilha_analista?tr=${encodeURIComponent(est.tr)}&parcela=${est.parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
+        const rEx = await fetchTO(`${API_URL}/planilha_analista?tr=${encodeURIComponent(est.tr)}&parcela=${est.parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
         const jEx = await rEx.json()
         if(jEx.data && jEx.data.length > 0) {
           migradas++  // já existe, conta como ok
@@ -1199,7 +1206,7 @@ async function confAss() {
 
       // 3c) Inserir na planilha_analista
       try {
-        const rIns = await fetch(`${API_URL}/planilha_analista`, {
+        const rIns = await fetchTO(`${API_URL}/planilha_analista`, {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
