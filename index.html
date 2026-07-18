@@ -1135,13 +1135,10 @@ async function confAss() {
   btn.disabled=true; btn.textContent='Salvando...'
   try {
     // 1) Buscar dados da TR selecionada via fetch direto (mais robusto)
-    const r1 = await fetch(`${API_URL}/estoque/${SEL}`)
-    const j1 = await r1.json()
-    const selTR = j1.data || j1
-    if(!selTR || !selTR.tr) throw new Error('TR não encontrada no estoque (id: '+SEL+')')
-
-    const tr      = selTR.tr
-    const parcela = selTR.parcela
+    const mAssI = document.getElementById('mAssI').innerHTML
+    const tr      = mAssI.match(/TR:<\/strong>\s*([^\s|<]+)/)?.[1]?.trim()
+    const parcela = mAssI.match(/Parcela:<\/strong>\s*(\d+)/)?.[1]?.trim()
+    if(!tr || !parcela) throw new Error('Não foi possível identificar TR ou parcela no modal')
     const agora   = new Date().toISOString()
     // Nome do analista na planilha (mapeamento)
     const MAPA_PLAN = {
@@ -1156,7 +1153,7 @@ async function confAss() {
     const setorial     = U.setorial_id || 'FCEE'
 
     // 2) buscar TODAS as linhas do estoque com o mesmo tr e parcela do registro selecionado
-    let parcelasParaAssumir = [selTR]  // começa com a selecionada
+    let parcelasParaAssumir = [{tr, parcela}]  // começa com a selecionada
     try {
       const rTP = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&parcela=${encodeURIComponent(parcela)}&limit=200`)
       const jTP = await rTP.json()
