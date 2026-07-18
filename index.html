@@ -1202,10 +1202,98 @@ async function abrirTR(tr) {
         <th style="${thS}white-space:nowrap;">Código PC</th><th style="${thS}">Tipo</th><th style="${thS}">NL</th>
         <th style="${thS}text-align:right;">Valor</th><th style="${thS}">Status</th><th style="${thS}">Ação</th>
       </tr></thead><tbody>${linhas}</tbody></table></div>
+
+      <div class="mc-campo" style="margin-top:16px;">
+        <label>Anotações</label>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Seu coordenador pode ver estas anotações</div>
+        <textarea id="anotTexto" rows="2" placeholder="Escreva uma anotação sobre esta TR..." style="resize:vertical;"></textarea>
+        <div style="text-align:right;margin-top:6px;">
+          <button class="mcok" id="btnSalvarAnot" onclick="salvarAnotacao('${tr}')" style="padding:6px 14px;font-size:11px;">Salvar anotação</button>
+        </div>
+      </div>
+      <div id="anotList"></div>
     `
+    carregarAnotacoes(tr)
   } catch(e) {
     document.getElementById('moTRB').innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
     console.error('abrirTR erro:', e)
+  }
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+async function carregarAnotacoes(tr) {
+  const cont = document.getElementById('anotList')
+  if(!cont) return
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
+  try {
+    const r = await fetch(`${API_URL}/anotacoes_tr?tr=${encodeURIComponent(tr)}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    const anots = j.data || []
+    if(!anots.length) {
+      cont.innerHTML = '<div style="color:var(--ct);font-size:11px;padding:8px 0;">Nenhuma anotação ainda.</div>'
+      return
+    }
+    cont.innerHTML = anots.map(a => {
+      const dt = new Date(a.criado_em).toLocaleString('pt-BR')
+      const btnDel = a.analista_id === U.id
+        ? `<button class="btn-acao btn-dev" style="margin-left:6px;" onclick="excluirAnotacao(${a.id},'${tr}')">Excluir</button>`
+        : ''
+      return `<div style="border-bottom:1px solid #EEF2EF;padding:8px 0;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
+          <strong style="font-size:11px;color:var(--v);">${escHtml(a.analista_nome)||'—'}</strong>
+          <span style="font-size:10px;color:var(--ct);">${dt}${btnDel}</span>
+        </div>
+        <div style="margin-top:3px;white-space:pre-wrap;">${escHtml(a.texto)}</div>
+      </div>`
+    }).join('')
+  } catch(e) {
+    cont.innerHTML = `<div style="color:var(--r);font-size:11px;">Erro ao carregar anotações: ${e.message}</div>`
+    console.error('carregarAnotacoes erro:', e)
+  }
+}
+
+async function salvarAnotacao(tr) {
+  const ta = document.getElementById('anotTexto')
+  const texto = ta.value.trim()
+  if(!texto) { toast('Digite o texto da anotação', 'err'); return }
+  const btn = document.getElementById('btnSalvarAnot')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const r = await fetch(`${API_URL}/anotacoes_tr`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, analista_id: U.id, analista_nome: U.nome, texto })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    ta.value = ''
+    carregarAnotacoes(tr)
+  } catch(e) {
+    toast('Erro ao salvar anotação: '+e.message, 'err')
+    console.error('salvarAnotacao erro:', e)
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar anotação'
+  }
+}
+
+async function excluirAnotacao(id, tr) {
+  if(!confirm('Excluir esta anotação?')) return
+  try {
+    const r = await fetch(`${API_URL}/anotacoes_tr/${id}`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ analista_id: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    carregarAnotacoes(tr)
+  } catch(e) {
+    toast('Erro ao excluir anotação: '+e.message, 'err')
+    console.error('excluirAnotacao erro:', e)
   }
 }
 
