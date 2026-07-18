@@ -1120,7 +1120,6 @@ function iniciarApp() {
   renderSB()
   irDash()
   carregarContadores()
-  setTimeout(atualizarBadgeAlertas, 1500)
 }
 
 function sair() {
@@ -1152,7 +1151,6 @@ function renderSB() {
       </div>
       <div class="sb-item" id="mi-plan" onclick="irPlanilha()" style="position:relative;">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Minha Planilha
-        <span id="planAlertBadge" style="display:none;background:var(--r);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:auto;"></span>
       </div>
       <div class="sb-item" id="mi-prod" onclick="irProd()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Produtividade (NL)
@@ -1540,7 +1538,6 @@ async function migrarParaPlanilha(id, tr, parcela, benef, processoSgp) {
     const jIns = await rIns.json()
     if(jIns.error) throw new Error(jIns.error.message || JSON.stringify(jIns.error))
     toast(`✓ TR ${tr} P${parcela} migrada para sua planilha!`, 'ok')
-    setTimeout(atualizarBadgeAlertas, 800)
   } catch(e) { toast('Erro ao migrar: '+e.message,'err'); console.error('migrar erro:', e) }
 }
 
@@ -3333,105 +3330,26 @@ async function primAcesso() {
 }
 
 // ══════════════════════════════════════
-//  SISTEMA DE ALERTAS
-// ══════════════════════════════════════
-function parseDateBR(str) {
-  if(!str) return null
-  // Suporta dd/mm/aaaa ou aaaa-mm-dd
-  if(str.includes('/')) { const [d,m,a] = str.split('/'); return new Date(`${a}-${m}-${d}`) }
-  return new Date(str)
-}
-
-function calcularAlertas(dados) {
-  const hoje = new Date(); hoje.setHours(0,0,0,0)
-  const em5 = new Date(hoje); em5.setDate(hoje.getDate() + 5)
-  const ha30 = new Date(hoje); ha30.setDate(hoje.getDate() - 30)
-  const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
-
-  const vencidos = [], urgentes = [], semMov = []
-  dados.forEach(r => {
-    if(SITS_BAIXA.has(r.situacao)) return
-    const prazo = parseDateBR(r.prazo_diligencia)
-    if(prazo) {
-      if(prazo < hoje) vencidos.push({...r, prazoDate: prazo})
-      else if(prazo <= em5) urgentes.push({...r, prazoDate: prazo})
-    }
-    // Sem movimentação: assumido há > 30 dias sem baixa
-    const assumido = r.assumido_em ? new Date(r.assumido_em) : null
-    const atualizado = r.atualizado_em ? new Date(r.atualizado_em) : assumido
-    if(atualizado && atualizado < ha30 && !prazo) semMov.push(r)
-  })
-  return { vencidos, urgentes, semMov }
-}
-
-async function atualizarBadgeAlertas() {
-  try {
-    const MAPA_PLANILHA = {
-      'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
-      'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
-      'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
-      'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara','Zadir Teresinha Machado Ferreira':'Zadir',
-    }
-    const nomePlan = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
-    const params = new URLSearchParams({ analista: nomePlan, setorial_id: U.setorialFiltro||'FCEE', limit: 9999, offset: 0 })
-    const r = await fetch(`${API_URL}/planilha_analista/completa?${params}`)
-    const j = await r.json()
-    const { vencidos, urgentes } = calcularAlertas(j.data||[])
-    const total = vencidos.length + urgentes.length
-    const badge = document.getElementById('planAlertBadge')
-    if(badge) {
-      badge.style.display = total > 0 ? '' : 'none'
-      badge.textContent = total
-    }
-  } catch(e) {}
-}
-
-function renderAlertasPanel(alertas) {
-  const { vencidos, urgentes, semMov } = alertas
-  if(!vencidos.length && !urgentes.length && !semMov.length) return ''
-  const total = vencidos.length + urgentes.length + semMov.length
-
-  const mkItem = (r, tipo) => {
-    const cor = tipo==='vencido'?'var(--r)':tipo==='urgente'?'var(--am)':'#555'
-    const icon = tipo==='vencido'?'🔴':tipo==='urgente'?'🟡':'🔵'
-    const prazoTxt = r.prazo_diligencia ? `Prazo: ${r.prazo_diligencia}` : 'Sem prazo'
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cb);">
-      <span style="font-size:14px;">${icon}</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:11px;font-weight:700;color:${cor};">${r.tr||'—'} P${r.parcela||'—'}</div>
-        <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||r.beneficiario||'—'} — ${r.situacao||'—'}</div>
-      </div>
-      <span style="font-size:9px;white-space:nowrap;color:${cor};font-weight:700;">${prazoTxt}</span>
-    </div>`
-  }
-
-  return `
-  <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);margin-bottom:12px;overflow:hidden;">
-    <div style="background:${vencidos.length?'#FFEBEE':urgentes.length?'#FFF8E1':'#E3F2FD'};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;">${vencidos.length?'🔴':urgentes.length?'🟡':'🔵'}</span>
-        <div>
-          <div style="font-size:12px;font-weight:800;color:${vencidos.length?'var(--r)':urgentes.length?'var(--am)':'#1565C0'};">⚠ ${total} Alerta${total>1?'s':'!'} de Prazo</div>
-          <div style="font-size:10px;color:var(--ct);">
-            ${vencidos.length?`<span style="color:var(--r);font-weight:700;">${vencidos.length} vencidos</span> · `:''}
-            ${urgentes.length?`<span style="color:var(--am);font-weight:700;">${urgentes.length} vencem em 5 dias</span> · `:''}
-            ${semMov.length?`<span style="color:#555;">${semMov.length} sem movimentação</span>`:''}
-          </div>
-        </div>
-      </div>
-      <span style="font-size:11px;color:var(--ct);">▼ clique para expandir</span>
-    </div>
-    <div style="padding:8px 14px;max-height:250px;overflow-y:auto;">
-      ${vencidos.length?`<div style="font-size:10px;font-weight:800;color:var(--r);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">PRAZOS VENCIDOS (${vencidos.length})</div>${vencidos.map(r=>mkItem(r,'vencido')).join('')}`:''}
-      ${urgentes.length?`<div style="font-size:10px;font-weight:800;color:var(--am);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">VENCEM EM 5 DIAS (${urgentes.length})</div>${urgentes.map(r=>mkItem(r,'urgente')).join('')}`:''}
-      ${semMov.length?`<div style="font-size:10px;font-weight:800;color:#555;padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">SEM MOVIMENTAÇÃO +30 DIAS (${semMov.length})</div>${semMov.map(r=>mkItem(r,'semMov')).join('')}`:''}
-    </div>
-  </div>`
-}
-
-// ══════════════════════════════════════
 //  TELA ANALISTA — PLANILHA
 // ══════════════════════════════════════
+const PLAN_STATUS_STYLE = {
+  livre:      {bg:'#F5F5F5', cor:'#666666', label:'LIVRE',      icone:'○'},
+  analise:    {bg:'#E3F2FD', cor:'#1565C0', label:'ANÁLISE',    icone:'🔵'},
+  diligencia: {bg:'#FFF8E1', cor:'#E65100', label:'DILIGÊNCIA', icone:'🟡'},
+  reanalise:  {bg:'#F3E5F5', cor:'#6A1B9A', label:'REANÁLISE',  icone:'🔴'},
+  baixada:    {bg:'#E8F5EE', cor:'#006B3C', label:'✓ BAIXADA',  icone:'✅'},
+}
+const PLAN_STATUS_ORDEM = ['diligencia','reanalise','analise','livre','baixada']
+
+function planStatusPredominante(statuses) {
+  const cont = {}
+  statuses.forEach(s => cont[s] = (cont[s]||0)+1)
+  return Object.keys(cont).sort((a,b) => {
+    if(cont[b] !== cont[a]) return cont[b]-cont[a]
+    return PLAN_STATUS_ORDEM.indexOf(a) - PLAN_STATUS_ORDEM.indexOf(b)
+  })[0]
+}
+
 async function irPlanilha() {
   ativarMenu('plan')
   document.getElementById('BODY').innerHTML = `
@@ -3440,31 +3358,22 @@ async function irPlanilha() {
         <div style="font-size:16px;font-weight:700;">Minha Planilha de Análise</div>
         <div style="font-size:11px;color:var(--ct);">Analista: <strong>${U.nome}</strong></div>
       </div>
-      <div style="display:flex;gap:6px;">
-        <button onclick="planMudaVis('lista')" id="planVisLista" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;border-radius:6px;cursor:pointer;">☰ Lista</button>
-        <button onclick="planMudaVis('cards')" id="planVisCards" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;">⊞ Cards</button>
-      </div>
     </div>
     <!-- Resumo estatístico -->
     <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;"></div>
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
-      <div class="fg"><label>Buscar Entidade / TR / SGPE</label>
+      <div class="fg"><label>Buscar Entidade / TR</label>
         <input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
           <option value="">Todas</option>
-          <option value="ativo">▶ Em Andamento</option>
-          <option value="baixado">✓ Concluídas</option>
-          <option disabled>──────────</option>
-          <option>Analisar</option><option>Análise</option><option>Diligência</option>
-          <option>Reanalise</option><option>Reanálise</option>
-          <option>Encaminhado para o Controle Interno</option>
-          <option>Parecer Regular</option>
-          <option>Parecer Regular com Ressalva</option>
-          <option>Parecer Regular com Ressalvas</option>
-          <option>Parecer Irregular</option>
+          <option value="livre">○ Livre</option>
+          <option value="analise">🔵 Análise</option>
+          <option value="diligencia">🟡 Diligência</option>
+          <option value="reanalise">🔴 Reanálise</option>
+          <option value="baixada">✅ Baixada</option>
         </select>
       </div>
       <button class="btn-buscar" onclick="buscarPlan()">
@@ -3488,18 +3397,22 @@ async function irPlanilha() {
   `
   window._planPag = 0
   window._planTot = 0
-  window._planVis = 'lista'
+  window._planMeta = null
+  await carregarMetaAnalista()
   buscarPlan()
 }
 
-function planMudaVis(vis) {
-  window._planVis = vis
-  const bL = document.getElementById('planVisLista')
-  const bC = document.getElementById('planVisCards')
-  if(bL) { bL.style.background = vis==='lista'?'var(--v)':'#fff'; bL.style.color = vis==='lista'?'#fff':'var(--ct)'; bL.style.border = vis==='lista'?'none':'1.5px solid var(--cb)' }
-  if(bC) { bC.style.background = vis==='cards'?'var(--v)':'#fff'; bC.style.color = vis==='cards'?'#fff':'var(--ct)'; bC.style.border = vis==='cards'?'none':'1.5px solid var(--cb)' }
-  // Re-render com os dados já carregados
-  if(window._planDadosCache) renderPlan(window._planDadosCache)
+async function carregarMetaAnalista() {
+  try {
+    const r = await fetch(`${API_URL}/metas_analistas?analista_id=${U.id}&vigente=true`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const metas = j.data||[]
+    window._planMeta = metas.length ? metas.reduce((s,m)=>s+(parseInt(m.meta)||0),0) : null
+  } catch(e) {
+    window._planMeta = null
+    console.error('carregarMetaAnalista erro:', e)
+  }
 }
 
 async function buscarPlan() {
@@ -3507,283 +3420,113 @@ async function buscarPlan() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
-  const busca = document.getElementById('plBusca')?.value.trim()||''
-  let sit = document.getElementById('plSit')?.value||''
-  const pag = window._planPag||0
-  const from = pag*PP
-
-  const MAPA_PLANILHA = {
-    'Sandra Paul':'Sandra Paul', 'Sandra Rocha':'Sandra Rocha',
-    'Ana Claudia':'Ana Claudia', 'Ana Leticia':'Ana Leticia',
-    'Grace Oliveira':'Grace Oliveira', 'Janaína':'Janaína',
-    'Richard Motta Coelho':'Richard',
-    'Nayara Limas Ferreira':'Nayara',
-    'Zadir Teresinha Machado Ferreira':'Zadir',
-  }
-  const nomeNaPlanilha = MAPA_PLANILHA[U.nome.trim()] || U.nome.trim().split(' ')[0]
-
-  // Filtros especiais
-  const filtroAtivo = sit === 'ativo'
-  const filtroBaixado = sit === 'baixado'
-  if(filtroAtivo || filtroBaixado) sit = ''
+  const busca = document.getElementById('plBusca')?.value.trim().toLowerCase()||''
+  const sit = document.getElementById('plSit')?.value||''
 
   try {
-    const params = new URLSearchParams({
-      analista: nomeNaPlanilha,
-      setorial_id: U.setorialFiltro || 'FCEE',
-      limit: 9999,
-      offset: 0,
-    })
-    if(sit) params.set('situacao', sit)
-    if(busca) params.set('busca', busca)
+    const params = new URLSearchParams({ analista_id: U.id, limit: 9999, offset: 0 })
+    if(sit) params.set('status', sit)
 
-    const r = await fetch(`${API_URL}/planilha_analista/completa?${params}`)
+    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
-    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
-    let todos = j.data||[]
+    let pcs = j.data||[]
+    if(busca) pcs = pcs.filter(p => (p.tr||'').toLowerCase().includes(busca) || (p.entidade||'').toLowerCase().includes(busca))
 
-    // Filtrar por tipo (ativo/baixado)
-    if(filtroAtivo) todos = todos.filter(r => !SITS_BAIXA.has(r.situacao))
-    if(filtroBaixado) todos = todos.filter(r => SITS_BAIXA.has(r.situacao))
+    renderPlanResumo(pcs, window._planMeta)
 
-    // Ordenar: ativos primeiro (por prioridade de situação), depois concluídos
-    const PRIO = {'Analisar':1,'Análise':2,'Diligência':3,'Reanalise':4,'Reanálise':4,'Encaminhado para o Controle Interno':5}
-    todos.sort((a,b) => {
-      const ba = SITS_BAIXA.has(a.situacao), bb = SITS_BAIXA.has(b.situacao)
-      if(ba !== bb) return ba ? 1 : -1
-      const pa = PRIO[a.situacao]||6, pb = PRIO[b.situacao]||6
-      return pa !== pb ? pa - pb : (a.tr||'').localeCompare(b.tr||'')
+    // Agrupar por TR
+    const grupos = {}
+    pcs.forEach(p => {
+      if(!grupos[p.tr]) grupos[p.tr] = { tr: p.tr, entidade: p.entidade, nls: new Set(), total_pcs: 0, baixadas: 0, statuses: [] }
+      const g = grupos[p.tr]
+      g.total_pcs++
+      if(p.codigo_nl) g.nls.add(p.codigo_nl)
+      if(p.status === 'baixada') g.baixadas++
+      g.statuses.push(p.status)
     })
+    const trs = Object.values(grupos).map(g => ({
+      tr: g.tr,
+      entidade: g.entidade,
+      total_pcs: g.total_pcs,
+      total_nls: g.nls.size,
+      baixadas: g.baixadas,
+      status_predominante: planStatusPredominante(g.statuses)
+    })).sort((a,b) => (a.tr||'').localeCompare(b.tr||''))
 
-    window._planTot = todos.length
-    window._planDadosCache = todos
+    window._planTot = trs.length
+    window._planDadosCache = trs
 
-    // Calcular e exibir alertas
-    const alertas = calcularAlertas(todos)
-    const alertTotal = alertas.vencidos.length + alertas.urgentes.length
-    const badge = document.getElementById('planAlertBadge')
-    if(badge) { badge.style.display = alertTotal>0?'':'none'; badge.textContent = alertTotal }
-
-    // Inserir painel de alertas antes do resumo (se ainda não existe)
-    let alertDiv = document.getElementById('planAlertPanel')
-    if(!alertDiv) {
-      alertDiv = document.createElement('div')
-      alertDiv.id = 'planAlertPanel'
-      const resumo = document.getElementById('planResumo')
-      if(resumo) resumo.parentNode.insertBefore(alertDiv, resumo)
-    }
-    alertDiv.innerHTML = renderAlertasPanel(alertas)
-
-    // Paginação client-side
-    const pagData = todos.slice(from, from + PP)
-    renderPlan(pagData, todos)
+    const from = (window._planPag||0)*PP
+    renderPlan(trs.slice(from, from+PP))
     planRenderPag()
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
 }
 
-const PLAN_SITS = ['Analisar','Análise','Diligência','Reanalise','Reanálise',
-  'Encaminhado para o Controle Interno',
-  'Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular']
-const PLAN_SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
-
-const PLAN_STATUS_STYLE = {
-  'Analisar':       {bg:'#E3F2FD',cor:'#1565C0',label:'ANALISAR',icone:'🔵'},
-  'Análise':        {bg:'#E3F2FD',cor:'#1565C0',label:'ANÁLISE', icone:'🔵'},
-  'Diligência':     {bg:'#FFF8E1',cor:'#E65100',label:'DILIGÊNCIA',icone:'🟡'},
-  'Reanalise':      {bg:'#F3E5F5',cor:'#6A1B9A',label:'REANÁLISE',icone:'🔴'},
-  'Reanálise':      {bg:'#F3E5F5',cor:'#6A1B9A',label:'REANÁLISE',icone:'🔴'},
-  'Encaminhado para o Controle Interno': {bg:'#E8EAF6',cor:'#283593',label:'CTRL. INTERNO',icone:'📋'},
-  'Parecer Regular':           {bg:'#E8F5EE',cor:'#006B3C',label:'✓ REGULAR',   icone:'✅'},
-  'Parecer Regular com Ressalva':  {bg:'#E8F5EE',cor:'#1B5E20',label:'✓ RESSALVA',icone:'✅'},
-  'Parecer Regular com Ressalvas': {bg:'#E8F5EE',cor:'#1B5E20',label:'✓ RESSALVAS',icone:'✅'},
-  'Parecer Irregular': {bg:'#FFEBEE',cor:'#C62828',label:'✗ IRREGULAR',icone:'❌'},
-}
-
-function renderPlan(rows, todos) {
-  const cont = document.getElementById('planConteudo')
-  if(!cont) return
-
-  // Atualizar resumo estatístico com totais globais
-  const base = todos || rows
-  const totAtivos = base.filter(r => !PLAN_SITS_BAIXA.has(r.situacao)).length
-  const totBx = base.filter(r => PLAN_SITS_BAIXA.has(r.situacao)).length
-  const totDilig = base.filter(r => r.situacao==='Diligência').length
-  const totAn = base.filter(r => r.situacao==='Análise'||r.situacao==='Analisar').length
-  const pct = base.length>0?Math.round(totBx/base.length*100):0
+function renderPlanResumo(pcs, meta) {
   const resumo = document.getElementById('planResumo')
-  if(resumo) resumo.innerHTML = `
+  if(!resumo) return
+  const total = pcs.length
+  const emAnalise = pcs.filter(r=>r.status==='analise').length
+  const diligencia = pcs.filter(r=>r.status==='diligencia').length
+  const reanalise = pcs.filter(r=>r.status==='reanalise').length
+  const baixadas = pcs.filter(r=>r.status==='baixada').length
+  const pctTxt = meta ? ` <span style="font-size:13px;">(${Math.round(baixadas/meta*100)}%)</span>` : ''
+  resumo.innerHTML = `
     <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
-      <div style="font-size:22px;font-weight:800;color:var(--te);">${base.length}</div>
-      <div style="font-size:10px;color:var(--ct);">Total</div>
+      <div style="font-size:22px;font-weight:800;color:var(--te);">${total}</div>
+      <div style="font-size:10px;color:var(--ct);">Total de PCs</div>
     </div>
     <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
-      <div style="font-size:22px;font-weight:800;color:#1565C0;">${totAn}</div>
+      <div style="font-size:22px;font-weight:800;color:#1565C0;">${emAnalise}</div>
       <div style="font-size:10px;color:var(--ct);">Em Análise</div>
     </div>
     <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
-      <div style="font-size:22px;font-weight:800;color:var(--am);">${totDilig}</div>
+      <div style="font-size:22px;font-weight:800;color:var(--am);">${diligencia}</div>
       <div style="font-size:10px;color:var(--ct);">Diligência</div>
     </div>
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--r);">
-      <div style="font-size:22px;font-weight:800;color:var(--r);">${totAtivos}</div>
-      <div style="font-size:10px;color:var(--ct);">Em Andamento</div>
+    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #6A1B9A;">
+      <div style="font-size:22px;font-weight:800;color:#6A1B9A;">${reanalise}</div>
+      <div style="font-size:10px;color:var(--ct);">Reanálise</div>
     </div>
     <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
-      <div style="font-size:22px;font-weight:800;color:var(--v);">${totBx} <span style="font-size:13px;">(${pct}%)</span></div>
-      <div style="font-size:10px;color:var(--ct);">Concluídas</div>
+      <div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas}${pctTxt}</div>
+      <div style="font-size:10px;color:var(--ct);">Baixadas</div>
     </div>`
+}
+
+function renderPlan(rows) {
+  const cont = document.getElementById('planConteudo')
+  if(!cont) return
 
   if(!rows.length) {
     cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum registro encontrado.</div>'
     return
   }
 
-  const vis = window._planVis || 'lista'
-  if(vis === 'cards') {
-    renderPlanCards(rows)
-  } else {
-    renderPlanLista(rows)
-  }
-}
-
-function renderPlanCards(rows) {
-  const cont = document.getElementById('planConteudo')
-  if(!cont) return
   const offset = (window._planPag||0)*PP
-
-  // Separar ativos e concluídos
-  const ativos = rows.filter(r => !PLAN_SITS_BAIXA.has(r.situacao))
-  const concluidos = rows.filter(r => PLAN_SITS_BAIXA.has(r.situacao))
-
-  const mkCard = (r, idx) => {
-    const st = PLAN_STATUS_STYLE[r.situacao] || {bg:'#F5F5F5',cor:'#666',label:r.situacao||'—',icone:'○'}
-    const entidade = r.entidade || r.beneficiario || '—'
-    const sgpe = r.sgpe || r.processo_sgp || '—'
-    const vlRepasse = r.valor_repasse ? `R$ ${parseFloat(r.valor_repasse).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : null
-    const sitOpts = PLAN_SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
-    return `
-    <div id="planRow${r.id}" style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;border-left:4px solid ${st.cor};">
-      <div style="background:${st.bg};padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <span style="font-size:10px;font-weight:800;color:${st.cor};letter-spacing:.5px;">${st.icone} ${st.label}</span>
-        <span style="font-size:9px;background:#fff;color:var(--ct);padding:2px 6px;border-radius:6px;font-weight:600;">#${offset+idx+1}</span>
-      </div>
-      <div style="padding:10px 12px;">
-        <div style="font-weight:700;font-size:12px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${entidade}">${entidade}</div>
-        <div style="font-size:11px;color:var(--az);font-weight:600;margin-bottom:6px;">${r.tr||'—'} — Parcela ${r.parcela||'—'}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;color:var(--ct);margin-bottom:8px;">
-          <span>SGPE: <strong>${sgpe}</strong></span>
-          ${vlRepasse?`<span>Repasse: <strong style="color:var(--v);">${vlRepasse}</strong></span>`:'<span></span>'}
-          ${r.prazo_diligencia?`<span>Prazo Dilig.: <strong style="color:var(--am);">${r.prazo_diligencia}</strong></span>`:'<span></span>'}
-          ${r.num_diligencias?`<span>Nº Dilig.: <strong>${r.num_diligencias}</strong></span>`:'<span></span>'}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:9px;font-weight:700;color:var(--ct);min-width:55px;text-transform:uppercase;letter-spacing:.3px;">Situação:</span>
-            <select style="flex:1;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;min-width:0;"
-              onchange="salvarCampo(${r.id},'situacao',this.value)">${sitOpts}</select>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <div style="flex:1;"><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Nº Dilig.</span>
-              <input type="text" value="${r.num_diligencias||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-                onblur="salvarCampo(${r.id},'num_diligencias',this.value)">
-            </div>
-            <div style="flex:2;"><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Prazo Diligência</span>
-              <input type="text" value="${r.prazo_diligencia||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-                onblur="salvarCampo(${r.id},'prazo_diligencia',this.value)" placeholder="dd/mm/aaaa">
-            </div>
-          </div>
-          <div><span style="font-size:9px;color:var(--ct);display:block;margin-bottom:2px;">Parecer</span>
-            <input type="text" value="${r.parecer||''}" style="width:100%;border:1.5px solid var(--cb);border-radius:5px;padding:3px 6px;font-size:11px;font-family:Barlow,sans-serif;"
-              onblur="salvarCampo(${r.id},'parecer',this.value)">
-          </div>
-        </div>
-      </div>
-    </div>`
-  }
-
-  let html = ''
-  if(ativos.length) {
-    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <div style="background:var(--r);color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:800;">▲ EM ANDAMENTO — ${ativos.length}</div>
-      <div style="font-size:10px;color:var(--ct);">ordenados por prioridade de situação</div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:14px;">
-      ${ativos.map((r,i)=>mkCard(r,i)).join('')}
-    </div>`
-  }
-  if(concluidos.length) {
-    html += `<details ${ativos.length?'':'open'}>
-      <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:8px;list-style:none;">
-        <div style="background:var(--v);color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:800;">✓ CONCLUÍDAS — ${concluidos.length}</div>
-        <span style="font-size:10px;color:var(--ct);">(clique para expandir/recolher)</span>
-      </summary>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:14px;">
-        ${concluidos.map((r,i)=>mkCard(r,ativos.length+i)).join('')}
-      </div>
-    </details>`
-  }
-  cont.innerHTML = html
-}
-
-function renderPlanLista(rows) {
-  const cont = document.getElementById('planConteudo')
-  if(!cont) return
-  const offset = (window._planPag||0)*PP
-
-  const ativos = rows.filter(r => !PLAN_SITS_BAIXA.has(r.situacao))
-  const concluidos = rows.filter(r => PLAN_SITS_BAIXA.has(r.situacao))
-
-  const mkLinhas = (lista, startIdx) => lista.map((r, i) => {
-    const st = PLAN_STATUS_STYLE[r.situacao] || {bg:'#F5F5F5',cor:'#999',label:r.situacao||'—',icone:'○'}
-    const entidade = r.entidade || r.beneficiario || '—'
-    const sgpe = r.sgpe || r.processo_sgp || '—'
-    const sitOpts = PLAN_SITS.map(s => `<option value="${s}" ${r.situacao===s?'selected':''}>${s}</option>`).join('')
-    return `<tr id="planRow${r.id}" style="background:${st.bg};">
-      <td style="font-size:10px;color:var(--ct);text-align:center;">${offset+startIdx+i+1}</td>
+  const linhas = rows.map((r,i) => {
+    const st = PLAN_STATUS_STYLE[r.status_predominante] || {bg:'#F5F5F5',cor:'#999',label:r.status_predominante||'—',icone:'○'}
+    return `<tr style="background:${st.bg};cursor:pointer;" onclick="abrirTR('${r.tr}')">
+      <td style="font-size:10px;color:var(--ct);text-align:center;">${offset+i+1}</td>
       <td style="padding:0;">
         <div style="width:5px;height:100%;min-height:40px;background:${st.cor};"></div>
       </td>
       <td>
         <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${st.cor};color:${st.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${st.icone} ${st.label}</span>
       </td>
-      <td style="max-width:170px;">
-        <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${entidade}">${entidade}</div>
-        <div style="font-size:10px;color:var(--ct);">${sgpe}</div>
+      <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}</td>
+      <td style="max-width:220px;">
+        <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.entidade||''}">${r.entidade||'—'}</div>
       </td>
-      <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}<br><span style="font-size:9px;color:var(--ct);">Parc. ${r.parcela||'—'}</span></td>
-      <td>
-        <select style="border:1.5px solid ${st.cor};border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;min-width:130px;background:#fff;"
-          onchange="salvarCampo(${r.id},'situacao',this.value)">${sitOpts}</select>
-      </td>
-      <td style="white-space:nowrap;">
-        <div style="display:flex;gap:4px;align-items:center;">
-          <input type="text" value="${r.num_diligencias||''}" style="width:38px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;text-align:center;" title="Nº Diligências"
-            onblur="salvarCampo(${r.id},'num_diligencias',this.value)" placeholder="Nº">
-          <input type="text" value="${r.prazo_diligencia||''}" style="width:80px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;" title="Prazo Diligência"
-            onblur="salvarCampo(${r.id},'prazo_diligencia',this.value)" placeholder="Prazo">
-        </div>
-      </td>
-      <td><input type="text" value="${r.parecer||''}" style="width:120px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'parecer',this.value)" placeholder="Parecer"></td>
-      <td><input type="text" value="${r.controle_interno||''}" style="width:90px;border:1.5px solid var(--cb);border-radius:5px;padding:2px 4px;font-size:10px;font-family:Barlow,sans-serif;"
-        onblur="salvarCampo(${r.id},'controle_interno',this.value)" placeholder="Ctrl. Interno"></td>
-      <td style="text-align:center;">${r.baixada?'<span class="bdg bdg-livre" style="font-size:9px;">✓ Sim</span>':'<span class="bdg bdg-analise" style="font-size:9px;">Não</span>'}</td>
+      <td style="text-align:center;font-size:11px;font-weight:700;">${r.total_pcs}</td>
+      <td style="text-align:center;font-size:11px;">${r.total_nls}</td>
+      <td style="text-align:center;font-size:11px;font-weight:700;color:var(--v);">${r.baixadas}</td>
     </tr>`
   }).join('')
-
-  const mkGrupo = (titulo, cor, lista, startIdx) => `
-    <tr><td colspan="10" style="background:${cor};padding:5px 12px;">
-      <span style="font-size:10px;font-weight:800;color:#fff;">${titulo} — ${lista.length} registros</span>
-    </td></tr>
-    ${mkLinhas(lista, startIdx)}`
-
-  let tbodyHtml = ''
-  if(ativos.length) tbodyHtml += mkGrupo('▲ EM ANDAMENTO', 'var(--r)', ativos, 0)
-  if(concluidos.length) tbodyHtml += mkGrupo('✓ CONCLUÍDAS', 'var(--v)', concluidos, ativos.length)
 
   cont.innerHTML = `
     <div class="tbl-wrap">
@@ -3793,46 +3536,16 @@ function renderPlanLista(rows) {
             <th style="width:30px;">#</th>
             <th style="width:5px;padding:0;"></th>
             <th style="min-width:110px;">Status</th>
-            <th>Entidade / SGPE</th>
-            <th>TR / Parcela</th>
-            <th style="min-width:140px;">Situação PC</th>
-            <th style="min-width:130px;">Diligência</th>
-            <th style="min-width:120px;">Parecer</th>
-            <th style="min-width:100px;">Ctrl. Interno</th>
-            <th>Baixada?</th>
+            <th>TR</th>
+            <th>Entidade</th>
+            <th>PCs</th>
+            <th>NLs</th>
+            <th>Baixadas</th>
           </tr></thead>
-          <tbody>${tbodyHtml}</tbody>
+          <tbody>${linhas}</tbody>
         </table>
       </div>
     </div>`
-}
-
-async function salvarCampo(id, campo, valor) {
-  try {
-    const upd = { [campo]: valor, atualizado_em: new Date().toISOString(), atualizado_por: U.nome }
-    if(campo === 'situacao') upd.baixada = PLAN_SITS_BAIXA.has(valor)
-    const { error } = await db.from('planilha_analista').update(upd).eq('id', id)
-    if(error) throw error
-    toast('Salvo!','ok')
-    if(campo === 'situacao') {
-      // Recarregar a planilha para atualizar ordenação e visual corretamente
-      setTimeout(() => {
-        const dados = window._planDadosCache||[]
-        const rec = dados.find(r=>r.id===id)
-        if(rec) { rec.situacao = valor; rec.baixada = PLAN_SITS_BAIXA.has(valor) }
-        // Reordenar
-        const PRIO = {'Analisar':1,'Análise':2,'Diligência':3,'Reanalise':4,'Reanálise':4,'Encaminhado para o Controle Interno':5}
-        dados.sort((a,b) => {
-          const ba = PLAN_SITS_BAIXA.has(a.situacao), bb = PLAN_SITS_BAIXA.has(b.situacao)
-          if(ba !== bb) return ba ? 1 : -1
-          const pa = PRIO[a.situacao]||6, pb = PRIO[b.situacao]||6
-          return pa !== pb ? pa - pb : (a.tr||'').localeCompare(b.tr||'')
-        })
-        const from = (window._planPag||0)*PP
-        renderPlan(dados.slice(from, from+PP), dados)
-      }, 400)
-    }
-  } catch(e) { toast('Erro ao salvar: '+e.message,'err') }
 }
 
 function planRenderPag() {
@@ -3841,7 +3554,7 @@ function planRenderPag() {
   const pNum = document.getElementById('planPagNum')
   const bAnt = document.getElementById('planBtnAnt')
   const bPrx = document.getElementById('planBtnPrx')
-  if(pInf) pInf.textContent = `Pág. ${(window._planPag||0)+1} de ${total} — ${window._planTot} registros`
+  if(pInf) pInf.textContent = `Pág. ${(window._planPag||0)+1} de ${total} — ${window._planTot} TRs`
   if(pNum) pNum.textContent = `${(window._planPag||0)+1}/${total}`
   if(bAnt) bAnt.disabled = (window._planPag||0) === 0
   if(bPrx) bPrx.disabled = (window._planPag||0) >= total-1
@@ -3850,7 +3563,7 @@ function planPg(d) {
   window._planPag = (window._planPag||0)+d
   const dados = window._planDadosCache||[]
   const from = window._planPag*PP
-  renderPlan(dados.slice(from, from+PP), dados)
+  renderPlan(dados.slice(from, from+PP))
   planRenderPag()
   document.getElementById('planConteudo')?.scrollIntoView({behavior:'smooth',block:'start'})
 }
