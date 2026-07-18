@@ -125,6 +125,7 @@ tr:last-child td{border-bottom:none;}
 .bdg-analise{background:#E0EEFA;color:#1A6BB5;}
 .bdg-dev{background:#FEF3E0;color:#9A5700;}
 .bdg-devolvido{background:#F0F0F0;color:#555;}
+.bdg-concluida{background:#EDE7F6;color:#4527A0;}
 .tec-chip{display:inline-flex;align-items:center;gap:4px;background:var(--vbg);border:1px solid #B8D8C6;border-radius:20px;padding:2px 7px;font-size:10px;color:var(--v);font-weight:600;}
 .btn-acao{border-radius:5px;font-family:'Barlow',sans-serif;font-size:10px;font-weight:700;padding:4px 9px;cursor:pointer;white-space:nowrap;border:1.5px solid;}
 .btn-ass{background:var(--v);color:#fff;border-color:var(--v);}
@@ -282,7 +283,7 @@ tr:last-child td{border-bottom:none;}
       <div id="mAssNL"></div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moAss')">Cancelar</button>
-        <button class="mcok" id="btnConfAss" onclick="confAss()">✓ Assumir</button>
+        <button class="mcok" id="btnConfAss" onclick="confirmarAssumirTR()">✓ Assumir</button>
       </div>
     </div>
   </div>
@@ -834,13 +835,13 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>TR / Beneficiário</label><input type="text" id="fBusca" placeholder="TR, Beneficiário ou SGPE..." style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR ou Entidade..." style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
-          <option value="livre">Livre</option>
-          <option value="analise">Em Análise</option>
-          <option value="dev_pendente">Aguard. Dev.</option>
+          <option value="Livre">Livre</option>
+          <option value="Em análise">Em Análise</option>
+          <option value="Concluída">Concluída</option>
         </select>
       </div>
       ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
@@ -850,8 +851,8 @@ function irEst() {
     <div class="tbl-wrap">
       <div class="tbl-header"><strong id="estCont">Carregando...</strong><span id="estSec">—</span></div>
       <div style="overflow-x:auto;"><table><thead><tr>
-        <th>TR</th><th>Beneficiário</th><th>Parc.</th><th>Processo SGP / NL</th><th>Anexo IV</th><th>Técnico/Analista</th><th>Prazo</th><th>Status</th><th>Ações</th>
-      </tr></thead><tbody id="estBody"><tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody></table></div>
+        <th>TR</th><th>Entidade</th><th>PCs</th><th>NLs</th><th>Baixadas</th><th>Analista</th><th>Status</th><th>Ações</th>
+      </tr></thead><tbody id="estBody"><tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody></table></div>
       <div class="paginacao">
         <span class="pag-info" id="pagInf">—</span>
         <div class="pag-btns">
@@ -865,10 +866,12 @@ function irEst() {
   buscar()
 }
 
+let TRS_EST = []  // resultado completo (já filtrado no servidor por setorial/busca), paginado no cliente
+
 async function buscar() {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
-  tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
+  tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
 
   const busca = document.getElementById('fBusca')?.value.trim()||''
   const st = document.getElementById('fSt')?.value||''
@@ -876,99 +879,61 @@ async function buscar() {
   const sid = U.setorialFiltro
 
   try {
-    const from = PAG*PP, to = from+PP-1
-    let q = db.from('estoque').select('*',{count:'exact'})
-    if(sid) q = q.eq('setorial_id',sid)
-    else if(secF) q = q.eq('setorial_id',secF)
-    if(st) q = q.eq('status',st)
-    if(busca) q = q.or(`tr.ilike.%${busca}%,beneficiario.ilike.%${busca}%,processo_sgp.ilike.%${busca}%`)
-    q = q.order('tr').range(from,to)
+    const p = new URLSearchParams()
+    if(sid) p.set('setorial_id', sid)
+    else if(secF) p.set('setorial_id', secF)
+    if(busca) p.set('busca', busca)
 
-    const { data, count, error } = await q
-    if(error) throw error
-    TOT = count||0
-    renderEst(data||[])
+    const r = await fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p.toString()}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+
+    TRS_EST = (j.data||[]).map(t => {
+      const totalPcs = parseInt(t.total_pcs)||0
+      const baixadas = parseInt(t.baixadas)||0
+      const status = !t.analista_nome ? 'Livre'
+        : baixadas >= totalPcs ? 'Concluída'
+        : 'Em análise'
+      return { ...t, total_pcs: totalPcs, total_nls: parseInt(t.total_nls)||0, baixadas, statusDerivado: status }
+    })
+    if(st) TRS_EST = TRS_EST.filter(t => t.statusDerivado === st)
+
+    TOT = TRS_EST.length
+    const from = PAG*PP
+    renderEst(TRS_EST.slice(from, from+PP))
     renderPag()
-    document.getElementById('estCont').textContent = TOT+' registros encontrados'
+    document.getElementById('estCont').textContent = TOT+' TRs encontradas'
     document.getElementById('estSec').textContent = sid||secF||'Todas as Setoriais'
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
   }
 }
 
-async function renderEst(rows) {
+function renderEst(rows) {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
-  if(!rows.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--ct);">Nenhum registro encontrado.</td></tr>'; return }
+  if(!rows.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum registro encontrado.</td></tr>'; return }
 
-  // Buscar contagem de NLs para os TRs desta página
-  const trs = [...new Set(rows.map(r=>r.tr))]
-  let nlMap = {}
-  try {
-    const { data: nls } = await db.from('notas_liquidacao').select('tr,parcela,baixada').in('tr',trs)
-    if(nls) nls.forEach(n => {
-      const k = n.tr+'|'+n.parcela
-      if(!nlMap[k]) nlMap[k]={total:0,baixadas:0}
-      nlMap[k].total++
-      if(n.baixada) nlMap[k].baixadas++
-    })
-  } catch(e) {}
-
-  const MAPA_PLAN_EST = {
-    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
-    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
-    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
-    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
-  }
-  const meuNomePlan = MAPA_PLAN_EST[U.nome.trim()] || U.nome.trim().split(' ')[0]
-  const isMeuTR = (r) => r.tecnico_nome && (
-    r.tecnico_nome.toLowerCase() === meuNomePlan.toLowerCase() ||
-    r.tecnico_nome.toLowerCase().includes(meuNomePlan.toLowerCase())
-  )
   // superadmin em modo ADMIN não assume (só gerencia); em modo analista (FCEE etc.) pode assumir
   const podeAssumir = U.setorialAcesso !== 'ADMIN'
+  const bdgClass = {'Livre':'bdg-livre','Em análise':'bdg-analise','Concluída':'bdg-concluida'}
 
-  tbody.innerHTML = rows.map(r => {
-    const k = r.tr+'|'+r.parcela
-    const nl = nlMap[k]||{total:0,baixadas:0}
-    const nlTxt = nl.total>0 ? `<button class="btn-acao btn-bx" onclick="verNL('${r.tr}','${r.parcela}')">${nl.baixadas}/${nl.total} NL</button>` : `<span style="color:var(--ct);font-size:10px;">—</span>`
-
-    let acoes = ''
-    if(r.status==='livre' && podeAssumir) {
-      acoes = `<button class="btn-acao btn-ass" onclick="abrirAss('${r.id}','${r.tr}','${r.parcela}','${(r.beneficiario||'').replace(/'/g,"\\'")}')">Assumir</button>`
-    } else if(r.status==='analise' && isMeuTR(r)) {
-      acoes = `<button class="btn-acao btn-dev" onclick="abrirDev('${r.id}','${r.tr}','${r.parcela}')">Devolver</button>
-               <button class="btn-acao" style="margin-left:3px;background:#fff;color:#6A1B9A;border:1.5px solid #6A1B9A;" onclick="migrarParaPlanilha('${r.id}','${r.tr}','${r.parcela}','${(r.beneficiario||'').replace(/'/g,"\\'")}','${r.processo_sgp||''}')">📋 Migrar</button>
-               <button class="btn-acao btn-ver" style="margin-left:3px;" onclick="verDetalhe('${r.id}')">Ver</button>`
-    } else if(r.status==='analise') {
-      acoes = `<button class="btn-acao btn-ver" onclick="verDetalhe('${r.id}')">Ver</button>`
-    } else if(r.status==='dev_pendente' && isMeuTR(r)) {
-      acoes = `<span style="font-size:9px;color:var(--am);font-weight:700;">⏳ Aguard.Coord.</span>
-               <button class="btn-acao btn-ver" style="margin-left:3px;" onclick="verDetalhe('${r.id}')">Ver</button>`
-    } else {
-      acoes = `<button class="btn-acao btn-ver" onclick="verDetalhe('${r.id}')">Ver</button>`
-    }
-
-    const tecH = r.tecnico_nome ? `<span class="tec-chip">${r.tecnico_nome.split(' ')[0]}</span>` : '<span style="color:var(--ct)">—</span>'
-    const bdgClass = {livre:'bdg-livre',analise:'bdg-analise',dev_pendente:'bdg-dev'}[r.status]||'bdg-devolvido'
-    const bdgTxt = {livre:'Livre',analise:'Análise',dev_pendente:'Aguard.Dev.'}[r.status]||r.status||'—'
-    const prazo = r.prazo_analise ? new Date(r.prazo_analise).toLocaleDateString('pt-BR') : '—'
-    // Destaque de NL: se houver múltiplas parcelas com mesmo processo_sgp, mostrar badge
-    const nlRows = rows.filter(x => x.processo_sgp && x.processo_sgp === r.processo_sgp)
-    const nlGrupo = nlRows.length > 1
-      ? `<div style="font-weight:700;color:var(--az);font-size:11px;cursor:pointer;" title="Clique para filtrar esta NL" onclick="document.getElementById('fBusca').value='${(r.processo_sgp||'').replace(/'/g,"\\'")}';PAG=0;buscar()">${r.processo_sgp}</div>
-         <span style="background:#E3F2FD;color:#1565C0;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800;">🔗 ${nlRows.length} parcelas</span>`
-      : r.processo_sgp ? `<div style="font-size:11px;color:var(--az);">${r.processo_sgp}</div>` : '<span style="color:var(--ct);font-size:11px;">—</span>'
+  tbody.innerHTML = rows.map(t => {
+    const acoes = (t.statusDerivado==='Livre' && podeAssumir)
+      ? `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
+      : '<span style="color:var(--ct);font-size:10px;">—</span>'
+    const analistaH = t.analista_nome
+      ? `<span class="tec-chip">${t.analista_nome.split(' ')[0]}</span>`
+      : '<span style="color:var(--ct)">—</span>'
 
     return `<tr>
-      <td><strong style="font-size:11px;">${r.tr||'—'}</strong></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.beneficiario||''}">${r.beneficiario||'—'}</td>
-      <td style="text-align:center;">${r.parcela||'—'}</td>
-      <td style="font-size:11px;">${nlGrupo}</td>
-      <td>${nlTxt}</td>
-      <td>${tecH}</td>
-      <td style="font-size:11px;">${prazo}</td>
-      <td><span class="bdg ${bdgClass}">${bdgTxt}</span></td>
+      <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
+      <td style="text-align:center;">${t.total_pcs}</td>
+      <td style="text-align:center;">${t.total_nls}</td>
+      <td style="text-align:center;">${t.baixadas}</td>
+      <td>${analistaH}</td>
+      <td><span class="bdg ${bdgClass[t.statusDerivado]||''}">${t.statusDerivado}</span></td>
       <td>${acoes}</td>
     </tr>`
   }).join('')
@@ -989,77 +954,42 @@ function limparF() {
 }
 
 // ══════════════════════════════════════
-//  ASSUMIR TR
+//  ASSUMIR TR (via prestacoes_contas)
 // ══════════════════════════════════════
-async function abrirAss(id, tr, parcela, benef) {
-  SEL = id
+let TR_ASSUMIR = null
+let PCS_ASSUMIR = []
+
+async function assumirTR(tr) {
+  TR_ASSUMIR = tr
+  PCS_ASSUMIR = []
   document.getElementById('moAss').classList.add('open')
   document.getElementById('mAssI').innerHTML = `
-    <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
-    <strong>Beneficiário:</strong> ${benef}<br>
-    <strong>Técnico/Analista:</strong> ${U.nome}<br>
-    <span style="font-size:10px;color:var(--ct);">⏳ Verificando parcelas da mesma NL...</span>
+    <strong>TR:</strong> ${tr}<br>
+    <span style="font-size:10px;color:var(--ct);">⏳ Carregando PCs livres...</span>
   `
   document.getElementById('mAssNL').innerHTML = ''
 
   try {
-    // Buscar dados completos via fetch direto
-    const rEst = await fetch(`${API_URL}/estoque/${id}`)
-    const jEst = await rEst.json()
-    const est  = jEst.data || jEst
-    const nl   = est?.processo_sgp || ''
+    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}&status=livre`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    PCS_ASSUMIR = j.data || []
+    if(!PCS_ASSUMIR.length) throw new Error('Nenhuma PC livre encontrada para esta TR')
 
-    // Buscar parcelas da mesma NL (mesmo processo_sgp + mesma TR + livres)
-    let parcelasMesmaNL = []
-    if(nl && nl.trim()) {
-      try {
-        const rNL = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&processo_sgp=${encodeURIComponent(nl)}&status=livre&limit=200`)
-        const jNL = await rNL.json()
-        parcelasMesmaNL = jNL.data || []
-      } catch(e) { parcelasMesmaNL = [] }
-    }
-
-    const qtd = parcelasMesmaNL.length
-    let alertaGrupo = ''
-    if(qtd > 1) {
-      alertaGrupo = `<div style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px;color:#7A4800;">
-        <div style="font-weight:800;margin-bottom:6px;">⚠️ AGRUPAMENTO POR NL — ${qtd} parcelas serão assumidas juntas!</div>
-        <div style="font-size:10px;margin-bottom:6px;">NL/Processo: <strong>${nl}</strong></div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
-          ${parcelasMesmaNL.map(p=>`<span style="background:#fff;border:1px solid #F57F17;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;">Parc. ${p.parcela}</span>`).join('')}
-        </div>
-        <div style="font-size:10px;color:#5D4037;">✅ Ao confirmar, todas serão assumidas e migradas para sua planilha automaticamente.</div>
-      </div>`
-    } else if(nl) {
-      alertaGrupo = `<div style="background:var(--vbg);border-radius:7px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--vdk);">
-        NL: <strong>${nl}</strong> — apenas esta parcela disponível (as demais já foram assumidas ou não existem).
-      </div>`
-    }
+    const entidade = PCS_ASSUMIR[0].entidade || '—'
+    const totalPcs = PCS_ASSUMIR.length
+    const totalNls = new Set(PCS_ASSUMIR.map(p=>p.codigo_nl).filter(Boolean)).size
 
     document.getElementById('mAssI').innerHTML = `
-      <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
-      <strong>Beneficiário:</strong> ${benef}<br>
-      <strong>Técnico/Analista:</strong> ${U.nome}
+      <strong>TR:</strong> ${tr}<br>
+      <strong>Entidade:</strong> ${entidade}<br>
+      <strong>PCs:</strong> ${totalPcs}<br>
+      <strong>NLs distintas:</strong> ${totalNls}<br>
+      <strong>Analista:</strong> ${U.nome}
     `
-
-    // NLs do Anexo IV desta parcela
-    const nls = await carregarNLs(tr, parcela)
-    let nlH = alertaGrupo
-    if(nls.length) {
-      nlH += `<div style="background:var(--azbg);border-radius:7px;padding:10px 12px;font-size:11px;color:#0F3D6E;">
-        <strong>${nls.length} NL${nls.length!==1?'s':''} Anexo IV</strong> — contará como <strong>${nls.length}</strong> na produtividade.<br>`
-      nls.forEach((n,x) => { nlH += `<span style="color:var(--ct)">${x+1}. ${n.codigo_pc||'—'} — R$ ${(n.valor_pgto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span><br>` })
-      nlH += `</div>`
-    }
-    document.getElementById('mAssNL').innerHTML = nlH
   } catch(e) {
-    document.getElementById('mAssI').innerHTML = `
-      <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}<br>
-      <strong>Beneficiário:</strong> ${benef}<br>
-      <strong>Técnico/Analista:</strong> ${U.nome}
-    `
-    document.getElementById('mAssNL').innerHTML = `<div style="color:var(--am);font-size:11px;">⚠️ Não foi possível verificar o agrupamento de NLs. Você pode prosseguir.</div>`
-    console.warn('abrirAss erro ao buscar NL:', e.message)
+    document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${tr}<br><span style="color:var(--r);font-size:11px;">Erro: ${e.message}</span>`
+    console.warn('assumirTR erro:', e.message)
   }
 }
 
@@ -1120,138 +1050,51 @@ async function migrarParaPlanilha(id, tr, parcela, benef, processoSgp) {
   } catch(e) { toast('Erro ao migrar: '+e.message,'err'); console.error('migrar erro:', e) }
 }
 
-async function confAss() {
-  if(!SEL) return
+async function confirmarAssumirTR() {
+  if(!TR_ASSUMIR || !PCS_ASSUMIR.length) return
   const btn = document.getElementById('btnConfAss')
   btn.disabled=true; btn.textContent='Salvando...'
+
+  // Fetch com timeout de 8s (evita requisição pendurada travando o botão)
+  const fetchTO = (url, opts={}, ms=8000) => {
+    const ctrl  = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), ms)
+    return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
+  }
+
   try {
-    // 1) Buscar dados da TR selecionada via fetch direto (mais robusto)
-    const mAssI = document.getElementById('mAssI').innerHTML
-    const tr      = mAssI.match(/TR:<\/strong>\s*([^\s|<]+)/)?.[1]?.trim()
-    const parcela = mAssI.match(/Parcela:<\/strong>\s*(\d+)/)?.[1]?.trim()
-    if(!tr || !parcela) throw new Error('Não foi possível identificar TR ou parcela no modal')
-    const agora   = new Date().toISOString()
-    // Nome do analista na planilha (mapeamento)
-    const MAPA_PLAN = {
-      'Richard Motta Coelho':'Richard',
-      'Nayara Limas Ferreira':'Nayara',
-      'Zadir Teresinha Machado Ferreira':'Zadir',
-      'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
-      'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
-      'Grace Oliveira':'Grace Oliveira',
-    }
-    const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
-    const setorial     = U.setorial_id || 'FCEE'
-
-    // 2) buscar TODAS as linhas do estoque com o mesmo tr e parcela do registro selecionado
-    let parcelasParaAssumir = [{tr, parcela}]  // começa com a selecionada
-    try {
-      const rTP = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&parcela=${encodeURIComponent(parcela)}&limit=200`)
-      const jTP = await rTP.json()
-      if(jTP.data && jTP.data.length > 20) {
-        console.warn(`confAss: /estoque retornou ${jTP.data.length} linhas para tr=${tr} parcela=${parcela}`)
-      }
-      const filtradas = (jTP.data || []).filter(l =>
-        String(l.tr).trim() === String(tr).trim() &&
-        String(l.parcela).trim() === String(parcela).trim()
-      )
-      parcelasParaAssumir = filtradas.length > 0 ? filtradas : [{tr, parcela}]
-    } catch(eTP) { console.warn('Fallback tr+parcela:', eTP.message) }
-
-    let errosAssumindo = []
-    let errosMigrando  = []
-    let assumidas = 0
-    let migradas  = 0
-
-    // Fetch com timeout de 8s (evita requisição pendurada travando o botão)
-    const fetchTO = (url, opts={}, ms=8000) => {
-      const ctrl  = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), ms)
-      return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
-    }
-
-    // 3) Para cada parcela: assumir no estoque + migrar para planilha
-    for(const est of parcelasParaAssumir) {
-      // 3a) Assumir no estoque
+    let ok = 0
+    let erros = []
+    for(const pc of PCS_ASSUMIR) {
       try {
-        const rUpd = await fetch(`${API_URL}/estoque/${est.id}`, {
+        const r = await fetchTO(`${API_URL}/prestacoes_contas/${encodeURIComponent(pc.codigo_pc)}`, {
           method: 'PATCH',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({
-            status: 'analise',
-            tecnico_nome: nomeAnalista,
-            tecnico_id: U.id,
-            assumido_em: agora,
-            atualizado_em: agora
-          })
+          body: JSON.stringify({ analista_nome: U.nome, analista_id: U.id, status: 'analise' })
         })
-        const jUpd = await rUpd.json()
-        if(jUpd.error) errosAssumindo.push(`P${est.parcela}: ${jUpd.error.message||jUpd.error}`)
-        else assumidas++
-      } catch(eU) { errosAssumindo.push(`P${est.parcela}: ${eU.message}`) }
-
-      // 3b) Verificar se já existe na planilha
-      try {
-        const rEx = await fetchTO(`${API_URL}/planilha_analista?tr=${encodeURIComponent(est.tr)}&parcela=${est.parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
-        const jEx = await rEx.json()
-        if(jEx.data && jEx.data.length > 0) {
-          migradas++  // já existe, conta como ok
-          continue
-        }
-      } catch(eEx) { console.warn('Check existência:', eEx.message) }
-
-      // 3c) Inserir na planilha_analista
-      try {
-        const rIns = await fetchTO(`${API_URL}/planilha_analista`, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({
-            tr:          est.tr,
-            parcela:     est.parcela,
-            entidade:    est.beneficiario || null,
-            cnpj_cpf:    est.cnpj_cpf    || null,
-            sgpe:        est.processo_sgp || null,
-            processo_sgp:est.processo_sgp || null,
-            valor_repasse:est.valor_repasse|| null,
-            prazo_analise:est.prazo_analise|| null,
-            situacao:    'Analisar',
-            analista:    nomeAnalista,
-            analista_id: U.id,
-            setorial_id: setorial,
-            baixada:     false,
-            assumido_em: agora,
-            criado_em:   agora,
-            atualizado_em:agora
-          })
-        })
-        const jIns = await rIns.json()
-        if(jIns.error) errosMigrando.push(`P${est.parcela}: ${jIns.error.message||jIns.error}`)
-        else migradas++
-      } catch(eI) { errosMigrando.push(`P${est.parcela}: ${eI.message}`) }
+        const j = await r.json()
+        if(j.error) erros.push(`${pc.codigo_pc}: ${j.error.message||j.error}`)
+        else ok++
+      } catch(eP) { erros.push(`${pc.codigo_pc}: ${eP.message}`) }
     }
 
-    fm('moAss'); SEL=null
-    PAG=0; buscar(); carregarContadores()
-    setTimeout(atualizarBadgeAlertas, 1000)
-
-    // Feedback detalhado
-    const total = parcelasParaAssumir.length
-    if(errosAssumindo.length === 0 && errosMigrando.length === 0) {
-      toast(`✓ ${total} parcela${total>1?'s':''} assumida${total>1?'s':''} e migrada${total>1?'s':''} para sua planilha!`, 'ok')
-    } else if(assumidas > 0) {
-      const msg = `⚠️ ${assumidas}/${total} assumidas, ${migradas} migradas.` +
-        (errosMigrando.length ? ' Erros migração: '+errosMigrando.join(' | ') : '')
-      toast(msg, 'err')
-      console.error('Erros assumindo:', errosAssumindo)
-      console.error('Erros migrando:', errosMigrando)
+    const total = PCS_ASSUMIR.length
+    if(erros.length === 0) {
+      toast(`✓ ${ok} PC${ok>1?'s':''} da TR ${TR_ASSUMIR} assumida${ok>1?'s':''}!`, 'ok')
+    } else if(ok > 0) {
+      toast(`⚠️ ${ok}/${total} PCs assumidas. Erros: ${erros.join(' | ')}`, 'err')
+      console.error('Erros ao assumir TR:', erros)
     } else {
-      throw new Error('Nenhuma parcela foi assumida. ' + errosAssumindo.join(' | '))
+      throw new Error('Nenhuma PC foi assumida. ' + erros.join(' | '))
     }
   } catch(e) {
     toast('Erro: '+e.message, 'err')
-    console.error('confAss erro:', e)
+    console.error('confirmarAssumirTR erro:', e)
+  } finally {
+    btn.disabled=false; btn.textContent='✓ Assumir'
+    fm('moAss'); TR_ASSUMIR=null; PCS_ASSUMIR=[]
+    PAG=0; buscar(); carregarContadores()
   }
-  finally { btn.disabled=false; btn.textContent='✓ Assumir' }
 }
 
 // ══════════════════════════════════════
