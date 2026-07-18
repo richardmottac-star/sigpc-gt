@@ -1157,9 +1157,14 @@ async function confAss() {
     try {
       const rTP = await fetch(`${API_URL}/estoque?tr=${encodeURIComponent(tr)}&parcela=${encodeURIComponent(parcela)}&limit=200`)
       const jTP = await rTP.json()
-      if(jTP.data && jTP.data.length > 0) {
-        parcelasParaAssumir = jTP.data
+      if(jTP.data && jTP.data.length > 20) {
+        console.warn(`confAss: /estoque retornou ${jTP.data.length} linhas para tr=${tr} parcela=${parcela}`)
       }
+      const filtradas = (jTP.data || []).filter(l =>
+        String(l.tr).trim() === String(tr).trim() &&
+        String(l.parcela).trim() === String(parcela).trim()
+      )
+      parcelasParaAssumir = filtradas.length > 0 ? filtradas : [{tr, parcela}]
     } catch(eTP) { console.warn('Fallback tr+parcela:', eTP.message) }
 
     let errosAssumindo = []
