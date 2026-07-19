@@ -515,6 +515,10 @@ label, .lbl-campo {
 /* ── Linhas de tabela ── */
 tbody tr { transition: background 150ms; }
 tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
+.zebra-a { background:#FFFFFF; }
+.zebra-b { background:#F5F8F6; }
+.grupo-sep td { background:#F5F8F6; padding:6px 10px; font-size:11px; font-weight:800; border-top:1.5px solid var(--cb); }
+tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
 
 /* ── Botões: sombra mais forte no hover, reduzida no active ── */
 .btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
@@ -1368,6 +1372,9 @@ function irEst() {
 }
 
 let TRS_EST = []  // resultado completo (já filtrado no servidor por setorial/busca), paginado no cliente
+let EST_MOSTRAR_SEP = true
+let EST_GRUPOS_CONTAGEM = {}
+const EST_ORDEM_EXIBICAO = ['Em análise','Livre','Concluída']
 
 async function buscar() {
   const tbody = document.getElementById('estBody')
@@ -1399,6 +1406,16 @@ async function buscar() {
     })
     if(st) TRS_EST = TRS_EST.filter(t => t.statusDerivado === st)
 
+    TRS_EST.sort((a,b) => {
+      const oa = EST_ORDEM_EXIBICAO.indexOf(a.statusDerivado)
+      const ob = EST_ORDEM_EXIBICAO.indexOf(b.statusDerivado)
+      if(oa !== ob) return oa - ob
+      return (a.tr||'').localeCompare(b.tr||'')
+    })
+    EST_GRUPOS_CONTAGEM = {}
+    TRS_EST.forEach(t => { EST_GRUPOS_CONTAGEM[t.statusDerivado] = (EST_GRUPOS_CONTAGEM[t.statusDerivado]||0)+1 })
+    EST_MOSTRAR_SEP = !st
+
     TOT = TRS_EST.length
     const from = PAG*PP
     renderEst(TRS_EST.slice(from, from+PP))
@@ -1427,7 +1444,16 @@ function renderEst(rows) {
   const meuNomePlan = MAPA_PLAN_EST[U.nome.trim()] || U.nome.trim().split(' ')[0]
   const isMeuTR = (t) => t.analista_nome && t.analista_nome.toLowerCase() === meuNomePlan.toLowerCase()
 
-  tbody.innerHTML = rows.map(t => {
+  const offset = PAG*PP
+  let html = ''
+  rows.forEach((t,i) => {
+    const idxGlobal = offset+i
+    const statusAnterior = idxGlobal>0 ? TRS_EST[idxGlobal-1].statusDerivado : null
+    if(EST_MOSTRAR_SEP && t.statusDerivado !== statusAnterior) {
+      const qtd = EST_GRUPOS_CONTAGEM[t.statusDerivado]||0
+      html += `<tr class="grupo-sep"><td colspan="9"><span class="bdg ${bdgClass[t.statusDerivado]||''}">${t.statusDerivado}</span> — ${qtd} TR${qtd!==1?'s':''}</td></tr>`
+    }
+
     let acoes
     if(t.statusDerivado==='Livre' && podeAssumir) {
       acoes = `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
@@ -1440,7 +1466,7 @@ function renderEst(rows) {
       ? `<span class="tec-chip">${t.analista_nome.split(' ')[0]}</span>`
       : '<span style="color:var(--ct)">—</span>'
 
-    return `<tr>
+    html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
       <td style="font-family:'Courier New',monospace;white-space:nowrap;font-size:11px;">${t.processo_mae||'—'}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
@@ -1451,7 +1477,8 @@ function renderEst(rows) {
       <td><span class="bdg ${bdgClass[t.statusDerivado]||''}">${t.statusDerivado}</span></td>
       <td>${acoes}</td>
     </tr>`
-  }).join('')
+  })
+  tbody.innerHTML = html
 }
 
 function renderPag() {
@@ -1941,7 +1968,7 @@ async function prodCarregar() {
   } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
 
-function prodCorPct(pct) { return pct===null ? '#999' : pct>80?'var(--v)':pct>=50?'var(--am)':'var(--r)' }
+function prodCorPct(pct) { return pct===null ? '#999' : pct>80?'#15803D':pct>=50?'#B45309':'#991B1B' }
 
 function prodRender(dados) {
   const cont = document.getElementById('prodCont')
@@ -1973,8 +2000,7 @@ function prodRender(dados) {
       const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
       const cor = prodCorPct(pct)
       const pctTxt = pct===null ? '—' : pct+'%'
-      const bgRow = i%2===0 ? '#fff' : '#F7F9F8'
-      return `<tr style="background:${bgRow}">
+      return `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
         <td style="font-size:11px;color:var(--ct);text-align:center;">${i+1}</td>
         <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="verProdDetalhe(${u.id},'${u.nome}')">${u.nome}</td>
         <td style="font-size:11px;text-align:center;">${grupo||'—'}</td>
@@ -3239,6 +3265,8 @@ const PLAN_STATUS_STYLE = {
   baixada:    {bg:'#E8F5EE', cor:'#006B3C', label:'✓ BAIXADA',  icone:'✅'},
 }
 const PLAN_STATUS_ORDEM = ['diligencia','reanalise','analise','livre','baixada']
+// Ordem de exibição das listagens (Minha Planilha / Estoque de TRs): trabalho em andamento primeiro, baixada por último
+const PLAN_ORDEM_EXIBICAO = ['analise','diligencia','reanalise','livre','baixada']
 
 function planStatusPredominante(statuses) {
   const cont = {}
@@ -3417,10 +3445,21 @@ async function buscarPlan() {
       total_nls: g.nls.size,
       baixadas: g.baixadas,
       status_predominante: planStatusPredominante(g.statuses)
-    })).sort((a,b) => (a.tr||'').localeCompare(b.tr||''))
+    })).sort((a,b) => {
+      const oa = PLAN_ORDEM_EXIBICAO.indexOf(a.status_predominante)
+      const ob = PLAN_ORDEM_EXIBICAO.indexOf(b.status_predominante)
+      if(oa !== ob) return oa - ob
+      return (a.tr||'').localeCompare(b.tr||'')
+    })
+
+    // Contagem por grupo de status, para as linhas separadoras
+    const contagemGrupos = {}
+    trs.forEach(t => { contagemGrupos[t.status_predominante] = (contagemGrupos[t.status_predominante]||0)+1 })
 
     window._planTot = trs.length
     window._planDadosCache = trs
+    window._planGruposContagem = contagemGrupos
+    window._planMostrarSep = !sit
 
     const from = (window._planPag||0)*PP
     renderPlan(trs.slice(from, from+PP))
@@ -3472,10 +3511,24 @@ function renderPlan(rows) {
   }
 
   const offset = (window._planPag||0)*PP
-  const linhas = rows.map((r,i) => {
-    const st = PLAN_STATUS_STYLE[r.status_predominante] || {bg:'#F5F5F5',cor:'#999',label:r.status_predominante||'—',icone:'○'}
-    return `<tr style="background:${st.bg};cursor:pointer;" onclick="abrirTR('${r.tr}')">
-      <td style="font-size:10px;color:var(--ct);text-align:center;">${offset+i+1}</td>
+  const dadosCompletos = window._planDadosCache||rows
+  const mostrarSep = window._planMostrarSep !== false
+  const contagem = window._planGruposContagem||{}
+  let linhas = ''
+  rows.forEach((r,i) => {
+    const idxGlobal = offset+i
+    const statusAnterior = idxGlobal>0 ? dadosCompletos[idxGlobal-1].status_predominante : null
+    if(mostrarSep && r.status_predominante !== statusAnterior) {
+      const stSep = PLAN_STATUS_STYLE[r.status_predominante] || {cor:'#999',label:r.status_predominante||'—',icone:'○'}
+      const qtd = contagem[r.status_predominante]||0
+      linhas += `<tr class="grupo-sep"><td colspan="9">
+        <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${stSep.cor};color:${stSep.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${stSep.icone} ${stSep.label}</span>
+        <span style="margin-left:6px;color:${stSep.cor};">— ${qtd} TR${qtd!==1?'s':''}</span>
+      </td></tr>`
+    }
+    const st = PLAN_STATUS_STYLE[r.status_predominante] || {cor:'#999',label:r.status_predominante||'—',icone:'○'}
+    linhas += `<tr class="${i%2===0?'zebra-a':'zebra-b'}" style="cursor:pointer;" onclick="abrirTR('${r.tr}')">
+      <td style="font-size:10px;color:var(--ct);text-align:center;">${idxGlobal+1}</td>
       <td style="padding:0;">
         <div style="width:5px;height:100%;min-height:40px;background:${st.cor};"></div>
       </td>
@@ -3491,7 +3544,7 @@ function renderPlan(rows) {
       <td style="text-align:center;font-size:11px;">${r.total_nls}</td>
       <td style="text-align:center;font-size:11px;font-weight:700;color:var(--v);">${r.baixadas}</td>
     </tr>`
-  }).join('')
+  })
 
   cont.innerHTML = `
     <div class="tbl-wrap">
