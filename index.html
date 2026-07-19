@@ -1336,7 +1336,7 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR ou Entidade..." style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR, entidade ou SGPe" style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
@@ -1352,8 +1352,8 @@ function irEst() {
     <div class="tbl-wrap">
       <div class="tbl-header"><strong id="estCont">Carregando...</strong><span id="estSec">—</span></div>
       <div style="overflow-x:auto;"><table><thead><tr>
-        <th>TR</th><th>Entidade</th><th>PCs</th><th>NLs</th><th>Baixadas</th><th>Analista</th><th>Status</th><th>Ações</th>
-      </tr></thead><tbody id="estBody"><tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody></table></div>
+        <th>TR</th><th>SGPe MÃE</th><th>Entidade</th><th>PCs</th><th>NLs</th><th>Baixadas</th><th>Analista</th><th>Status</th><th>Ações</th>
+      </tr></thead><tbody id="estBody"><tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody></table></div>
       <div class="paginacao">
         <span class="pag-info" id="pagInf">—</span>
         <div class="pag-btns">
@@ -1372,7 +1372,7 @@ let TRS_EST = []  // resultado completo (já filtrado no servidor por setorial/b
 async function buscar() {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
-  tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
+  tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
 
   const busca = document.getElementById('fBusca')?.value.trim()||''
   const st = document.getElementById('fSt')?.value||''
@@ -1406,14 +1406,14 @@ async function buscar() {
     document.getElementById('estCont').textContent = TOT+' TRs encontradas'
     document.getElementById('estSec').textContent = sid||secF||'Todas as Setoriais'
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
   }
 }
 
 function renderEst(rows) {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
-  if(!rows.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum registro encontrado.</td></tr>'; return }
+  if(!rows.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--ct);">Nenhum registro encontrado.</td></tr>'; return }
 
   // superadmin em modo ADMIN não assume (só gerencia); em modo analista (FCEE etc.) pode assumir
   const podeAssumir = U.setorialAcesso !== 'ADMIN'
@@ -1442,6 +1442,7 @@ function renderEst(rows) {
 
     return `<tr>
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
+      <td style="font-family:'Courier New',monospace;white-space:nowrap;font-size:11px;">${t.processo_mae||'—'}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
@@ -1602,6 +1603,7 @@ async function abrirTR(tr) {
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
+        <td style="${tdS}white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_pc||'—'}</td>
         <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
         <td style="${tdS}">${p.codigo_nl||'—'}</td>
         <td style="${tdS}text-align:right;">${valorFmt}</td>
@@ -1614,11 +1616,11 @@ async function abrirTR(tr) {
     const thS = 'position:sticky;top:0;background:var(--fundo-app);padding:6px 8px;font-size:13px;z-index:1;'
     document.getElementById('moTRB').innerHTML = `
       <div class="mci" style="margin-bottom:12px;">
-        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
+        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span style="font-family:'Courier New',monospace;">${pcs[0].processo_mae||'—'}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
         <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
       </div>
       <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
-        <th style="${thS}white-space:nowrap;">Código PC</th><th style="${thS}">Tipo</th><th style="${thS}">NL</th>
+        <th style="${thS}white-space:nowrap;">Código PC</th><th style="${thS}white-space:nowrap;">SGPe PC</th><th style="${thS}">Tipo</th><th style="${thS}">NL</th>
         <th style="${thS}text-align:right;">Valor</th><th style="${thS}">Status</th><th style="${thS}">Ação</th><th style="${thS}">Controle Interno</th>
       </tr></thead><tbody>${linhas}</tbody></table></div>
 
@@ -3131,7 +3133,7 @@ function relRenderTabela() {
   document.getElementById('relTblWrap').style.display='block'
   document.getElementById('relTblTit').textContent = `${total} registros encontrados`
   document.getElementById('relThead').innerHTML = `<tr>
-    <th>#</th><th>Analista</th><th>TR</th><th>Código PC</th>
+    <th>#</th><th>Analista</th><th>TR</th><th>SGPe MÃE</th><th>Código PC</th><th>SGPe PC</th>
     <th>Entidade</th><th>Status</th><th>Baixada</th>
   </tr>`
   document.getElementById('relTbody').innerHTML = pag.map((r,i) => {
@@ -3140,7 +3142,9 @@ function relRenderTabela() {
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
       <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
+      <td style="font-size:10px;white-space:nowrap;font-family:'Courier New',monospace;">${r.processo_mae||'—'}</td>
       <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
+      <td style="font-size:10px;white-space:nowrap;font-family:'Courier New',monospace;">${r.processo_pc||'—'}</td>
       <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
       <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
@@ -3169,9 +3173,9 @@ function relLimpar() {
 
 function relExportExcel() {
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
-  let csv = '\uFEFF#;Analista;TR;Código PC;Entidade;Status;Baixada\n'
+  let csv = '\uFEFF#;Analista;TR;SGPe MÃE;Código PC;SGPe PC;Entidade;Status;Baixada\n'
   _relDados.forEach((r,i) => {
-    csv += `${i+1};"${r.analista_completo||''}";${r.tr||''};${r.codigo_pc||''};"${(r.entidade||'').replace(/"/g,"'")}";${r.status||''};${r.status==='baixada'?'Sim':'Não'}\n`
+    csv += `${i+1};"${r.analista_completo||''}";${r.tr||''};${r.processo_mae||''};${r.codigo_pc||''};${r.processo_pc||''};"${(r.entidade||'').replace(/"/g,"'")}";${r.status||''};${r.status==='baixada'?'Sim':'Não'}\n`
   })
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
@@ -3190,9 +3194,9 @@ function relExportPDF() {
   .bx{color:#006B3C;font-weight:bold;}</style></head><body>
   <h2>SIGPC-GT — Relatório de Prestações de Contas</h2>
   <p>Gerado em ${dt} | Total: ${_relDados.length} registros | Baixadas: ${baixadas} (${_relDados.length>0?Math.round(baixadas/_relDados.length*100):0}%)</p>
-  <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>Código PC</th><th>Entidade</th><th>Status</th><th>Baixada</th></tr></thead>
+  <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>SGPe MÃE</th><th>Código PC</th><th>SGPe PC</th><th>Entidade</th><th>Status</th><th>Baixada</th></tr></thead>
   <tbody>${_relDados.map((r,i)=>`<tr style="${r.status==='baixada'?'background:#F0FAF4':''}">
-    <td>${i+1}</td><td>${r.analista_completo||'—'}</td><td>${r.tr||'—'}</td><td>${r.codigo_pc||'—'}</td>
+    <td>${i+1}</td><td>${r.analista_completo||'—'}</td><td>${r.tr||'—'}</td><td>${r.processo_mae||'—'}</td><td>${r.codigo_pc||'—'}</td><td>${r.processo_pc||'—'}</td>
     <td>${(r.entidade||'—').substring(0,50)}</td>
     <td>${r.status||'—'}</td><td class="${r.status==='baixada'?'bx':''}">${r.status==='baixada'?'✓ Sim':'Não'}</td>
   </tr>`).join('')}</tbody></table></body></html>`
@@ -3261,7 +3265,7 @@ async function irPlanilha() {
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar Entidade / TR</label>
-        <input type="text" id="plBusca" placeholder="Digite..." style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
+        <input type="text" id="plBusca" placeholder="TR, entidade ou SGPe" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
@@ -3348,6 +3352,7 @@ function renderAlertasPrazo(alertas) {
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
         <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
+        <div style="font-size:9px;color:var(--ct);font-family:'Courier New',monospace;white-space:nowrap;">SGPe PC: ${r.processo_pc||'—'}</div>
       </div>
       <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}</span>
     </div>`
@@ -3390,14 +3395,14 @@ async function buscarPlan() {
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
     let pcs = j.data||[]
-    if(busca) pcs = pcs.filter(p => (p.tr||'').toLowerCase().includes(busca) || (p.entidade||'').toLowerCase().includes(busca))
+    if(busca) pcs = pcs.filter(p => (p.tr||'').toLowerCase().includes(busca) || (p.entidade||'').toLowerCase().includes(busca) || (p.processo_mae||'').toLowerCase().includes(busca) || (p.processo_pc||'').toLowerCase().includes(busca))
 
     renderPlanResumo(pcs, window._planMeta)
 
     // Agrupar por TR
     const grupos = {}
     pcs.forEach(p => {
-      if(!grupos[p.tr]) grupos[p.tr] = { tr: p.tr, entidade: p.entidade, nls: new Set(), total_pcs: 0, baixadas: 0, statuses: [] }
+      if(!grupos[p.tr]) grupos[p.tr] = { tr: p.tr, entidade: p.entidade, processo_mae: p.processo_mae, nls: new Set(), total_pcs: 0, baixadas: 0, statuses: [] }
       const g = grupos[p.tr]
       g.total_pcs++
       if(p.codigo_nl) g.nls.add(p.codigo_nl)
@@ -3407,6 +3412,7 @@ async function buscarPlan() {
     const trs = Object.values(grupos).map(g => ({
       tr: g.tr,
       entidade: g.entidade,
+      processo_mae: g.processo_mae,
       total_pcs: g.total_pcs,
       total_nls: g.nls.size,
       baixadas: g.baixadas,
@@ -3477,6 +3483,7 @@ function renderPlan(rows) {
         <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${st.cor};color:${st.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${st.icone} ${st.label}</span>
       </td>
       <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}</td>
+      <td style="font-family:'Courier New',monospace;white-space:nowrap;font-size:11px;">${r.processo_mae||'—'}</td>
       <td style="max-width:220px;">
         <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.entidade||''}">${r.entidade||'—'}</div>
       </td>
@@ -3495,6 +3502,7 @@ function renderPlan(rows) {
             <th style="width:5px;padding:0;"></th>
             <th style="min-width:110px;">Status</th>
             <th>TR</th>
+            <th>SGPe MÃE</th>
             <th>Entidade</th>
             <th>PCs</th>
             <th>NLs</th>
@@ -4172,7 +4180,9 @@ function ciRender(pcs) {
     return `<tr>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);cursor:pointer;white-space:nowrap;" onclick="abrirTR('${p.tr}')">${p.tr||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_mae||'—'}</td>
       <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_pc||'—'}</td>
       <td style="font-size:11px;max-width:220px;"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.entidade||''}">${p.entidade||'—'}</div></td>
       <td style="font-size:11px;">${p.analista_nome||'—'}</td>
       <td style="font-size:11px;white-space:nowrap;">${new Date(p.dt_envio_ci).toLocaleDateString('pt-BR')}</td>
@@ -4183,7 +4193,7 @@ function ciRender(pcs) {
   cont.innerHTML = `
     <div class="tbl-wrap"><div style="overflow-x:auto;">
       <table><thead><tr>
-        <th style="width:30px;">#</th><th>TR</th><th>Código PC</th><th>Entidade</th>
+        <th style="width:30px;">#</th><th>TR</th><th>SGPe MÃE</th><th>Código PC</th><th>SGPe PC</th><th>Entidade</th>
         <th>Analista</th><th>Enviado em</th><th>Dias parado</th><th>Ação</th>
       </tr></thead><tbody>${linhas}</tbody></table>
     </div></div>`
@@ -4275,7 +4285,10 @@ async function verProdDetalhe(analistaId, nome) {
       </div>
       <div style="max-height:300px;overflow-y:auto;">
         ${baixadas.slice(0,50).map(p=>`<div class="nl-row">
-          <span style="font-size:10px;font-weight:600;">${p.tr||'—'} — ${p.codigo_pc||'—'}</span>
+          <div style="min-width:0;">
+            <div style="font-size:10px;font-weight:600;white-space:nowrap;">${p.tr||'—'} — ${p.codigo_pc||'—'}</div>
+            <div style="font-size:9px;color:var(--ct);font-family:'Courier New',monospace;white-space:nowrap;">SGPe mãe ${p.processo_mae||'—'} · SGPe PC ${p.processo_pc||'—'}</div>
+          </div>
           <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.entidade||'—'}</span>
           <span class="bdg bdg-livre" style="font-size:9px;">${p.parecer_tipo||'Baixada'}</span>
         </div>`).join('')}
