@@ -1493,61 +1493,6 @@ async function assumirTR(tr) {
   }
 }
 
-// ══════════════════════════════════════
-//  MIGRAR TR JÁ ASSUMIDA → PLANILHA
-// ══════════════════════════════════════
-async function migrarParaPlanilha(id, tr, parcela, benef, processoSgp) {
-  if(!confirm(`Migrar TR ${tr} Parcela ${parcela} para sua planilha de análise?\n\nEsta ação cria o registro na sua planilha sem alterar o estoque.`)) return
-  try {
-    const MAPA_PLAN = {
-      'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
-      'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
-      'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
-      'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
-    }
-    const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
-    const setorial = U.setorial_id || 'FCEE'
-    const agora = new Date().toISOString()
-
-    // Verificar se já existe na planilha (fetch direto)
-    const rEx = await fetch(`${API_URL}/planilha_analista?tr=${encodeURIComponent(tr)}&parcela=${parcela}&analista=${encodeURIComponent(nomeAnalista)}&limit=1`)
-    const jEx = await rEx.json()
-    if(jEx.data && jEx.data.length > 0) {
-      toast('Esta TR já está na sua planilha!', 'err')
-      return
-    }
-
-    // Buscar dados completos do estoque para essa TR/parcela
-    const rEst = await fetch(`${API_URL}/estoque/${id}`)
-    const jEst = await rEst.json()
-    const est = jEst.data || jEst
-
-    const rIns = await fetch(`${API_URL}/planilha_analista`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        tr, parcela,
-        entidade:    est.beneficiario || benef || null,
-        cnpj_cpf:    est.cnpj_cpf    || null,
-        sgpe:        processoSgp     || est.processo_sgp || null,
-        processo_sgp:processoSgp     || est.processo_sgp || null,
-        valor_repasse:est.valor_repasse || null,
-        prazo_analise:est.prazo_analise || null,
-        situacao:    'Analisar',
-        analista:    nomeAnalista,
-        analista_id: U.id,
-        setorial_id: setorial,
-        baixada:     false,
-        assumido_em: agora,
-        criado_em:   agora,
-        atualizado_em:agora
-      })
-    })
-    const jIns = await rIns.json()
-    if(jIns.error) throw new Error(jIns.error.message || JSON.stringify(jIns.error))
-    toast(`✓ TR ${tr} P${parcela} migrada para sua planilha!`, 'ok')
-  } catch(e) { toast('Erro ao migrar: '+e.message,'err'); console.error('migrar erro:', e) }
-}
 
 async function confirmarAssumirTR() {
   if(!TR_ASSUMIR || !PCS_ASSUMIR.length) return
@@ -1841,14 +1786,6 @@ async function confirmarParecer() {
 // ══════════════════════════════════════
 //  DEVOLVER TR
 // ══════════════════════════════════════
-function abrirDev(id, tr, parcela) {
-  SEL = id
-  document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>Parcela:</strong> ${parcela}`
-  document.getElementById('devMotivo').value = ''
-  document.getElementById('devJust').value = ''
-  document.getElementById('moDev').classList.add('open')
-}
-
 async function confDev() {
   const mot = document.getElementById('devMotivo').value
   const just = document.getElementById('devJust').value.trim()
@@ -1866,35 +1803,6 @@ async function confDev() {
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
-// ══════════════════════════════════════
-//  VER NLs
-// ══════════════════════════════════════
-async function verNL(tr, parcela) {
-  document.getElementById('moNLT').textContent = `NLs Anexo IV — ${tr} Parc.${parcela}`
-  document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando NLs...</div>'
-  document.getElementById('moNL').classList.add('open')
-
-  const nls = await carregarNLs(tr, parcela)
-  const bx = nls.filter(n=>n.baixada).length
-
-  let h = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;background:var(--cl);border-radius:8px;padding:10px;margin-bottom:12px;">
-    <div><div style="font-size:20px;font-weight:800;">${nls.length}</div><div style="font-size:9px;color:var(--ct);">Total NLs</div></div>
-    <div><div style="font-size:20px;font-weight:800;color:var(--v);">${bx}</div><div style="font-size:9px;color:var(--ct);">Baixadas</div></div>
-    <div><div style="font-size:20px;font-weight:800;color:var(--az);">${nls.length-bx}</div><div style="font-size:9px;color:var(--ct);">Pendentes</div></div>
-  </div>`
-
-  if(!nls.length) { h += '<p style="color:var(--ct);font-size:12px;text-align:center;">Nenhuma NL registrada.</p>' }
-  else nls.forEach((n,i) => {
-    h += `<div class="nl-row">
-      <span style="font-weight:600;font-size:11px;">${i+1}. ${n.codigo_pc||'—'}</span>
-      <span style="font-size:11px;">R$ ${(n.valor_pgto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-      <span style="font-size:11px;color:var(--ct);">${n.situacao||'—'}</span>
-      <span class="bdg ${n.baixada?'bdg-livre':'bdg-analise'}">${n.baixada?'Baixada':'Pendente'}</span>
-    </div>`
-  })
-  document.getElementById('moNLB').innerHTML = h
-}
-
 async function carregarNLs(tr, parcela) {
   try {
     const { data } = await db.from('notas_liquidacao').select('*').eq('tr',tr).eq('parcela',parcela)
@@ -1905,32 +1813,27 @@ async function carregarNLs(tr, parcela) {
 // ══════════════════════════════════════
 //  PRODUTIVIDADE
 // ══════════════════════════════════════
-const MAPA_PROD = {
-  'Sandra Paul':'Sandra Paul','Sandra Rocha':'Sandra Rocha',
-  'Ana Claudia':'Ana Claudia','Ana Leticia':'Ana Leticia',
-  'Grace Oliveira':'Grace Oliveira','Janaína':'Janaína',
-  'Richard Motta Coelho':'Richard',
-  'Nayara Limas Ferreira':'Nayara',
-  'Zadir Teresinha Machado Ferreira':'Zadir',
+const COORD_GRUPO = {1:'Nayara',2:'Zadir',3:'Gustavo'}
+
+// Busca todas as PCs (fonte única: prestacoes_contas), opcionalmente filtradas por setorial
+async function fetchTodasPCs(sid) {
+  const params = new URLSearchParams({ limit: 99999 })
+  if(sid) params.set('setorial_id', sid)
+  const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
+  const j = await r.json()
+  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  return j.data || []
 }
 
-// Grupos fixos conforme Relatório CGE — Plano de Ação FCEE GT-PC
-const GRUPOS_FIXOS = {
-  // Grupo 1 — Coordenadora: Nayara
-  'Aline':1,'Andressa':1,'Cris':1,'Daiana':1,'Daniela':1,'Gabriele':1,
-  'Guilherme':1,'Ivonete':1,'Marcelo':1,'Marisa':1,'Sandra':1,
-  'Sandra Paul':1,'Sandra Rocha':1,'Tatiana':1,'Valderi':1,
-  // Grupo 2 — Coordenadora: Zadir
-  'Ana Claudia':2,'Ana Leticia':2,'Ana Letícia':2,'Elisandra':2,'Geisa':2,
-  'Gislainy':2,'Grace Oliveira':2,'Grace':2,'Isabel':2,'Marilza':2,
-  'Miriam':2,'Noici':2,'Perla':2,'Rita':2,'Simone':2,'Tanimeri':2,
-  // Grupo 3 — FCEE
-  'Caroline':3,'Claudia':3,'Clodoaldo':3,'Elquier':3,'Scheila':3,'Everaldo':3,
-  'Goreti':3,'Graciane':3,'Grazielly':3,'Higor':3,'Janaina':3,'Janaína':3,
-  'Juliana':3,'Luis Filipe':3,'Marlene':3,'Rafael':3,'Richard':3,
-  'Samoel':3,'Willian':3,
+// Busca metas vigentes, somadas por analista_id
+async function fetchMetasVigentes() {
+  const r = await fetch(`${API_URL}/metas_analistas?vigente=true`)
+  const j = await r.json()
+  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  const mapa = {}
+  ;(j.data||[]).forEach(m => { if(m.analista_id) mapa[m.analista_id] = (mapa[m.analista_id]||0) + (parseInt(m.meta)||0) })
+  return mapa
 }
-const COORD_GRUPO = {1:'Nayara',2:'Zadir',3:'FCEE'}
 
 async function irProd() {
   ativarMenu('prod')
@@ -1944,7 +1847,7 @@ async function irProd() {
             <option value="">Todos</option>
             <option value="1">Grupo 1 — Nayara</option>
             <option value="2">Grupo 2 — Zadir</option>
-            <option value="3">Grupo 3 — FCEE</option>
+            <option value="3">Grupo 3 — Gustavo</option>
           </select>
         </div>` : ''}
         <div style="display:flex;border:1.5px solid var(--cb);border-radius:6px;overflow:hidden;">
@@ -1977,48 +1880,33 @@ async function prodCarregar() {
   try {
     const sid = U.setorialFiltro
     const grupoF = document.getElementById('prodFiltGrupo')?.value||''
-    let q = db.from('usuarios').select('*').eq('ativo',true)
-    if(sid) q = q.eq('setorial_id',sid)
-    const { data: todosUsers } = await q
-    // Incluir analistas E qualquer usuário que esteja no MAPA_PROD (ex: superadmin que também analisa)
-    const users = (todosUsers||[]).filter(u =>
-      u.perfil === 'analista' ||
-      Object.keys(MAPA_PROD).some(k => k.toLowerCase().trim() === u.nome.toLowerCase().trim())
-    )
-    if(!users||!users.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum analista encontrado.</p>'; return }
 
-    // Buscar toda planilha_analista de uma vez
-    const { data: todaPlan } = await db.from('planilha_analista').select('analista,baixada,situacao').eq('setorial_id', sid||'FCEE')
+    const { data: todosUsers } = await db.from('usuarios').select('*')
+    const usuariosPorId = {}
+    ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
 
-    // Montar mapa: analista → {total, baixadas, dilig, analise}
+    const [pcs, metaPorId] = await Promise.all([fetchTodasPCs(sid), fetchMetasVigentes()])
+
+    // Agrega prestacoes_contas por analista_id (evita duplicar quem tem grafias diferentes de nome)
     const mapaStats = {}
-    ;(todaPlan||[]).forEach(r => {
-      const a = r.analista
-      if(!mapaStats[a]) mapaStats[a] = {total:0,baixadas:0,dilig:0,analise:0}
-      mapaStats[a].total++
-      if(r.baixada) mapaStats[a].baixadas++
-      else {
-        const sit = (r.situacao||'').toLowerCase()
-        if(sit.includes('diligên')||sit.includes('diligenc')) mapaStats[a].dilig++
-        else mapaStats[a].analise++
-      }
+    pcs.forEach(p => {
+      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0}
+      const s = mapaStats[p.analista_id]
+      s.total++
+      if(p.status==='baixada') s.baixadas++
+      else if(p.status==='analise') s.analise++
+      else if(p.status==='diligencia') s.dilig++
+      else if(p.status==='reanalise') s.reanalise++
     })
 
-    // Grupos: GRUPOS_FIXOS como primário (API como complemento se disponível)
-    const mapaGrupo = {...GRUPOS_FIXOS}
-    try {
-      const rGrupos = await fetch(`${API_URL}/estoque/grupos-analistas?setorial_id=${sid||'FCEE'}`)
-      const jGrupos = await rGrupos.json()
-      ;(jGrupos.data||[]).forEach(r => { if(r.tecnico_nome && r.grupo) mapaGrupo[r.tecnico_nome] = r.grupo })
-    } catch(e) {}
-
-    _prodDados = users.map(u => {
-      const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
-      const stats = mapaStats[nomePlan] || {total:0,baixadas:0,dilig:0,analise:0}
-      const grupo = mapaGrupo[nomePlan] || mapaGrupo[u.nome.split(' ')[0]] || null
-      const pct = stats.total>0 ? Math.round(stats.baixadas/stats.total*100) : 0
-      return {u, nomePlan, grupo, coord: COORD_GRUPO[grupo]||'—', ...stats, pct}
-    }).filter(d => {
+    _prodDados = Object.entries(mapaStats).map(([analistaId, stats]) => {
+      const u = usuariosPorId[analistaId]
+      const meta = metaPorId[analistaId] || 0
+      const pct = meta>0 ? Math.round(stats.baixadas/meta*100) : null
+      const grupo = u.grupo ? parseInt(u.grupo) : null
+      return {u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, ...stats, pct}
+    }).filter(d => d.total > 0).filter(d => {
       // Analista só vê o próprio card; coordenador só vê o grupo dele; superadmin vê tudo
       if(U.perfil === 'analista') return d.u.id === U.id
       if(U.perfil === 'coordenador' && String(d.grupo) !== String(U.grupo||'')) return false
@@ -2029,57 +1917,64 @@ async function prodCarregar() {
   } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
 
+function prodCorPct(pct) { return pct===null ? '#999' : pct>80?'var(--v)':pct>=50?'var(--am)':'var(--r)' }
+
 function prodRender(dados) {
   const cont = document.getElementById('prodCont')
   if(!cont) return
   if(_prodAba === 'cards') {
     cont.innerHTML = `<div class="prod-cards">${dados.map(d => {
-      const {u,total,baixadas,dilig,analise,pct,grupo,coord} = d
-      const cor = pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'
-      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">
+      const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
+      const cor = prodCorPct(pct)
+      const pctTxt = pct===null ? '—' : pct+'%'
+      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="verProdDetalhe(${u.id},'${u.nome}')">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-          <div class="prod-nome">${u.nome.split(' ')[0]}</div>
+          <div class="prod-nome">${u.nome}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
         </div>
-        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">FCEE — Técnico/Analista</div>
-        <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct}%;background:${cor}"></div></div>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">Meta: ${meta||'—'}${meta?' PCs no período':''}</div>
+        <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct||0}%;background:${cor}"></div></div>
         <div class="prod-nums" style="margin-top:5px;">
-          <span>📋 ${total} assumidas</span>
-          <span style="font-weight:700;color:${cor}">✓ ${baixadas} baixadas (${pct}%)</span>
+          <span>📋 ${total} PCs</span>
+          <span style="font-weight:700;color:${cor}">✓ ${baixadas} baixadas (${pctTxt})</span>
         </div>
-        <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;display:flex;gap:8px;">
-          <span>🔵 ${analise} análise</span><span>🟡 ${dilig} dilig.</span><span>⏳ ${total-baixadas} pend.</span>
+        <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
+          <span>🔵 ${analise} análise</span><span>🟡 ${dilig} dilig.</span><span>🔴 ${reanalise} reanál.</span>
         </div>
       </div>`
     }).join('')}</div>`
   } else {
-    // TABELA
+    // TABELA — linhas alternadas neutras; só o % e a barra recebem cor de acordo com a meta
     const linhas = dados.map((d,i) => {
-      const {u,total,baixadas,dilig,analise,pct,grupo,coord} = d
-      const cor = pct>70?'var(--verde-claro-1)':pct>40?'#FFF8E1':'#FFEBEE'
-      const corT = pct>70?'var(--v)':pct>40?'var(--am)':'var(--r)'
-      return `<tr style="background:${cor}">
+      const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
+      const cor = prodCorPct(pct)
+      const pctTxt = pct===null ? '—' : pct+'%'
+      const bgRow = i%2===0 ? '#fff' : '#F7F9F8'
+      return `<tr style="background:${bgRow}">
         <td style="font-size:11px;color:var(--ct);text-align:center;">${i+1}</td>
-        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="verProdDetalhe('${u.nome}','${u.setorial_id}')">${u.nome.split(' ')[0]}</td>
+        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="verProdDetalhe(${u.id},'${u.nome}')">${u.nome}</td>
         <td style="font-size:11px;text-align:center;">${grupo||'—'}</td>
         <td style="font-size:11px;">${coord}</td>
+        <td style="font-size:12px;text-align:center;">${meta||'—'}</td>
         <td style="font-size:12px;font-weight:700;text-align:center;">${total}</td>
         <td style="font-size:12px;font-weight:700;text-align:center;color:var(--v);">${baixadas}</td>
         <td style="font-size:12px;text-align:center;color:var(--az);">${analise}</td>
         <td style="font-size:12px;text-align:center;color:var(--am);">${dilig}</td>
-        <td style="font-size:12px;text-align:center;color:var(--r);">${total-baixadas}</td>
+        <td style="font-size:12px;text-align:center;color:#6A1B9A;">${reanalise}</td>
         <td style="text-align:center;">
-          <span style="font-weight:800;font-size:12px;color:${corT};">${pct}%</span>
-          <div style="background:#E8EEEB;border-radius:4px;height:4px;margin-top:3px;"><div style="height:4px;border-radius:4px;background:${corT};width:${pct}%"></div></div>
+          <span style="font-weight:800;font-size:12px;color:${cor};">${pctTxt}</span>
+          <div style="background:#E8EEEB;border-radius:4px;height:4px;margin-top:3px;"><div style="height:4px;border-radius:4px;background:${cor};width:${pct||0}%"></div></div>
         </td>
       </tr>`
     }).join('')
 
     const totTotal = dados.reduce((a,d)=>a+d.total,0)
     const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+    const totMeta = dados.reduce((a,d)=>a+(d.meta||0),0)
     const totDil = dados.reduce((a,d)=>a+d.dilig,0)
     const totAn = dados.reduce((a,d)=>a+d.analise,0)
-    const totPct = totTotal>0?Math.round(totBx/totTotal*100):0
+    const totRean = dados.reduce((a,d)=>a+d.reanalise,0)
+    const totPct = totMeta>0?Math.round(totBx/totMeta*100):null
 
     cont.innerHTML = `
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
@@ -2089,21 +1984,23 @@ function prodRender(dados) {
       <div class="tbl-wrap"><div style="overflow-x:auto;">
       <table id="prodTabela"><thead><tr>
         <th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
+        <th style="text-align:center;">Meta</th>
         <th style="text-align:center;">Total</th>
         <th style="text-align:center;color:var(--v);">Baixadas ✓</th>
         <th style="text-align:center;color:var(--az);">Análise</th>
         <th style="text-align:center;color:var(--am);">Diligência</th>
-        <th style="text-align:center;color:var(--r);">Pendentes</th>
-        <th style="text-align:center;">% Concluído</th>
+        <th style="text-align:center;color:#6A1B9A;">Reanálise</th>
+        <th style="text-align:center;">% Meta</th>
       </tr></thead><tbody>${linhas}</tbody>
       <tfoot><tr style="background:var(--fundo-app);font-weight:700;">
         <td colspan="4" style="font-size:11px;padding:8px 11px;">TOTAL GERAL — ${dados.length} analistas</td>
+        <td style="text-align:center;font-size:12px;">${totMeta||'—'}</td>
         <td style="text-align:center;font-size:12px;">${totTotal}</td>
         <td style="text-align:center;font-size:12px;color:var(--v);">${totBx}</td>
         <td style="text-align:center;font-size:12px;color:var(--az);">${totAn}</td>
         <td style="text-align:center;font-size:12px;color:var(--am);">${totDil}</td>
-        <td style="text-align:center;font-size:12px;color:var(--r);">${totTotal-totBx}</td>
-        <td style="text-align:center;font-size:12px;font-weight:800;">${totPct}%</td>
+        <td style="text-align:center;font-size:12px;color:#6A1B9A;">${totRean}</td>
+        <td style="text-align:center;font-size:12px;font-weight:800;">${totPct===null?'—':totPct+'%'}</td>
       </tr></tfoot>
       </table></div></div>`
   }
@@ -2111,9 +2008,10 @@ function prodRender(dados) {
 
 function prodExportExcel() {
   const dados = _prodDados
-  let csv = '\uFEFF#;Analista;Grupo;Coordenador;Total;Baixadas;Em Análise;Diligência;Pendentes;% Concluído\n'
+  let csv = '\uFEFF#;Analista;Grupo;Coordenador;Meta;Total;Baixadas;Em Análise;Diligência;Reanálise;% Meta\n'
   dados.forEach((d,i) => {
-    csv += `${i+1};${d.u.nome.split(' ')[0]};${d.grupo||'—'};${d.coord};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.total-d.baixadas};${d.pct}%\n`
+    const pctTxt = d.pct===null?'—':d.pct+'%'
+    csv += `${i+1};${d.u.nome};${d.grupo||'—'};${d.coord};${d.meta||'—'};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.reanalise};${pctTxt}\n`
   })
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
@@ -2125,15 +2023,18 @@ function prodExportPDF() {
   const dados = _prodDados
   const dt = new Date().toLocaleDateString('pt-BR')
   const linhas = dados.map((d,i) => {
-    const cor = d.pct>70?'#E8F5EE':d.pct>40?'#FFF8E1':'#FFEBEE'
+    const cor = d.pct===null?'':d.pct>80?'#E8F5EE':d.pct>=50?'#FFF8E1':'#FFEBEE'
+    const pctTxt = d.pct===null?'—':d.pct+'%'
     return `<tr style="background:${cor}">
-      <td>${i+1}</td><td><b>${d.u.nome.split(' ')[0]}</b></td><td>${d.grupo||'—'}</td><td>${d.coord}</td>
-      <td>${d.total}</td><td><b style="color:#006B3C">${d.baixadas}</b></td>
-      <td>${d.analise}</td><td>${d.dilig}</td><td>${d.total-d.baixadas}</td>
-      <td><b>${d.pct}%</b></td></tr>`
+      <td>${i+1}</td><td><b>${d.u.nome}</b></td><td>${d.grupo||'—'}</td><td>${d.coord}</td>
+      <td>${d.meta||'—'}</td><td>${d.total}</td><td><b style="color:#006B3C">${d.baixadas}</b></td>
+      <td>${d.analise}</td><td>${d.dilig}</td><td>${d.reanalise}</td>
+      <td><b>${pctTxt}</b></td></tr>`
   }).join('')
   const totTotal = dados.reduce((a,d)=>a+d.total,0)
   const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+  const totMeta = dados.reduce((a,d)=>a+(d.meta||0),0)
+  const totPct = totMeta>0?Math.round(totBx/totMeta*100)+'%':'—'
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
     <title>Produtividade SIGPC-GT</title>
     <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}
@@ -2142,13 +2043,13 @@ function prodExportPDF() {
     td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:11px;}
     tfoot tr{background:#F5F8F6;font-weight:bold;}</style></head><body>
     <h2>SIGPC-GT — Produtividade por Analista</h2>
-    <p>Gerado em ${dt} | FCEE | ${dados.length} analistas | ${totBx}/${totTotal} baixadas</p>
+    <p>Gerado em ${dt} | ${dados.length} analistas | ${totBx}/${totMeta||'—'} baixadas sobre a meta</p>
     <table><thead><tr><th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
-    <th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Pendentes</th><th>%</th></tr></thead>
+    <th>Meta</th><th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Reanálise</th><th>% Meta</th></tr></thead>
     <tbody>${linhas}</tbody>
-    <tfoot><tr><td colspan="4">TOTAL</td><td>${totTotal}</td><td>${totBx}</td><td>${dados.reduce((a,d)=>a+d.analise,0)}</td>
-    <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${totTotal-totBx}</td>
-    <td>${totTotal>0?Math.round(totBx/totTotal*100):0}%</td></tr></tfoot>
+    <tfoot><tr><td colspan="4">TOTAL</td><td>${totMeta||'—'}</td><td>${totTotal}</td><td>${totBx}</td><td>${dados.reduce((a,d)=>a+d.analise,0)}</td>
+    <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${dados.reduce((a,d)=>a+d.reanalise,0)}</td>
+    <td>${totPct}</td></tr></tfoot>
     </table></body></html>`
   const w = window.open('','_blank')
   w.document.write(html)
@@ -2195,39 +2096,40 @@ async function boardCarregar() {
   const sid = document.getElementById('boardSid')?.value || U.setorialFiltro || 'FCEE'
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
-    const { data } = await db.from('planilha_analista').select('*').eq('setorial_id', sid)
-    if(!data) throw new Error('Sem dados')
+    const data = await fetchTodasPCs(sid)
 
-    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
     const total = data.length
-    const baixadas = data.filter(r=>r.baixada||SITS_BAIXA.has(r.situacao)).length
-    const dilig = data.filter(r=>(r.situacao||'').toLowerCase().includes('diligên')||(r.situacao||'').toLowerCase().includes('diligenc')).length
-    const analise = data.filter(r=>r.situacao==='Análise'||r.situacao==='Analisar').length
-    const reanalise = data.filter(r=>r.situacao==='Reanálise'||r.situacao==='Reanalise').length
-    const ctrl = data.filter(r=>(r.situacao||'').toLowerCase().includes('controle')).length
+    const baixadas = data.filter(r=>r.status==='baixada').length
+    const dilig = data.filter(r=>r.status==='diligencia').length
+    const analise = data.filter(r=>r.status==='analise').length
+    const reanalise = data.filter(r=>r.status==='reanalise').length
+    const ctrl = data.filter(r=>r.enviado_ci).length
     const pct = total>0?Math.round(baixadas/total*100):0
 
-    // Stats por grupo
-    const grupos = {1:{total:0,bx:0,dilig:0,nome:'G1 — Nayara'},2:{total:0,bx:0,dilig:0,nome:'G2 — Zadir'},3:{total:0,bx:0,dilig:0,nome:'G3 — FCEE'}}
+    // Stats por grupo (prestacoes_contas.grupo já vem preenchido por linha)
+    const grupos = {1:{total:0,bx:0,dilig:0,nome:`G1 — ${COORD_GRUPO[1]}`},2:{total:0,bx:0,dilig:0,nome:`G2 — ${COORD_GRUPO[2]}`},3:{total:0,bx:0,dilig:0,nome:`G3 — ${COORD_GRUPO[3]}`}}
     data.forEach(r => {
-      const g = GRUPOS_FIXOS[r.analista] || GRUPOS_FIXOS[(r.analista||'').split(' ')[0]]
+      const g = r.grupo
       if(g && grupos[g]) {
         grupos[g].total++
-        if(r.baixada||SITS_BAIXA.has(r.situacao)) grupos[g].bx++
-        if((r.situacao||'').toLowerCase().includes('diligên')||(r.situacao||'').toLowerCase().includes('diligenc')) grupos[g].dilig++
+        if(r.status==='baixada') grupos[g].bx++
+        if(r.status==='diligencia') grupos[g].dilig++
       }
     })
 
-    // Stats por analista (top analistas para o gráfico)
+    // Stats por analista (top analistas para o gráfico) — agrupado por analista_id, nome completo via usuarios
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome')
+    const nomePorId = {}
+    ;(todosUsers||[]).forEach(u => { nomePorId[u.id] = u.nome })
     const mapaAn = {}
     data.forEach(r => {
-      const a = r.analista||'—'
-      if(!mapaAn[a]) mapaAn[a] = {total:0,bx:0}
-      mapaAn[a].total++
-      if(r.baixada||SITS_BAIXA.has(r.situacao)) mapaAn[a].bx++
+      if(!r.analista_id) return
+      if(!mapaAn[r.analista_id]) mapaAn[r.analista_id] = {total:0,bx:0}
+      mapaAn[r.analista_id].total++
+      if(r.status==='baixada') mapaAn[r.analista_id].bx++
     })
     const analistas = Object.entries(mapaAn)
-      .map(([n,v]) => ({nome:n,...v,pct:v.total>0?Math.round(v.bx/v.total*100):0}))
+      .map(([id,v]) => ({nome:nomePorId[id]||('Analista #'+id),...v,pct:v.total>0?Math.round(v.bx/v.total*100):0}))
       .sort((a,b) => b.bx - a.bx)
       .slice(0, 20)
 
@@ -2447,7 +2349,7 @@ function irRel() {
           <option value="">Todos</option>
           <option value="1">Grupo 1 — Nayara</option>
           <option value="2">Grupo 2 — Zadir</option>
-          <option value="3">Grupo 3 — FCEE</option>
+          <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>
       <div class="fg" id="relFiltTR" style="display:none"><label>Número TR</label>
@@ -2459,20 +2361,8 @@ function irRel() {
           <option value="livre">Livre</option>
           <option value="analise">Em Análise</option>
           <option value="diligencia">Diligência</option>
-          <option value="baixado">Baixado</option>
-        </select>
-      </div>
-      <div class="fg"><label>Situação PC</label>
-        <select id="relSit">
-          <option value="">Todas</option>
-          <option>Analisar</option>
-          <option>Análise</option>
-          <option>Diligência</option>
-          <option>Reanálise</option>
-          <option>Parecer Regular</option>
-          <option>Parecer Regular com Ressalvas</option>
-          <option>Parecer Irregular</option>
-          <option>Encaminhado para o Controle Interno</option>
+          <option value="reanalise">Reanálise</option>
+          <option value="baixada">Baixada</option>
         </select>
       </div>
       <div style="display:flex;align-items:flex-end;gap:6px;">
@@ -2513,7 +2403,7 @@ function irRel() {
     <div id="relPainelCGE" style="display:none;">
       <div style="background:#FCFDFC;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
         <div style="font-size:13px;font-weight:800;color:var(--te);margin-bottom:4px;">Parâmetros do Relatório CGE</div>
-        <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Preencha o período de monitoramento e as metas conforme o Plano de Ação aprovado junto à CGE.</div>
+        <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Selecione a setorial e o período de apuração. Metas e estoque são calculados a partir dos dados atuais do sistema.</div>
         <div class="filtros" style="gap:10px;flex-wrap:wrap;padding:0;background:none;border-radius:0;box-shadow:none;">
           <div class="fg"><label>Setorial</label>
             <select id="cgeSetorial" style="min-width:110px;">
@@ -2522,20 +2412,11 @@ function irRel() {
               <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
             </select>
           </div>
-          <div class="fg"><label>Data Início Monitoramento</label>
+          <div class="fg"><label>Data Inicial</label>
             <input type="date" id="cgeDtInicio" value="2025-08-01" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
-          <div class="fg"><label>Data de Corte (Fim)</label>
+          <div class="fg"><label>Data Final</label>
             <input type="date" id="cgeDtCorte" value="${new Date().toISOString().split('T')[0]}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-          </div>
-          <div class="fg"><label>Meta/Técnico/Mês (PCs)</label>
-            <input type="number" id="cgeMetaMes" value="10" min="1" max="50" style="width:70px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-          </div>
-          <div class="fg"><label>Nº Técnicos</label>
-            <input type="number" id="cgeNumTec" value="43" min="1" style="width:60px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-          </div>
-          <div class="fg"><label>Total PCs Estoque (Plano)</label>
-            <input type="number" id="cgeTotalPlano" value="9632" min="1" style="width:90px;border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
@@ -2567,70 +2448,83 @@ async function cgeGerar() {
   const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
   const dtInicio = document.getElementById('cgeDtInicio')?.value || ''
   const dtCorte  = document.getElementById('cgeDtCorte')?.value  || ''
-  const metaMes  = parseFloat(document.getElementById('cgeMetaMes')?.value) || 10
-  const totalPlano = parseInt(document.getElementById('cgeTotalPlano')?.value) || 9632
-  const numTec   = parseInt(document.getElementById('cgeNumTec')?.value) || 43
 
-  // Calcular número de meses no período
-  let meses = 0
-  if(dtInicio && dtCorte) {
-    const d1 = new Date(dtInicio), d2 = new Date(dtCorte)
-    meses = Math.round((d2 - d1) / (1000*60*60*24*30.44))
-  }
-  _cgeParams = { sid, dtInicio, dtCorte, metaMes, totalPlano, numTec, meses }
+  if(!dtInicio || !dtCorte) { cont.innerHTML = '<p style="color:var(--r);padding:20px;">Informe a Data Inicial e a Data Final.</p>'; return }
+
+  const d1 = new Date(dtInicio), d2 = new Date(dtCorte)
+  const meses = Math.max(1, Math.round((d2 - d1) / (1000*60*60*24*30.44)))
 
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
-    const { data } = await db.from('planilha_analista').select('*').eq('setorial_id', sid)
-    if(!data||!data.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
+    const [todosPcs, metaPorId, usersRes] = await Promise.all([
+      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*')
+    ])
+    if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
-    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+    const dtIni = new Date(dtInicio+'T00:00:00')
+    const dtFim = new Date(dtCorte+'T23:59:59')
+    const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+
+    const usuariosPorId = {}
+    ;(usersRes.data||[]).forEach(u => { if(u.perfil === 'analista') usuariosPorId[u.id] = u })
+
+    // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
     const mapaAn = {}
-    data.forEach(r => {
-      const a = r.analista||'—'
-      if(!mapaAn[a]) mapaAn[a] = {analista:a, grupo:GRUPOS_FIXOS[a]||GRUPOS_FIXOS[a.split(' ')[0]]||null, total:0, baixadas:0, analise:0, dilig:0, reanalise:0, ctrl:0}
-      mapaAn[a].total++
-      if(r.baixada||SITS_BAIXA.has(r.situacao)) mapaAn[a].baixadas++
-      else {
-        const sit = (r.situacao||'').toLowerCase()
-        if(sit.includes('diligên')||sit.includes('diligenc')) mapaAn[a].dilig++
-        else if(sit.includes('reanál')||sit.includes('reanalise')) mapaAn[a].reanalise++
-        else if(sit.includes('controle')) mapaAn[a].ctrl++
-        else mapaAn[a].analise++
+    todosPcs.forEach(p => {
+      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
+      if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0}
+      const m = mapaAn[p.analista_id]
+      if(p.status==='analise') m.analise++
+      else if(p.status==='diligencia') m.dilig++
+      else if(p.status==='reanalise') m.reanalise++
+      if(p.enviado_ci) m.ctrl++
+      if(p.baixada && noPeriodo(p)) {
+        if(p.origem_baixa === 'secretario') m.bxSecretario++
+        else m.bxTecnico++
       }
     })
-    _cgeDados = Object.values(mapaAn)
-      .sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.analista.localeCompare(b.analista))
 
-    const metaAcum = meses > 0 ? numTec * metaMes * meses : 0
-    const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
-    const totBx    = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+    // Coordenadores não aparecem; analista inativo só aparece se teve baixa no período
+    _cgeDados = Object.keys(usuariosPorId).map(id => {
+      const u = usuariosPorId[id]
+      const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0}
+      const totalBaixadas = m.bxSecretario + m.bxTecnico
+      if(!u.ativo && totalBaixadas === 0) return null
+      const grupo = u.grupo ? parseInt(u.grupo) : null
+      const meta = metaPorId[id] || 0
+      const pctMeta = meta>0 ? Math.round(totalBaixadas/meta*100) : null
+      return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, totalBaixadas, pctMeta, ...m }
+    }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
+
+    const cargaHistoricaNoPeriodo = todosPcs.filter(p => p.baixada && noPeriodo(p) && p.origem_baixa==='carga_historica').length
+
+    const metaTotal = _cgeDados.reduce((s,d)=>s+d.meta,0)
+    const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
+    const totBxSec = _cgeDados.reduce((s,d)=>s+d.bxSecretario,0)
+    const totBxTec = _cgeDados.reduce((s,d)=>s+d.bxTecnico,0)
     const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
     const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
     const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
     const totCtrl  = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
-    const totPctMeta = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1) : '—'
-    const totPctEst  = totalPlano>0 ? (totBx/totalPlano*100).toFixed(1) : '—'
+    const estoque  = todosPcs.filter(p => p.status !== 'baixada').length
+    const totPctMeta = metaTotal>0 ? (totBx/metaTotal*100).toFixed(1) : '—'
     const dt = new Date().toLocaleDateString('pt-BR')
-    const periodoTxt = dtInicio && dtCorte
-      ? `${new Date(dtInicio).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
-      : 'Período não definido'
+    const periodoTxt = `${new Date(dtInicio+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
+
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, cargaHistoricaNoPeriodo }
 
     // Renderizar quadros
     const q2linhas = _cgeDados.map((d,i) => {
-      const metaInd = meses > 0 ? metaMes * meses : '—'
-      const pctMeta = metaAcum>0 && meses>0 ? (d.baixadas / (metaMes*meses) * 100).toFixed(0)+'%' : '—'
-      const emAndamento = d.total - d.baixadas
-      const cor = d.baixadas >= (metaMes*meses*0.7) ? 'var(--verde-claro-1)' : d.baixadas >= (metaMes*meses*0.4) ? '#FFF8E1' : ''
+      const cor = d.pctMeta===null?'':d.pctMeta>=70?'var(--verde-claro-1)':d.pctMeta>=40?'#FFF8E1':''
       return `<tr style="background:${cor}">
         <td>${i+1}</td>
-        <td style="font-weight:700;">${d.analista}</td>
-        <td style="text-align:center;">${COORD_GRUPO[d.grupo]||'—'}</td>
-        <td style="text-align:center;">${metaInd}</td>
-        <td style="text-align:center;">0</td>
-        <td style="text-align:center;color:var(--v);font-weight:700;">${d.baixadas}</td>
-        <td style="text-align:center;font-weight:700;">${d.baixadas}</td>
-        <td style="text-align:center;font-weight:700;">${pctMeta}</td>
+        <td style="font-weight:700;">${d.u.nome}</td>
+        <td style="text-align:center;">${d.coord}</td>
+        <td style="text-align:center;">${d.meta||'—'}</td>
+        <td style="text-align:center;">${d.bxSecretario}</td>
+        <td style="text-align:center;color:var(--v);font-weight:700;">${d.bxTecnico}</td>
+        <td style="text-align:center;font-weight:700;">${d.totalBaixadas}</td>
+        <td style="text-align:center;font-weight:700;">${d.pctMeta===null?'—':d.pctMeta+'%'}</td>
       </tr>`
     }).join('')
 
@@ -2639,8 +2533,8 @@ async function cgeGerar() {
       if(!emAnd) return ''
       return `<tr>
         <td>${i+1}</td>
-        <td style="font-weight:700;">${d.analista}</td>
-        <td style="text-align:center;">${COORD_GRUPO[d.grupo]||'—'}</td>
+        <td style="font-weight:700;">${d.u.nome}</td>
+        <td style="text-align:center;">${d.coord}</td>
         <td style="text-align:center;color:#1565C0;">${d.analise}</td>
         <td style="text-align:center;color:var(--am);">${d.dilig}</td>
         <td style="text-align:center;color:#6A1B9A;">${d.reanalise}</td>
@@ -2666,8 +2560,8 @@ async function cgeGerar() {
           <div><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</div>
           <div><strong>Processo:</strong> CGE nº 727/2025</div>
           <div><strong>Período de Monitoramento:</strong> ${periodoTxt}</div>
-          <div><strong>Número PCs Total:</strong> ${totalPlano.toLocaleString('pt-BR')} PCs (conforme Plano de Ação)</div>
-          <div><strong>Servidores GT-PC:</strong> ${numTec} técnicos | Meta: ${metaMes} PCs/técnico/mês</div>
+          <div><strong>Meta do Período:</strong> ${metaTotal.toLocaleString('pt-BR')} PCs (soma das metas vigentes por analista)</div>
+          <div><strong>Servidores GT-PC:</strong> ${_cgeDados.length} servidores</div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
           <button onclick="cgeExportExcel()" style="background:var(--verde-escuro);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
@@ -2679,21 +2573,19 @@ async function cgeGerar() {
       <div class="tbl-wrap" style="margin-bottom:12px;">
         <div class="tbl-header"><strong>1. QUADRO GERAL DE METAS</strong></div>
         <div style="overflow-x:auto;"><table><thead><tr>
-          <th>Período</th><th style="text-align:center;">Meta Acumulada</th>
-          <th style="text-align:center;">Execução (PCs Baixadas)</th>
-          <th style="text-align:center;">% Meta</th>
-          <th style="text-align:center;">Estoque Total</th>
-          <th style="text-align:center;">% Total/Estoque</th>
+          <th>Período</th><th style="text-align:center;">Meta do Período</th>
+          <th style="text-align:center;">PCs Baixadas</th>
+          <th style="text-align:center;">Execução (%)</th>
+          <th style="text-align:center;">Estoque</th>
         </tr></thead><tbody><tr>
           <td style="font-weight:700;">${periodoTxt}</td>
-          <td style="text-align:center;font-weight:700;">${metaAcum||'—'}</td>
+          <td style="text-align:center;font-weight:700;">${metaTotal||'—'}</td>
           <td style="text-align:center;font-weight:800;color:var(--v);">${totBx}</td>
           <td style="text-align:center;font-weight:800;color:${parseFloat(totPctMeta)>=70?'var(--v)':parseFloat(totPctMeta)>=40?'var(--am)':'var(--r)'};">${totPctMeta}%</td>
-          <td style="text-align:center;">${totalPlano.toLocaleString('pt-BR')}</td>
-          <td style="text-align:center;font-weight:700;">${totPctEst}%</td>
+          <td style="text-align:center;">${estoque.toLocaleString('pt-BR')}</td>
         </tr></tbody></table></div>
         <div style="padding:8px 12px;font-size:10px;color:var(--ct);background:var(--fundo-app);">
-          Nota: Meta acumulada calculada com base em ${numTec} técnicos × ${metaMes} PCs/mês × ${meses||'?'} meses. Gerado em ${dt} via SIGPC-GT v2.1.
+          Nota: das ${totBx} PCs baixadas no período, ${cargaHistoricaNoPeriodo} vieram da carga histórica de migração (origem_baixa = carga_historica). Gerado em ${dt} via SIGPC-GT v2.1.
         </div>
       </div>
 
@@ -2702,7 +2594,7 @@ async function cgeGerar() {
         <div class="tbl-header"><strong>2. DESEMPENHO INDIVIDUAL DOS SERVIDORES DO GT-PC</strong></div>
         <div style="overflow-x:auto;"><table><thead><tr>
           <th>#</th><th>Servidor</th><th>Coordenador</th>
-          <th style="text-align:center;">Meta Acum.</th>
+          <th style="text-align:center;">Meta</th>
           <th style="text-align:center;">Bx. Secretário</th>
           <th style="text-align:center;">Bx. Técnico</th>
           <th style="text-align:center;">Total Baixas</th>
@@ -2711,9 +2603,9 @@ async function cgeGerar() {
         <tbody>${q2linhas}</tbody>
         <tfoot><tr style="background:var(--fundo-app);font-weight:700;">
           <td colspan="3">TOTAL GERAL — ${_cgeDados.length} servidores</td>
-          <td style="text-align:center;">${metaAcum||'—'}</td>
-          <td style="text-align:center;">0</td>
-          <td style="text-align:center;color:var(--v);">${totBx}</td>
+          <td style="text-align:center;">${metaTotal||'—'}</td>
+          <td style="text-align:center;">${totBxSec}</td>
+          <td style="text-align:center;color:var(--v);">${totBxTec}</td>
           <td style="text-align:center;">${totBx}</td>
           <td style="text-align:center;">${totPctMeta}%</td>
         </tr></tfoot></table></div>
@@ -2748,15 +2640,15 @@ function cgeExportExcel() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const sid = document.getElementById('cgeSetorial')?.value||'FCEE'
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
-  const totTotal = _cgeDados.reduce((s,d)=>s+d.total,0)
-  const totBx = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+  const totMeta = _cgeDados.reduce((s,d)=>s+d.meta,0)
+  const totBx = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
   let csv = `\uFEFFRELATÓRIO CGE — SIGPC-GT v2.1\nSetorial: ${sid}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\n`
-  csv += '#;Analista;Total PC;Concluídas;Em Análise;Diligência;Ctrl. Interno;% Concluído\n'
+  csv += '#;Servidor;Meta;Bx. Secretário;Bx. Técnico;Total Baixas;% Meta\n'
   _cgeDados.forEach((d,i)=>{
-    const pct = d.total>0?Math.round(d.baixadas/d.total*100):0
-    csv += `${i+1};${d.analista};${d.total};${d.baixadas};${d.analise};${d.dilig};${d.ctrl};${pct}%\n`
+    const pctTxt = d.pctMeta===null?'—':d.pctMeta+'%'
+    csv += `${i+1};${d.u.nome};${d.meta||'—'};${d.bxSecretario};${d.bxTecnico};${d.totalBaixadas};${pctTxt}\n`
   })
-  csv += `TOTAL;${_cgeDados.length} analistas;${totTotal};${totBx};;;;\n`
+  csv += `TOTAL;${_cgeDados.length} servidores;${totMeta};;;${totBx};\n`
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
   a.download=`relatorio_cge_${sid}_${dt}.csv`; a.click()
@@ -2765,18 +2657,23 @@ function cgeExportExcel() {
 function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
-  const { sid='FCEE', dtInicio='', dtCorte='', metaMes=10, totalPlano=9632, numTec=43, meses=0 } = _cgeParams||{}
-  const totBx    = _cgeDados.reduce((s,d)=>s+d.baixadas,0)
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0 } = _cgeParams||{}
+  const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
   const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
   const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
   const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
   const totCtrl  = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
   const totEmAnd = totAn+totDil+totRean+totCtrl
-  const metaAcum = meses>0 ? numTec*metaMes*meses : 0
-  const metaTrim = meses>0 ? numTec*metaMes : 0
+  // Compatibilidade com o texto fixo do relatório (metodologia antiga de meta por técnico/mês) —
+  // metaMes/numTec/totalPlano saíram do formulário; aproximados aqui a partir da meta real por analista.
+  const numTec   = _cgeDados.length
+  const metaMes  = meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0
+  const totalPlano = estoque + totBx
+  const metaAcum = metaTotal
+  const metaTrim = metaTotal
   const pctMeta  = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1).replace('.',',')+'%' : '—'
   const pctEst   = totalPlano>0 ? (totBx/totalPlano*100).toFixed(1).replace('.',',')+'%' : '—'
-  const metaInd  = meses>0 ? metaMes*meses : '—'
+  const metaInd  = '—'
 
   const fmtPeriodo = (s) => { if(!s) return '—'; const d=new Date(s+'T12:00:00'); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
   const fmtAbrev   = (s) => { if(!s) return '—'; const d=new Date(s+'T12:00:00'); const m=d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''); const a=String(d.getFullYear()).slice(2); return `${m.charAt(0).toUpperCase()+m.slice(1)}/${a}` }
@@ -2789,8 +2686,8 @@ function cgeExportPDF() {
   const totalPlanoFmt= totalPlano.toLocaleString('pt-BR')
 
   // Grupo stats
-  const gList = (g) => _cgeDados.filter(d=>(GRUPOS_FIXOS[d.analista]||GRUPOS_FIXOS[(d.analista||'').split(' ')[0]]||0)===g)
-  const gSt   = (arr) => ({ bx:arr.reduce((s,d)=>s+d.baixadas,0), tot:arr.reduce((s,d)=>s+d.total,0), acima:arr.filter(d=>d.baixadas>=(metaMes*(meses||1))).length })
+  const gList = (g) => _cgeDados.filter(d=>d.grupo===g)
+  const gSt   = (arr) => ({ bx:arr.reduce((s,d)=>s+d.totalBaixadas,0), tot:arr.reduce((s,d)=>s+d.totalBaixadas,0), acima:arr.filter(d=>d.pctMeta!==null && d.pctMeta>=100).length })
   const g1=gSt(gList(1)), g2=gSt(gList(2)), g3=gSt(gList(3))
 
   const LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MjAgMTEwIiB3aWR0aD0iNTIwIiBoZWlnaHQ9IjExMCI+CiAgPCEtLSBCYW5kZWlyYSBTQyAtLT4KICA8cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMTc1IiBoZWlnaHQ9IjExMCIgZmlsbD0id2hpdGUiLz4KICA8IS0tIEZhaXhhIHZlcm1lbGhhIHN1cGVyaW9yIC0tPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxNzUiIGhlaWdodD0iMzYiIGZpbGw9IiNDODEwMkUiLz4KICA8IS0tIEZhaXhhIGJyYW5jYSBjZW50cmFsIC0tPgogIDxyZWN0IHg9IjAiIHk9IjM2IiB3aWR0aD0iMTc1IiBoZWlnaHQ9IjM4IiBmaWxsPSJ3aGl0ZSIvPgogIDwhLS0gRmFpeGEgdmVybWVsaGEgaW5mZXJpb3IgLS0+CiAgPHJlY3QgeD0iMCIgeT0iNzQiIHdpZHRoPSIxNzUiIGhlaWdodD0iMzYiIGZpbGw9IiNDODEwMkUiLz4KICA8IS0tIExvc2FuZ28gdmVyZGUgLS0+CiAgPHBvbHlnb24gcG9pbnRzPSI4Nyw0IDE3MSw1NSA4NywxMDYgMyw1NSIgZmlsbD0iIzAwOUIzQSIvPgogIDwhLS0gRXN0cmVsYSBicmFuY2EgY2VudHJhbCAoc2ltcGxpZmljYWRhKSAtLT4KICA8Y2lyY2xlIGN4PSI4NyIgY3k9IjU1IiByPSIyMiIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuOSIvPgogIDwhLS0gRGV0YWxoZXMgZGEgZXN0cmVsYS9lc2N1ZG8gU0MgLS0+CiAgPHRleHQgeD0iODciIHk9IjYyIiBmb250LWZhbWlseT0ic2VyaWYiIGZvbnQtc2l6ZT0iMjIiIGZvbnQtd2VpZ2h0PSI5MDAiIGZpbGw9IiNDODEwMkUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlNDPC90ZXh0PgogIDwhLS0gTGluaGEgc2VwYXJhZG9yYSAtLT4KICA8cmVjdCB4PSIxODUiIHk9IjgiIHdpZHRoPSIyIiBoZWlnaHQ9Ijk0IiBmaWxsPSIjMzMzIiBvcGFjaXR5PSIwLjMiLz4KICA8IS0tIFRleHRvOiBHT1ZFUk5PIERFIC0tPgogIDx0ZXh0IHg9IjIwNSIgeT0iMzYiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iNDAwIiBmaWxsPSIjMzMzIiBsZXR0ZXItc3BhY2luZz0iNSI+R09WRVJOTyBERTwvdGV4dD4KICA8IS0tIFRleHRvOiBTQU5UQSBDQVRBUklOQSAtLT4KICA8dGV4dCB4PSIyMDAiIHk9IjcyIiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0MCIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iIzFhMWExYSI+U0FOVEE8L3RleHQ+CiAgPHRleHQgeD0iMjAwIiB5PSIxMDgiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjQwIiBmb250LXdlaWdodD0iOTAwIiBmaWxsPSIjMWExYTFhIj5DQVRBUklOQTwvdGV4dD4KPC9zdmc+Cg=="
@@ -2816,16 +2713,16 @@ function cgeExportPDF() {
   const right = _cgeDados.slice(half)
   const q2rows = left.map((d,i)=>{
     const r=right[i]
-    const pctL = meses>0&&metaMes>0 ? Math.round(d.baixadas/(metaMes*meses)*100)+'%' : '—'
-    const pctR = r&&meses>0&&metaMes>0 ? Math.round(r.baixadas/(metaMes*meses)*100)+'%' : ''
+    const pctL = d.pctMeta===null?'—':d.pctMeta+'%'
+    const pctR = r ? (r.pctMeta===null?'—':r.pctMeta+'%') : ''
     return `<tr>
-      <td style="text-align:left;">${d.analista}</td>
-      <td class="tc">${metaInd}</td><td class="tc">0</td>
-      <td class="tc">${d.baixadas}</td><td class="tc fw">${d.baixadas}</td><td class="tc fw">${pctL}</td>
+      <td style="text-align:left;">${d.u.nome}</td>
+      <td class="tc">${d.meta||'—'}</td><td class="tc">${d.bxSecretario}</td>
+      <td class="tc">${d.bxTecnico}</td><td class="tc fw">${d.totalBaixadas}</td><td class="tc fw">${pctL}</td>
       <td class="col-div"></td>
-      ${r?`<td style="text-align:left;">${r.analista}</td>
-      <td class="tc">${metaInd}</td><td class="tc">0</td>
-      <td class="tc">${r.baixadas}</td><td class="tc fw">${r.baixadas}</td><td class="tc fw">${pctR}</td>`
+      ${r?`<td style="text-align:left;">${r.u.nome}</td>
+      <td class="tc">${r.meta||'—'}</td><td class="tc">${r.bxSecretario}</td>
+      <td class="tc">${r.bxTecnico}</td><td class="tc fw">${r.totalBaixadas}</td><td class="tc fw">${pctR}</td>`
       :`<td colspan="6"></td>`}
     </tr>`
   }).join('')
@@ -2833,7 +2730,7 @@ function cgeExportPDF() {
 
   // Quadro 4 — layout 2 colunas como no original
   const q4list = _cgeDados
-    .map(d=>({nome:d.analista, emAnd:d.analise+d.dilig+d.reanalise+d.ctrl}))
+    .map(d=>({nome:d.u.nome, emAnd:d.analise+d.dilig+d.reanalise+d.ctrl}))
     .sort((a,b)=>a.nome.localeCompare(b.nome))
   const q4half = Math.ceil(q4list.length/2)
   const q4left = q4list.slice(0,q4half)
@@ -3159,10 +3056,10 @@ async function relCarregarAnalistas() {
   const sel = document.getElementById('relAnalista')
   if(!sel) return
   try {
-    const { data } = await db.from('usuarios').select('nome').eq('perfil','analista').eq('ativo',true).order('nome')
+    const { data } = await db.from('usuarios').select('id,nome').eq('perfil','analista').eq('ativo',true).order('nome')
     if(data) data.forEach(u => {
       const o = document.createElement('option')
-      o.value = u.nome; o.textContent = u.nome.split(' ')[0]
+      o.value = u.id; o.textContent = u.nome
       sel.appendChild(o)
     })
   } catch(e) {}
@@ -3185,41 +3082,34 @@ async function relBuscar() {
   document.getElementById('relMsg').style.display='none'
   document.getElementById('relTblWrap').style.display='none'
   document.getElementById('relSumario').style.display='none'
-  const tipo = document.getElementById('relTipo')?.value||'analista'
-  const analista = document.getElementById('relAnalista')?.value||''
+  const analistaId = document.getElementById('relAnalista')?.value||''
   const grupo = document.getElementById('relGrupo')?.value||''
   const tr = document.getElementById('relTR')?.value.trim()||''
   const status = document.getElementById('relStatus')?.value||''
-  const sit = document.getElementById('relSit')?.value||''
   const sid = U.setorialFiltro || 'FCEE'
 
   document.getElementById('relMsg').style.display='block'
   document.getElementById('relMsg').innerHTML='<div class="loading"><div class="spin"></div>Gerando relatório...</div>'
 
   try {
-    let q = db.from('planilha_analista').select('*').eq('setorial_id', sid)
-    if(analista) { const nomePlan = MAPA_PROD[analista]||analista.split(' ')[0]; q = q.ilike('analista', nomePlan+'%') }
-    if(sit) q = q.eq('situacao', sit)
-    if(tr) q = q.ilike('tr', '%'+tr+'%')
-    q = q.order('analista').order('tr').order('parcela')
-    const { data, error } = await q
-    if(error) throw error
+    const params = new URLSearchParams({ setorial_id: sid, limit: 99999 })
+    if(analistaId) params.set('analista_id', analistaId)
+    if(grupo) params.set('grupo', grupo)
+    if(status) params.set('status', status)
+    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    let dados = j.data||[]
 
-    let dados = data||[]
+    // Busca por TR é substring — filtra no cliente
+    if(tr) dados = dados.filter(p => (p.tr||'').toLowerCase().includes(tr.toLowerCase()))
 
-    // Filtrar por grupo via estoque
-    if(grupo) {
-      const { data: estGrp } = await db.from('estoque').select('tr,parcela,grupo,status').eq('setorial_id',sid).eq('grupo',parseInt(grupo))
-      const chaves = new Set((estGrp||[]).map(r=>r.tr+'|'+r.parcela))
-      dados = dados.filter(r => chaves.has(r.tr+'|'+r.parcela))
-    }
-
-    // Filtrar por status via estoque
-    if(status) {
-      const { data: estSt } = await db.from('estoque').select('tr,parcela,status').eq('setorial_id',sid).eq('status',status)
-      const chaves = new Set((estSt||[]).map(r=>r.tr+'|'+r.parcela))
-      dados = dados.filter(r => chaves.has(r.tr+'|'+r.parcela))
-    }
+    // Nome completo do analista, via usuarios
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome')
+    const nomePorId = {}
+    ;(todosUsers||[]).forEach(u => { nomePorId[u.id] = u.nome })
+    dados = dados.map(p => ({...p, analista_completo: p.analista_id ? (nomePorId[p.analista_id]||p.analista_nome) : (p.analista_nome||'Livre')}))
+    dados.sort((a,b) => (a.analista_completo||'').localeCompare(b.analista_completo||'') || (a.tr||'').localeCompare(b.tr||''))
 
     _relDados = dados
     relRenderTabela()
@@ -3234,10 +3124,9 @@ function relRenderTabela() {
   const from = _relPag * REL_PP
   const pag = dados.slice(from, from+REL_PP)
   const total = dados.length
-  const baixadas = dados.filter(r=>r.baixada).length
-  const dilig = dados.filter(r=>(r.situacao||'').toLowerCase().includes('diligên')||
-    (r.situacao||'').toLowerCase().includes('diligenc')).length
-  const analise = total - baixadas - dilig
+  const baixadas = dados.filter(r=>r.status==='baixada').length
+  const dilig = dados.filter(r=>r.status==='diligencia').length
+  const analise = dados.filter(r=>r.status==='analise').length
 
   // Sumário
   document.getElementById('relSumario').style.display='block'
@@ -3254,20 +3143,19 @@ function relRenderTabela() {
   document.getElementById('relTblWrap').style.display='block'
   document.getElementById('relTblTit').textContent = `${total} registros encontrados`
   document.getElementById('relThead').innerHTML = `<tr>
-    <th>#</th><th>Analista</th><th>TR (SIGEF)</th><th>Parcela</th>
-    <th>Processo SGP</th><th>Beneficiário</th><th>Situação</th><th>Baixada</th>
+    <th>#</th><th>Analista</th><th>TR</th><th>Código PC</th>
+    <th>Entidade</th><th>Status</th><th>Baixada</th>
   </tr>`
   document.getElementById('relTbody').innerHTML = pag.map((r,i) => {
-    const cor = r.baixada?'#F0FAF4':''
+    const cor = r.status==='baixada'?'#F0FAF4':''
     return `<tr style="background:${cor}">
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
-      <td style="font-size:11px;font-weight:600;">${r.analista||'—'}</td>
+      <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
-      <td style="text-align:center;font-size:11px;">${r.parcela||'—'}</td>
-      <td style="font-size:10px;">${r.processo_sgp||'—'}</td>
-      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.beneficiario||''}">${r.beneficiario||'—'}</td>
-      <td><span class="bdg ${r.baixada?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.situacao||'—'}</span></td>
-      <td style="text-align:center;">${r.baixada?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
+      <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
+      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
+      <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
+      <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
     </tr>`
   }).join('')
 
@@ -3281,7 +3169,7 @@ function relRenderTabela() {
 
 function relPg(d) { _relPag += d; relRenderTabela() }
 function relLimpar() {
-  ['relTipo','relAnalista','relGrupo','relTR','relStatus','relSit'].forEach(id => {
+  ['relTipo','relAnalista','relGrupo','relTR','relStatus'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value=''
   })
   _relDados=[]; _relPag=0
@@ -3293,9 +3181,9 @@ function relLimpar() {
 
 function relExportExcel() {
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
-  let csv = '\uFEFF#;Analista;TR;Parcela;Processo SGP;Beneficiário;Situação;Baixada\n'
+  let csv = '\uFEFF#;Analista;TR;Código PC;Entidade;Status;Baixada\n'
   _relDados.forEach((r,i) => {
-    csv += `${i+1};"${r.analista||''}";${r.tr||''};${r.parcela||''};"${r.processo_sgp||''}";"${(r.beneficiario||'').replace(/"/g,"'")}";${r.situacao||''};${r.baixada?'Sim':'Não'}\n`
+    csv += `${i+1};"${r.analista_completo||''}";${r.tr||''};${r.codigo_pc||''};"${(r.entidade||'').replace(/"/g,"'")}";${r.status||''};${r.status==='baixada'?'Sim':'Não'}\n`
   })
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
@@ -3304,7 +3192,7 @@ function relExportExcel() {
 
 function relExportPDF() {
   const dt = new Date().toLocaleDateString('pt-BR')
-  const baixadas = _relDados.filter(r=>r.baixada).length
+  const baixadas = _relDados.filter(r=>r.status==='baixada').length
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório SIGPC-GT</title>
   <style>body{font-family:Arial,sans-serif;font-size:10px;margin:20px;}
   h2{color:#006B3C;}p{color:#666;margin-bottom:8px;}
@@ -3314,11 +3202,11 @@ function relExportPDF() {
   .bx{color:#006B3C;font-weight:bold;}</style></head><body>
   <h2>SIGPC-GT — Relatório de Prestações de Contas</h2>
   <p>Gerado em ${dt} | Total: ${_relDados.length} registros | Baixadas: ${baixadas} (${_relDados.length>0?Math.round(baixadas/_relDados.length*100):0}%)</p>
-  <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>Parcela</th><th>Processo SGP</th><th>Beneficiário</th><th>Situação</th><th>Baixada</th></tr></thead>
-  <tbody>${_relDados.map((r,i)=>`<tr style="${r.baixada?'background:#F0FAF4':''}">
-    <td>${i+1}</td><td>${r.analista||'—'}</td><td>${r.tr||'—'}</td><td>${r.parcela||'—'}</td>
-    <td>${r.processo_sgp||'—'}</td><td>${(r.beneficiario||'—').substring(0,50)}</td>
-    <td>${r.situacao||'—'}</td><td class="${r.baixada?'bx':''}">${r.baixada?'✓ Sim':'Não'}</td>
+  <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>Código PC</th><th>Entidade</th><th>Status</th><th>Baixada</th></tr></thead>
+  <tbody>${_relDados.map((r,i)=>`<tr style="${r.status==='baixada'?'background:#F0FAF4':''}">
+    <td>${i+1}</td><td>${r.analista_completo||'—'}</td><td>${r.tr||'—'}</td><td>${r.codigo_pc||'—'}</td>
+    <td>${(r.entidade||'—').substring(0,50)}</td>
+    <td>${r.status||'—'}</td><td class="${r.status==='baixada'?'bx':''}">${r.status==='baixada'?'✓ Sim':'Não'}</td>
   </tr>`).join('')}</tbody></table></body></html>`
   const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print()
 }
@@ -3674,7 +3562,7 @@ async function irGestaoGrupo() {
             <option value="">Todos os Grupos</option>
             <option value="1">Grupo 1 — Nayara</option>
             <option value="2">Grupo 2 — Zadir</option>
-            <option value="3">Grupo 3 — FCEE</option>
+            <option value="3">Grupo 3 — Gustavo</option>
           </select>
         </div>
         <button onclick="irGestaoGrupo()" class="btn-buscar" style="height:32px;">↺ Atualizar</button>
@@ -3692,32 +3580,29 @@ async function gestCarregar() {
   const sid = U.setorialFiltro || 'FCEE'
 
   try {
-    // Buscar usuários analistas
-    const { data: todosUsers } = await db.from('usuarios').select('*').eq('ativo', true).eq('setorial_id', sid)
-    const users = (todosUsers||[]).filter(u => u.perfil === 'analista' || Object.keys(MAPA_PROD).some(k => k.toLowerCase() === u.nome.toLowerCase()))
+    const { data: todosUsers } = await db.from('usuarios').select('*')
+    const usuariosPorId = {}
+    ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
 
-    // Buscar toda planilha_analista
-    const { data: todaPlan } = await db.from('planilha_analista').select('analista,baixada,situacao').eq('setorial_id', sid)
+    const pcs = await fetchTodasPCs(sid)
 
-    // Montar mapa stats
-    const SITS_BAIXA = new Set(['Parecer Regular','Parecer Regular com Ressalva','Parecer Regular com Ressalvas','Parecer Irregular'])
+    // Agrega prestacoes_contas por analista_id
     const mapaStats = {}
-    ;(todaPlan||[]).forEach(r => {
-      const a = r.analista
-      if(!mapaStats[a]) mapaStats[a] = {total:0,baixadas:0}
-      mapaStats[a].total++
-      if(r.baixada || SITS_BAIXA.has(r.situacao)) mapaStats[a].baixadas++
+    pcs.forEach(p => {
+      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0}
+      mapaStats[p.analista_id].total++
+      if(p.status==='baixada') mapaStats[p.analista_id].baixadas++
     })
 
-    // Montar lista com mapa de grupo
-    let lista = users.map(u => {
-      const nomePlan = MAPA_PROD[u.nome] || u.nome.split(' ')[0]
-      const stats = mapaStats[nomePlan] || {total:0,baixadas:0}
-      const grupo = GRUPOS_FIXOS[nomePlan] || GRUPOS_FIXOS[u.nome.split(' ')[0]] || null
+    // Montar lista com grupo já preenchido em usuarios
+    let lista = Object.entries(mapaStats).map(([analistaId, stats]) => {
+      const u = usuariosPorId[analistaId]
+      const grupo = u.grupo ? parseInt(u.grupo) : null
       const emAndamento = stats.total - stats.baixadas
       const pct = stats.total > 0 ? Math.round(stats.baixadas / stats.total * 100) : 0
-      return { u, nomePlan, grupo, coord: COORD_GRUPO[grupo]||'—', ...stats, emAndamento, pct }
-    }).filter(d => !grupoF || String(d.grupo) === grupoF)
+      return { u, grupo, coord: COORD_GRUPO[grupo]||'—', ...stats, emAndamento, pct }
+    }).filter(d => d.total > 0).filter(d => !grupoF || String(d.grupo) === grupoF)
       .sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
     if(!lista.length) {
@@ -3763,7 +3648,7 @@ async function gestCarregar() {
       const cor = d.pct>=70?'var(--v)':d.pct>=40?'var(--am)':'var(--r)'
       const bgRow = d.pct>=70?'#F0FBF5':d.pct>=40?'#FFFBF0':'#FFF5F5'
       return `<tr style="background:${bgRow};">
-        <td style="cursor:pointer;color:var(--v);font-weight:700;" onclick="verProdDetalhe('${d.u.nome}','${d.u.setorial_id}')">${d.u.nome.split(' ')[0]}</td>
+        <td style="cursor:pointer;color:var(--v);font-weight:700;" onclick="verProdDetalhe(${d.u.id},'${d.u.nome}')">${d.u.nome}</td>
         <td style="text-align:center;font-size:12px;font-weight:700;">${d.total}</td>
         <td style="text-align:center;font-size:13px;font-weight:800;color:var(--v);">${d.baixadas}</td>
         <td style="text-align:center;font-size:12px;color:var(--am);">${d.emAndamento}</td>
@@ -3937,7 +3822,7 @@ function irAdmin() {
                 <option value="">Sem grupo</option>
                 <option value="1">Grupo 1 — Nayara</option>
                 <option value="2">Grupo 2 — Zadir</option>
-                <option value="3">Grupo 3 — FCEE</option>
+                <option value="3">Grupo 3 — Gustavo</option>
               </select>
             </div>
             <div class="mc-campo" id="admEmailWrap">
@@ -4373,82 +4258,23 @@ async function enviarAoCI(codigoPc) {
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
-// ══════════════════════════════════════
-//  VER DETALHE TR (modal completo)
-// ══════════════════════════════════════
-async function verDetalhe(id) {
-  document.getElementById('moNLT').textContent = 'Carregando...'
-  document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
-  document.getElementById('moNL').classList.add('open')
-  try {
-    const { data: r } = await db.from('estoque').select('*').eq('id',id).limit(1)
-    const est = r?.[0]
-    if(!est) return
-    const nls = await carregarNLs(est.tr, est.parcela)
-    const bx = nls.filter(n=>n.baixada).length
-
-    document.getElementById('moNLT').textContent = `${est.tr} — Parcela ${est.parcela}`
-    document.getElementById('moNLB').innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Beneficiário</div>
-          <div style="font-size:13px;font-weight:700;">${est.beneficiario||'—'}</div>
-        </div>
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Processo SGP</div>
-          <div style="font-size:13px;font-weight:700;">${est.processo_sgp||'—'}</div>
-        </div>
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Técnico/Analista</div>
-          <div style="font-size:13px;font-weight:700;">${est.tecnico_nome||'Livre'}</div>
-        </div>
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Status</div>
-          <span class="bdg ${ {livre:'bdg-livre',analise:'bdg-analise',dev_pendente:'bdg-dev'}[est.status]||'bdg-devolvido' }">${{livre:'Livre',analise:'Em Análise',dev_pendente:'Aguard.Dev.'}[est.status]||est.status}</span>
-        </div>
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Data Assumido</div>
-          <div style="font-size:12px;">${est.assumido_em?new Date(est.assumido_em).toLocaleDateString('pt-BR'):'—'}</div>
-        </div>
-        <div style="background:var(--cl);border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">Prazo Análise</div>
-          <div style="font-size:12px;">${est.prazo_analise?new Date(est.prazo_analise).toLocaleDateString('pt-BR'):'—'}</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-        Notas de Liquidação (${nls.length} NL${nls.length!==1?'s':''}) — ${bx} baixada${bx!==1?'s':''}
-      </div>
-      ${nls.length===0?'<p style="color:var(--ct);font-size:12px;">Nenhuma NL registrada.</p>':
-        nls.map((n,i)=>`<div class="nl-row">
-          <span style="font-weight:600;font-size:11px;">${i+1}. ${n.codigo_pc||'—'}</span>
-          <span style="font-size:11px;">R$ ${(n.valor_pgto||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-          <span style="font-size:11px;color:var(--ct);">${n.situacao||'—'}</span>
-          <span class="bdg ${n.baixada?'bdg-livre':'bdg-analise'}">${n.baixada?'✓ Baixada':'Pendente'}</span>
-        </div>`).join('')}
-    `
-  } catch(e) {
-    document.getElementById('moNLB').innerHTML = `<p style="color:var(--r);">Erro: ${e.message}</p>`
-  }
-}
-
 // Ver detalhe produtividade analista
-async function verProdDetalhe(nome, setorial) {
+async function verProdDetalhe(analistaId, nome) {
   document.getElementById('moNLT').textContent = `Produtividade — ${nome}`
   document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
   document.getElementById('moNL').classList.add('open')
   try {
-    const { data, count } = await db.from('planilha_analista')
-      .select('*',{count:'exact'})
-      .ilike('analista', nome.split(' ')[0]+'%')
-      .order('tr').order('parcela')
-    const baixadas = (data||[]).filter(r=>r.baixada)
-    const total = count||0
-    const pct = total>0?Math.round(baixadas.length/total*100):0
+    const r = await fetch(`${API_URL}/prestacoes_contas?analista_id=${analistaId}&limit=99999`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const pcs = j.data||[]
+    const baixadas = pcs.filter(p=>p.status==='baixada')
+    const total = pcs.length
     document.getElementById('moNLB').innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;text-align:center;">
         <div style="background:var(--cl);border-radius:8px;padding:12px;">
           <div style="font-size:22px;font-weight:800;">${total}</div>
-          <div style="font-size:9px;color:var(--ct);">Total Registros</div>
+          <div style="font-size:9px;color:var(--ct);">Total de PCs</div>
         </div>
         <div style="background:#E0F2E9;border-radius:8px;padding:12px;">
           <div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas.length}</div>
@@ -4459,12 +4285,11 @@ async function verProdDetalhe(nome, setorial) {
           <div style="font-size:9px;color:var(--ct);">Pendentes</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--ct);margin-bottom:8px;"><strong>Situações que contam como baixada:</strong> Parecer Regular, Parecer Regular com Ressalva/Ressalvas, Parecer Irregular</div>
       <div style="max-height:300px;overflow-y:auto;">
-        ${baixadas.slice(0,50).map(r=>`<div class="nl-row">
-          <span style="font-size:10px;font-weight:600;">${r.tr} P${r.parcela}</span>
-          <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.entidade||'—'}</span>
-          <span class="bdg bdg-livre" style="font-size:9px;">${r.situacao}</span>
+        ${baixadas.slice(0,50).map(p=>`<div class="nl-row">
+          <span style="font-size:10px;font-weight:600;">${p.tr||'—'} — ${p.codigo_pc||'—'}</span>
+          <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.entidade||'—'}</span>
+          <span class="bdg bdg-livre" style="font-size:9px;">${p.parecer_tipo||'Baixada'}</span>
         </div>`).join('')}
         ${baixadas.length>50?`<p style="text-align:center;font-size:11px;color:var(--ct);padding:8px;">... e mais ${baixadas.length-50} registros</p>`:''}
       </div>
