@@ -1139,6 +1139,8 @@ function sair() {
 function renderSB() {
   const isAdmin = U.setorialAcesso === 'ADMIN'
   const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
+  const podeGerirUsuarios = isAdmin || U.perfil === 'coordenador'
+  const podeCI = U.perfil === 'superadmin' || U.perfil === 'coordenador' || U.perfil === 'controle_interno'
   document.getElementById('SB').innerHTML = `
     <div class="sb-sec">
       <div class="sb-lbl">Principal</div>
@@ -1164,10 +1166,14 @@ function renderSB() {
         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
         ${isCoordi?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADM</span>':''}
       </div>
-      ${isAdmin ? `<div class="sb-item" id="mi-admin" onclick="irAdmin()" style="color:#C8102E;">
+      ${podeCI ? `<div class="sb-item" id="mi-ci" onclick="irCI()">
+        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z"/></svg>
+        Controle Interno
+      </div>` : ''}
+      ${podeGerirUsuarios ? `<div class="sb-item" id="mi-admin" onclick="irAdmin()" style="color:#C8102E;">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 14c-2.67 0-5.03-1.33-6.47-3.36.35-1.63 2.95-2.64 6.47-2.64s6.12 1.01 6.47 2.64C17.03 17.67 14.67 19 12 19z"/></svg>
-        <span style="font-weight:800;">Painel ADMIN</span>
-        <span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:auto;">SA</span>
+        <span style="font-weight:800;">${isAdmin ? 'Painel ADMIN' : 'Gestão de Usuários'}</span>
+        ${isAdmin?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:auto;">SA</span>':''}
       </div>` : ''}
     </div>
     ${isCoordi ? `<div class="sb-sec">
@@ -1629,6 +1635,11 @@ async function abrirTR(tr) {
       const acao = !p.baixada
         ? `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
         : '<span style="color:var(--ct);font-size:10px;">—</span>'
+      const acaoCI = p.baixada
+        ? '<span style="color:var(--ct);font-size:10px;">—</span>'
+        : p.enviado_ci
+          ? '<span style="color:#00838F;font-size:10px;font-weight:700;">No Controle Interno</span>'
+          : `<button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}')">Enviar ao CI</button>`
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
@@ -1637,6 +1648,7 @@ async function abrirTR(tr) {
         <td style="${tdS}text-align:right;">${valorFmt}</td>
         <td style="${tdS}"><span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span></td>
         <td style="${tdS}">${acao}</td>
+        <td style="${tdS}">${acaoCI}</td>
       </tr>`
     }).join('')
 
@@ -1648,7 +1660,7 @@ async function abrirTR(tr) {
       </div>
       <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
         <th style="${thS}white-space:nowrap;">Código PC</th><th style="${thS}">Tipo</th><th style="${thS}">NL</th>
-        <th style="${thS}text-align:right;">Valor</th><th style="${thS}">Status</th><th style="${thS}">Ação</th>
+        <th style="${thS}text-align:right;">Valor</th><th style="${thS}">Status</th><th style="${thS}">Ação</th><th style="${thS}">Controle Interno</th>
       </tr></thead><tbody>${linhas}</tbody></table></div>
 
       <div class="mc-campo" style="margin-top:16px;">
@@ -1922,18 +1934,19 @@ const COORD_GRUPO = {1:'Nayara',2:'Zadir',3:'FCEE'}
 
 async function irProd() {
   ativarMenu('prod')
+  const podeFiltrarGrupo = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:16px;font-weight:700;">Produtividade (NL)</div>
       <div style="display:flex;gap:6px;align-items:center;">
-        <div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
+        ${podeFiltrarGrupo ? `<div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
           <select id="prodFiltGrupo" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
             <option value="">Todos</option>
             <option value="1">Grupo 1 — Nayara</option>
             <option value="2">Grupo 2 — Zadir</option>
             <option value="3">Grupo 3 — FCEE</option>
           </select>
-        </div>
+        </div>` : ''}
         <div style="display:flex;border:1.5px solid var(--cb);border-radius:6px;overflow:hidden;">
           <button id="prodTabCards" onclick="prodAba('cards')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;cursor:pointer;">🃏 Cards</button>
           <button id="prodTabTabela" onclick="prodAba('tabela')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:none;cursor:pointer;">📊 Tabela</button>
@@ -2005,8 +2018,12 @@ async function prodCarregar() {
       const grupo = mapaGrupo[nomePlan] || mapaGrupo[u.nome.split(' ')[0]] || null
       const pct = stats.total>0 ? Math.round(stats.baixadas/stats.total*100) : 0
       return {u, nomePlan, grupo, coord: COORD_GRUPO[grupo]||'—', ...stats, pct}
-    }).filter(d => !grupoF || String(d.grupo) === grupoF)
-      .sort((a,b) => a.u.nome.localeCompare(b.u.nome))
+    }).filter(d => {
+      // Analista só vê o próprio card; coordenador só vê o grupo dele; superadmin vê tudo
+      if(U.perfil === 'analista') return d.u.id === U.id
+      if(U.perfil === 'coordenador' && String(d.grupo) !== String(U.grupo||'')) return false
+      return !grupoF || String(d.grupo) === grupoF
+    }).sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
     prodRender(_prodDados)
   } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
@@ -3324,7 +3341,7 @@ async function primAcesso() {
     if(!data||!data.length) { toast('CPF não encontrado. Solicite ao administrador seu cadastro.','err'); return }
     const u = data[0]
     if(u.perfil!=='superadmin' && u.setorial_id !== sec) { toast('CPF não pertence a esta setorial.','err'); return }
-    const { error: e2 } = await db.from('usuarios').update({senha_hash: sen, atualizado_em: new Date().toISOString()}).eq('id', u.id)
+    const { error: e2 } = await db.from('usuarios').update({senha_hash: sen}).eq('id', u.id)
     if(e2) throw e2
     fm('moPrimAcesso')
     toast('Senha criada com sucesso! Faça o login.','ok')
@@ -3361,6 +3378,8 @@ async function irPlanilha() {
         <div style="font-size:11px;color:var(--ct);">Analista: <strong>${U.nome}</strong></div>
       </div>
     </div>
+    <!-- Alertas de prazo -->
+    <div id="planAlertas" style="margin-bottom:12px;"></div>
     <!-- Resumo estatístico -->
     <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;"></div>
     <!-- Filtros -->
@@ -3401,6 +3420,7 @@ async function irPlanilha() {
   window._planTot = 0
   window._planMeta = null
   await carregarMetaAnalista()
+  carregarAlertasPrazo()
   buscarPlan()
 }
 
@@ -3415,6 +3435,66 @@ async function carregarMetaAnalista() {
     window._planMeta = null
     console.error('carregarMetaAnalista erro:', e)
   }
+}
+
+async function carregarAlertasPrazo() {
+  const cont = document.getElementById('planAlertas')
+  if(!cont) return
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/alertas_prazo?analista_id=${U.id}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    renderAlertasPrazo(j.data)
+  } catch(e) {
+    console.error('carregarAlertasPrazo erro:', e)
+    cont.innerHTML = ''
+  }
+}
+
+function renderAlertasPrazo(alertas) {
+  const cont = document.getElementById('planAlertas')
+  if(!cont || !alertas) return
+  const { contagem, top10 } = alertas
+  const total = contagem.vencida365 + contagem.vencidaMenos365 + contagem.aVencer30
+  if(!total) { cont.innerHTML = ''; return }
+
+  const faixaDe = (dias) => dias > 365
+    ? {cor:'var(--r)', bg:'#FFEBEE', label:'Vencida há +365 dias'}
+    : dias > 0
+      ? {cor:'#E65100', bg:'#FFF3E0', label:'Vencida há -365 dias'}
+      : {cor:'var(--am)', bg:'#FFF8E1', label:'A vencer em 30 dias'}
+
+  const mkItem = (r) => {
+    const f = faixaDe(r.dias)
+    const diasTxt = r.dias > 0 ? `${r.dias}d atraso` : `vence em ${Math.abs(r.dias)}d`
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cb);cursor:pointer;" onclick="abrirTR('${r.tr}')">
+      <span style="width:8px;height:8px;border-radius:50%;background:${f.cor};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
+        <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
+      </div>
+      <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}</span>
+    </div>`
+  }
+
+  cont.innerHTML = `
+  <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;">
+    <div style="background:${contagem.vencida365?'#FFEBEE':contagem.vencidaMenos365?'#FFF3E0':'#FFF8E1'};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;">⚠</span>
+        <div style="font-size:12px;font-weight:800;color:var(--te);">${total} PC${total>1?'s':''} com prazo em alerta</div>
+      </div>
+      <div style="display:flex;gap:10px;font-size:10px;font-weight:700;">
+        <span style="color:var(--r);">🔴 ${contagem.vencida365} vencida${contagem.vencida365!==1?'s':''} +365d</span>
+        <span style="color:#E65100;">🟠 ${contagem.vencidaMenos365} vencida${contagem.vencidaMenos365!==1?'s':''} -365d</span>
+        <span style="color:var(--am);">🟡 ${contagem.aVencer30} a vencer 30d</span>
+      </div>
+    </div>
+    <div style="padding:8px 14px;max-height:280px;overflow-y:auto;">
+      <div style="font-size:10px;font-weight:800;color:var(--ct);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">10 mais críticas</div>
+      ${top10.map(mkItem).join('')}
+    </div>
+  </div>`
 }
 
 async function buscarPlan() {
@@ -3730,20 +3810,34 @@ async function gestCarregar() {
 // ══════════════════════════════════════
 //  PAINEL SUPERADMIN — GESTÃO DE USUÁRIOS
 // ══════════════════════════════════════
-const PERFIS = ['analista','coordenador','superadmin','cge','setorial']
+const PERFIS = ['analista','coordenador','superadmin','cge','setorial','controle_interno']
 const SETORIAIS_LISTA = ['FCEE','FCC','FCC-TV','FESPORTE','SED','SIE','SES','SAS','SCC','SECOM','SGG']
+const PERFIL_LABELS = {
+  superadmin:'SUPERADMIN', coordenador:'Coordenador', analista:'Analista',
+  cge:'CGE', setorial:'Setorial / Viewer', controle_interno:'Controle Interno'
+}
+function perfilLabel(p) { return PERFIL_LABELS[p] || p }
+
+// Coordenador só pode gerenciar analistas (nunca outro coordenador nem a si mesmo)
+function admPodeGerenciar(u) {
+  if(U.perfil === 'superadmin') return true
+  if(U.perfil === 'coordenador') return u.perfil !== 'coordenador'
+  return false
+}
 
 function irAdmin() {
-  if(U.setorialAcesso !== 'ADMIN') { toast('Acesso restrito ao SUPERADMIN.','err'); return }
+  const souCoord = U.perfil === 'coordenador'
+  if(U.setorialAcesso !== 'ADMIN' && !souCoord) { toast('Acesso restrito a SUPERADMIN e Coordenadores.','err'); return }
   ativarMenu('admin')
+  const perfisModal = souCoord ? ['analista'] : PERFIS
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--r)"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 14c-2.67 0-5.03-1.33-6.47-3.36.35-1.63 2.95-2.64 6.47-2.64s6.12 1.01 6.47 2.64C17.03 17.67 14.67 19 12 19z"/></svg>
-          Painel SUPERADMIN — Gestão de Usuários
+          ${souCoord ? 'Gestão de Usuários — Meu Grupo' : 'Painel SUPERADMIN — Gestão de Usuários'}
         </div>
-        <div style="font-size:11px;color:var(--ct);margin-top:2px;">Gerencie acessos, perfis e setoriais dos usuários do sistema</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:2px;">${souCoord ? 'Gerencie os analistas do seu grupo' : 'Gerencie acessos, perfis e setoriais dos usuários do sistema'}</div>
       </div>
       <button onclick="abrirNovoUsuario()" style="background:var(--v);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -3759,7 +3853,7 @@ function irAdmin() {
       <div class="fg"><label>Perfil</label>
         <select id="admPerfil" onchange="adminFiltrar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           <option value="">Todos</option>
-          ${PERFIS.map(p=>`<option value="${p}">${p.charAt(0).toUpperCase()+p.slice(1)}</option>`).join('')}
+          ${PERFIS.map(p=>`<option value="${p}">${perfilLabel(p)}</option>`).join('')}
         </select>
       </div>
       <div class="fg"><label>Setorial</label>
@@ -3827,8 +3921,8 @@ function irAdmin() {
             </div>
             <div class="mc-campo">
               <label>Perfil / Nível de Acesso *</label>
-              <select id="admPerfilNovo" onchange="admAjustarCampos()">
-                ${PERFIS.map(p=>`<option value="${p}">${p==='superadmin'?'SUPERADMIN':p==='coordenador'?'Coordenador':p==='analista'?'Analista':p==='cge'?'CGE':p==='setorial'?'Setorial / Viewer':p}</option>`).join('')}
+              <select id="admPerfilNovo" onchange="admAjustarCampos()" ${souCoord?'disabled':''}>
+                ${perfisModal.map(p=>`<option value="${p}">${perfilLabel(p)}</option>`).join('')}
               </select>
             </div>
             <div class="mc-campo">
@@ -3897,7 +3991,9 @@ let _admEditId = null
 
 async function adminCarregar() {
   try {
-    const { data, error } = await db.from('usuarios').select('*').order('nome')
+    let q = db.from('usuarios').select('*').order('nome')
+    if(U.perfil === 'coordenador') q = q.eq('grupo', U.grupo)
+    const { data, error } = await q
     if(error) throw error
     _admUsers = data || []
     adminRenderCounters()
@@ -3948,11 +4044,7 @@ function adminFiltrar() {
 
   const PERFIL_COR = {
     superadmin:'#C8102E', coordenador:'#F57F17', analista:'#1565C0',
-    cge:'#6A1B9A', setorial:'#2E7D32'
-  }
-  const PERFIL_LABEL = {
-    superadmin:'SUPERADMIN', coordenador:'Coordenador', analista:'Analista',
-    cge:'CGE', setorial:'Setorial'
+    cge:'#6A1B9A', setorial:'#2E7D32', controle_interno:'#00838F'
   }
 
   const tbody = document.getElementById('admBody')
@@ -3964,9 +4056,10 @@ function adminFiltrar() {
 
   tbody.innerHTML = lista.map((u,i) => {
     const cor = PERFIL_COR[u.perfil]||'#666'
-    const lbl = PERFIL_LABEL[u.perfil]||u.perfil
+    const lbl = perfilLabel(u.perfil)
     const ult = u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
     const grupo = u.grupo ? `G${u.grupo}` : '—'
+    const podeGerir = admPodeGerenciar(u)
     return `<tr>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td>
@@ -3980,9 +4073,11 @@ function adminFiltrar() {
       <td><span class="bdg ${u.ativo?'bdg-livre':'bdg-devolvido'}">${u.ativo?'● Ativo':'○ Inativo'}</span></td>
       <td style="font-size:10px;color:var(--ct);">${ult}</td>
       <td style="white-space:nowrap;">
+        ${podeGerir ? `
         <button class="btn-acao btn-ver" onclick="admEditarUsuario('${u.id}')" style="margin-right:3px;">✏️ Editar</button>
         <button class="btn-acao" style="background:#fff;color:var(--am);border:1.5px solid var(--am);" onclick="admAbrirSenha('${u.id}','${u.nome.replace(/'/g,"\'")}')">🔑 Senha</button>
         <button class="btn-acao ${u.ativo?'btn-dev':'btn-ass'}" style="margin-left:3px;" onclick="admToggleAtivo('${u.id}',${u.ativo})">${u.ativo?'🚫 Desativar':'✅ Ativar'}</button>
+        ` : '<span style="font-size:10px;color:var(--ct);">Somente SUPERADMIN</span>'}
       </td>
     </tr>`
   }).join('')
@@ -4008,6 +4103,7 @@ function abrirNovoUsuario() {
 function admEditarUsuario(id) {
   const u = _admUsers.find(u=>String(u.id)===String(id))
   if(!u) return
+  if(!admPodeGerenciar(u)) { toast('Você não pode editar este usuário.','err'); return }
   _admEditId = id
   document.getElementById('moAdmUserTit').textContent = 'Editar Usuário — ' + u.nome
   document.getElementById('admNome').value = u.nome||''
@@ -4028,6 +4124,12 @@ function admAjustarCampos() {
   const perfil = document.getElementById('admPerfilNovo')?.value
   const grupoWrap = document.getElementById('admGrupoWrap')
   if(grupoWrap) grupoWrap.style.display = perfil==='analista'||perfil==='coordenador' ? '' : 'none'
+  // Coordenador não pode escolher o grupo — fica travado no grupo dele
+  const grupoSel = document.getElementById('admGrupoNovo')
+  if(grupoSel && U.perfil === 'coordenador') {
+    grupoSel.value = U.grupo || ''
+    grupoSel.disabled = true
+  }
 }
 
 async function admSalvarUsuario() {
@@ -4049,6 +4151,14 @@ async function admSalvarUsuario() {
   if(!_admEditId && !senha) { showErr('Informe a senha para novo usuário.'); return }
   if(!perfil || !setorial) { showErr('Informe perfil e setorial.'); return }
 
+  if(U.perfil === 'coordenador') {
+    if(perfil !== 'analista') { showErr('Coordenadores só podem cadastrar/editar analistas.'); return }
+    if(_admEditId) {
+      const alvo = _admUsers.find(u=>String(u.id)===String(_admEditId))
+      if(!alvo || !admPodeGerenciar(alvo)) { showErr('Você não pode editar este usuário.'); return }
+    }
+  }
+
   const btn = document.getElementById('admSalvarBtn')
   btn.disabled = true; btn.textContent = 'Salvando...'
 
@@ -4056,9 +4166,8 @@ async function admSalvarUsuario() {
     const payload = {
       nome, cpf, perfil,
       setorial_id: setorial,
-      grupo: grupo ? parseInt(grupo) : null,
-      ativo,
-      atualizado_em: new Date().toISOString()
+      grupo: U.perfil === 'coordenador' ? (U.grupo || null) : (grupo ? parseInt(grupo) : null),
+      ativo
     }
     if(senha) payload.senha_hash = senha  // superadmin define senha em texto; API pode fazer hash
 
@@ -4085,6 +4194,8 @@ async function admSalvarUsuario() {
 
 let _admSenhaId = null
 function admAbrirSenha(id, nome) {
+  const u = _admUsers.find(u=>String(u.id)===String(id))
+  if(u && !admPodeGerenciar(u)) { toast('Você não pode redefinir a senha deste usuário.','err'); return }
   _admSenhaId = id
   document.getElementById('admSenhaInfo').innerHTML = `Redefinir senha de: <strong>${nome}</strong>`
   document.getElementById('admNovaSenha').value = ''
@@ -4096,8 +4207,7 @@ async function admRedefinirSenha() {
   if(!nova || nova.length < 4) { toast('Senha muito curta (mín. 4 caracteres).','err'); return }
   try {
     const { error } = await db.from('usuarios').update({
-      senha_hash: nova,
-      atualizado_em: new Date().toISOString()
+      senha_hash: nova
     }).eq('id', _admSenhaId)
     if(error) throw error
     fm('moAdmSenha')
@@ -4107,15 +4217,159 @@ async function admRedefinirSenha() {
 }
 
 async function admToggleAtivo(id, atual) {
+  const u = _admUsers.find(u=>String(u.id)===String(id))
+  if(u && !admPodeGerenciar(u)) { toast('Você não pode alterar o status deste usuário.','err'); return }
   const acao = atual ? 'desativar' : 'ativar'
   if(!confirm(`Deseja ${acao} este usuário?`)) return
   try {
     const { error } = await db.from('usuarios').update({
-      ativo: !atual, atualizado_em: new Date().toISOString()
+      ativo: !atual
     }).eq('id', id)
     if(error) throw error
     toast(`Usuário ${atual?'desativado':'ativado'} com sucesso!`,'ok')
     await adminCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════
+//  CONTROLE INTERNO
+// ══════════════════════════════════════
+async function irCI() {
+  ativarMenu('ci')
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Controle Interno</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">PCs enviadas para análise do Controle Interno — mais antigas primeiro</div>
+    <div id="ciCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
+
+    <!-- Modal devolver ao analista -->
+    <div class="mo" id="moCiDev">
+      <div class="mc" style="width:420px;">
+        <div class="mch am">
+          <h3>Devolver ao Analista</h3>
+          <button class="mcx" onclick="fm('moCiDev')">✕</button>
+        </div>
+        <div class="mcb">
+          <div class="mci am" id="ciDevInfo"></div>
+          <div class="mc-campo">
+            <label>Justificativa *</label>
+            <textarea id="ciDevJust" rows="3" placeholder="Explique o motivo da devolução..." style="resize:vertical;"></textarea>
+          </div>
+          <div class="mcbt">
+            <button class="mccn" onclick="fm('moCiDev')">Cancelar</button>
+            <button class="mcok" id="ciDevBtn" onclick="ciConfirmarDevolucao()">✓ Devolver</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+  await ciCarregar()
+}
+
+let _ciDados = []
+let _ciDevAlvo = null
+
+async function ciCarregar() {
+  const cont = document.getElementById('ciCont')
+  if(!cont) return
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas?enviado_ci=true&limit=9999`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const pcs = (j.data||[]).filter(p => p.dt_envio_ci)
+    pcs.sort((a,b) => new Date(a.dt_envio_ci) - new Date(b.dt_envio_ci))
+    _ciDados = pcs
+    ciRender(pcs)
+  } catch(e) {
+    cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
+}
+
+function ciRender(pcs) {
+  const cont = document.getElementById('ciCont')
+  if(!cont) return
+  if(!pcs.length) {
+    cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhuma PC no Controle Interno no momento.</div>'
+    return
+  }
+  const hoje = Date.now()
+  const linhas = pcs.map((p,i) => {
+    const dias = Math.floor((hoje - new Date(p.dt_envio_ci).getTime()) / 86400000)
+    const cor = dias>60?'var(--r)':dias>30?'var(--am)':'var(--ct)'
+    return `<tr>
+      <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
+      <td style="font-size:11px;font-weight:600;color:var(--az);cursor:pointer;white-space:nowrap;" onclick="abrirTR('${p.tr}')">${p.tr||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
+      <td style="font-size:11px;max-width:220px;"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.entidade||''}">${p.entidade||'—'}</div></td>
+      <td style="font-size:11px;">${p.analista_nome||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;">${new Date(p.dt_envio_ci).toLocaleDateString('pt-BR')}</td>
+      <td style="font-size:12px;font-weight:800;color:${cor};text-align:center;">${dias}</td>
+      <td><button class="btn-acao btn-dev" onclick="ciAbrirDevolucao('${p.codigo_pc}')">↩ Devolver ao analista</button></td>
+    </tr>`
+  }).join('')
+  cont.innerHTML = `
+    <div class="tbl-wrap"><div style="overflow-x:auto;">
+      <table><thead><tr>
+        <th style="width:30px;">#</th><th>TR</th><th>Código PC</th><th>Entidade</th>
+        <th>Analista</th><th>Enviado em</th><th>Dias parado</th><th>Ação</th>
+      </tr></thead><tbody>${linhas}</tbody></table>
+    </div></div>`
+}
+
+function ciAbrirDevolucao(codigoPc) {
+  const p = _ciDados.find(x=>x.codigo_pc===codigoPc)
+  if(!p) return
+  _ciDevAlvo = p
+  document.getElementById('ciDevInfo').innerHTML = `TR: <strong>${p.tr||'—'}</strong> — PC: <strong>${codigoPc}</strong>`
+  document.getElementById('ciDevJust').value = ''
+  document.getElementById('moCiDev').classList.add('open')
+}
+
+async function ciConfirmarDevolucao() {
+  const just = document.getElementById('ciDevJust').value.trim()
+  if(!just || just.length < 10) { toast('Escreva uma justificativa (mín. 10 caracteres).','err'); return }
+  const p = _ciDevAlvo
+  if(!p) return
+  const btn = document.getElementById('ciDevBtn')
+  btn.disabled = true; btn.textContent = 'Devolvendo...'
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(p.codigo_pc)}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ enviado_ci: false, dt_envio_ci: null })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+
+    await fetch(`${API_URL}/anotacoes_tr`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tr: p.tr, analista_id: U.id, analista_nome: U.nome,
+        texto: `[Devolvido pelo Controle Interno — PC ${p.codigo_pc}] ${just}`
+      })
+    })
+
+    fm('moCiDev')
+    toast('PC devolvida ao analista!','ok')
+    ciCarregar()
+  } catch(e) {
+    toast('Erro ao devolver: '+e.message,'err')
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Devolver'
+  }
+}
+
+// Chamado pelo botão "Enviar ao Controle Interno" no modal abrirTR
+async function enviarAoCI(codigoPc) {
+  if(!confirm('Enviar esta PC ao Controle Interno?')) return
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(codigoPc)}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ enviado_ci: true, dt_envio_ci: new Date().toISOString() })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast('PC enviada ao Controle Interno!','ok')
+    if(TR_DETALHE_ATUAL) abrirTR(TR_DETALHE_ATUAL)
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
