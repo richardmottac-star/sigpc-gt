@@ -519,6 +519,7 @@ tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
 .zebra-b { background:#F5F8F6; }
 .grupo-sep td { background:#F5F8F6; padding:6px 10px; font-size:11px; font-weight:800; border-top:1.5px solid var(--cb); }
 tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
+.proc-sgpe { font-family:var(--fonte-corpo); text-transform:uppercase; letter-spacing:0.3px; }
 
 /* ── Botões: sombra mais forte no hover, reduzida no active ── */
 .btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
@@ -1337,14 +1338,15 @@ function irDash() {
 function irEst() {
   ativarMenu('est')
   const isAdmin = U.setorialAcesso === 'ADMIN'
+  const vePorPadrao = U.perfil === 'superadmin' || U.perfil === 'coordenador'
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
       <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR, entidade ou SGPe" style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
-          <option value="">Todos</option>
-          <option value="Livre">Livre</option>
+          <option value="" ${vePorPadrao?'selected':''}>Todos</option>
+          <option value="Livre" ${vePorPadrao?'':'selected'}>Livre</option>
           <option value="Em análise">Em Análise</option>
           <option value="Concluída">Concluída</option>
         </select>
@@ -1468,7 +1470,7 @@ function renderEst(rows) {
 
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
-      <td style="font-family:'Courier New',monospace;white-space:nowrap;font-size:11px;">${t.processo_mae||'—'}</td>
+      <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${normalizarProcesso(t.processo_mae)}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
@@ -1630,7 +1632,7 @@ async function abrirTR(tr) {
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
-        <td style="${tdS}white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_pc||'—'}</td>
+        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
         <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
         <td style="${tdS}">${p.codigo_nl||'—'}</td>
         <td style="${tdS}text-align:right;">${valorFmt}</td>
@@ -1643,7 +1645,7 @@ async function abrirTR(tr) {
     const thS = 'position:sticky;top:0;background:var(--fundo-app);padding:6px 8px;font-size:13px;z-index:1;'
     document.getElementById('moTRB').innerHTML = `
       <div class="mci" style="margin-bottom:12px;">
-        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span style="font-family:'Courier New',monospace;">${pcs[0].processo_mae||'—'}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
+        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span class="proc-sgpe">${normalizarProcesso(pcs[0].processo_mae)}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
         <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
       </div>
       <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
@@ -1670,6 +1672,33 @@ async function abrirTR(tr) {
 
 function escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+// Normaliza processo SGPe: sigla maiúscula + espaço + número com zeros à esquerda + /ano
+// Ex: "FCEE390/2019" -> "FCEE 00000390/2019" | "ADR17867/2017" -> "ADR17 00000867/2017"
+function normalizarProcesso(str) {
+  if(!str) return '—'
+  const s = String(str).trim()
+  if(!s) return '—'
+
+  const mSigla = s.match(/^([A-Za-zÀ-ÿ]+)\s*(.+)$/)
+  if(!mSigla) return s.toUpperCase()
+
+  const siglaBase = mSigla[1].toUpperCase()
+  const resto = mSigla[2].trim()
+
+  if(siglaBase === 'ADR' || siglaBase === 'SDR') {
+    const mRegiao = resto.match(/^(\d{2})\s*(\d+)\s*\/\s*(\d+)$/)
+    if(!mRegiao) return `${siglaBase} ${resto}`
+    const numero = mRegiao[2].padStart(8,'0')
+    return `${siglaBase}${mRegiao[1]} ${numero}/${mRegiao[3]}`
+  }
+
+  const digitos = siglaBase === 'SST' ? 4 : 8
+  const mNum = resto.match(/^(\d+)\s*\/\s*(\d+)$/)
+  if(!mNum) return `${siglaBase} ${resto}`
+  const numero = mNum[1].padStart(digitos, '0')
+  return `${siglaBase} ${numero}/${mNum[2]}`
 }
 
 async function carregarAnotacoes(tr) {
@@ -3168,9 +3197,9 @@ function relRenderTabela() {
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
       <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
-      <td style="font-size:10px;white-space:nowrap;font-family:'Courier New',monospace;">${r.processo_mae||'—'}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${normalizarProcesso(r.processo_mae)}</td>
       <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
-      <td style="font-size:10px;white-space:nowrap;font-family:'Courier New',monospace;">${r.processo_pc||'—'}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${normalizarProcesso(r.processo_pc)}</td>
       <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
       <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
@@ -3201,7 +3230,7 @@ function relExportExcel() {
   const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
   let csv = '\uFEFF#;Analista;TR;SGPe MÃE;Código PC;SGPe PC;Entidade;Status;Baixada\n'
   _relDados.forEach((r,i) => {
-    csv += `${i+1};"${r.analista_completo||''}";${r.tr||''};${r.processo_mae||''};${r.codigo_pc||''};${r.processo_pc||''};"${(r.entidade||'').replace(/"/g,"'")}";${r.status||''};${r.status==='baixada'?'Sim':'Não'}\n`
+    csv += `${i+1};"${r.analista_completo||''}";${r.tr||''};${normalizarProcesso(r.processo_mae)};${r.codigo_pc||''};${normalizarProcesso(r.processo_pc)};"${(r.entidade||'').replace(/"/g,"'")}";${r.status||''};${r.status==='baixada'?'Sim':'Não'}\n`
   })
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
@@ -3222,7 +3251,7 @@ function relExportPDF() {
   <p>Gerado em ${dt} | Total: ${_relDados.length} registros | Baixadas: ${baixadas} (${_relDados.length>0?Math.round(baixadas/_relDados.length*100):0}%)</p>
   <table><thead><tr><th>#</th><th>Analista</th><th>TR</th><th>SGPe MÃE</th><th>Código PC</th><th>SGPe PC</th><th>Entidade</th><th>Status</th><th>Baixada</th></tr></thead>
   <tbody>${_relDados.map((r,i)=>`<tr style="${r.status==='baixada'?'background:#F0FAF4':''}">
-    <td>${i+1}</td><td>${r.analista_completo||'—'}</td><td>${r.tr||'—'}</td><td>${r.processo_mae||'—'}</td><td>${r.codigo_pc||'—'}</td><td>${r.processo_pc||'—'}</td>
+    <td>${i+1}</td><td>${r.analista_completo||'—'}</td><td>${r.tr||'—'}</td><td>${normalizarProcesso(r.processo_mae)}</td><td>${r.codigo_pc||'—'}</td><td>${normalizarProcesso(r.processo_pc)}</td>
     <td>${(r.entidade||'—').substring(0,50)}</td>
     <td>${r.status||'—'}</td><td class="${r.status==='baixada'?'bx':''}">${r.status==='baixada'?'✓ Sim':'Não'}</td>
   </tr>`).join('')}</tbody></table></body></html>`
@@ -3380,7 +3409,7 @@ function renderAlertasPrazo(alertas) {
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
         <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
-        <div style="font-size:9px;color:var(--ct);font-family:'Courier New',monospace;white-space:nowrap;">SGPe PC: ${r.processo_pc||'—'}</div>
+        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${normalizarProcesso(r.processo_pc)}</span></div>
       </div>
       <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}</span>
     </div>`
@@ -3536,7 +3565,7 @@ function renderPlan(rows) {
         <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${st.cor};color:${st.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${st.icone} ${st.label}</span>
       </td>
       <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}</td>
-      <td style="font-family:'Courier New',monospace;white-space:nowrap;font-size:11px;">${r.processo_mae||'—'}</td>
+      <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${normalizarProcesso(r.processo_mae)}</td>
       <td style="max-width:220px;">
         <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.entidade||''}">${r.entidade||'—'}</div>
       </td>
@@ -4233,9 +4262,9 @@ function ciRender(pcs) {
     return `<tr>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);cursor:pointer;white-space:nowrap;" onclick="abrirTR('${p.tr}')">${p.tr||'—'}</td>
-      <td style="font-size:11px;white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_mae||'—'}</td>
+      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_mae)}</td>
       <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
-      <td style="font-size:11px;white-space:nowrap;font-family:'Courier New',monospace;">${p.processo_pc||'—'}</td>
+      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
       <td style="font-size:11px;max-width:220px;"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.entidade||''}">${p.entidade||'—'}</div></td>
       <td style="font-size:11px;">${p.analista_nome||'—'}</td>
       <td style="font-size:11px;white-space:nowrap;">${new Date(p.dt_envio_ci).toLocaleDateString('pt-BR')}</td>
@@ -4340,7 +4369,7 @@ async function verProdDetalhe(analistaId, nome) {
         ${baixadas.slice(0,50).map(p=>`<div class="nl-row">
           <div style="min-width:0;">
             <div style="font-size:10px;font-weight:600;white-space:nowrap;">${p.tr||'—'} — ${p.codigo_pc||'—'}</div>
-            <div style="font-size:9px;color:var(--ct);font-family:'Courier New',monospace;white-space:nowrap;">SGPe mãe ${p.processo_mae||'—'} · SGPe PC ${p.processo_pc||'—'}</div>
+            <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe mãe <span class="proc-sgpe">${normalizarProcesso(p.processo_mae)}</span> · SGPe PC <span class="proc-sgpe">${normalizarProcesso(p.processo_pc)}</span></div>
           </div>
           <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.entidade||'—'}</span>
           <span class="bdg bdg-livre" style="font-size:9px;">${p.parecer_tipo||'Baixada'}</span>
