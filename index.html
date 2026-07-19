@@ -138,7 +138,7 @@ tr:last-child td{border-bottom:none;}
 .bdg-dev{background:#FEF3E0;color:#9A5700;}
 .bdg-devolvido{background:#F0F0F0;color:#555;}
 .bdg-concluida{background:#EDE7F6;color:#4527A0;}
-.tec-chip{display:inline-flex;align-items:center;gap:4px;background:var(--vbg);border:1px solid #B8D8C6;border-radius:20px;padding:2px 7px;font-size:10px;color:var(--v);font-weight:600;}
+.tec-chip{display:inline-flex;align-items:center;gap:4px;background:var(--chip-cinza-bg);border:1px solid #E0E3E8;border-radius:20px;padding:2px 7px;font-size:10px;color:var(--chip-cinza-tx);font-weight:600;}
 .btn-acao{border-radius:5px;font-family:'Barlow',sans-serif;font-size:10px;font-weight:700;padding:4px 9px;cursor:pointer;white-space:nowrap;border:1.5px solid;}
 .btn-ass{background:var(--v);color:#fff;border-color:var(--v);}
 .btn-ass:hover{background:var(--vm);}
@@ -1338,17 +1338,18 @@ function irDash() {
 function irEst() {
   ativarMenu('est')
   const isAdmin = U.setorialAcesso === 'ADMIN'
-  const vePorPadrao = U.perfil === 'superadmin' || U.perfil === 'coordenador'
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
       <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR, entidade ou SGPe" style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
-          <option value="" ${vePorPadrao?'selected':''}>Todos</option>
-          <option value="Livre" ${vePorPadrao?'':'selected'}>Livre</option>
-          <option value="Em análise">Em Análise</option>
-          <option value="Concluída">Concluída</option>
+          <option value="">Todos</option>
+          <option value="livre" selected>Livre</option>
+          <option value="analise">Em Análise</option>
+          <option value="diligencia">Diligência</option>
+          <option value="reanalise">Reanálise</option>
+          <option value="baixada">Baixada</option>
         </select>
       </div>
       ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
@@ -1376,7 +1377,14 @@ function irEst() {
 let TRS_EST = []  // resultado completo (já filtrado no servidor por setorial/busca), paginado no cliente
 let EST_MOSTRAR_SEP = true
 let EST_GRUPOS_CONTAGEM = {}
-const EST_ORDEM_EXIBICAO = ['Em análise','Livre','Concluída']
+const EST_ORDEM_EXIBICAO = ['livre','analise','diligencia','reanalise','baixada']
+const EST_STATUS_INFO = {
+  livre:      {label:'Livre',      cls:'st-livre'},
+  analise:    {label:'Em Análise', cls:'st-analise'},
+  diligencia: {label:'Diligência', cls:'st-diligencia'},
+  reanalise:  {label:'Reanálise',  cls:'st-reanalise'},
+  baixada:    {label:'Baixada',    cls:'st-baixada'},
+}
 
 async function buscar() {
   const tbody = document.getElementById('estBody')
@@ -1401,10 +1409,13 @@ async function buscar() {
     TRS_EST = (j.data||[]).map(t => {
       const totalPcs = parseInt(t.total_pcs)||0
       const baixadas = parseInt(t.baixadas)||0
-      const status = !t.analista_nome ? 'Livre'
-        : baixadas >= totalPcs ? 'Concluída'
-        : 'Em análise'
-      return { ...t, total_pcs: totalPcs, total_nls: parseInt(t.total_nls)||0, baixadas, statusDerivado: status }
+      const statusList = t.status||[]
+      const statusDerivado = !t.analista_nome ? 'livre'
+        : baixadas >= totalPcs ? 'baixada'
+        : statusList.includes('reanalise') ? 'reanalise'
+        : statusList.includes('diligencia') ? 'diligencia'
+        : 'analise'
+      return { ...t, total_pcs: totalPcs, total_nls: parseInt(t.total_nls)||0, baixadas, statusDerivado }
     })
     if(st) TRS_EST = TRS_EST.filter(t => t.statusDerivado === st)
 
@@ -1436,7 +1447,6 @@ function renderEst(rows) {
 
   // superadmin em modo ADMIN não assume (só gerencia); em modo analista (FCEE etc.) pode assumir
   const podeAssumir = U.setorialAcesso !== 'ADMIN'
-  const bdgClass = {'Livre':'st-livre','Em análise':'st-analise','Concluída':'st-concluida'}
   const MAPA_PLAN_EST = {
     'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
     'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
@@ -1453,11 +1463,12 @@ function renderEst(rows) {
     const statusAnterior = idxGlobal>0 ? TRS_EST[idxGlobal-1].statusDerivado : null
     if(EST_MOSTRAR_SEP && t.statusDerivado !== statusAnterior) {
       const qtd = EST_GRUPOS_CONTAGEM[t.statusDerivado]||0
-      html += `<tr class="grupo-sep"><td colspan="9"><span class="bdg ${bdgClass[t.statusDerivado]||''}">${t.statusDerivado}</span> — ${qtd} TR${qtd!==1?'s':''}</td></tr>`
+      const infoSep = EST_STATUS_INFO[t.statusDerivado] || {label:t.statusDerivado||'—',cls:''}
+      html += `<tr class="grupo-sep"><td colspan="9"><span class="bdg ${infoSep.cls}">${infoSep.label}</span> — ${qtd} TR${qtd!==1?'s':''}</td></tr>`
     }
 
     let acoes
-    if(t.statusDerivado==='Livre' && podeAssumir) {
+    if(t.statusDerivado==='livre' && podeAssumir) {
       acoes = `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
     } else if(isMeuTR(t)) {
       acoes = `<button class="btn-acao btn-ver" onclick="abrirTR('${t.tr}')">Ver</button>`
@@ -1467,6 +1478,7 @@ function renderEst(rows) {
     const analistaH = t.analista_nome
       ? `<span class="tec-chip">${t.analista_nome.split(' ')[0]}</span>`
       : '<span style="color:var(--ct)">—</span>'
+    const infoSt = EST_STATUS_INFO[t.statusDerivado] || {label:t.statusDerivado||'—',cls:''}
 
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
@@ -1475,8 +1487,8 @@ function renderEst(rows) {
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
       <td style="text-align:center;">${t.baixadas}</td>
-      <td>${analistaH}</td>
-      <td><span class="bdg ${bdgClass[t.statusDerivado]||''}">${t.statusDerivado}</span></td>
+      <td style="text-align:center;">${analistaH}</td>
+      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span></td>
       <td>${acoes}</td>
     </tr>`
   })
