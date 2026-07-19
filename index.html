@@ -1835,6 +1835,14 @@ async function fetchMetasVigentes() {
   return mapa
 }
 
+// Contagem total de prestacoes_contas, sem nenhum filtro (setorial, período, status etc.)
+async function fetchTotalPCs() {
+  const r = await fetch(`${API_URL}/prestacoes_contas?limit=1`)
+  const j = await r.json()
+  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  return j.count || 0
+}
+
 async function irProd() {
   ativarMenu('prod')
   const podeFiltrarGrupo = U.perfil === 'coordenador' || U.perfil === 'superadmin'
@@ -2456,8 +2464,8 @@ async function cgeGerar() {
 
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
-    const [todosPcs, metaPorId, usersRes] = await Promise.all([
-      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*')
+    const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
+      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*'), fetchTotalPCs()
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
@@ -2511,7 +2519,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(dtInicio+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, cargaHistoricaNoPeriodo }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     // Renderizar quadros
     const q2linhas = _cgeDados.map((d,i) => {
@@ -2657,7 +2665,8 @@ function cgeExportExcel() {
 function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0 } = _cgeParams||{}
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0 } = _cgeParams||{}
+  const totalGeralPCsFmt = totalGeralPCs.toLocaleString('pt-BR')
   const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
   const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
   const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
@@ -2813,8 +2822,8 @@ ${HDR}
   <p><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</p>
   <p><strong>Processo:</strong> CGE nº 727/2025</p>
   <p><strong>Período de Monitoramento:</strong> ${periodoLong}</p>
-  <p><strong>Número PCs Total:</strong> ${totalPlanoFmt} PCs (conforme Plano de Ação)</p>
-  <p><strong>Número de servidores GT-PC:</strong> ${numTec+2} servidores (${numTec} técnicos + 2 coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</p>
+  <p><strong>Número PCs Total:</strong> ${totalGeralPCsFmt} PCs (total geral de prestações de contas no sistema)</p>
+  <p><strong>Número de servidores GT-PC:</strong> ${numTec+3} servidores (${numTec} técnicos + 3 coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</p>
 </div>
 </div>
 
@@ -3032,6 +3041,16 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
         <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
       </div>
     </div>
+    <!-- Gustavo — coordenador do Grupo 3. Descomentar e preencher nome completo/portaria quando disponíveis.
+         Ajustar .ass-col para width:31% (ou similar) no CSS acima para caber 3 colunas lado a lado.
+    <div class="ass-col">
+      <div class="ass-linha">
+        <div class="ass-nome">[NOME COMPLETO DO GUSTAVO]</div>
+        <div class="ass-cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
+        <div class="ass-cargo">[PORTARIA DE NOMEAÇÃO]</div>
+      </div>
+    </div>
+    -->
   </div>
   <div class="ass-center">
     <div class="ass-linha">
