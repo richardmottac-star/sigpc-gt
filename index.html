@@ -120,6 +120,18 @@ th{background:var(--fundo-app);padding:8px 11px;text-align:left;font-size:10px;f
 td{padding:7px 11px;border-bottom:1px solid #EEF2EF;font-size:12px;vertical-align:middle;}
 tr:hover td{background:#F8FBF9;}
 tr:last-child td{border-bottom:none;}
+
+/* ═══════ RELATÓRIO CGE — visual de documento oficial (papel) ═══════ */
+.cge-doc-wrap{background:#E8E8E8;border-radius:10px;padding:24px 12px;margin-bottom:12px;}
+.cge-doc{max-width:820px;margin:0 auto;background:#fff;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-family:Arial,Helvetica,sans-serif;}
+.cge-doc, .cge-doc p, .cge-doc div, .cge-doc span, .cge-doc td, .cge-doc th, .cge-doc strong{color:#000;}
+.cge-doc .cge-verde{color:#006B3C;}
+.cge-doc p{font-size:10px;}
+.cge-doc table{width:100%;border-collapse:collapse;font-size:9px;margin:8px 0;}
+.cge-doc th, .cge-doc td{border:1px solid #000;padding:5px 7px;font-size:9px;vertical-align:middle;text-transform:none;white-space:normal;}
+.cge-doc th{background:#E8E8E8;font-weight:700;text-align:center;}
+.cge-doc th.th2{background:#F0F0F0;}
+.cge-doc tfoot td{background:#E8E8E8;font-weight:700;}
 .bdg{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
 .bdg-livre{background:#E0F2E9;color:var(--verde-primario);}
 .bdg-analise{background:#E0EEFA;color:#1A6BB5;}
@@ -2526,14 +2538,13 @@ async function cgeGerar() {
     // Renderizar quadros — Quadro 2 e Quadro 4 sempre ordenados por nome
     const q2Sorted = [..._cgeDados].sort((a,b) => a.u.nome.localeCompare(b.u.nome))
     const q2linhas = q2Sorted.map((d,i) => {
-      const cor = d.pctMeta===null?'':d.pctMeta>=70?'var(--verde-claro-1)':d.pctMeta>=40?'#FFF8E1':''
-      return `<tr style="background:${cor}">
+      return `<tr>
         <td>${i+1}</td>
-        <td style="font-weight:700;">${d.u.nome}</td>
-        <td style="text-align:center;">${d.coord}</td>
+        <td style="font-weight:700;text-align:left;">${d.u.nome}</td>
+        <td>${d.coord}</td>
         <td style="text-align:right;">${d.meta||'—'}</td>
         <td style="text-align:right;">${d.bxSecretario}</td>
-        <td style="text-align:right;color:var(--v);font-weight:700;">${d.bxTecnico}</td>
+        <td style="text-align:right;font-weight:700;">${d.bxTecnico}</td>
         <td style="text-align:right;font-weight:700;">${d.totalBaixadas}</td>
         <td style="text-align:right;font-weight:700;">${d.pctMeta===null?'—':d.pctMeta+'%'}</td>
       </tr>`
@@ -2545,25 +2556,31 @@ async function cgeGerar() {
       .sort((a,b) => a.nome.localeCompare(b.nome))
     const q4linhas = q4Sorted.map((d,i) => `<tr>
         <td>${i+1}</td>
-        <td style="font-weight:700;">${d.nome}</td>
+        <td style="font-weight:700;text-align:left;">${d.nome}</td>
         <td style="text-align:right;font-weight:700;">${d.emAnd}</td>
       </tr>`).join('')
 
     cont.innerHTML = `
-      <!-- Cabeçalho institucional -->
-      <div style="background:#FCFDFC;border-radius:10px;padding:16px 20px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
+        <button onclick="cgeExportExcel()" style="background:var(--verde-escuro);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
+        <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
+      </div>
+      <div class="cge-doc-wrap"><div class="cge-doc">
+        <!-- Cabeçalho institucional -->
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
-          <img src="${LOGO_SC}" alt="Governo de Santa Catarina" style="height:42px;width:auto;flex-shrink:0;">
+          <div style="width:200px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            <img src="${LOGO_SC}" alt="Governo de Santa Catarina" style="height:60px;width:auto;">
+          </div>
           <div style="flex:1;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:var(--ct);letter-spacing:1px;">ESTADO DE SANTA CATARINA</div>
-            <div style="font-size:12px;font-weight:800;color:var(--te);">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL — GABINETE DA PRESIDÊNCIA</div>
-            <div style="font-size:11px;color:var(--ct);">SETOR DE PRESTAÇÃO DE CONTAS</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:1px;">ESTADO DE SANTA CATARINA</div>
+            <div class="cge-verde" style="font-size:12px;font-weight:800;">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL — GABINETE DA PRESIDÊNCIA</div>
+            <div style="font-size:11px;">SETOR DE PRESTAÇÃO DE CONTAS</div>
           </div>
         </div>
-        <div style="border-top:2px solid var(--verde-escuro);margin-bottom:8px;"></div>
-        <div style="text-align:center;background:var(--fundo-app);border-radius:8px;padding:10px;margin:8px 0;">
-          <div style="font-size:14px;font-weight:800;color:var(--v);">RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO</div>
-          <div style="font-size:12px;font-weight:700;color:var(--te);">ANÁLISE DE PRESTAÇÕES DE CONTAS</div>
+        <div style="border-top:2px solid #000;margin-bottom:8px;"></div>
+        <div style="text-align:center;border:1px solid #000;padding:10px;margin:8px 0;">
+          <div style="font-size:14px;font-weight:800;">RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO</div>
+          <div style="font-size:12px;font-weight:700;">ANÁLISE DE PRESTAÇÕES DE CONTAS</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-top:8px;">
           <div><strong>Órgão/Entidade:</strong> FCEE - Fundação Catarinense de Educação Especial - UG 450021</div>
@@ -2573,66 +2590,62 @@ async function cgeGerar() {
           <div><strong>Meta do Período:</strong> ${metaTotal.toLocaleString('pt-BR')} PCs (soma das metas vigentes por analista)</div>
           <div><strong>Servidores GT-PC:</strong> ${_cgeDados.length} servidores</div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
-          <button onclick="cgeExportExcel()" style="background:var(--verde-escuro);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
-          <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
+
+        <!-- Quadro 1 -->
+        <div style="margin-top:18px;">
+          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">1. QUADRO GERAL DE METAS</div>
+          <table><thead><tr>
+            <th>Período</th><th>Meta do Período</th>
+            <th>PCs Baixadas</th>
+            <th>Execução (%)</th>
+            <th>Estoque</th>
+          </tr></thead><tbody><tr>
+            <td style="font-weight:700;text-align:left;">${periodoTxt}</td>
+            <td style="text-align:right;font-weight:700;">${metaTotal||'—'}</td>
+            <td style="text-align:right;font-weight:800;">${totBx}</td>
+            <td style="text-align:right;font-weight:800;">${totPctMeta}%</td>
+            <td style="text-align:right;">${estoque.toLocaleString('pt-BR')}</td>
+          </tr></tbody></table>
+          <div style="font-size:9px;font-style:italic;margin-top:4px;">
+            Nota: das ${totBx} PCs baixadas no período, ${cargaHistoricaNoPeriodo} vieram da carga histórica de migração (origem_baixa = carga_historica). Gerado em ${dt} via SIGPC-GT v2.1.
+          </div>
         </div>
-      </div>
 
-      <!-- Quadro 1 -->
-      <div class="tbl-wrap" style="margin-bottom:12px;">
-        <div class="tbl-header"><strong>1. QUADRO GERAL DE METAS</strong></div>
-        <div style="overflow-x:auto;"><table><thead><tr>
-          <th>Período</th><th style="text-align:center;">Meta do Período</th>
-          <th style="text-align:center;">PCs Baixadas</th>
-          <th style="text-align:center;">Execução (%)</th>
-          <th style="text-align:center;">Estoque</th>
-        </tr></thead><tbody><tr>
-          <td style="font-weight:700;">${periodoTxt}</td>
-          <td style="text-align:center;font-weight:700;">${metaTotal||'—'}</td>
-          <td style="text-align:center;font-weight:800;color:var(--v);">${totBx}</td>
-          <td style="text-align:center;font-weight:800;color:${parseFloat(totPctMeta)>=70?'var(--v)':parseFloat(totPctMeta)>=40?'var(--am)':'var(--r)'};">${totPctMeta}%</td>
-          <td style="text-align:center;">${estoque.toLocaleString('pt-BR')}</td>
-        </tr></tbody></table></div>
-        <div style="padding:8px 12px;font-size:10px;color:var(--ct);background:var(--fundo-app);">
-          Nota: das ${totBx} PCs baixadas no período, ${cargaHistoricaNoPeriodo} vieram da carga histórica de migração (origem_baixa = carga_historica). Gerado em ${dt} via SIGPC-GT v2.1.
+        <!-- Quadro 2 -->
+        <div style="margin-top:18px;">
+          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">2. DESEMPENHO INDIVIDUAL DOS SERVIDORES DO GT-PC</div>
+          <table><thead><tr>
+            <th>#</th><th>Servidor</th><th>Coordenador</th>
+            <th>Meta</th>
+            <th>Bx. Secretário</th>
+            <th>Bx. Técnico</th>
+            <th>Total Baixas</th>
+            <th>% Meta</th>
+          </tr></thead>
+          <tbody>${q2linhas}</tbody>
+          <tfoot><tr>
+            <td colspan="3" style="text-align:left;">TOTAL GERAL — ${_cgeDados.length} servidores</td>
+            <td style="text-align:right;">${metaTotal||'—'}</td>
+            <td style="text-align:right;">${totBxSec}</td>
+            <td style="text-align:right;">${totBxTec}</td>
+            <td style="text-align:right;">${totBx}</td>
+            <td style="text-align:right;">${totPctMeta}%</td>
+          </tr></tfoot></table>
         </div>
-      </div>
 
-      <!-- Quadro 2 -->
-      <div class="tbl-wrap" style="margin-bottom:12px;">
-        <div class="tbl-header"><strong>2. DESEMPENHO INDIVIDUAL DOS SERVIDORES DO GT-PC</strong></div>
-        <div style="overflow-x:auto;"><table><thead><tr>
-          <th>#</th><th>Servidor</th><th>Coordenador</th>
-          <th style="text-align:right;">Meta</th>
-          <th style="text-align:right;">Bx. Secretário</th>
-          <th style="text-align:right;">Bx. Técnico</th>
-          <th style="text-align:right;">Total Baixas</th>
-          <th style="text-align:right;">% Meta</th>
-        </tr></thead>
-        <tbody>${q2linhas}</tbody>
-        <tfoot><tr style="background:var(--fundo-app);font-weight:700;">
-          <td colspan="3">TOTAL GERAL — ${_cgeDados.length} servidores</td>
-          <td style="text-align:right;">${metaTotal||'—'}</td>
-          <td style="text-align:right;">${totBxSec}</td>
-          <td style="text-align:right;color:var(--v);">${totBxTec}</td>
-          <td style="text-align:right;">${totBx}</td>
-          <td style="text-align:right;">${totPctMeta}%</td>
-        </tr></tfoot></table></div>
-      </div>
-
-      <!-- Quadro 4 -->
-      <div class="tbl-wrap" style="margin-bottom:12px;">
-        <div class="tbl-header"><strong>4. PROCESSOS POR TÉCNICO — EM ANÁLISE, DILIGÊNCIA E REANÁLISE</strong><span style="font-size:11px;color:var(--ct);">Data de corte: ${dtCorte ? new Date(dtCorte).toLocaleDateString('pt-BR') : 'Atual'}</span></div>
-        <div style="overflow-x:auto;"><table><thead><tr>
-          <th>#</th><th>Servidor</th><th style="text-align:right;">Quantidade</th>
-        </tr></thead>
-        <tbody>${q4linhas||'<tr><td colspan="3" style="text-align:center;color:var(--ct);padding:16px;">Todos os processos estão concluídos.</td></tr>'}</tbody>
-        <tfoot><tr style="background:var(--fundo-app);font-weight:700;">
-          <td colspan="2">TOTAL GERAL</td>
-          <td style="text-align:right;">${totAn+totDil+totRean+totCtrl}</td>
-        </tr></tfoot></table></div>
-      </div>`
+        <!-- Quadro 4 -->
+        <div style="margin-top:18px;">
+          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">4. PROCESSOS POR TÉCNICO — EM ANÁLISE, DILIGÊNCIA E REANÁLISE <span style="font-weight:400;font-size:9px;">(Data de corte: ${dtCorte ? new Date(dtCorte).toLocaleDateString('pt-BR') : 'Atual'})</span></div>
+          <table><thead><tr>
+            <th>#</th><th>Servidor</th><th>Quantidade</th>
+          </tr></thead>
+          <tbody>${q4linhas||'<tr><td colspan="3" style="text-align:center;padding:16px;">Todos os processos estão concluídos.</td></tr>'}</tbody>
+          <tfoot><tr>
+            <td colspan="2" style="text-align:left;">TOTAL GERAL</td>
+            <td style="text-align:right;">${totAn+totDil+totRean+totCtrl}</td>
+          </tr></tfoot></table>
+        </div>
+      </div></div>`
 
   } catch(e) { cont.innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
@@ -2743,45 +2756,48 @@ function cgeExportPDF() {
 <style>
 @page { size:A4 portrait; margin:1.8cm 2cm 1.5cm 2cm; }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:Arial,sans-serif;font-size:11px;color:#111;line-height:1.6;}
+html,body{background:#E8E8E8;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;line-height:1.6;}
+.paper{max-width:820px;margin:0 auto;background:#fff;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.15);}
 .hdr-tbl{width:100%;border-collapse:collapse;margin-bottom:4px;}
-.hdr-logo{width:auto;vertical-align:middle;padding-right:12px;}
-.logo-img{height:42px;width:auto;}
+.hdr-logo{width:200px;vertical-align:middle;text-align:center;padding-right:12px;}
+.logo-img{height:60px;width:auto;}
 .hdr-txt{vertical-align:middle;text-align:center;}
-.hdr-sc{font-size:10px;font-weight:700;color:#333;letter-spacing:1px;}
+.hdr-sc{font-size:10px;font-weight:700;color:#000;letter-spacing:1px;}
 .hdr-fcee{font-size:13px;font-weight:900;color:#006B3C;letter-spacing:.5px;}
-.hdr-sub{font-size:10px;color:#444;font-weight:600;}
+.hdr-sub{font-size:10px;color:#000;font-weight:600;}
 .hdr-linha{border-top:2px solid #006B3C;margin:4px 0 10px;}
 h2{font-size:12px;font-weight:900;text-align:center;text-transform:uppercase;margin:8px 0 6px;line-height:1.4;}
-.ficha{border:1px solid #888;padding:8px 12px;margin:8px 0 12px;font-size:10.5px;}
+.ficha{border:1px solid #000;padding:8px 12px;margin:8px 0 12px;font-size:10px;}
 .ficha p{margin:1px 0;text-align:left;}
 .sec{font-size:11px;font-weight:900;margin:10px 0 4px;}
-p{text-align:justify;margin-bottom:6px;font-size:11px;}
-ul{margin:4px 0 6px 18px;font-size:11px;}
+p{text-align:justify;margin-bottom:6px;font-size:10px;}
+ul{margin:4px 0 6px 18px;font-size:10px;}
 ul li{margin-bottom:2px;}
-table{width:100%;border-collapse:collapse;font-size:10px;margin:4px 0 8px;page-break-inside:auto;}
+table{width:100%;border-collapse:collapse;font-size:9px;margin:4px 0 8px;page-break-inside:auto;}
 thead{display:table-header-group;}
 tfoot{display:table-footer-group;}
-th{background:#006B3C;color:#fff;padding:4px 5px;text-align:center;border:1px solid #004D2B;font-size:9px;font-weight:700;line-height:1.3;}
-td{padding:3px 5px;border:1px solid #ccc;font-size:9.5px;vertical-align:middle;}
+th{background:#E8E8E8;color:#000;padding:4px 5px;text-align:center;border:1px solid #000;font-size:9px;font-weight:700;line-height:1.3;}
+th.th2{background:#F0F0F0;}
+td{padding:3px 5px;border:1px solid #000;font-size:9px;vertical-align:middle;}
 tr{page-break-inside:avoid;}
-tr:nth-child(even) td{background:#F5F9F6;}
-.tft td{background:#D4EDD9!important;font-weight:700;border-top:2px solid #006B3C;}
+tr:nth-child(even) td{background:#F5F5F5;}
+.tft td{background:#E8E8E8!important;font-weight:700;color:#000;}
 .tc{text-align:center;}
 .fw{font-weight:700;}
-.nota{font-size:9px;color:#555;margin-top:3px;text-align:justify;font-style:italic;}
+.nota{font-size:9px;color:#000;margin-top:3px;text-align:justify;font-style:italic;}
 .qtit{font-size:10.5px;font-weight:700;margin:8px 0 3px;}
 .keep{page-break-inside:avoid;}
 .new-page{page-break-before:always;}
 .ass{margin-top:28px;}
 .ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
 .ass-col{width:47%;text-align:center;}
-.ass-linha{border-top:1px solid #333;padding-top:4px;margin-top:36px;}
+.ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
 .ass-nome{font-size:10.5px;font-weight:700;}
-.ass-cargo{font-size:9.5px;color:#555;}
+.ass-cargo{font-size:9.5px;color:#000;}
 .ass-center{text-align:center;margin:0 auto;width:50%;}
-.rodape{text-align:center;font-size:8px;color:#888;border-top:1px solid #ddd;padding-top:5px;margin-top:16px;}
-</style></head><body>
+.rodape{text-align:center;font-size:8px;color:#000;font-style:italic;border-top:1px solid #000;padding-top:5px;margin-top:16px;}
+</style></head><body><div class="paper">
 
 ${HDR}
 
@@ -2819,14 +2835,14 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
       <th rowspan="3">Total /<br>Estoque<br>% (12)</th>
     </tr>
     <tr>
-      <th colspan="2">Parcial</th>
-      <th colspan="2">Final</th>
-      <th rowspan="2">Regular<br>(8)</th>
-      <th rowspan="2">Irregular<br>(9)</th>
+      <th class="th2" colspan="2">Parcial</th>
+      <th class="th2" colspan="2">Final</th>
+      <th class="th2" rowspan="2">Regular<br>(8)</th>
+      <th class="th2" rowspan="2">Irregular<br>(9)</th>
     </tr>
     <tr>
-      <th>Regular<br>(4)</th><th>Irregular<br>(5)</th>
-      <th>Regular<br>(6)</th><th>Irregular<br>(7)</th>
+      <th class="th2">Regular<br>(4)</th><th class="th2">Irregular<br>(5)</th>
+      <th class="th2">Regular<br>(6)</th><th class="th2">Irregular<br>(7)</th>
     </tr>
   </thead>
   <tbody>
@@ -2920,15 +2936,15 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
 <table>
   <thead><tr><th style="width:22%;text-align:left;">Aspecto Avaliado</th><th style="text-align:left;">Observações e Ações</th></tr></thead>
   <tbody>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Atividades Desenvolvidas</td><td>• Estruturação do trabalho em três grupos operacionais.<br>• Distribuição equilibrada das análises.<br>• Coordenação descentralizada com acompanhamento individualizado.<br>• Reuniões com CGE, PGE e Tribunal de Contas.<br>• Atuação da Consultoria Jurídica da FCEE na emissão de parecer técnico de respaldo às análises.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Comunicação e Alinhamento</td><td>• Reuniões virtuais periódicas.<br>• Criação de grupo institucional de comunicação.<br>• Compartilhamento contínuo de orientações técnicas.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Análise Técnica</td><td>• Priorização de processos em estoque.<br>• Identificação sistemática de inconsistências.<br>• Registro formal das análises.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Padronização dos Procedimentos</td><td>• Elaboração de modelos de pareceres.<br>• Planejamento de capacitações técnicas.<br>• Uniformização dos fluxos internos.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Principais Dificuldades</td><td>• Elevada complexidade dos processos.<br>• Dependência do retorno documental.<br>• Impacto do recesso e férias no período.<br>• Dificuldade na conferência de cálculos de rendimentos.<br>• Instabilidade no acesso às planilhas compartilhadas.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Ações Corretivas Implementadas</td><td>• Ajuste no acesso às planilhas por e-mail individual.<br>• Reuniões mensais de alinhamento.<br>• Monitoramento sistemático da produtividade.<br>• Redistribuição de processos complexos.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Resultados das Ações</td><td>• Eliminação da perda de dados.<br>• Melhoria gradual na uniformidade dos pareceres.<br>• Redução de inconsistências recorrentes.<br>• Fortalecimento do controle interno.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Propostas de Aperfeiçoamento</td><td>• Intensificação das capacitações.<br>• Implementação de revisão cruzada.<br>• Ampliação dos mecanismos preventivos.<br>• Aumento do quantitativo dos servidores públicos nos Núcleos de Gestão de Convênios.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F7F0;">Planilha</td><td>• Sugere-se o aperfeiçoamento da planilha de monitoramento, com a inclusão de campos específicos que evidenciem a produtividade individual dos técnicos, contemplando: (i) quantitativo de prestações de contas analisadas por servidor.<br>• Tal medida permitirá maior transparência, rastreabilidade e precisão na avaliação do desempenho, fortalecendo a gestão por resultados.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Atividades Desenvolvidas</td><td>• Estruturação do trabalho em três grupos operacionais.<br>• Distribuição equilibrada das análises.<br>• Coordenação descentralizada com acompanhamento individualizado.<br>• Reuniões com CGE, PGE e Tribunal de Contas.<br>• Atuação da Consultoria Jurídica da FCEE na emissão de parecer técnico de respaldo às análises.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Comunicação e Alinhamento</td><td>• Reuniões virtuais periódicas.<br>• Criação de grupo institucional de comunicação.<br>• Compartilhamento contínuo de orientações técnicas.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Análise Técnica</td><td>• Priorização de processos em estoque.<br>• Identificação sistemática de inconsistências.<br>• Registro formal das análises.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Padronização dos Procedimentos</td><td>• Elaboração de modelos de pareceres.<br>• Planejamento de capacitações técnicas.<br>• Uniformização dos fluxos internos.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Principais Dificuldades</td><td>• Elevada complexidade dos processos.<br>• Dependência do retorno documental.<br>• Impacto do recesso e férias no período.<br>• Dificuldade na conferência de cálculos de rendimentos.<br>• Instabilidade no acesso às planilhas compartilhadas.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Ações Corretivas Implementadas</td><td>• Ajuste no acesso às planilhas por e-mail individual.<br>• Reuniões mensais de alinhamento.<br>• Monitoramento sistemático da produtividade.<br>• Redistribuição de processos complexos.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Resultados das Ações</td><td>• Eliminação da perda de dados.<br>• Melhoria gradual na uniformidade dos pareceres.<br>• Redução de inconsistências recorrentes.<br>• Fortalecimento do controle interno.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Propostas de Aperfeiçoamento</td><td>• Intensificação das capacitações.<br>• Implementação de revisão cruzada.<br>• Ampliação dos mecanismos preventivos.<br>• Aumento do quantitativo dos servidores públicos nos Núcleos de Gestão de Convênios.</td></tr>
+    <tr><td style="font-weight:700;background:#F0F0F0;">Planilha</td><td>• Sugere-se o aperfeiçoamento da planilha de monitoramento, com a inclusão de campos específicos que evidenciem a produtividade individual dos técnicos, contemplando: (i) quantitativo de prestações de contas analisadas por servidor.<br>• Tal medida permitirá maior transparência, rastreabilidade e precisão na avaliação do desempenho, fortalecendo a gestão por resultados.</td></tr>
   </tbody>
 </table>
 
@@ -2962,7 +2978,7 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
 <table style="width:70%;margin:0 auto;">
   <thead><tr><th style="text-align:left;">Nome</th><th>Período</th><th>Motivo</th></tr></thead>
   <tbody>
-    <tr><td colspan="3" style="text-align:center;color:#888;font-style:italic;padding:8px;">Preencher manualmente conforme registros de afastamento do período.</td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#000;font-style:italic;padding:8px;">Preencher manualmente conforme registros de afastamento do período.</td></tr>
   </tbody>
 </table>
 
@@ -3015,7 +3031,7 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
 
 <div class="rodape">Relatório gerado automaticamente pelo SIGPC-GT v2.1 em ${dtGerado} | Dados extraídos do sistema em tempo real</div>
 
-</body></html>`
+</div></body></html>`
 
   const w = window.open('','_blank')
   if(!w) { toast('Permita pop-ups para gerar o PDF.','err'); return }
