@@ -819,15 +819,15 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="mc-campo" style="grid-column:1/-1;">
           <label>Nome Completo *</label>
-          <input type="text" id="paNome" placeholder="Seu nome completo">
+          <input type="text" id="paNome" placeholder="Seu nome completo" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>CPF *</label>
-          <input type="text" id="paCPF" placeholder="000.000.000-00" maxlength="14" oninput="msk(this)">
+          <input type="text" id="paCPF" placeholder="000.000.000-00" maxlength="14" oninput="msk(this)" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>Setorial *</label>
-          <select id="paSetorial">
+          <select id="paSetorial" autocomplete="off">
             <option value="">Selecione...</option>
             <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
             <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
@@ -836,31 +836,31 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         </div>
         <div class="mc-campo">
           <label>E-mail *</label>
-          <input type="email" id="paEmail" placeholder="seu@email.com">
+          <input type="email" id="paEmail" placeholder="seu@email.com" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>Telefone / WhatsApp</label>
-          <input type="text" id="paTelefone" placeholder="(00) 00000-0000">
+          <input type="text" id="paTelefone" placeholder="(00) 00000-0000" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>Região</label>
-          <input type="text" id="paRegiao" placeholder="Região">
+          <select id="paRegiao" onchange="paAtualizarMunicipios()" autocomplete="off"></select>
         </div>
         <div class="mc-campo">
           <label>Município</label>
-          <input type="text" id="paMunicipio" placeholder="Município">
+          <select id="paMunicipio" autocomplete="off"></select>
         </div>
         <div class="mc-campo" style="grid-column:1/-1;">
           <label>Núcleo / Departamento</label>
-          <input type="text" id="paNucleo" placeholder="Núcleo ou departamento">
+          <input type="text" id="paNucleo" placeholder="Núcleo ou departamento" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>Nova Senha * (mín. 6 caracteres)</label>
-          <input type="password" id="paSenha" placeholder="Crie sua senha">
+          <input type="password" id="paSenha" placeholder="Crie sua senha" autocomplete="off">
         </div>
         <div class="mc-campo">
           <label>Confirmar Senha *</label>
-          <input type="password" id="paSenha2" placeholder="Repita a senha">
+          <input type="password" id="paSenha2" placeholder="Repita a senha" autocomplete="off">
         </div>
       </div>
       <div id="paMsg" style="display:none;background:#FFEBEE;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:8px 12px;font-size:11px;margin-top:8px;"></div>
@@ -3341,6 +3341,59 @@ function relExportPDF() {
 
 
 // ══════════════════════════════════════
+//  REGIÕES FECAM — 295 municípios de SC agrupados nas 21 associações
+// ══════════════════════════════════════
+const REGIOES_FECAM = {
+  AMAI: ['Abelardo Luz','Bom Jesus','Entre Rios','Faxinal dos Guedes','Ipuaçu','Lajeado Grande','Marema','Ouro Verde','Passos Maia','Ponte Serrada','São Domingos','Vargeão','Xanxerê','Xaxim'],
+  AMARP: ['Arroio Trinta','Caçador','Calmon','Fraiburgo','Ibiam','Iomerê','Lebon Régis','Macieira','Matos Costa','Pinheiro Preto','Rio das Antas','Salto Veloso','Tangará','Timbó Grande','Videira'],
+  AMAUC: ['Alto Bela Vista','Arabutã','Concórdia','Ipira','Ipumirim','Irani','Itá','Jaborá','Lindóia do Sul','Peritiba','Piratuba','Presidente Castello Branco','Seara','Xavantina'],
+  AMAVI: ['Agrolândia','Agronômica','Atalanta','Aurora','Braço do Trombudo','Chapadão do Lageado','Dona Emma','Ibirama','Imbuia','Ituporanga','José Boiteux','Laurentino','Lontras','Mirim Doce','Petrolândia','Pouso Redondo','Presidente Getúlio','Presidente Nereu','Rio do Campo','Rio do Oeste','Rio do Sul','Salete','Santa Terezinha','Taió','Trombudo Central','Vidal Ramos','Vitor Meireles','Witmarsum'],
+  AMEOSC: ['Anchieta','Bandeirante','Barra Bonita','Belmonte','Descanso','Dionísio Cerqueira','Guaraciaba','Guarujá do Sul','Iporã do Oeste','Itapiranga','Mondaí','Palma Sola','Paraíso','Princesa','Santa Helena','São João do Oeste','São José do Cedro','São Miguel do Oeste','Tunápolis'],
+  AMERIOS: ['Bom Jesus do Oeste','Caibi','Campo Erê','Cunha Porã','Cunhataí','Flor do Sertão','Iraceminha','Maravilha','Modelo','Palmitos','Riqueza','Romelândia','Saltinho','Santa Terezinha do Progresso','São Miguel da Boa Vista','Saudades','Tigrinhos'],
+  AMESC: ['Araranguá','Balneário Arroio do Silva','Balneário Gaivota','Ermo','Jacinto Machado','Maracajá','Meleiro','Morro Grande','Passo de Torres','Praia Grande','Santa Rosa do Sul','São João do Sul','Sombrio','Timbé do Sul','Turvo'],
+  AMFRI: ['Balneário Camboriú','Balneário Piçarras','Bombinhas','Camboriú','Ilhota','Itajaí','Itapema','Luiz Alves','Navegantes','Penha','Porto Belo'],
+  AMMOC: ['Água Doce','Capinzal','Catanduvas','Erval Velho',"Herval d'Oeste",'Ibicaré','Joaçaba','Lacerdópolis','Luzerna','Ouro','Treze Tílias','Vargem Bonita'],
+  AMNOROESTE: ['Coronel Martins','Galvão','Irati','Jupiá','Novo Horizonte','Quilombo','São Bernardino','São Lourenço do Oeste'],
+  AMOSC: ['Águas de Chapecó','Águas Frias','Arvoredo','Caxambu do Sul','Chapecó','Cordilheira Alta','Coronel Freitas','Formosa do Sul','Guatambú','Jardinópolis','Nova Erechim','Nova Itaberaba','Paial','Pinhalzinho','Planalto Alegre','Santiago do Sul','São Carlos','Serra Alta','Sul Brasil','União do Oeste'],
+  AMPLANORTE: ['Bela Vista do Toldo','Canoinhas','Irineópolis','Itaiópolis','Mafra','Major Vieira','Monte Castelo','Papanduva','Porto União','Três Barras'],
+  AMPLASC: ['Abdon Batista','Brunópolis','Campos Novos','Celso Ramos','Monte Carlo','Vargem','Zortéa'],
+  AMREC: ['Balneário Rincão','Cocal do Sul','Criciúma','Forquilhinha','Içara','Lauro Müller','Morro da Fumaça','Nova Veneza','Orleans','Siderópolis','Treviso','Urussanga'],
+  AMUNESC: ['Araquari','Balneário Barra do Sul','Campo Alegre','Garuva','Itapoá','Joinville','Rio Negrinho','São Bento do Sul','São Francisco do Sul'],
+  AMURC: ['Curitibanos','Frei Rogério','Ponte Alta do Norte','Santa Cecília','São Cristóvão do Sul'],
+  AMUREL: ['Armazém','Braço do Norte','Capivari de Baixo','Grão Pará','Gravatal','Imaruí','Imbituba','Jaguaruna','Laguna','Pedras Grandes','Pescaria Brava','Rio Fortuna','Sangão','Santa Rosa de Lima','São Ludgero','São Martinho','Treze de Maio','Tubarão'],
+  AMURES: ['Anita Garibaldi','Bocaina do Sul','Bom Jardim da Serra','Bom Retiro','Campo Belo do Sul','Capão Alto','Cerro Negro','Correia Pinto','Lages','Otacílio Costa','Painel','Palmeira','Ponte Alta','Rio Rufino','São Joaquim','São José do Cerrito','Urubici','Urupema'],
+  AMVALI: ['Barra Velha','Corupá','Guaramirim','Jaraguá do Sul','Massaranduba','São João do Itaperiú','Schroeder'],
+  AMVE: ['Apiúna','Ascurra','Benedito Novo','Blumenau','Botuverá','Brusque','Doutor Pedrinho','Gaspar','Guabiruba','Indaial','Pomerode','Rio dos Cedros','Rodeio','Timbó'],
+  GRANFPOLIS: ['Águas Mornas','Alfredo Wagner','Angelina','Anitápolis','Antônio Carlos','Biguaçu','Canelinha','Florianópolis','Garopaba','Governador Celso Ramos','Leoberto Leal','Major Gercino','Nova Trento','Palhoça','Paulo Lopes','Rancho Queimado','Santo Amaro da Imperatriz','São Bonifácio','São João Batista','São José','São Pedro de Alcântara','Tijucas'],
+}
+
+function fecamRegiaoOptionsHtml(selecionada) {
+  return '<option value="">Todas as regiões</option>' +
+    Object.keys(REGIOES_FECAM).sort().map(r => `<option value="${r}" ${r===selecionada?'selected':''}>${r}</option>`).join('')
+}
+
+function fecamMunicipiosLista(regiao) {
+  if(regiao && REGIOES_FECAM[regiao]) return REGIOES_FECAM[regiao]
+  const todos = new Set()
+  Object.values(REGIOES_FECAM).forEach(lista => lista.forEach(m => todos.add(m)))
+  return [...todos].sort((a,b) => a.localeCompare(b,'pt-BR'))
+}
+
+function fecamMunicipioOptionsHtml(regiao, selecionado) {
+  return '<option value="">Selecione...</option>' +
+    fecamMunicipiosLista(regiao).map(m => `<option value="${m}" ${m===selecionado?'selected':''}>${m}</option>`).join('')
+}
+
+function paAtualizarMunicipios() {
+  const regiao = document.getElementById('paRegiao').value
+  document.getElementById('paMunicipio').innerHTML = fecamMunicipioOptionsHtml(regiao, '')
+}
+
+// Popula os dropdowns do modal Primeiro Acesso (HTML estático, já presente no DOM)
+document.getElementById('paRegiao').innerHTML = fecamRegiaoOptionsHtml('')
+document.getElementById('paMunicipio').innerHTML = fecamMunicipioOptionsHtml('', '')
+
+// ══════════════════════════════════════
 //  PRIMEIRO ACESSO
 // ══════════════════════════════════════
 async function primAcesso() {
@@ -3379,10 +3432,11 @@ async function primAcesso() {
     if(j.error) throw new Error(j.error.message || j.error)
 
     fm('moPrimAcesso')
-    ;['paNome','paCPF','paEmail','paTelefone','paRegiao','paMunicipio','paNucleo','paSenha','paSenha2'].forEach(id => {
+    ;['paNome','paCPF','paEmail','paTelefone','paRegiao','paNucleo','paSenha','paSenha2'].forEach(id => {
       const el = document.getElementById(id); if(el) el.value = ''
     })
     document.getElementById('paSetorial').value = ''
+    document.getElementById('paMunicipio').innerHTML = fecamMunicipioOptionsHtml('', '')
     mostrarSucesso(j.message || 'Cadastro realizado! Aguarde a aprovação do seu coordenador para acessar o sistema.')
   } catch(e) {
     showErr('Erro: ' + e.message)
@@ -4632,15 +4686,15 @@ function irMeuPerfil() {
           <div style="font-size:9px;color:var(--ct);margin-top:6px;max-width:100px;">Clique para trocar a foto (JPG/PNG, máx. 200KB)</div>
         </div>
         <div style="flex:1;min-width:280px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div class="mc-campo"><label>Nome Completo</label><input type="text" value="${U.nome||''}" style="${roLabel}" disabled></div>
-          <div class="mc-campo"><label>CPF</label><input type="text" value="${U.cpf||''}" style="${roLabel}" disabled></div>
-          <div class="mc-campo"><label>Perfil</label><input type="text" value="${perfilLabel(U.perfil)}" style="${roLabel}" disabled></div>
-          <div class="mc-campo"><label>Grupo</label><input type="text" value="${U.grupo?'Grupo '+U.grupo:'—'}" style="${roLabel}" disabled></div>
-          <div class="mc-campo"><label>E-mail</label><input type="email" id="perfilEmail" value="${U.email||''}" placeholder="seu@email.com"></div>
-          <div class="mc-campo"><label>Telefone / WhatsApp</label><input type="text" id="perfilTelefone" value="${U.telefone||''}" placeholder="(00) 00000-0000"></div>
-          <div class="mc-campo"><label>Região</label><input type="text" id="perfilRegiao" value="${U.regiao||''}" placeholder="Região"></div>
-          <div class="mc-campo"><label>Município</label><input type="text" id="perfilMunicipio" value="${U.municipio||''}" placeholder="Município"></div>
-          <div class="mc-campo" style="grid-column:1/-1;"><label>Núcleo / Departamento</label><input type="text" id="perfilNucleo" value="${U.nucleo||''}" placeholder="Núcleo ou departamento"></div>
+          <div class="mc-campo"><label>Nome Completo</label><input type="text" value="${U.nome||''}" style="${roLabel}" autocomplete="off" disabled></div>
+          <div class="mc-campo"><label>CPF</label><input type="text" value="${U.cpf||''}" style="${roLabel}" autocomplete="off" disabled></div>
+          <div class="mc-campo"><label>Perfil</label><input type="text" value="${perfilLabel(U.perfil)}" style="${roLabel}" autocomplete="off" disabled></div>
+          <div class="mc-campo"><label>Grupo</label><input type="text" value="${U.grupo?'Grupo '+U.grupo:'—'}" style="${roLabel}" autocomplete="off" disabled></div>
+          <div class="mc-campo"><label>E-mail</label><input type="email" id="perfilEmail" value="${U.email||''}" placeholder="seu@email.com" autocomplete="off"></div>
+          <div class="mc-campo"><label>Telefone / WhatsApp</label><input type="text" id="perfilTelefone" value="${U.telefone||''}" placeholder="(00) 00000-0000" autocomplete="off"></div>
+          <div class="mc-campo"><label>Região</label><select id="perfilRegiao" onchange="perfilAtualizarMunicipios()" autocomplete="off">${fecamRegiaoOptionsHtml(U.regiao||'')}</select></div>
+          <div class="mc-campo"><label>Município</label><select id="perfilMunicipio" autocomplete="off">${fecamMunicipioOptionsHtml(U.regiao||'', U.municipio||'')}</select></div>
+          <div class="mc-campo" style="grid-column:1/-1;"><label>Núcleo / Departamento</label><input type="text" id="perfilNucleo" value="${U.nucleo||''}" placeholder="Núcleo ou departamento" autocomplete="off"></div>
         </div>
       </div>
       <div style="text-align:right;margin-top:14px;">
@@ -4651,14 +4705,40 @@ function irMeuPerfil() {
     <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:20px;">
       <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Segurança</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px;">
-        <div class="mc-campo"><label>Nova Senha *</label><input type="password" id="perfilSenha" placeholder="Nova senha"></div>
-        <div class="mc-campo"><label>Confirmar Senha *</label><input type="password" id="perfilSenha2" placeholder="Repita a senha"></div>
+        <div class="mc-campo"><label>Nova Senha *</label>
+          <div class="swrap"><input type="password" id="perfilSenha" placeholder="Nova senha" autocomplete="off">
+            <button class="olho" type="button" onclick="toggleSenhaCampo(this)" title="Mostrar/ocultar senha">
+              <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="mc-campo"><label>Confirmar Senha *</label>
+          <div class="swrap"><input type="password" id="perfilSenha2" placeholder="Repita a senha" autocomplete="off">
+            <button class="olho" type="button" onclick="toggleSenhaCampo(this)" title="Mostrar/ocultar senha">
+              <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
       <div style="text-align:right;margin-top:10px;">
         <button class="mcok" id="perfilSenhaBtn" onclick="perfilRedefinirSenha()" style="padding:8px 20px;">🔑 Redefinir senha</button>
       </div>
     </div>
   `
+}
+
+function perfilAtualizarMunicipios() {
+  const regiao = document.getElementById('perfilRegiao').value
+  document.getElementById('perfilMunicipio').innerHTML = fecamMunicipioOptionsHtml(regiao, '')
+}
+
+function toggleSenhaCampo(btn) {
+  const inp = btn.previousElementSibling
+  const aberto = inp.type === 'password'
+  inp.type = aberto ? 'text' : 'password'
+  btn.querySelector('svg').innerHTML = aberto
+    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/>'
+    : '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>'
 }
 
 function perfilSelecionarFoto(event) {
