@@ -44,6 +44,7 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .errmsg{background:#FFEBEE;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:10px;display:none;align-items:center;gap:8px;}
 .errmsg svg{width:16px;height:16px;fill:currentColor;flex-shrink:0;}
 .errmsg.vis{display:flex;}
+.errmsg.sucesso{background:#E8F5EE;border-color:#B8D8C6;color:#1B5E3A;}
 .hrD{border:none;border-top:1px solid var(--cb);margin:16px 0;}
 .logins-demo{background:var(--cl);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--ct);line-height:2;}
 .logins-demo code{background:#fff;border:1px solid var(--cb);border-radius:4px;padding:1px 5px;font-size:10px;color:var(--v);}
@@ -642,6 +643,10 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
       <span id="eTXT">Setorial, CPF ou senha incorretos.</span>
     </div>
+    <div class="errmsg sucesso" id="sMSG">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      <span id="sTXT"></span>
+    </div>
     <div class="campo">
       <label>Selecione a Setorial *</label>
       <select id="lSec">
@@ -671,7 +676,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
     </div>
     <button class="btn-e" onclick="login()">Entrar no Sistema</button>
     <hr class="hrD">
-    <button class="btn-e" style="background:#fff;color:var(--v);border:1.5px solid var(--v);margin-top:0;" onclick="document.getElementById('moPrimAcesso').classList.add('open')">🔐 Primeiro Acesso — Criar minha senha</button>
+    <button class="btn-e" style="background:#fff;color:var(--v);border:1.5px solid var(--v);margin-top:0;" onclick="document.getElementById('moPrimAcesso').classList.add('open')">🔐 Primeiro Acesso — Solicitar Cadastro</button>
   </div>
 </div>
 
@@ -807,24 +812,61 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
 
 <!-- ══ MODAL PRIMEIRO ACESSO ══ -->
 <div class="mo" id="moPrimAcesso">
-  <div class="mc">
-    <div class="mch v"><h3>🔐 Primeiro Acesso — Criar minha senha</h3><button class="mcx" onclick="fm('moPrimAcesso')">✕</button></div>
+  <div class="mc" style="width:560px;">
+    <div class="mch v"><h3>🔐 Primeiro Acesso — Cadastro de Analista</h3><button class="mcx" onclick="fm('moPrimAcesso')">✕</button></div>
     <div class="mcb">
-      <p style="font-size:12px;color:var(--ct);margin-bottom:14px;line-height:1.6;">Informe seus dados para criar ou redefinir sua senha. Seu CPF deve estar cadastrado pelo administrador.</p>
-      <div class="mc-campo"><label>Setorial *</label>
-        <select id="paSetorial">
-          <option value="">Selecione...</option>
-          <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
-          <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
-          <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
-        </select>
+      <p style="font-size:12px;color:var(--ct);margin-bottom:14px;line-height:1.6;">Preencha seus dados para solicitar acesso ao sistema. Seu cadastro ficará aguardando aprovação do seu coordenador.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mc-campo" style="grid-column:1/-1;">
+          <label>Nome Completo *</label>
+          <input type="text" id="paNome" placeholder="Seu nome completo">
+        </div>
+        <div class="mc-campo">
+          <label>CPF *</label>
+          <input type="text" id="paCPF" placeholder="000.000.000-00" maxlength="14" oninput="msk(this)">
+        </div>
+        <div class="mc-campo">
+          <label>Setorial *</label>
+          <select id="paSetorial">
+            <option value="">Selecione...</option>
+            <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
+            <option value="FESPORTE">FESPORTE</option><option value="SED">SED</option>
+            <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
+          </select>
+        </div>
+        <div class="mc-campo">
+          <label>E-mail *</label>
+          <input type="email" id="paEmail" placeholder="seu@email.com">
+        </div>
+        <div class="mc-campo">
+          <label>Telefone / WhatsApp</label>
+          <input type="text" id="paTelefone" placeholder="(00) 00000-0000">
+        </div>
+        <div class="mc-campo">
+          <label>Região</label>
+          <input type="text" id="paRegiao" placeholder="Região">
+        </div>
+        <div class="mc-campo">
+          <label>Município</label>
+          <input type="text" id="paMunicipio" placeholder="Município">
+        </div>
+        <div class="mc-campo" style="grid-column:1/-1;">
+          <label>Núcleo / Departamento</label>
+          <input type="text" id="paNucleo" placeholder="Núcleo ou departamento">
+        </div>
+        <div class="mc-campo">
+          <label>Nova Senha * (mín. 6 caracteres)</label>
+          <input type="password" id="paSenha" placeholder="Crie sua senha">
+        </div>
+        <div class="mc-campo">
+          <label>Confirmar Senha *</label>
+          <input type="password" id="paSenha2" placeholder="Repita a senha">
+        </div>
       </div>
-      <div class="mc-campo"><label>CPF *</label><input type="text" id="paCPF" placeholder="000.000.000-00" maxlength="14" oninput="msk(this)"></div>
-      <div class="mc-campo"><label>Nova Senha * (mín. 6 caracteres)</label><input type="password" id="paSenha" placeholder="Crie sua senha"></div>
-      <div class="mc-campo"><label>Confirmar Senha *</label><input type="password" id="paSenha2" placeholder="Repita a senha"></div>
+      <div id="paMsg" style="display:none;background:#FFEBEE;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:8px 12px;font-size:11px;margin-top:8px;"></div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moPrimAcesso')">Cancelar</button>
-        <button class="mcok" onclick="primAcesso()">✓ Criar Senha</button>
+        <button class="mcok" id="paSalvarBtn" onclick="primAcesso()">✓ Enviar Cadastro</button>
       </div>
     </div>
   </div>
@@ -999,6 +1041,12 @@ function salvarSessao() {
     grupo: U.grupo,
     modoAnalista: U.modoAnalista,
     setorialFiltro: U.setorialFiltro,
+    email: U.email,
+    telefone: U.telefone,
+    regiao: U.regiao,
+    municipio: U.municipio,
+    nucleo: U.nucleo,
+    foto_base64: U.foto_base64,
     expira_em: Date.now() + SESSAO_DURACAO_MS
   }
   localStorage.setItem(SESSAO_KEY, JSON.stringify(sessao))
@@ -1077,18 +1125,21 @@ async function login() {
   const sec = document.getElementById('lSec').value
   const cpf = document.getElementById('lCPF').value.trim()
   const sen = document.getElementById('lSen').value.trim()
-  const eMsg = document.getElementById('eMSG')
-  eMsg.classList.remove('vis')
+  document.getElementById('eMSG').classList.remove('vis')
+  document.getElementById('sMSG').classList.remove('vis')
 
   if(!sec||!cpf||!sen) { mostrarErro('Preencha todos os campos.'); return }
 
   try {
     const { data, error } = await db.from('usuarios')
-      .select('*').eq('cpf', cpf).eq('ativo', true).limit(1)
+      .select('*').eq('cpf', cpf).limit(1)
     if(error) throw error
     if(!data||!data.length) { mostrarErro('CPF não encontrado.'); return }
 
     const u = data[0]
+
+    if(u.aguardando_aprovacao) { mostrarErro('Seu cadastro está aguardando aprovação. Aguarde o contato do seu coordenador.'); return }
+    if(!u.ativo) { mostrarErro('Usuário inativo. Entre em contato com o administrador.'); return }
 
     // Verificar senha — suporta senha simples ou dupla (admin|analista)
     const partes = (u.senha_hash||'').split('|')
@@ -1122,8 +1173,24 @@ async function login() {
 }
 
 function mostrarErro(msg) {
+  document.getElementById('sMSG').classList.remove('vis')
   document.getElementById('eTXT').textContent = msg
   document.getElementById('eMSG').classList.add('vis')
+}
+
+function mostrarSucesso(msg) {
+  document.getElementById('eMSG').classList.remove('vis')
+  document.getElementById('sTXT').textContent = msg
+  document.getElementById('sMSG').classList.add('vis')
+}
+
+function atualizarAvatarHeader() {
+  const el = document.getElementById('tAv')
+  if(!el) return
+  const ini = U.nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
+  el.innerHTML = U.foto_base64
+    ? `<img src="${U.foto_base64}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : ini
 }
 
 function iniciarApp() {
@@ -1131,12 +1198,11 @@ function iniciarApp() {
   document.getElementById('sLogin').classList.remove('ativa')
   document.getElementById('sPainel').classList.add('ativa')
 
-  const ini = U.nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
   document.getElementById('tNome').textContent = U.nome
-  document.getElementById('tPerfil').textContent = 
-    (U.perfil==='superadmin'?'SUPERADMIN':U.perfil.toUpperCase()) + ' — ' + 
+  document.getElementById('tPerfil').textContent =
+    (U.perfil==='superadmin'?'SUPERADMIN':U.perfil.toUpperCase()) + ' — ' +
     (U.setorialAcesso==='ADMIN'?'GERAL':U.setorialAcesso)
-  document.getElementById('tAv').textContent = ini
+  atualizarAvatarHeader()
 
   renderSB()
   irDash()
@@ -1184,6 +1250,9 @@ function renderSB() {
       <div class="sb-item" id="mi-rel" onclick="irRel()">
         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
         ${isCoordi?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADM</span>':''}
+      </div>
+      <div class="sb-item" id="mi-perfil" onclick="irMeuPerfil()">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Meu Perfil
       </div>
       ${podeCI ? `<div class="sb-item" id="mi-ci" onclick="irCI()">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z"/></svg>
@@ -3275,24 +3344,51 @@ function relExportPDF() {
 //  PRIMEIRO ACESSO
 // ══════════════════════════════════════
 async function primAcesso() {
-  const sec = document.getElementById('paSetorial').value
+  const nome = document.getElementById('paNome').value.trim()
   const cpf = document.getElementById('paCPF').value.trim()
+  const setorial = document.getElementById('paSetorial').value
+  const email = document.getElementById('paEmail').value.trim()
+  const telefone = document.getElementById('paTelefone').value.trim()
+  const regiao = document.getElementById('paRegiao').value.trim()
+  const municipio = document.getElementById('paMunicipio').value.trim()
+  const nucleo = document.getElementById('paNucleo').value.trim()
   const sen = document.getElementById('paSenha').value
   const sen2 = document.getElementById('paSenha2').value
-  if(!sec||!cpf) { toast('Preencha setorial e CPF.','err'); return }
-  if(sen.length < 6) { toast('Senha deve ter mínimo 6 caracteres.','err'); return }
-  if(sen !== sen2) { toast('As senhas não coincidem.','err'); return }
+
+  const msgEl = document.getElementById('paMsg')
+  const showErr = (m) => { msgEl.textContent = m; msgEl.style.display='block' }
+  msgEl.style.display = 'none'
+
+  if(!nome) { showErr('Informe seu nome completo.'); return }
+  if(!cpf || cpf.replace(/\D/g,'').length !== 11) { showErr('CPF inválido.'); return }
+  if(!setorial) { showErr('Selecione a setorial.'); return }
+  if(!email) { showErr('Informe seu e-mail.'); return }
+  if(sen.length < 6) { showErr('Senha deve ter no mínimo 6 caracteres.'); return }
+  if(sen !== sen2) { showErr('As senhas não coincidem.'); return }
+
+  const btn = document.getElementById('paSalvarBtn')
+  btn.disabled = true; btn.textContent = 'Enviando...'
+
   try {
-    const { data, error } = await db.from('usuarios').select('id,nome,perfil,setorial_id').eq('cpf',cpf).eq('ativo',true).limit(1)
-    if(error) throw error
-    if(!data||!data.length) { toast('CPF não encontrado. Solicite ao administrador seu cadastro.','err'); return }
-    const u = data[0]
-    if(u.perfil!=='superadmin' && u.setorial_id !== sec) { toast('CPF não pertence a esta setorial.','err'); return }
-    const { error: e2 } = await db.from('usuarios').update({senha_hash: sen}).eq('id', u.id)
-    if(e2) throw e2
+    const r = await fetch(`${API_URL}/usuarios/primeiro_acesso`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ nome, cpf, email, telefone, regiao, municipio, nucleo, senha_hash: sen, setorial_id: setorial })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+
     fm('moPrimAcesso')
-    toast('Senha criada com sucesso! Faça o login.','ok')
-  } catch(e) { toast('Erro: '+e.message,'err') }
+    ;['paNome','paCPF','paEmail','paTelefone','paRegiao','paMunicipio','paNucleo','paSenha','paSenha2'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value = ''
+    })
+    document.getElementById('paSetorial').value = ''
+    mostrarSucesso(j.message || 'Cadastro realizado! Aguarde a aprovação do seu coordenador para acessar o sistema.')
+  } catch(e) {
+    showErr('Erro: ' + e.message)
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Enviar Cadastro'
+  }
 }
 
 // ══════════════════════════════════════
@@ -3820,6 +3916,9 @@ function irAdmin() {
       </button>
     </div>
 
+    <!-- Aguardando Aprovação -->
+    <div id="admPendentesArea" style="margin-bottom:14px;"></div>
+
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar</label>
@@ -3957,8 +4056,35 @@ function irAdmin() {
         </div>
       </div>
     </div>
+
+    <!-- Modal aprovar cadastro pendente -->
+    <div class="mo" id="moAdmAprovar">
+      <div class="mc" style="width:400px;">
+        <div class="mch v">
+          <h3>Aprovar Cadastro</h3>
+          <button class="mcx" onclick="fm('moAdmAprovar')">✕</button>
+        </div>
+        <div class="mcb">
+          <div class="mci" id="admAprovarInfo"></div>
+          <div class="mc-campo">
+            <label>Grupo</label>
+            <select id="admAprovarGrupo">
+              <option value="">Sem grupo</option>
+              <option value="1">Grupo 1 — Nayara</option>
+              <option value="2">Grupo 2 — Zadir</option>
+              <option value="3">Grupo 3 — Gustavo</option>
+            </select>
+          </div>
+          <div class="mcbt">
+            <button class="mccn" onclick="fm('moAdmAprovar')">Cancelar</button>
+            <button class="mcok" id="admAprovarBtn" onclick="admConfirmarAprovar()">✓ Aprovar</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `
   adminCarregar()
+  admCarregarPendentes()
 }
 
 let _admUsers = []
@@ -4142,7 +4268,7 @@ async function admSalvarUsuario() {
       nome, cpf, perfil,
       setorial_id: setorial,
       grupo: U.perfil === 'coordenador' ? (U.grupo || null) : (grupo ? parseInt(grupo) : null),
-      ativo
+      ativo, email: email || null
     }
     if(senha) payload.senha_hash = senha  // superadmin define senha em texto; API pode fazer hash
 
@@ -4203,6 +4329,96 @@ async function admToggleAtivo(id, atual) {
     if(error) throw error
     toast(`Usuário ${atual?'desativado':'ativado'} com sucesso!`,'ok')
     await adminCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════
+//  AGUARDANDO APROVAÇÃO
+// ══════════════════════════════════════
+let _admPendentes = []
+let _admAprovarId = null
+
+async function admCarregarPendentes() {
+  const cont = document.getElementById('admPendentesArea')
+  if(!cont) return
+  try {
+    const r = await fetch(`${API_URL}/usuarios?aguardando_aprovacao=true`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    _admPendentes = (j.data||[]).sort((a,b) => new Date(a.criado_em||0) - new Date(b.criado_em||0))
+    admRenderPendentes()
+  } catch(e) {
+    cont.innerHTML = `<div style="color:var(--r);padding:12px;font-size:12px;">Erro ao carregar cadastros pendentes: ${e.message}</div>`
+  }
+}
+
+function admRenderPendentes() {
+  const cont = document.getElementById('admPendentesArea')
+  if(!cont) return
+  if(!_admPendentes.length) { cont.innerHTML = ''; return }
+
+  const cards = _admPendentes.map(u => {
+    const dt = u.criado_em ? new Date(u.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'
+    return `<div style="background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:220px;">
+        <div style="font-weight:700;font-size:13px;">${u.nome||'—'}</div>
+        <div style="font-size:11px;color:var(--ct);">CPF: ${u.cpf||'—'} &nbsp;|&nbsp; ${u.email||'—'} &nbsp;|&nbsp; ${u.telefone||'—'}</div>
+        <div style="font-size:11px;color:var(--ct);">Setorial: <strong>${u.setorial_id||'—'}</strong> &nbsp;|&nbsp; Cadastrado em: ${dt}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-acao btn-ass" onclick="admAbrirAprovar('${u.id}')">✓ Aprovar</button>
+        <button class="btn-acao btn-dev" onclick="admRejeitar('${u.id}')">✕ Rejeitar</button>
+      </div>
+    </div>`
+  }).join('')
+
+  cont.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:800;">⏳ Aguardando Aprovação</div>
+      <span style="background:var(--r);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:800;">${_admPendentes.length}</span>
+    </div>
+    ${cards}`
+}
+
+function admAbrirAprovar(id) {
+  const u = _admPendentes.find(x=>String(x.id)===String(id))
+  if(!u) return
+  _admAprovarId = id
+  document.getElementById('admAprovarInfo').innerHTML = `<strong>${u.nome||'—'}</strong><br>CPF: ${u.cpf||'—'} &nbsp;|&nbsp; Setorial: ${u.setorial_id||'—'}`
+  document.getElementById('admAprovarGrupo').value = ''
+  document.getElementById('moAdmAprovar').classList.add('open')
+}
+
+async function admConfirmarAprovar() {
+  if(!_admAprovarId) return
+  const grupo = document.getElementById('admAprovarGrupo').value
+  const btn = document.getElementById('admAprovarBtn')
+  btn.disabled = true; btn.textContent = 'Aprovando...'
+  try {
+    const r = await fetch(`${API_URL}/usuarios/${_admAprovarId}/aprovar`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ grupo: grupo || null })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    fm('moAdmAprovar')
+    toast('Cadastro aprovado com sucesso!','ok')
+    await admCarregarPendentes()
+    await adminCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { btn.disabled = false; btn.textContent = '✓ Aprovar' }
+}
+
+async function admRejeitar(id) {
+  const u = _admPendentes.find(x=>String(x.id)===String(id))
+  if(!u) return
+  if(!confirm(`Rejeitar o cadastro de ${u.nome}? Esta ação remove a solicitação e não pode ser desfeita.`)) return
+  try {
+    const r = await fetch(`${API_URL}/usuarios/${id}/rejeitar`, { method:'PATCH' })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Cadastro rejeitado.','ok')
+    await admCarregarPendentes()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
@@ -4392,6 +4608,113 @@ async function verProdDetalhe(analistaId, nome) {
   } catch(e) {
     document.getElementById('moNLB').innerHTML = `<p style="color:var(--r);">Erro: ${e.message}</p>`
   }
+}
+
+// ══════════════════════════════════════
+//  MEU PERFIL
+// ══════════════════════════════════════
+function irMeuPerfil() {
+  ativarMenu('perfil')
+  const iniciais = U.nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
+  const avatarHtml = U.foto_base64
+    ? `<img src="${U.foto_base64}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : iniciais
+  const roLabel = 'background:var(--fundo-app);color:var(--ct);cursor:not-allowed;'
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px;">Meu Perfil</div>
+
+    <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:20px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Dados Pessoais</div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="text-align:center;flex-shrink:0;">
+          <div id="perfilAvatar" onclick="document.getElementById('perfilFotoInput').click()" style="width:84px;height:84px;border-radius:50%;background:var(--v);color:#fff;font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;border:2px solid var(--cb);" title="Clique para trocar a foto">${avatarHtml}</div>
+          <input type="file" id="perfilFotoInput" accept="image/jpeg,image/png" style="display:none;" onchange="perfilSelecionarFoto(event)">
+          <div style="font-size:9px;color:var(--ct);margin-top:6px;max-width:100px;">Clique para trocar a foto (JPG/PNG, máx. 200KB)</div>
+        </div>
+        <div style="flex:1;min-width:280px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="mc-campo"><label>Nome Completo</label><input type="text" value="${U.nome||''}" style="${roLabel}" disabled></div>
+          <div class="mc-campo"><label>CPF</label><input type="text" value="${U.cpf||''}" style="${roLabel}" disabled></div>
+          <div class="mc-campo"><label>Perfil</label><input type="text" value="${perfilLabel(U.perfil)}" style="${roLabel}" disabled></div>
+          <div class="mc-campo"><label>Grupo</label><input type="text" value="${U.grupo?'Grupo '+U.grupo:'—'}" style="${roLabel}" disabled></div>
+          <div class="mc-campo"><label>E-mail</label><input type="email" id="perfilEmail" value="${U.email||''}" placeholder="seu@email.com"></div>
+          <div class="mc-campo"><label>Telefone / WhatsApp</label><input type="text" id="perfilTelefone" value="${U.telefone||''}" placeholder="(00) 00000-0000"></div>
+          <div class="mc-campo"><label>Região</label><input type="text" id="perfilRegiao" value="${U.regiao||''}" placeholder="Região"></div>
+          <div class="mc-campo"><label>Município</label><input type="text" id="perfilMunicipio" value="${U.municipio||''}" placeholder="Município"></div>
+          <div class="mc-campo" style="grid-column:1/-1;"><label>Núcleo / Departamento</label><input type="text" id="perfilNucleo" value="${U.nucleo||''}" placeholder="Núcleo ou departamento"></div>
+        </div>
+      </div>
+      <div style="text-align:right;margin-top:14px;">
+        <button class="mcok" id="perfilSalvarBtn" onclick="perfilSalvarDados()" style="padding:8px 20px;">✓ Salvar</button>
+      </div>
+    </div>
+
+    <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:20px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Segurança</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px;">
+        <div class="mc-campo"><label>Nova Senha *</label><input type="password" id="perfilSenha" placeholder="Nova senha"></div>
+        <div class="mc-campo"><label>Confirmar Senha *</label><input type="password" id="perfilSenha2" placeholder="Repita a senha"></div>
+      </div>
+      <div style="text-align:right;margin-top:10px;">
+        <button class="mcok" id="perfilSenhaBtn" onclick="perfilRedefinirSenha()" style="padding:8px 20px;">🔑 Redefinir senha</button>
+      </div>
+    </div>
+  `
+}
+
+function perfilSelecionarFoto(event) {
+  const file = event.target.files[0]
+  if(!file) return
+  if(!['image/jpeg','image/png'].includes(file.type)) { toast('Envie um arquivo JPG ou PNG.','err'); event.target.value=''; return }
+  if(file.size > 200*1024) { toast('A imagem deve ter no máximo 200KB.','err'); event.target.value=''; return }
+  const reader = new FileReader()
+  reader.onload = async () => {
+    const base64 = reader.result
+    document.getElementById('perfilAvatar').innerHTML = `<img src="${base64}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    try {
+      const { error } = await db.from('usuarios').update({ foto_base64: base64 }).eq('id', U.id)
+      if(error) throw error
+      U.foto_base64 = base64
+      salvarSessao()
+      atualizarAvatarHeader()
+      toast('Foto atualizada com sucesso!','ok')
+    } catch(e) { toast('Erro ao salvar foto: '+e.message,'err') }
+  }
+  reader.readAsDataURL(file)
+}
+
+async function perfilSalvarDados() {
+  const email = document.getElementById('perfilEmail').value.trim()
+  const telefone = document.getElementById('perfilTelefone').value.trim()
+  const regiao = document.getElementById('perfilRegiao').value.trim()
+  const municipio = document.getElementById('perfilMunicipio').value.trim()
+  const nucleo = document.getElementById('perfilNucleo').value.trim()
+  const btn = document.getElementById('perfilSalvarBtn')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const { error } = await db.from('usuarios').update({ email, telefone, regiao, municipio, nucleo }).eq('id', U.id)
+    if(error) throw error
+    Object.assign(U, { email, telefone, regiao, municipio, nucleo })
+    salvarSessao()
+    toast('Dados atualizados com sucesso!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { btn.disabled = false; btn.textContent = '✓ Salvar' }
+}
+
+async function perfilRedefinirSenha() {
+  const sen = document.getElementById('perfilSenha').value
+  const sen2 = document.getElementById('perfilSenha2').value
+  if(sen.length < 6) { toast('Senha deve ter no mínimo 6 caracteres.','err'); return }
+  if(sen !== sen2) { toast('As senhas não coincidem.','err'); return }
+  const btn = document.getElementById('perfilSenhaBtn')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const { error } = await db.from('usuarios').update({ senha_hash: sen }).eq('id', U.id)
+    if(error) throw error
+    document.getElementById('perfilSenha').value = ''
+    document.getElementById('perfilSenha2').value = ''
+    toast('Senha redefinida com sucesso!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { btn.disabled = false; btn.textContent = '🔑 Redefinir senha' }
 }
 
 // ══════════════════════════════════════

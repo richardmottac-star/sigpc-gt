@@ -91,8 +91,10 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
 
 3. **Datas futuras zeram o relatório.** `data_baixa` sempre no passado.
 
-4. **Colunas que NÃO existem em `usuarios`:** `email`, `obs`, `atualizado_em`.
+4. **Colunas que NÃO existem em `usuarios`:** `obs`, `atualizado_em`.
    Incluí-las no payload gera erro. Se precisar, criar antes com `ALTER TABLE`.
+   `email`, `regiao`, `municipio`, `telefone`, `nucleo`, `foto_base64`, `aprovado`
+   e `aguardando_aprovacao` existem desde o fluxo de Primeiro Acesso/Perfil (19/07/2026).
 
 5. **Não editar `index.html` por número de linha via PowerShell** — risco de corromper
    o arquivo inteiro. Usar edição por busca de texto.
