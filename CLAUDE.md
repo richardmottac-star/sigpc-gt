@@ -4,7 +4,7 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 19/07/2026
+**Última sessão:** 20/07/2026
 
 ---
 
@@ -80,6 +80,29 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
 
 ---
 
+## Fluxo de acesso e perfil (desde 19–20/07/2026)
+
+- **Primeiro Acesso** virou autocadastro completo (nome, CPF, setorial, e-mail,
+  telefone, região, município, núcleo, senha) via `POST /usuarios/primeiro_acesso`
+  — não depende mais de um usuário pré-criado pelo admin. O cadastro nasce com
+  `ativo=false`, `aprovado=false`, `aguardando_aprovacao=true`, `grupo=null`.
+- **Login** bloqueia com mensagem específica se `aguardando_aprovacao=true`
+  (não usa mais `.eq('ativo', true)` na query — busca por CPF e decide depois).
+- **Painel Admin** (`irAdmin`) mostra a seção "Aguardando Aprovação" no topo
+  (superadmin e coordenador veem todos os pendentes, sem filtro de grupo).
+  Aprovar seta `ativo/aprovado=true` e define o grupo escolhido no momento;
+  rejeitar **deleta** o registro pendente (permite recadastro pelo mesmo CPF).
+- **Meu Perfil** (`irMeuPerfil`, item novo no sidebar) — qualquer usuário logado
+  edita e-mail, telefone, região, município, núcleo e foto (JPG/PNG ≤200KB,
+  salva como `foto_base64`); e redefine a própria senha. Avatar do cabeçalho
+  mostra a foto quando existir.
+- **Região/Município** são dropdowns encadeados usando a constante
+  `REGIOES_FECAM` (295 municípios de SC nas 21 associações regionais da
+  FECAM) — fonte: arquivo `MUNICIPIOS DE SC E REGIÕES FECAM LISTA.md`
+  fornecido pelo Richard. Sem região selecionada, lista todos em ordem alfabética.
+
+---
+
 ## Armadilhas conhecidas
 
 1. **Nome curto vs completo** — `prestacoes_contas.analista_nome` é curto ("Richard");
@@ -122,7 +145,17 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
 ### Verificar (última rodada não conferida)
 - [ ] Quadro 2 do relatório CGE lista os 45 servidores (estava truncando em 5)
 - [ ] Estoque no Quadro 1 mostra 11.552 (estava 14.622)
-- [ ] Tela Produtividade com linhas neutras (estava colorida por faixa)
+- [x] Tela Produtividade com linhas neutras — corrigido 19/07/2026 (zebra branco/cinza,
+      cor só no % e na barra: verde #15803D / âmbar #B45309 / vermelho #991B1B)
+
+### Verificar — sessão 20/07/2026 (não testado em navegador, só validado com node --check)
+- [ ] Fluxo completo Primeiro Acesso → aparece em "Aguardando Aprovação" → Aprovar
+      (com grupo) → login libera. E o caminho de Rejeitar.
+- [ ] Upload de foto no Meu Perfil, agora que o bodyParser subiu para 5mb
+- [ ] Migração automática das colunas novas de `usuarios` rodou certo no boot do
+      Railway (`garantirColunasUsuarios` em `server.js`)
+- [ ] Dropdown Região/Município no Primeiro Acesso e no Meu Perfil (filtro e opção
+      "Todas as regiões" mostrando os 295 municípios)
 
 ### Cadastro
 - [ ] Gustavo — falta nome completo e portaria; assinatura comentada no PDF
@@ -137,5 +170,12 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
 
 ### Funcionalidades
 - [ ] Notificações internas — sininho no cabeçalho, não implementado
-- [ ] E-mails dos analistas — adiado
+- [x] E-mails dos analistas — campo `email` existe desde 19/07/2026 (Primeiro Acesso
+      e Meu Perfil); ainda não há envio de e-mail de fato, só o cadastro do dado
 - [ ] Código morto: `confDev` e modal `moDev`
+
+### Arquivos não versionados (intencional, conferir antes de apagar)
+- [ ] `sigpc-gt`: `identidade_sigpc.css`, `logo_sc_base64.js` — presentes desde antes
+      da sessão 19/07, propósito não confirmado com o Richard
+- [ ] `sigpc-api`: scripts de carga (`carga_*.js`, `*_carga.csv`, `backfill_*.js`,
+      `desfazer_assuncoes.js`, `importar_nls.js`) — nunca commitar (regra do projeto)
