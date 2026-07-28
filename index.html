@@ -4882,15 +4882,18 @@ async function priorCarregar() {
       trMap[e.tr].ids.push(e.id)
     })
     const trs = Object.keys(trMap)
-    const nlR = await fetch(`${API_URL}/notas_liquidacao?tr=${trs.join(',')}&baixada=false&limit=9999`)
-    const nlJ = await nlR.json()
-    const nls = nlJ.data || []
     const nlMap = {}
-    nls.forEach(n => {
-      const k = n.tr+'|'+n.parcela
-      if(!nlMap[k]) nlMap[k] = 0
-      nlMap[k]++
-    })
+    await Promise.all(trs.map(async tr => {
+      try {
+        const nr = await fetch(`${API_URL}/notas_liquidacao?tr=${tr}&baixada=false&limit=9999`)
+        const nj = await nr.json()
+        ;(nj.data||[]).forEach(n => {
+          const k = n.tr+'|'+n.parcela
+          if(!nlMap[k]) nlMap[k] = 0
+          nlMap[k]++
+        })
+      } catch(e) {}
+    }))
     PRIOR_DADOS = trs.map(tr => {
       const info = trMap[tr]
       let totalNLs = 0
