@@ -1251,6 +1251,9 @@ function renderSB() {
         <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
         ${isCoordi?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:2px;">ADM</span>':''}
       </div>
+      ${U.perfil==='superadmin'?`<div class="sb-item" id="mi-prior" onclick="irPrioridade()">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-2v-4H8v-2h4V8h2v4h4v2z"/></svg>Painel Técnico
+      </div>`:''}
       <div class="sb-item" id="mi-perfil" onclick="irMeuPerfil()">
         <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Meu Perfil
       </div>
@@ -4801,6 +4804,183 @@ async function perfilRedefinirSenha() {
 //  UTILITÁRIOS
 // ══════════════════════════════════════
 function fm(id) { document.getElementById(id).classList.remove('open') }
+
+// ══════════════════════════════════════
+//  PAINEL TÉCNICO (superadmin only)
+// ══════════════════════════════════════
+let PRIOR_DADOS = []
+
+async function irPrioridade() {
+  ativarMenu('prior')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">📊 Painel Técnico</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:2px;">TRs livres ranqueados pelo maior volume de PCs que um único parecer pode baixar</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="fg">
+          <label style="font-size:10px;">Ordenar por</label>
+          <select id="priorOrd" onchange="priorOrdenar(this.value)"
+            style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <option value="pcs">↓ Mais PCs por NL</option>
+            <option value="parcelas">↓ Mais Parcelas</option>
+            <option value="tr">TR (A→Z)</option>
+          </select>
+        </div>
+        <button onclick="priorCarregar()" class="btn-buscar" style="height:32px;">↺ Atualizar</button>
+        <button onclick="priorExportarCSV()" class="btn-buscar" style="height:32px;background:var(--az);color:#fff;border:none;">⬇ CSV</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+      <div class="card"><div class="card-val" id="pc-trs">—</div><div class="card-lbl">TRs Livres</div></div>
+      <div class="card"><div class="card-val" id="pc-parcelas">—</div><div class="card-lbl">Parcelas Livres</div></div>
+      <div class="card"><div class="card-val" id="pc-pcs" style="color:var(--v);">—</div><div class="card-lbl">PCs Potenciais</div></div>
+      <div class="card"><div class="card-val" id="pc-media" style="color:var(--az);">—</div><div class="card-lbl">Média PCs/NL</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:var(--v);color:#fff;font-size:11px;">
+            <th style="padding:8px 6px;text-align:center;width:36px;">#</th>
+            <th style="padding:8px 6px;text-align:left;">TR</th>
+            <th style="padding:8px 6px;text-align:left;max-width:200px;">Beneficiário</th>
+            <th style="padding:8px 6px;text-align:center;">Parcelas<br>Livres</th>
+            <th style="padding:8px 6px;text-align:center;">NLs<br>Pendentes</th>
+            <th style="padding:8px 6px;text-align:center;background:#004d2c;">PCs por<br>Parecer</th>
+            <th style="padding:8px 6px;text-align:center;">Barra</th>
+            <th style="padding:8px 6px;text-align:center;">Ação</th>
+          </tr>
+        </thead>
+        <tbody id="priorBody">
+          <tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="priorRodape" style="font-size:10px;color:var(--ct);margin-top:8px;text-align:right;"></div>
+  `
+  await priorCarregar()
+}
+
+async function priorCarregar() {
+  const tbody = document.getElementById('priorBody')
+  if(!tbody) return
+  tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando estoque livre...</div></td></tr>'
+  try {
+    const sid = U.setorialFiltro || 'FCEE'
+    const r = await fetch(`${API_URL}/estoque?status=livre&setorial_id=${sid}&limit=9999`)
+    const j = await r.json()
+    const estoque = j.data || []
+    if(!estoque.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum TR livre encontrado.</td></tr>'
+      return
+    }
+    const trMap = {}
+    estoque.forEach(e => {
+      if(!trMap[e.tr]) trMap[e.tr] = { tr:e.tr, beneficiario:e.beneficiario||'—', parcelas:[], ids:[] }
+      trMap[e.tr].parcelas.push({ id:e.id, parcela:e.parcela })
+      trMap[e.tr].ids.push(e.id)
+    })
+    const trs = Object.keys(trMap)
+    const nlR = await fetch(`${API_URL}/notas_liquidacao?tr=${trs.join(',')}&baixada=false&limit=9999`)
+    const nlJ = await nlR.json()
+    const nls = nlJ.data || []
+    const nlMap = {}
+    nls.forEach(n => {
+      const k = n.tr+'|'+n.parcela
+      if(!nlMap[k]) nlMap[k] = 0
+      nlMap[k]++
+    })
+    PRIOR_DADOS = trs.map(tr => {
+      const info = trMap[tr]
+      let totalNLs = 0
+      info.parcelas.forEach(p => { totalNLs += nlMap[tr+'|'+p.parcela] || 0 })
+      const pcs_por_parecer = info.parcelas.length > 0
+        ? Math.round((totalNLs / info.parcelas.length) * 10) / 10
+        : 0
+      return {
+        tr: info.tr,
+        beneficiario: info.beneficiario,
+        qtd_parcelas: info.parcelas.length,
+        total_nls: totalNLs,
+        pcs_por_parecer,
+        id_ref: info.ids[0],
+        parcela_ref: info.parcelas[0]?.parcela
+      }
+    })
+    priorOrdenar('pcs')
+  } catch(e) {
+    if(document.getElementById('priorBody'))
+      document.getElementById('priorBody').innerHTML =
+        `<tr><td colspan="8" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+  }
+}
+
+function priorOrdenar(col) {
+  let dados = [...PRIOR_DADOS]
+  if(col==='pcs')      dados.sort((a,b)=>b.pcs_por_parecer-a.pcs_por_parecer)
+  if(col==='parcelas') dados.sort((a,b)=>b.qtd_parcelas-a.qtd_parcelas)
+  if(col==='tr')       dados.sort((a,b)=>a.tr.localeCompare(b.tr))
+  priorRenderizar(dados)
+}
+
+function priorRenderizar(dados) {
+  const tbody = document.getElementById('priorBody')
+  if(!tbody) return
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v }
+  set('pc-trs', dados.length)
+  set('pc-parcelas', dados.reduce((s,r)=>s+r.qtd_parcelas,0))
+  set('pc-pcs', dados.reduce((s,r)=>s+r.total_nls,0)||'(sem NL)')
+  const totalParc = dados.reduce((s,r)=>s+r.qtd_parcelas,0)
+  const totalNLs  = dados.reduce((s,r)=>s+r.total_nls,0)
+  set('pc-media', totalParc>0?(totalNLs/totalParc).toFixed(1):'—')
+  const maxPcs = Math.max(...dados.map(r=>r.pcs_por_parecer),1)
+  if(!dados.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum dado.</td></tr>'
+    return
+  }
+  tbody.innerHTML = dados.map((r,i) => {
+    const pct   = Math.round((r.pcs_por_parecer/maxPcs)*100)
+    const cor   = i<3?'var(--v)':(i<10?'var(--az)':'var(--ct)')
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`
+    const badge = r.pcs_por_parecer>=10
+      ? `<span style="background:#E8F5E9;color:var(--v);font-weight:800;font-size:13px;padding:2px 8px;border-radius:8px;border:1.5px solid var(--v);">+${r.pcs_por_parecer.toFixed(1)}</span>`
+      : `<span style="background:#FFF8E1;color:#B8860B;font-weight:700;font-size:12px;padding:2px 8px;border-radius:8px;">${r.pcs_por_parecer.toFixed(1)}</span>`
+    const nlTxt = r.total_nls>0
+      ? `<span style="font-weight:600;color:var(--az);">${r.total_nls}</span>`
+      : `<span style="color:var(--ct);font-size:10px;">—</span>`
+    const btnAss = `<button class="btn-acao btn-ass" onclick="assumirTR('${r.tr}')">Assumir</button>`
+    return `<tr style="${i%2===0?'background:#fafffe;':''}${i<3?'border-left:3px solid var(--v);':''}">
+      <td style="text-align:center;font-weight:800;color:${cor};font-size:13px;">${medal}</td>
+      <td style="font-weight:700;font-size:12px;">${r.tr}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ct);" title="${r.beneficiario}">${r.beneficiario}</td>
+      <td style="text-align:center;"><span class="bdg bdg-livre">${r.qtd_parcelas} parc.</span></td>
+      <td style="text-align:center;">${nlTxt}</td>
+      <td style="text-align:center;background:#F1FBF5;">${badge}</td>
+      <td style="min-width:120px;padding:6px;">
+        <div style="background:#e0e0e0;border-radius:4px;height:10px;overflow:hidden;">
+          <div style="background:${cor};height:100%;width:${pct}%;border-radius:4px;"></div>
+        </div>
+      </td>
+      <td style="text-align:center;">${btnAss}</td>
+    </tr>`
+  }).join('')
+  const el=document.getElementById('priorRodape')
+  if(el) el.textContent=`${dados.length} TRs — ${new Date().toLocaleString('pt-BR')}`
+}
+
+function priorExportarCSV() {
+  if(!PRIOR_DADOS.length){toast('Sem dados.','err');return}
+  let csv='Posição;TR;Beneficiário;Parcelas Livres;NLs Pendentes;PCs por Parecer\n'
+  ;[...PRIOR_DADOS].sort((a,b)=>b.pcs_por_parecer-a.pcs_por_parecer).forEach((r,i)=>{
+    csv+=`${i+1};"${r.tr}";"${(r.beneficiario||'').replace(/"/g,"'")}";"${r.qtd_parcelas}";"${r.total_nls}";"${r.pcs_por_parecer.toFixed(1)}"\n`
+  })
+  const a=document.createElement('a')
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}))
+  a.download=`painel_tecnico_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+  toast('CSV exportado!','ok')
+}
 
 function toast(msg, tipo='ok') {
   const el = document.getElementById('toast')
