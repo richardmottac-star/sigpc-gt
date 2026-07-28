@@ -4816,15 +4816,15 @@ async function irPrioridade() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-size:16px;font-weight:700;">📊 Painel Técnico</div>
-        <div style="font-size:11px;color:var(--ct);margin-top:2px;">TRs livres ranqueados pelo maior volume de PCs que um único parecer pode baixar</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:2px;">TRs com PCs livres — ranqueados pelo maior pacote de PCs sob a mesma NL</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <div class="fg">
           <label style="font-size:10px;">Ordenar por</label>
           <select id="priorOrd" onchange="priorOrdenar(this.value)"
             style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-            <option value="pcs">↓ Mais PCs por NL</option>
-            <option value="parcelas">↓ Mais Parcelas</option>
+            <option value="nl">↓ Maior pacote por NL</option>
+            <option value="pcs">↓ Mais PCs livres</option>
             <option value="tr">TR (A→Z)</option>
           </select>
         </div>
@@ -4833,10 +4833,10 @@ async function irPrioridade() {
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
-      <div class="card"><div class="card-val" id="pc-trs">—</div><div class="card-lbl">TRs Livres</div></div>
-      <div class="card"><div class="card-val" id="pc-parcelas">—</div><div class="card-lbl">Parcelas Livres</div></div>
-      <div class="card"><div class="card-val" id="pc-pcs" style="color:var(--v);">—</div><div class="card-lbl">PCs Potenciais</div></div>
-      <div class="card"><div class="card-val" id="pc-media" style="color:var(--az);">—</div><div class="card-lbl">Média PCs/NL</div></div>
+      <div class="card"><div class="card-val" id="pc-trs">—</div><div class="card-lbl">TRs com PC Livre</div></div>
+      <div class="card"><div class="card-val" id="pc-pcs" style="color:var(--v);">—</div><div class="card-lbl">PCs Livres</div></div>
+      <div class="card"><div class="card-val" id="pc-nls">—</div><div class="card-lbl">NLs Distintas</div></div>
+      <div class="card"><div class="card-val" id="pc-max" style="color:var(--az);">—</div><div class="card-lbl">Maior Pacote</div></div>
     </div>
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -4844,10 +4844,10 @@ async function irPrioridade() {
           <tr style="background:var(--v);color:#fff;font-size:11px;">
             <th style="padding:8px 6px;text-align:center;width:36px;">#</th>
             <th style="padding:8px 6px;text-align:left;">TR</th>
-            <th style="padding:8px 6px;text-align:left;max-width:200px;">Beneficiário</th>
-            <th style="padding:8px 6px;text-align:center;">Parcelas<br>Livres</th>
-            <th style="padding:8px 6px;text-align:center;">NLs<br>Pendentes</th>
-            <th style="padding:8px 6px;text-align:center;background:#004d2c;color:#fff;">PCs por<br>Parecer</th>
+            <th style="padding:8px 6px;text-align:left;max-width:200px;">Entidade</th>
+            <th style="padding:8px 6px;text-align:center;">PCs<br>Livres</th>
+            <th style="padding:8px 6px;text-align:center;">NLs<br>Distintas</th>
+            <th style="padding:8px 6px;text-align:center;background:#004d2c;color:#fff;">Maior Pacote<br>(1 parecer)</th>
             <th style="padding:8px 6px;text-align:center;">Barra</th>
             <th style="padding:8px 6px;text-align:center;">Ação</th>
           </tr>
@@ -4865,53 +4865,35 @@ async function irPrioridade() {
 async function priorCarregar() {
   const tbody = document.getElementById('priorBody')
   if(!tbody) return
-  tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando estoque livre...</div></td></tr>'
+  tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><div class="spin"></div>Carregando PCs livres...</div></td></tr>'
   try {
     const sid = U.setorialFiltro || 'FCEE'
-    const r = await fetch(`${API_URL}/estoque?status=livre&setorial_id=${sid}&limit=9999`)
+    const r = await fetch(`${API_URL}/prestacoes_contas?status=livre&setorial_id=${sid}&limit=99999`)
     const j = await r.json()
-    const estoque = j.data || []
-    if(!estoque.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum TR livre encontrado.</td></tr>'
+    const pcs = j.data || []
+    if(!pcs.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhuma PC livre encontrada.</td></tr>'
       return
     }
     const trMap = {}
-    estoque.forEach(e => {
-      if(!trMap[e.tr]) trMap[e.tr] = { tr:e.tr, beneficiario:e.beneficiario||'—', parcelas:[], ids:[] }
-      trMap[e.tr].parcelas.push({ id:e.id, parcela:e.parcela })
-      trMap[e.tr].ids.push(e.id)
+    pcs.forEach(p => {
+      if(!trMap[p.tr]) trMap[p.tr] = { tr:p.tr, entidade:p.entidade||'—', total:0, nls:{} }
+      const t = trMap[p.tr]
+      t.total++
+      const chaveNL = p.codigo_nl || ('SEM_NL_'+p.codigo_pc)
+      t.nls[chaveNL] = (t.nls[chaveNL]||0) + 1
     })
-    const trs = Object.keys(trMap)
-    const nlMap = {}
-    await Promise.all(trs.map(async tr => {
-      try {
-        const nr = await fetch(`${API_URL}/notas_liquidacao?tr=${tr}&baixada=false&limit=9999`)
-        const nj = await nr.json()
-        ;(nj.data||[]).forEach(n => {
-          const k = n.tr+'|'+n.parcela
-          if(!nlMap[k]) nlMap[k] = 0
-          nlMap[k]++
-        })
-      } catch(e) {}
-    }))
-    PRIOR_DADOS = trs.map(tr => {
-      const info = trMap[tr]
-      let totalNLs = 0
-      info.parcelas.forEach(p => { totalNLs += nlMap[tr+'|'+p.parcela] || 0 })
-      const pcs_por_parecer = info.parcelas.length > 0
-        ? Math.round((totalNLs / info.parcelas.length) * 10) / 10
-        : 0
+    PRIOR_DADOS = Object.values(trMap).map(t => {
+      const grupos = Object.values(t.nls)
       return {
-        tr: info.tr,
-        beneficiario: info.beneficiario,
-        qtd_parcelas: info.parcelas.length,
-        total_nls: totalNLs,
-        pcs_por_parecer,
-        id_ref: info.ids[0],
-        parcela_ref: info.parcelas[0]?.parcela
+        tr: t.tr,
+        entidade: t.entidade,
+        pcs_livres: t.total,
+        qtd_nls: grupos.length,
+        maior_nl: Math.max.apply(null, grupos)
       }
     })
-    priorOrdenar('pcs')
+    priorOrdenar(document.getElementById('priorOrd')?.value || 'nl')
   } catch(e) {
     if(document.getElementById('priorBody'))
       document.getElementById('priorBody').innerHTML =
@@ -4921,9 +4903,9 @@ async function priorCarregar() {
 
 function priorOrdenar(col) {
   let dados = [...PRIOR_DADOS]
-  if(col==='pcs')      dados.sort((a,b)=>b.pcs_por_parecer-a.pcs_por_parecer)
-  if(col==='parcelas') dados.sort((a,b)=>b.qtd_parcelas-a.qtd_parcelas)
-  if(col==='tr')       dados.sort((a,b)=>a.tr.localeCompare(b.tr))
+  if(col==='nl')  dados.sort((a,b)=>b.maior_nl-a.maior_nl || b.pcs_livres-a.pcs_livres)
+  if(col==='pcs') dados.sort((a,b)=>b.pcs_livres-a.pcs_livres)
+  if(col==='tr')  dados.sort((a,b)=>a.tr.localeCompare(b.tr))
   priorRenderizar(dados)
 }
 
@@ -4932,33 +4914,28 @@ function priorRenderizar(dados) {
   if(!tbody) return
   const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v }
   set('pc-trs', dados.length)
-  set('pc-parcelas', dados.reduce((s,r)=>s+r.qtd_parcelas,0))
-  set('pc-pcs', dados.reduce((s,r)=>s+r.total_nls,0)||'(sem NL)')
-  const totalParc = dados.reduce((s,r)=>s+r.qtd_parcelas,0)
-  const totalNLs  = dados.reduce((s,r)=>s+r.total_nls,0)
-  set('pc-media', totalParc>0?(totalNLs/totalParc).toFixed(1):'—')
-  const maxPcs = Math.max(...dados.map(r=>r.pcs_por_parecer),1)
+  set('pc-pcs', dados.reduce((s,r)=>s+r.pcs_livres,0))
+  set('pc-nls', dados.reduce((s,r)=>s+r.qtd_nls,0))
+  set('pc-max', dados.length ? Math.max.apply(null, dados.map(r=>r.maior_nl)) : '—')
   if(!dados.length) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ct);">Nenhum dado.</td></tr>'
     return
   }
+  const maxNL = Math.max.apply(null, dados.map(r=>r.maior_nl).concat([1]))
   tbody.innerHTML = dados.map((r,i) => {
-    const pct   = Math.round((r.pcs_por_parecer/maxPcs)*100)
+    const pct   = Math.round((r.maior_nl/maxNL)*100)
     const cor   = i<3?'var(--v)':(i<10?'var(--az)':'var(--ct)')
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`
-    const badge = r.pcs_por_parecer>=10
-      ? `<span style="background:#E8F5E9;color:var(--v);font-weight:800;font-size:13px;padding:2px 8px;border-radius:8px;border:1.5px solid var(--v);">+${r.pcs_por_parecer.toFixed(1)}</span>`
-      : `<span style="background:#FFF8E1;color:#B8860B;font-weight:700;font-size:12px;padding:2px 8px;border-radius:8px;">${r.pcs_por_parecer.toFixed(1)}</span>`
-    const nlTxt = r.total_nls>0
-      ? `<span style="font-weight:600;color:var(--az);">${r.total_nls}</span>`
-      : `<span style="color:var(--ct);font-size:10px;">—</span>`
+    const badge = r.maior_nl>=5
+      ? `<span style="background:#E8F5E9;color:var(--v);font-weight:800;font-size:14px;padding:3px 10px;border-radius:8px;border:1.5px solid var(--v);">${r.maior_nl} PCs</span>`
+      : `<span style="background:#FFF8E1;color:#B8860B;font-weight:700;font-size:12px;padding:3px 10px;border-radius:8px;">${r.maior_nl} PC${r.maior_nl>1?'s':''}</span>`
     const btnAss = `<button class="btn-acao btn-ass" onclick="assumirTR('${r.tr}')">Assumir</button>`
     return `<tr style="${i%2===0?'background:#fafffe;':''}${i<3?'border-left:3px solid var(--v);':''}">
       <td style="text-align:center;font-weight:800;color:${cor};font-size:13px;">${medal}</td>
       <td style="font-weight:700;font-size:12px;">${r.tr}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ct);" title="${r.beneficiario}">${r.beneficiario}</td>
-      <td style="text-align:center;"><span class="bdg bdg-livre">${r.qtd_parcelas} parc.</span></td>
-      <td style="text-align:center;">${nlTxt}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ct);" title="${r.entidade}">${r.entidade}</td>
+      <td style="text-align:center;"><span class="bdg bdg-livre">${r.pcs_livres}</span></td>
+      <td style="text-align:center;font-weight:600;color:var(--az);">${r.qtd_nls}</td>
       <td style="text-align:center;background:#F1FBF5;">${badge}</td>
       <td style="min-width:120px;padding:6px;">
         <div style="background:#e0e0e0;border-radius:4px;height:10px;overflow:hidden;">
@@ -4974,9 +4951,9 @@ function priorRenderizar(dados) {
 
 function priorExportarCSV() {
   if(!PRIOR_DADOS.length){toast('Sem dados.','err');return}
-  let csv='Posição;TR;Beneficiário;Parcelas Livres;NLs Pendentes;PCs por Parecer\n'
-  ;[...PRIOR_DADOS].sort((a,b)=>b.pcs_por_parecer-a.pcs_por_parecer).forEach((r,i)=>{
-    csv+=`${i+1};"${r.tr}";"${(r.beneficiario||'').replace(/"/g,"'")}";"${r.qtd_parcelas}";"${r.total_nls}";"${r.pcs_por_parecer.toFixed(1)}"\n`
+  let csv='Posição;TR;Entidade;PCs Livres;NLs Distintas;Maior Pacote NL\n'
+  ;[...PRIOR_DADOS].sort((a,b)=>b.maior_nl-a.maior_nl).forEach((r,i)=>{
+    csv+=`${i+1};"${r.tr}";"${(r.entidade||'').replace(/"/g,"'")}";${r.pcs_livres};${r.qtd_nls};${r.maior_nl}\n`
   })
   const a=document.createElement('a')
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}))
