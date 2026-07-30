@@ -82,3 +82,54 @@ O CI não conta como baixa — confirmado nas duas planilhas (coluna separada) e
 A confirmar com Nayara/Zadir:
 1. Encaminhar ao CI conta como baixa para produtividade CGE?
 2. Se sim, como evitar dupla contagem quando o processo retorna e recebe parecer?
+
+## 5. Situação individual — Richard
+
+Meta 78 · Realizadas 30 · Faltam 48 · Cumprimento real 38,5%
+
+A planilha mostra 22 porque 8 registros estão com a coluna "Número de PCs" em branco, todos em parcelas FINAL. O correto é 30 — valor que coincide exatamente com o Quadro 2 do relatório anterior.
+
+### TRs a corrigir na planilha (preencher com valor 1)
+
+2022TR000251 · 2021TR001582 · 2022TR002146 · 2023TR000150 · 2021TR002268 · 2021TR001690 · 2023TR000807 · e um registro sem número de TR informado
+
+### Plano para fechar a meta — 5 TRs, 5 pareceres, 51 PCs
+
+| TR | Entidade | PCs |
+|---|---|---|
+| 2022TR001465 | APAE Blumenau | 12 |
+| 2022TR002271 | APAE Florianópolis | 12 |
+| 2023TR000219 | Fraternidade Cristã | 11 |
+| 2022TR001456 | APAE São Ludgero | 8 |
+| 2023TR000809 | Integração Social de Crianças | 8 |
+
+### Lista de reserva
+
+2022TR001451 (7) · 2022TR001512 (7) · 2022TR001438 (6) · 2022TR001530 (6) · 2022TR001086 (5) · 2022TR001440 (5) · 2022TR000770 (4)
+
+### Evitar por ora (pacote inicial bom, volume total alto — entope a carteira)
+
+2022TR001683 (36 PCs) · 2022TR000941 (42) · 2022TR000691 (45) · 2020TR000820 (46)
+
+### Excluídos por inviabilidade técnica
+
+Todos da Associação de Deficientes Visuais de Itajaí e Região: 2022TR001097 · 2022TR001688 · 2020TR000632
+
+### TR 2020TR000620 — APAE Timbó
+
+77 PCs em 27 NLs, todas do Richard. CNPJ 83.793.083/0001-40 · processo mãe SCC2511/2020.
+
+Maiores pacotes: 2022NL003473 (6 PCs) · 2020NL006139 (5) · 2021NL005732 (5) · 2022NL014906 (5)
+
+Razão de 2,85 PCs por parecer — bem acima da média do Grupo 3.
+
+**Verificar depois:** 4 PCs de 2023 com valor e SGPe idênticos (SCC 00007810/2024, R$ 483.957,94) mas com NLs diferentes — sugere possível duplicidade na carga.
+
+## Próximos passos
+
+1. Testar a Devolução Master no navegador
+2. Verificar qual tabela a tela Estoque TRs está lendo
+3. Levar o PDF de análise à coordenação e definir o método de apuração
+4. Confirmar a regra do Controle Interno
+5. Definir o período do relatório: junho/2026 (meta 110) ou julho/2026 (meta 120)
+6. Executar o plano dos 5 TRs
