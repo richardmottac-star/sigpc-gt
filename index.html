@@ -2978,6 +2978,7 @@ async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
   const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
+  const TXT = await cgeCarregarTextos()
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
   try {
@@ -3031,6 +3032,46 @@ async function cgeExportPDF() {
   const gList = (g) => _cgeDados.filter(d=>d.grupo===g)
   const gSt   = (arr) => ({ bx:arr.reduce((s,d)=>s+d.totalBaixadas,0), tot:arr.reduce((s,d)=>s+d.totalBaixadas,0), acima:arr.filter(d=>d.pctMeta!==null && d.pctMeta>=100).length })
   const g1=gSt(gList(1)), g2=gSt(gList(2)), g3=gSt(gList(3))
+
+  // Textos editáveis (moCgeTxt) — usa o que foi salvo em relatorios_cge; cai no texto padrão quando vazio
+  const defG1 = `O Grupo 1 apresentou bom desempenho com ${g1.acima} técnico(s) atingindo ou ultrapassando a meta estabelecida${g1.acima>0?', demonstrando comprometimento e expertise crescente nos processos analisados':'. Alguns técnicos apresentam percentual menor em virtude de processos mais complexos, causando uma morosidade nestas análises e consequentemente nas respectivas baixas'}.`
+  const defG2 = `O Grupo 2 possui um percentual mais equilibrado de PCs baixadas entre os técnicos, com ${g2.acima} técnico(s) ultrapassando a meta prevista. Apresenta um grande volume de processos em fase de diligência no período avaliado, evidenciando dependência significativa do retorno tempestivo de documentação por parte das entidades parceiras.`
+  const defG3 = `O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente pela questão de em sua maioria ser apenas 1 PC por parcial, impactando diretamente no resultado. Muitos desse grupo também não possuíam contato com esta função de convênios, prestações de contas, criando cada vez mais conhecimento e isso refletindo na melhora da produtividade.`
+
+  const justHtml = (TXT.justificativas && TXT.justificativas.length ? TXT.justificativas : CGE_TXT_PADRAO.justificativas)
+    .map((t,i) => `<p>${String.fromCharCode(97+i)}) ${t}</p>`).join('\n')
+
+  const defConclusao = [
+    `Diante dos dados apresentados, constata-se o cumprimento parcial das metas estabelecidas no Plano de Ação para o período de ${periodoLong}. Tendo como meta acumulada ${metaAcumFmt}, tendo sido registradas até o momento baixa de ${totBxFmt} PCs, correspondendo a ${pctMeta} de cumprimento da meta planejada.`,
+    `O desempenho observado foi impactado, principalmente, pela elevada complexidade de parte dos processos analisados, pela predominância de pendências de natureza documental e formal, pela dependência de retorno tempestivo das entidades conveniadas, pelas reiterações de diligências, fatores que influenciaram diretamente a capacidade operacional e o tempo médio de finalização dos processos.`,
+    `Ressalta-se, contudo, que, mesmo diante das limitações verificadas, o Grupo de Trabalho manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, com observância aos normativos vigentes e à preservação da segurança jurídica dos pareceres emitidos.`,
+    `Destaca-se, ainda, que estamos implementando um sistema para monitoramento e acompanhamento tanto da coordenação como técnicos dando mais transparência e controle nas atividades.`,
+    `Quanto ao impacto no resultado global das metas pactuadas, registra-se que o desempenho do período não inviabiliza o alcance dos objetivos estabelecidos no Plano de Ação, desde que mantidas e aperfeiçoadas as estratégias de gestão, capacitação técnica, padronização dos procedimentos e acompanhamento sistemático, com reforço das ações de orientação às entidades conveniadas e do apoio institucional à uniformização dos critérios de análise.`,
+    `Por fim, ressalta-se o comprometimento da equipe do GT-PC com a execução das atividades de análise de prestações de contas e a importância de preservar a continuidade do monitoramento, mantendo o alinhamento permanente com as orientações técnicas da Controladoria-Geral do Estado, com vistas ao fortalecimento do controle interno, à melhoria dos indicadores institucionais e à preservação do interesse público.`
+  ].map(p=>`<p>${p}</p>`).join('\n')
+  const conclusaoHtml = TXT.conclusao && TXT.conclusao.trim()
+    ? TXT.conclusao.split('\n').filter(l=>l.trim()).map(l=>`<p>${l}</p>`).join('\n')
+    : defConclusao
+
+  const sigList = (TXT.signatarios && TXT.signatarios.length) ? TXT.signatarios : CGE_TXT_PADRAO.signatarios
+  const sigPrincipais = sigList.slice(0, -1)
+  const sigFinal = sigList[sigList.length-1]
+  const assRowHtml = sigPrincipais.map(s => `
+    <div class="ass-col">
+      <div class="ass-linha">
+        <div class="ass-nome">${s.nome||''}</div>
+        <div class="ass-cargo">${s.cargo||''}</div>
+        ${s.portaria?`<div class="ass-cargo">${s.portaria}</div>`:''}
+      </div>
+    </div>`).join('')
+  const assFinalHtml = sigFinal ? `
+  <div class="ass-center">
+    <div class="ass-linha">
+      <div class="ass-nome">${sigFinal.nome||''}</div>
+      <div class="ass-cargo">${sigFinal.cargo||''}</div>
+      ${sigFinal.portaria?`<div class="ass-cargo">${sigFinal.portaria}</div>`:''}
+    </div>
+  </div>` : ''
 
 
   // Cabeçalho institucional (reutilizado em cada seção)
@@ -3142,7 +3183,7 @@ ${HDR}
 </div>
 
 <div class="sec">1. Contextualização</div>
-<p>O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.</p>
+<p>${TXT.contextualizacao || CGE_TXT_PADRAO.contextualizacao}</p>
 
 <div class="sec">1.1 Cronograma e Metas Mensais</div>
 <p>Conforme o Plano de Ação aprovado, a meta global para o período de ${periodoLong} foi de ${metaTrim.toLocaleString('pt-BR')} prestações de contas analisadas, correspondendo à meta de ${metaMes} prestações de contas por técnico/mês${meses>0?`, totalizando ${metaMes*meses} processos por técnico neste período`:''}.
@@ -3242,21 +3283,17 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
 
 <div class="sec">Análise por Grupo</div>
 <p><strong>Grupo 1</strong><br>
-O Grupo 1 apresentou bom desempenho com ${g1.acima} técnico(s) atingindo ou ultrapassando a meta estabelecida${g1.acima>0?', demonstrando comprometimento e expertise crescente nos processos analisados':'. Alguns técnicos apresentam percentual menor em virtude de processos mais complexos, causando uma morosidade nestas análises e consequentemente nas respectivas baixas'}.</p>
+${TXT.analise_grupo1 || defG1}</p>
 <p><strong>Grupo 2</strong><br>
-O Grupo 2 possui um percentual mais equilibrado de PCs baixadas entre os técnicos, com ${g2.acima} técnico(s) ultrapassando a meta prevista. Apresenta um grande volume de processos em fase de diligência no período avaliado, evidenciando dependência significativa do retorno tempestivo de documentação por parte das entidades parceiras.</p>
+${TXT.analise_grupo2 || defG2}</p>
 <p><strong>Grupo 3</strong><br>
-O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente pela questão de em sua maioria ser apenas 1 PC por parcial, impactando diretamente no resultado. Muitos desse grupo também não possuíam contato com esta função de convênios, prestações de contas, criando cada vez mais conhecimento e isso refletindo na melhora da produtividade.</p>
+${TXT.analise_grupo3 || defG3}</p>
 
 <div class="sec">1.3 Análise Qualitativa e Ações Corretivas</div>
 <p>A análise qualitativa permite identificar aspectos relevantes quanto à organização do trabalho, à padronização dos procedimentos e à efetividade das ações desenvolvidas pelo Grupo de Trabalho de Prestação de Contas (GT-PC) no período de monitoramento.</p>
 <p><strong>Justificativas Complementares sobre o Desempenho no Período</strong></p>
 <p>A análise dos resultados apresentados nos Quadros 1 e 2 deve ser interpretada à luz das especificidades operacionais verificadas no período monitorado, as quais impactaram diretamente o ritmo de tramitação e conclusão das prestações de contas, destacando-se:</p>
-<p>a) Prorrogação de prazos para atendimento às diligências, solicitada pelas entidades conveniadas em razão do acúmulo de diligências recebidas de programas já encerrados e mesmo de programas vigentes, o que resultou no adiamento da apresentação de documentos complementares e atendimento de alterações no sistema;</p>
-<p>b) Reiteração de diligências em razão da ausência ou incompletude documental, bem como do não cumprimento dos prazos por parte de determinadas instituições, exigindo novas solicitações e reanálises sucessivas;</p>
-<p>c) Nova diretoria e dificuldades de acesso aos sistemas, com mudança de pessoal ocorre falta de conhecimento por parte dos novos colaboradores de como mexer no sistema, de se inteirar sobre as pendências e responderem as diligências;</p>
-<p>d) Existência de processos condicionados à apresentação de documentos financeiros essenciais, tais como extratos bancários e balancetes, cuja ausência demandou nova análise integral da situação contábil e financeira, muitas vezes o banco não se mostrou solicito a ajudar a sanar essa falta de documentos bancários, informando que não é mais possível extrair extratos pelo longo prazo;</p>
-<p>e) Heterogeneidade e complexidade das prestações de contas analisadas, considerando diferenças relevantes quanto aos valores envolvidos, volume de movimentações financeiras e grau de detalhamento exigido, impactando diretamente o tempo médio de análise por técnico.</p>
+${justHtml}
 <p>Diante desse contexto, verifica-se que mesmo com ajuste das metas quantitativas, se torna muito difícil precisar um número em virtude dos diversos pontos que impactam esse processo, considerando as peculiaridades de cada convênio, das parcerias, o volume documental, a complexidade das análises e a dependência de fatores externos à atuação do GT-PC.</p>
 <p>Ressalta-se, contudo, que a equipe manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, priorizando a qualidade e a segurança jurídica dos pareceres emitidos. As informações encontram-se detalhadas no Quadro 3.</p>
 
@@ -3312,44 +3349,12 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
 <p>Nesse contexto, evidencia-se a necessidade de fortalecimento da estrutura dos Núcleos de Gestão de Convênios, por meio da ampliação do quadro de servidores, como medida essencial para aprimorar o atendimento, garantir o cumprimento de prazos, assegurar a adequada orientação às entidades e promover a redução do passivo de processos, contribuindo, assim, para o alcance das metas institucionais estabelecidas.</p>
 
 <div class="sec">1.4 Conclusão</div>
-<p>Diante dos dados apresentados, constata-se o cumprimento parcial das metas estabelecidas no Plano de Ação para o período de ${periodoLong}. Tendo como meta acumulada ${metaAcumFmt}, tendo sido registradas até o momento baixa de ${totBxFmt} PCs, correspondendo a ${pctMeta} de cumprimento da meta planejada.</p>
-<p>O desempenho observado foi impactado, principalmente, pela elevada complexidade de parte dos processos analisados, pela predominância de pendências de natureza documental e formal, pela dependência de retorno tempestivo das entidades conveniadas, pelas reiterações de diligências, fatores que influenciaram diretamente a capacidade operacional e o tempo médio de finalização dos processos.</p>
-<p>Ressalta-se, contudo, que, mesmo diante das limitações verificadas, o Grupo de Trabalho manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, com observância aos normativos vigentes e à preservação da segurança jurídica dos pareceres emitidos.</p>
-<p>Destaca-se, ainda, que estamos implementando um sistema para monitoramento e acompanhamento tanto da coordenação como técnicos dando mais transparência e controle nas atividades.</p>
-<p>Quanto ao impacto no resultado global das metas pactuadas, registra-se que o desempenho do período não inviabiliza o alcance dos objetivos estabelecidos no Plano de Ação, desde que mantidas e aperfeiçoadas as estratégias de gestão, capacitação técnica, padronização dos procedimentos e acompanhamento sistemático, com reforço das ações de orientação às entidades conveniadas e do apoio institucional à uniformização dos critérios de análise.</p>
-<p>Por fim, ressalta-se o comprometimento da equipe do GT-PC com a execução das atividades de análise de prestações de contas e a importância de preservar a continuidade do monitoramento, mantendo o alinhamento permanente com as orientações técnicas da Controladoria-Geral do Estado, com vistas ao fortalecimento do controle interno, à melhoria dos indicadores institucionais e à preservação do interesse público.</p>
+${conclusaoHtml}
 
 <div class="ass">
   <p style="text-align:center;margin-bottom:16px;">São José, ${dtGerado}.</p>
-  <div class="ass-row">
-    <div class="ass-col">
-      <div class="ass-linha">
-        <div class="ass-nome">Nayara Limas Ferreira</div>
-        <div class="ass-cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
-        <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
-      </div>
-    </div>
-    <div class="ass-col">
-      <div class="ass-linha">
-        <div class="ass-nome">Zadir Teresinha Machado Ferreira</div>
-        <div class="ass-cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
-        <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
-      </div>
-    </div>
-    <div class="ass-col">
-      <div class="ass-linha">
-        <div class="ass-nome">Gustavo</div>
-        <div class="ass-cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
-        <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
-      </div>
-    </div>
-  </div>
-  <div class="ass-center">
-    <div class="ass-linha">
-      <div class="ass-nome">Jeane Rauh Probst Leite</div>
-      <div class="ass-cargo">Presidente da FCEE</div>
-    </div>
-  </div>
+  <div class="ass-row">${assRowHtml}
+  </div>${assFinalHtml}
 </div>
 
 <div class="rodape">Relatório gerado automaticamente pelo SIGPC-GT v2.1 em ${dtGerado} | Dados extraídos do sistema em tempo real</div>
