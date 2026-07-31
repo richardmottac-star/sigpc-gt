@@ -1733,9 +1733,9 @@ async function abrirTR(tr) {
 
     const tdS = 'padding:5px 8px;font-size:13px;'
     const linhas = pcs.map(p => {
-      const acao = !p.baixada
-        ? `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
-        : '<span style="color:var(--ct);font-size:10px;">—</span>'
+      const acao = p.baixada === true
+        ? '<span style="color:var(--ct);font-size:10px;">Já baixada</span>'
+        : `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
       const acaoCI = p.baixada
         ? '<span style="color:var(--ct);font-size:10px;">—</span>'
         : p.enviado_ci
