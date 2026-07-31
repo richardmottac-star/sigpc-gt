@@ -5519,7 +5519,7 @@ async function cgeCarregarTextos() {
   const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
   if(_cgeTexto && _cgeTextoSid === sid) return _cgeTexto
   try {
-    const r = await fetch(`${API_URL}/relatorios_cge?setorial_id=${sid}&limit=1`)
+    const r = await fetch(`${API_URL}/relatorios_cge?setorial_id=${sid}&status=rascunho&limit=1`)
     const j = await r.json()
     const reg = (j.data||[])[0]
     if(reg) {
@@ -5555,6 +5555,46 @@ async function cgeCarregarAnterior() {
     _cgeAnterior = reg || null
   } catch(e) { _cgeAnterior = null }
   return _cgeAnterior
+}
+
+async function cgeFecharVersao() {
+  if(!_cgeTexto || !_cgeTexto.id) { toast('Salve os textos antes de fechar a versão.','err'); return }
+  if(!confirm('Fechar esta versão do relatório?\n\nO conteúdo atual será arquivado como versão entregue e um novo rascunho será criado a partir dele. A versão fechada passa a aparecer em Ver versão anterior.')) return
+  try {
+    cgeSalvarSecaoAtual()
+    const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+
+    const rF = await fetch(`${API_URL}/relatorios_cge/${_cgeTexto.id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'fechado' })
+    })
+    const jF = await rF.json()
+    if(jF.error) throw new Error(jF.error.message || jF.error)
+
+    const novo = {
+      contextualizacao: _cgeTexto.contextualizacao,
+      analise_grupo1: _cgeTexto.analise_grupo1,
+      analise_grupo2: _cgeTexto.analise_grupo2,
+      analise_grupo3: _cgeTexto.analise_grupo3,
+      justificativas: _cgeTexto.justificativas,
+      quadro3: _cgeTexto.quadro3,
+      conclusao: _cgeTexto.conclusao,
+      signatarios: _cgeTexto.signatarios,
+      setorial_id: sid, criado_por: U.id, status: 'rascunho'
+    }
+    const rN = await fetch(`${API_URL}/relatorios_cge`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(novo)
+    })
+    const jN = await rN.json()
+    if(jN.error) throw new Error(jN.error.message || jN.error)
+
+    if(jN.data && jN.data.id) _cgeTexto.id = jN.data.id
+    await cgeCarregarAnterior()
+    const info = document.getElementById('cgeSalvoInfo')
+    if(info) info.textContent = 'Versão fechada. Novo rascunho criado a partir dela.'
+    toast('Versão fechada e arquivada!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 function cgeJustRender() {
@@ -5631,6 +5671,7 @@ async function cgeAbrirTextos() {
       </div>
       <div style="display:flex;gap:6px;">
         <button onclick="cgeVerAnterior()" class="btn-buscar" style="height:32px;background:#fff;color:var(--az);border:1.5px solid var(--az);">Ver versão anterior</button>
+        <button onclick="cgeFecharVersao()" class="btn-buscar" style="height:32px;background:#fff;color:#8A6100;border:1.5px solid #8A6100;">Fechar versão</button>
         <button onclick="cgeSalvarTextos()" id="cgeTxtBtn" class="btn-buscar" style="height:32px;">✓ Salvar</button>
       </div>
     </div>
