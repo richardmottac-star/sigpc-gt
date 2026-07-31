@@ -191,3 +191,67 @@ Teste realizado e aprovado: cadastro com motivo Férias, cadastro com motivo Out
 ### Próximo passo
 
 Fase 4, relatório CGE editável. Layout já aprovado em coluna única com nove blocos, seguindo a ordem do documento impresso. Blocos com fundo branco são preenchidos pelo usuário e blocos com fundo azul e cadeado são gerados pelo sistema, exceto o campo Estoque que é editável. Assinaturas em quantidade variável, com nome, cargo e portaria, salvas como padrão para reaproveitamento no trimestre seguinte.
+
+## Fase 4 concluída — relatório CGE editável
+
+Commits: `cafa244` no `sigpc-api`. No `sigpc-gt`: `5a3a25b`, `c6fd9fe`, `284a299`, `c416840`, `1f6c83d`, `dc6b967`, `3baf6c6`, `f02a652`, `3c83e9e` e `5aebaea`.
+
+Foi criada a tabela `relatorios_cge` com vinte colunas, incluindo três campos JSONB para `justificativas`, `quadro3` e `signatarios`. Na API foram criadas cinco rotas seguindo o padrão do arquivo, com um helper `toJsonb` compartilhado entre `POST` e `PATCH`, e whitelist nomeada `RELATORIOS_CGE_PATCH_PERMITIDOS`.
+
+### Descoberta importante
+
+O relatório CGE já existia praticamente completo no sistema. A função `cgeGerar` monta os Quadros 1, 2 e 4, e a função `cgeExportPDF` gera o documento inteiro por impressão nativa do navegador, sem biblioteca externa de PDF. A Fase 4 não precisou reescrever o cálculo, apenas trocar o conteúdo fixo por editável.
+
+### Correções aplicadas
+
+**Bug de meta duplicada:** a servidora Ana Claudia aparecia com meta 220 e a servidora Claudia sem meta. A causa não estava no código, e sim no dado. O registro 31 da tabela `metas_analistas` tinha `analista_nome` igual a Claudia e grupo 3, mas estava gravado com `analista_id` 22, que é o da Ana Claudia. Provável casamento por substring durante a carga inicial. Corrigido por `UPDATE` direto no banco. Varredura posterior confirmou ser caso isolado.
+
+**Divergência de estoque** entre a prévia e o PDF, 11.522 contra 14.622. A prévia usava o estoque remanescente e o PDF somava as baixadas de volta. Unificado em dois valores nomeados: `estoqueRemanescente` para as não baixadas, e `estoqueBase` para remanescente mais baixadas. O relatório usa o `estoqueBase`, que é a base fixa contra a qual a CGE mede o avanço.
+
+**Bug crítico de data**, capturado pelo Claude Code antes de ir ao ar. Ao trocar o campo de corte de `type="date"` para `datetime-local`, quatro pontos do código concatenavam sufixo de hora a um valor que já continha hora, produzindo data inválida. Como qualquer comparação com data inválida retorna falso, o relatório zeraria silenciosamente todas as baixas, sem erro visível. Corrigido normalizando com `String(...).slice(0,10)` em todas as ocorrências.
+
+Coluna de afastamentos no PDF, que antes trazia o texto pedindo preenchimento manual, agora busca automaticamente da tabela `afastamentos` filtrando pelo período. Assinaturas passaram de dois para três coordenadores, com o bloco do Gustavo que estava comentado no código.
+
+Margens do PDF reduzidas de `1.8cm 2cm` para `1.2cm 1.4cm`, largura útil ampliada de 820 para 900 pixels, e o nome da fundação ajustado para caber em linha única no cabeçalho.
+
+### Painel de parâmetros de exceção
+
+Filosofia definida pela coordenação: o sistema calcula tudo automaticamente, e o painel serve apenas para ajuste pontual quando algo ainda não está correto na base. Não é para uso rotineiro.
+
+Todos os campos vêm em branco com placeholder "calculado". Só entram no relatório se preenchidos. Quando preenchidos, o campo fica com borda âmbar e aparece uma etiqueta informando quantos foram sobrescritos.
+
+São oito parâmetros: número de PCs total, estoque, meta do período, meta mínima por servidor ao mês, número de técnicos, número de coordenadores, PCs baixadas e baixas do secretário.
+
+A data de corte passou a incluir hora e filtra as baixas de verdade. Fica carimbada no cabeçalho do documento gerado, no formato "Dados extraídos em [data e hora]".
+
+### Editor de textos em tela cheia
+
+Substituiu o modal, que era apertado demais. Ocupa o `BODY` como as demais telas, com menu lateral de oito seções: contextualização, grupo 1, grupo 2, grupo 3, justificativas, quadro 3, conclusão e signatários.
+
+Cada seção mostra o título e a indicação de onde aquele texto sai no relatório, para o usuário saber o que está editando.
+
+As cinco seções de texto corrido usam `contenteditable` com barra de formatação por `execCommand`: negrito, itálico, sublinhado, lista com marcadores, lista numerada, alinhamento à esquerda, centralizado e justificado, e limpar formatação. Como o PDF já é HTML, a formatação aplicada vai direto para o documento final sem conversão.
+
+As três seções estruturadas mantêm a lógica própria: justificativas como lista de itens, Quadro 3 com aspecto e itens sendo uma linha por item, e signatários com nome, cargo e portaria em quantidade livre.
+
+Todos os textos têm fallback: quando o campo está vazio, o PDF usa o texto padrão ou o texto gerado dinamicamente, como no caso das análises por grupo que contam os técnicos acima da meta.
+
+### Versionamento
+
+Botão "Ver versão anterior" abre um painel acima do editor mostrando o conteúdo da seção atual no último relatório fechado. Fecha com um clique, não ocupa espaço permanente.
+
+Botão "Fechar versão" marca o rascunho atual como `status='fechado'` e cria um novo rascunho a partir dele. A função `cgeCarregarTextos` filtra por `status='rascunho'`, então nunca traz uma versão já arquivada.
+
+### Pendências da fase
+
+Exportar em formato DOC, além de PDF e Excel. Como o documento já é HTML, é rápido de implementar.
+
+O Quadro 1 ainda não separa as baixas por tipo de parecer. As colunas Parcial Regular, Parcial Irregular, Final Regular e Final Irregular precisam ser preenchidas a partir dos campos `tipo` e `parecer_tipo` da tabela `prestacoes_contas`, em vez de jogar tudo em Parcial Regular.
+
+O número total de PCs do sistema, 14.652, diverge do que a CGE tem registrado. O Richard vai confirmar com a coordenação. Enquanto isso o painel de parâmetros resolve o ajuste.
+
+Na segunda-feira será feita nova extração das planilhas, pois os analistas ainda estão lançando análises e fechando diligências.
+
+### Próximos passos
+
+Fase 5, Quadro Geral de Metas automático com a quebra por tipo de parecer. Fase 6, matriz de permissões. E o DOC.
