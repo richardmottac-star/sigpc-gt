@@ -4105,9 +4105,28 @@ function irAdmin() {
               <label>E-mail (opcional)</label>
               <input type="email" id="admEmail" placeholder="email@fcee.sc.gov.br">
             </div>
+            <div class="mc-campo" style="grid-column:1/-1;border-top:1px solid var(--cb);padding-top:10px;margin-top:4px;">
+              <label style="color:var(--v);font-weight:700;">Dados do GT-PC</label>
+            </div>
+            <div class="mc-campo">
+              <label>Matrícula</label>
+              <input type="text" id="admMatricula" placeholder="Matrícula funcional">
+            </div>
+            <div class="mc-campo">
+              <label>Meta mensal (PCs)</label>
+              <input type="number" id="admMetaMensal" value="10" min="0">
+            </div>
             <div class="mc-campo" style="grid-column:1/-1;">
-              <label>Observações</label>
-              <textarea id="admObs" rows="2" placeholder="Anotações sobre o usuário..." style="resize:vertical;"></textarea>
+              <label>Portaria</label>
+              <input type="text" id="admPortaria" placeholder="Ex: FCEE nº 227/2025">
+            </div>
+            <div class="mc-campo">
+              <label>Data de ingresso no GT</label>
+              <input type="date" id="admDataIngresso">
+            </div>
+            <div class="mc-campo">
+              <label>Data de saída</label>
+              <input type="date" id="admDataSaida">
             </div>
             <div class="mc-campo" style="display:flex;align-items:center;gap:8px;">
               <input type="checkbox" id="admAtivoNovo" checked style="width:auto;">
@@ -4278,7 +4297,11 @@ function abrirNovoUsuario() {
   document.getElementById('admCPF').value = ''
   document.getElementById('admSenha').value = ''
   document.getElementById('admEmail').value = ''
-  document.getElementById('admObs').value = ''
+  document.getElementById('admMatricula').value = ''
+  document.getElementById('admPortaria').value = ''
+  document.getElementById('admDataIngresso').value = ''
+  document.getElementById('admDataSaida').value = ''
+  document.getElementById('admMetaMensal').value = 10
   document.getElementById('admPerfilNovo').value = 'analista'
   document.getElementById('admSetorialNovo').value = 'FCEE'
   document.getElementById('admGrupoNovo').value = ''
@@ -4298,7 +4321,11 @@ function admEditarUsuario(id) {
   document.getElementById('admCPF').value = u.cpf||''
   document.getElementById('admSenha').value = ''  // Não mostrar senha atual
   document.getElementById('admEmail').value = u.email||''
-  document.getElementById('admObs').value = u.obs||''
+  document.getElementById('admMatricula').value = u.matricula || ''
+  document.getElementById('admPortaria').value = u.portaria || ''
+  document.getElementById('admDataIngresso').value = u.data_ingresso ? String(u.data_ingresso).slice(0,10) : ''
+  document.getElementById('admDataSaida').value = u.data_saida ? String(u.data_saida).slice(0,10) : ''
+  document.getElementById('admMetaMensal').value = u.meta_mensal ?? 10
   document.getElementById('admPerfilNovo').value = u.perfil||'analista'
   document.getElementById('admSetorialNovo').value = u.setorial_id||'FCEE'
   document.getElementById('admGrupoNovo').value = u.grupo||''
@@ -4328,7 +4355,11 @@ async function admSalvarUsuario() {
   const setorial = document.getElementById('admSetorialNovo').value
   const grupo = document.getElementById('admGrupoNovo').value
   const email = document.getElementById('admEmail').value.trim()
-  const obs = document.getElementById('admObs').value.trim()
+  const matricula = document.getElementById('admMatricula').value.trim()
+  const portaria = document.getElementById('admPortaria').value.trim()
+  const dataIngresso = document.getElementById('admDataIngresso').value
+  const dataSaida = document.getElementById('admDataSaida').value
+  const metaMensal = document.getElementById('admMetaMensal').value
   const ativo = document.getElementById('admAtivoNovo').checked
 
   const msgEl = document.getElementById('admUserMsg')
@@ -4355,7 +4386,12 @@ async function admSalvarUsuario() {
       nome, cpf, perfil,
       setorial_id: setorial,
       grupo: U.perfil === 'coordenador' ? (U.grupo || null) : (grupo ? parseInt(grupo) : null),
-      ativo, email: email || null
+      ativo, email: email || null,
+      matricula: matricula || null,
+      portaria: portaria || null,
+      data_ingresso: dataIngresso || null,
+      data_saida: dataSaida || null,
+      meta_mensal: metaMensal ? parseInt(metaMensal) : 10
     }
     if(senha) payload.senha_hash = senha  // superadmin define senha em texto; API pode fazer hash
 
