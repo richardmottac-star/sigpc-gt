@@ -149,3 +149,25 @@ Teste realizado e aprovado com a PC `2023PC002110`. Produtividade subiu de 30 pa
 ### Pendências anotadas
 
 Aplicar a função `tagsEstadoPC` nas telas. Substituir os `confirm` do navegador por modal do sistema. Criar tela de estorno, pois hoje a reversão só é possível por comando direto no banco. Unificar no back-end os campos `status`, `baixada` e `estornada`, que hoje podem desincronizar. Lançar manualmente no sistema os 41 registros de Controle Interno que existem nas planilhas, equivalentes a 46 PCs.
+
+## Fase 2 concluída — cadastro de analistas
+
+Commits: `1f1016f` no repositório `sigpc-api`, e `21cefb7` e `3d356cd` no `sigpc-gt`.
+
+Foram criados cinco campos na tabela `usuarios`: `matricula` do tipo texto, `portaria` do tipo texto, `data_ingresso` do tipo data, `data_saida` do tipo data e `meta_mensal` do tipo inteiro com padrão dez. O `ALTER TABLE` foi executado pelo painel do Railway, na aba Database e seção Query, porque o `psql` não está instalado no computador do trabalho.
+
+Na API foi necessário alterar dois pontos no arquivo `server.js`. A constante `USUARIOS_PATCH_PERMITIDOS` funciona como whitelist e descartava silenciosamente qualquer campo fora da lista, sem retornar erro. Os cinco campos foram acrescentados. A rota `POST` de usuários tinha o `INSERT` com colunas fixas e também foi ampliada.
+
+**Armadilha registrada:** um PATCH misto contendo um campo válido e um campo fora da whitelist grava apenas o válido e responde sucesso. O campo descartado não gera erro algum. Sempre verificar a whitelist antes de acrescentar campos novos em qualquer tela.
+
+No frontend o campo Observações do modal de usuário foi removido, pois nunca gravou nada por não existir a coluna `obs` na tabela. No lugar entrou a seção "Dados do GT-PC" com os cinco campos. As funções `admSalvarUsuario`, `admEditarUsuario` e `abrirNovoUsuario` foram ajustadas para ler, gravar e limpar os campos.
+
+**Bug corrigido durante a fase:** o superadmin estava trancado para fora do próprio Painel Admin. A função `irAdmin` e a variável `isAdmin` em `renderSB` exigiam `setorialAcesso` igual a `ADMIN`, mas não existe seletor de setorial na interface para fazer essa troca. As duas condições passaram a usar `perfil` igual a `superadmin`.
+
+Teste realizado e aprovado: os dados gravados no formulário persistem após fechar e reabrir o usuário.
+
+**Pendência da fase:** as colunas novas ainda não aparecem na listagem da tabela do Painel Admin, apenas no formulário de edição.
+
+### Próximo passo
+
+Fase 3, férias e afastamentos. Criar a tabela `afastamentos` com os campos `analista_id`, `data_inicio`, `data_fim` e `motivo`. Coordenador lança os do próprio grupo e superadmin lança de todos. Os registros alimentam a tabela de afastamentos do relatório CGE.
