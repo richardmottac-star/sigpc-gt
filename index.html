@@ -5493,6 +5493,7 @@ function cgeLerParams() {
 //  TEXTOS EDITÁVEIS — RELATÓRIO CGE
 // ══════════════════════════════════════
 let _cgeTexto = null
+let _cgeTextoSid = null
 
 const CGE_TXT_PADRAO = {
   contextualizacao: 'O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.',
@@ -5516,9 +5517,9 @@ const CGE_TXT_PADRAO = {
 }
 
 async function cgeCarregarTextos() {
-  if(_cgeTexto) return _cgeTexto
+  const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+  if(_cgeTexto && _cgeTextoSid === sid) return _cgeTexto
   try {
-    const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
     const r = await fetch(`${API_URL}/relatorios_cge?setorial_id=${sid}&limit=1`)
     const j = await r.json()
     const reg = (j.data||[])[0]
@@ -5541,6 +5542,7 @@ async function cgeCarregarTextos() {
     _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
     _cgeTexto.id = null
   }
+  _cgeTextoSid = sid
   return _cgeTexto
 }
 
