@@ -2734,7 +2734,7 @@ async function cgeGerar() {
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
     const dtIni = new Date(dtInicio+'T00:00:00')
-    const dtFim = new Date(dtCorte+'T23:59:59')
+    const dtFim = new Date(dtCorte)
     const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
 
     const usuariosPorId = {}
