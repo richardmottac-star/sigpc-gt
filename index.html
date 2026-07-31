@@ -2776,7 +2776,7 @@ async function cgeGerar() {
     cont.innerHTML = `
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
         <button onclick="cgeExportExcel()" style="background:var(--verde-escuro);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
-        <button onclick="cgeExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
+        <button onclick="(async()=>{ await cgeExportPDF() })()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
       </div>
       <div class="cge-doc-wrap"><div class="cge-doc">
         <!-- Cabeçalho institucional -->
@@ -2881,10 +2881,29 @@ function cgeExportExcel() {
   a.download=`relatorio_cge_${sid}_${dt}.csv`; a.click()
 }
 
-function cgeExportPDF() {
+async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
   const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0 } = _cgeParams||{}
+
+  let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
+  try {
+    const rAf = await fetch(`${API_URL}/afastamentos?setorial_id=${sid}&limit=999`)
+    const jAf = await rAf.json()
+    const fmtD = d => d ? String(d).slice(0,10).split('-').reverse().slice(0,2).join('/') : '—'
+    const lista = (jAf.data||[]).filter(a => {
+      if(!dtInicio || !dtCorte) return true
+      return String(a.data_fim).slice(0,10) >= dtInicio && String(a.data_inicio).slice(0,10) <= dtCorte
+    }).sort((a,b)=> String(a.data_inicio).localeCompare(String(b.data_inicio)))
+    if(lista.length) {
+      _afastRows = lista.map(a=>`<tr>
+        <td style="text-align:left;">${a.analista_nome||'—'}</td>
+        <td class="tc">${fmtD(a.data_inicio)} a ${fmtD(a.data_fim)}</td>
+        <td class="tc">${a.motivo==='Outro' ? (a.observacao||'Outro') : a.motivo}</td>
+      </tr>`).join('')
+    }
+  } catch(e) { console.warn('afastamentos:', e.message) }
+
   const totalGeralPCsFmt = totalGeralPCs.toLocaleString('pt-BR')
   const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
   const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
@@ -3004,7 +3023,7 @@ tr:nth-child(even) td{background:#F5F5F5;}
 .new-page{page-break-before:always;}
 .ass{margin-top:28px;}
 .ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
-.ass-col{width:47%;text-align:center;}
+.ass-col{width:31%;text-align:center;}
 .ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
 .ass-nome{font-size:10.5px;font-weight:700;}
 .ass-cargo{font-size:9.5px;color:#000;}
@@ -3190,9 +3209,7 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
 <p style="font-weight:900;text-align:center;font-size:10.5px;margin:8px 0 4px;">SERVIDORES COM AFASTAMENTO DURANTE O PERÍODO</p>
 <table style="width:70%;margin:0 auto;">
   <thead><tr><th style="text-align:left;">Nome</th><th>Período</th><th>Motivo</th></tr></thead>
-  <tbody>
-    <tr><td colspan="3" style="text-align:center;color:#000;font-style:italic;padding:8px;">Preencher manualmente conforme registros de afastamento do período.</td></tr>
-  </tbody>
+  <tbody>${_afastRows}</tbody>
 </table>
 
 <p style="margin-top:8px;">No período monitorado, registraram-se afastamentos de servidores, predominantemente em razão de férias regulamentares. Ressalta-se, ainda, o reduzido quantitativo de servidores lotados nos Núcleos de Gestão de Convênios, responsáveis por orientar, acompanhar e conferir celeridade aos trâmites das prestações de contas nas 21 Regiões do Estado. A redução gradativa do quadro funcional tem impactado negativamente a capacidade de atendimento, a tempestividade das análises e a diminuição do estoque processual.</p>
@@ -3223,16 +3240,13 @@ O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente 
         <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
       </div>
     </div>
-    <!-- Gustavo — coordenador do Grupo 3. Descomentar e preencher nome completo/portaria quando disponíveis.
-         Ajustar .ass-col para width:31% (ou similar) no CSS acima para caber 3 colunas lado a lado.
     <div class="ass-col">
       <div class="ass-linha">
-        <div class="ass-nome">[NOME COMPLETO DO GUSTAVO]</div>
+        <div class="ass-nome">Gustavo</div>
         <div class="ass-cargo">Coord. Grupo de Trabalho Prest. de Contas</div>
-        <div class="ass-cargo">[PORTARIA DE NOMEAÇÃO]</div>
+        <div class="ass-cargo">Portaria FCEE 170 – 24/06/2025</div>
       </div>
     </div>
-    -->
   </div>
   <div class="ass-center">
     <div class="ass-linha">
