@@ -813,6 +813,45 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<div class="mo" id="moCgeTxt">
+  <div class="mc" style="width:760px;max-height:88vh;">
+    <div class="mch v"><h3>Textos do Relatório CGE</h3><button class="mcx" onclick="fm('moCgeTxt')">✕</button></div>
+    <div class="mcb" style="max-height:74vh;overflow-y:auto;">
+      <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Os textos ficam salvos e são reaproveitados nos próximos relatórios. Os quadros continuam sendo gerados pelo sistema.</div>
+
+      <div class="mc-campo"><label>Contextualização</label>
+        <textarea id="cgeTxtContext" rows="3" style="resize:vertical;"></textarea></div>
+
+      <div class="mc-campo"><label>Análise — Grupo 1</label>
+        <textarea id="cgeTxtG1" rows="2" style="resize:vertical;"></textarea></div>
+      <div class="mc-campo"><label>Análise — Grupo 2</label>
+        <textarea id="cgeTxtG2" rows="2" style="resize:vertical;"></textarea></div>
+      <div class="mc-campo"><label>Análise — Grupo 3</label>
+        <textarea id="cgeTxtG3" rows="2" style="resize:vertical;"></textarea></div>
+
+      <div class="mc-campo">
+        <label>Justificativas do período</label>
+        <div id="cgeTxtJustBox"></div>
+        <button onclick="cgeJustAdd()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar justificativa</button>
+      </div>
+
+      <div class="mc-campo"><label>Conclusão</label>
+        <textarea id="cgeTxtConclusao" rows="3" style="resize:vertical;"></textarea></div>
+
+      <div class="mc-campo">
+        <label>Signatários</label>
+        <div id="cgeTxtAssBox"></div>
+        <button onclick="cgeAssAdd()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar signatário</button>
+      </div>
+
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moCgeTxt')">Cancelar</button>
+        <button class="mcok" id="cgeTxtBtn" onclick="cgeSalvarTextos()">✓ Salvar textos</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL VER NLs ══ -->
 <div class="mo" id="moNL">
   <div class="mc lg">
@@ -2655,6 +2694,9 @@ function irRel() {
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn-buscar" onclick="cgeAbrirTextos()" style="height:32px;background:#fff;color:var(--v);border:1.5px solid var(--v);">✎ Editar textos</button>
           </div>
         </div>
         <div style="margin-top:14px;border-top:1px dashed var(--cb);padding-top:12px;">
@@ -5440,6 +5482,138 @@ function cgeLerParams() {
     metaMin: v('cgePmMetaMin'), tecnicos: v('cgePmTecnicos'), coords: v('cgePmCoords'),
     baixadas: v('cgePmBaixadas'), bxSec: v('cgePmBxSec')
   }
+}
+
+// ══════════════════════════════════════
+//  TEXTOS EDITÁVEIS — RELATÓRIO CGE
+// ══════════════════════════════════════
+let _cgeTexto = null
+
+const CGE_TXT_PADRAO = {
+  contextualizacao: 'O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.',
+  analise_grupo1: '',
+  analise_grupo2: '',
+  analise_grupo3: '',
+  justificativas: [
+    'Prorrogação de prazos para atendimento às diligências, solicitada pelas entidades conveniadas em razão do acúmulo de diligências recebidas de programas já encerrados e mesmo de programas vigentes.',
+    'Reiteração de diligências em razão da ausência ou incompletude documental, bem como do não cumprimento dos prazos por parte de determinadas instituições.',
+    'Nova diretoria e dificuldades de acesso aos sistemas, com mudança de pessoal ocorre falta de conhecimento por parte dos novos colaboradores.',
+    'Existência de processos condicionados à apresentação de documentos financeiros essenciais, tais como extratos bancários e balancetes.',
+    'Heterogeneidade e complexidade das prestações de contas analisadas, considerando diferenças relevantes quanto aos valores envolvidos.'
+  ],
+  conclusao: '',
+  signatarios: [
+    { nome:'Nayara Limas Ferreira', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 170 – 24/06/2025' },
+    { nome:'Zadir Teresinha Machado Ferreira', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 170 – 24/06/2025' },
+    { nome:'Gustavo', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'' },
+    { nome:'Jeane Rauh Probst Leite', cargo:'Presidente da FCEE', portaria:'' }
+  ]
+}
+
+async function cgeCarregarTextos() {
+  if(_cgeTexto) return _cgeTexto
+  try {
+    const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+    const r = await fetch(`${API_URL}/relatorios_cge?setorial_id=${sid}&limit=1`)
+    const j = await r.json()
+    const reg = (j.data||[])[0]
+    if(reg) {
+      _cgeTexto = {
+        id: reg.id,
+        contextualizacao: reg.contextualizacao || CGE_TXT_PADRAO.contextualizacao,
+        analise_grupo1: reg.analise_grupo1 || '',
+        analise_grupo2: reg.analise_grupo2 || '',
+        analise_grupo3: reg.analise_grupo3 || '',
+        justificativas: Array.isArray(reg.justificativas) && reg.justificativas.length ? reg.justificativas : CGE_TXT_PADRAO.justificativas,
+        conclusao: reg.conclusao || '',
+        signatarios: Array.isArray(reg.signatarios) && reg.signatarios.length ? reg.signatarios : CGE_TXT_PADRAO.signatarios
+      }
+    } else {
+      _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
+      _cgeTexto.id = null
+    }
+  } catch(e) {
+    _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
+    _cgeTexto.id = null
+  }
+  return _cgeTexto
+}
+
+function cgeJustRender() {
+  const box = document.getElementById('cgeTxtJustBox')
+  if(!box) return
+  box.innerHTML = (_cgeTexto.justificativas||[]).map((t,i)=>`
+    <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px;">
+      <span style="font-size:11px;color:var(--ct);padding-top:7px;min-width:16px;">${String.fromCharCode(97+i)})</span>
+      <textarea rows="2" oninput="_cgeTexto.justificativas[${i}]=this.value" style="flex:1;resize:vertical;font-size:12px;">${t}</textarea>
+      <button onclick="cgeJustDel(${i})" style="background:var(--r);color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;">✕</button>
+    </div>`).join('')
+}
+function cgeJustAdd() { _cgeTexto.justificativas.push(''); cgeJustRender() }
+function cgeJustDel(i) { _cgeTexto.justificativas.splice(i,1); cgeJustRender() }
+
+function cgeAssRender() {
+  const box = document.getElementById('cgeTxtAssBox')
+  if(!box) return
+  box.innerHTML = (_cgeTexto.signatarios||[]).map((s,i)=>`
+    <div style="border:1px solid var(--cb);border-radius:6px;padding:8px;margin-bottom:6px;">
+      <div style="display:flex;gap:6px;margin-bottom:5px;">
+        <input type="text" value="${(s.nome||'').replace(/"/g,'&quot;')}" placeholder="Nome completo" oninput="_cgeTexto.signatarios[${i}].nome=this.value" style="flex:1;font-size:12px;">
+        <button onclick="cgeAssDel(${i})" style="background:var(--r);color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:6px;">
+        <input type="text" value="${(s.cargo||'').replace(/"/g,'&quot;')}" placeholder="Cargo" oninput="_cgeTexto.signatarios[${i}].cargo=this.value" style="font-size:11px;">
+        <input type="text" value="${(s.portaria||'').replace(/"/g,'&quot;')}" placeholder="Portaria (opcional)" oninput="_cgeTexto.signatarios[${i}].portaria=this.value" style="font-size:11px;">
+      </div>
+    </div>`).join('')
+}
+function cgeAssAdd() { _cgeTexto.signatarios.push({nome:'',cargo:'',portaria:''}); cgeAssRender() }
+function cgeAssDel(i) { _cgeTexto.signatarios.splice(i,1); cgeAssRender() }
+
+async function cgeAbrirTextos() {
+  await cgeCarregarTextos()
+  document.getElementById('cgeTxtContext').value = _cgeTexto.contextualizacao || ''
+  document.getElementById('cgeTxtG1').value = _cgeTexto.analise_grupo1 || ''
+  document.getElementById('cgeTxtG2').value = _cgeTexto.analise_grupo2 || ''
+  document.getElementById('cgeTxtG3').value = _cgeTexto.analise_grupo3 || ''
+  document.getElementById('cgeTxtConclusao').value = _cgeTexto.conclusao || ''
+  cgeJustRender(); cgeAssRender()
+  document.getElementById('moCgeTxt').classList.add('open')
+}
+
+async function cgeSalvarTextos() {
+  const btn = document.getElementById('cgeTxtBtn')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+    _cgeTexto.contextualizacao = document.getElementById('cgeTxtContext').value
+    _cgeTexto.analise_grupo1 = document.getElementById('cgeTxtG1').value
+    _cgeTexto.analise_grupo2 = document.getElementById('cgeTxtG2').value
+    _cgeTexto.analise_grupo3 = document.getElementById('cgeTxtG3').value
+    _cgeTexto.conclusao = document.getElementById('cgeTxtConclusao').value
+    const payload = {
+      contextualizacao: _cgeTexto.contextualizacao,
+      analise_grupo1: _cgeTexto.analise_grupo1,
+      analise_grupo2: _cgeTexto.analise_grupo2,
+      analise_grupo3: _cgeTexto.analise_grupo3,
+      justificativas: _cgeTexto.justificativas,
+      conclusao: _cgeTexto.conclusao,
+      signatarios: _cgeTexto.signatarios,
+      setorial_id: sid, criado_por: U.id, status: 'rascunho'
+    }
+    const url = _cgeTexto.id ? `${API_URL}/relatorios_cge/${_cgeTexto.id}` : `${API_URL}/relatorios_cge`
+    const r = await fetch(url, {
+      method: _cgeTexto.id ? 'PATCH' : 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    if(j.data && j.data.id) _cgeTexto.id = j.data.id
+    fm('moCgeTxt')
+    toast('Textos salvos!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { btn.disabled=false; btn.textContent='✓ Salvar textos' }
 }
 
 function toast(msg, tipo='ok') {
