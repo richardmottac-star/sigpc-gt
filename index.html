@@ -2741,12 +2741,14 @@ async function cgeGerar() {
     const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
     const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
     const totCtrl  = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
-    const estoque  = todosPcs.filter(p => p.status !== 'baixada').length
+    const estoqueRemanescente = todosPcs.filter(p => p.baixada !== true).length
+    const estoqueBase = estoqueRemanescente + totBx
+    const estoque = estoqueBase
     const totPctMeta = metaTotal>0 ? (totBx/metaTotal*100).toFixed(1) : '—'
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(dtInicio+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     // Renderizar quadros — Quadro 2 e Quadro 4 sempre ordenados por nome
     const q2Sorted = [..._cgeDados].sort((a,b) => a.u.nome.localeCompare(b.u.nome))
@@ -2811,13 +2813,15 @@ async function cgeGerar() {
             <th>Período</th><th>Meta do Período</th>
             <th>PCs Baixadas</th>
             <th>Execução (%)</th>
-            <th>Estoque</th>
+            <th>Estoque base</th>
+            <th>Remanescente</th>
           </tr></thead><tbody><tr>
             <td style="font-weight:700;text-align:left;">${periodoTxt}</td>
             <td style="text-align:right;font-weight:700;">${metaTotal||'—'}</td>
             <td style="text-align:right;font-weight:800;">${totBx}</td>
             <td style="text-align:right;font-weight:800;">${totPctMeta}%</td>
-            <td style="text-align:right;">${estoque.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right;font-weight:700;">${estoqueBase.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right;">${estoqueRemanescente.toLocaleString('pt-BR')}</td>
           </tr></tbody></table>
           <div style="font-size:9px;font-style:italic;margin-top:4px;">
             Nota: das ${totBx} PCs baixadas no período, ${cargaHistoricaNoPeriodo} vieram da carga histórica de migração (origem_baixa = carga_historica). Gerado em ${dt} via SIGPC-GT v2.1.
@@ -2915,7 +2919,7 @@ async function cgeExportPDF() {
   // metaMes/numTec/totalPlano saíram do formulário; aproximados aqui a partir da meta real por analista.
   const numTec   = _cgeDados.length
   const metaMes  = meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0
-  const totalPlano = estoque + totBx
+  const totalPlano = estoque
   const metaAcum = metaTotal
   const metaTrim = metaTotal
   const pctMeta  = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1).replace('.',',')+'%' : '—'
