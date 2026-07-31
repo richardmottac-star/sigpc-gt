@@ -133,3 +133,19 @@ Razão de 2,85 PCs por parecer — bem acima da média do Grupo 3.
 4. Confirmar a regra do Controle Interno
 5. Definir o período do relatório: junho/2026 (meta 110) ou julho/2026 (meta 120)
 6. Executar o plano dos 5 TRs
+
+## Fase 1 concluída — regra do Controle Interno
+
+Commits 0bdb672 e 7165c53.
+
+Regra definida pela coordenação: encaminhar ao Controle Interno registra a baixa. O analista já tem o parecer pronto e anexado no SGPe e no SIGEF antes de encaminhar, então a responsabilidade é dele. Quando o Controle Interno devolve o processo para diligência ou pede novas ações, a PC permanece baixada. Ao retornar ao Controle Interno novamente não computa nova baixa, para não duplicar produtividade.
+
+O que foi implementado: as 17 ocorrências de `status==='baixada'` foram migradas para o campo booleano `baixada`. As cadeias de `else if` foram quebradas, permitindo que uma PC conte como baixada e simultaneamente apareça em diligência. A função `ciConfirmarDevolucao` não zera mais o campo `dt_envio_ci`, que passa a ser a marca permanente da passagem pelo Controle Interno. A função `enviarAoCI` recebeu o segundo argumento `jaBaixada` e só grava os campos de baixa se a PC ainda não estiver baixada. O botão "Registrar parecer" é substituído pelo texto "Já baixada" quando a PC já está baixada. Foi criada a função `tagsEstadoPC`, ainda não aplicada nas telas.
+
+Estados possíveis pelo par de campos: `enviado_ci` falso e `dt_envio_ci` vazio significa que nunca foi ao Controle Interno. `enviado_ci` verdadeiro e `dt_envio_ci` preenchido significa que está no Controle Interno agora. `enviado_ci` falso e `dt_envio_ci` preenchido significa que já voltou do Controle Interno.
+
+Teste realizado e aprovado com a PC `2023PC002110`. Produtividade subiu de 30 para 31 ao encaminhar ao Controle Interno, e permaneceu em 31 após a devolução pelo painel. A PC foi revertida ao estado original por comando direto no banco ao final do teste.
+
+### Pendências anotadas
+
+Aplicar a função `tagsEstadoPC` nas telas. Substituir os `confirm` do navegador por modal do sistema. Criar tela de estorno, pois hoje a reversão só é possível por comando direto no banco. Unificar no back-end os campos `status`, `baixada` e `estornada`, que hoje podem desincronizar. Lançar manualmente no sistema os 41 registros de Controle Interno que existem nas planilhas, equivalentes a 46 PCs.
