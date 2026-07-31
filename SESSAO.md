@@ -171,3 +171,23 @@ Teste realizado e aprovado: os dados gravados no formulário persistem após fec
 ### Próximo passo
 
 Fase 3, férias e afastamentos. Criar a tabela `afastamentos` com os campos `analista_id`, `data_inicio`, `data_fim` e `motivo`. Coordenador lança os do próprio grupo e superadmin lança de todos. Os registros alimentam a tabela de afastamentos do relatório CGE.
+
+## Fase 3 concluída — férias e afastamentos
+
+Commits: `cca3389` no repositório `sigpc-api` e `b10e37b` no `sigpc-gt`.
+
+Foi criada a tabela `afastamentos` com dez colunas: `id`, `analista_id` com referência a `usuarios`, `analista_nome`, `data_inicio`, `data_fim`, `motivo`, `observacao`, `setorial_id` com padrão `FCEE`, `registrado_por` e `criado_em`. Também foram criados dois índices, um por `analista_id` (`idx_afast_analista`) e outro pelo par `data_inicio`/`data_fim` (`idx_afast_periodo`). O `CREATE TABLE` foi executado pelo painel do Railway.
+
+Na API foram criadas quatro rotas seguindo o padrão de resposta com `data` e `error`: `GET /afastamentos` com filtros opcionais por `analista_id`, `setorial_id`, `data_inicio_gte` e `data_fim_lte`, ordenando por `data_inicio` decrescente; `POST /afastamentos` com obrigatoriedade de `analista_id`, `data_inicio`, `data_fim` e `motivo`; `PATCH /afastamentos/:id` com whitelist dos campos editáveis; e `DELETE /afastamentos/:id`.
+
+No frontend foi criado o item de menu "Férias e Afastamentos" na seção Coordenação, visível para coordenador e superadmin. Foi criado o modal `moAfast` e oito funções: `irAfastamentos`, `afastCarregar`, `afastRender`, `afastToggleObs`, `afastNovo`, `afastEditar`, `afastSalvar` e `afastExcluir`.
+
+Os motivos são lista fixa em dropdown, para evitar variações de grafia como aconteceu com os nomes nas planilhas. As opções são Férias, Licença saúde, Licença maternidade, Licença prêmio e Outro. Ao selecionar Outro, aparece um campo de texto obrigatório para especificar o motivo, e na listagem e no relatório sai o texto digitado em vez da palavra "Outro".
+
+O coordenador enxerga e lança apenas afastamentos dos servidores do próprio grupo. O superadmin enxerga todos. A tela calcula automaticamente a quantidade de dias entre as datas.
+
+Teste realizado e aprovado: cadastro com motivo Férias, cadastro com motivo Outro exibindo o texto digitado, edição e exclusão. Ficou lançado no sistema o afastamento real do servidor Willian, de 06/04/2026 a 17/04/2026, motivo férias.
+
+### Próximo passo
+
+Fase 4, relatório CGE editável. Layout já aprovado em coluna única com nove blocos, seguindo a ordem do documento impresso. Blocos com fundo branco são preenchidos pelo usuário e blocos com fundo azul e cadeado são gerados pelo sistema, exceto o campo Estoque que é editável. Assinaturas em quantidade variável, com nome, cargo e portaria, salvas como padrão para reaproveitamento no trimestre seguinte.
