@@ -772,6 +772,47 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<div class="mo" id="moAfast">
+  <div class="mc" style="width:480px;">
+    <div class="mch v"><h3 id="moAfastTit">Novo Afastamento</h3><button class="mcx" onclick="fm('moAfast')">✕</button></div>
+    <div class="mcb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mc-campo" style="grid-column:1/-1;">
+          <label>Servidor *</label>
+          <select id="afastAnalista"></select>
+        </div>
+        <div class="mc-campo">
+          <label>Data de início *</label>
+          <input type="date" id="afastInicio">
+        </div>
+        <div class="mc-campo">
+          <label>Data de fim *</label>
+          <input type="date" id="afastFim">
+        </div>
+        <div class="mc-campo" style="grid-column:1/-1;">
+          <label>Motivo *</label>
+          <select id="afastMotivo" onchange="afastToggleObs()">
+            <option value="Férias">Férias</option>
+            <option value="Licença saúde">Licença saúde</option>
+            <option value="Licença maternidade">Licença maternidade</option>
+            <option value="Licença prêmio">Licença prêmio</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div class="mc-campo" style="grid-column:1/-1;display:none;" id="afastObsWrap">
+          <label>Especifique o motivo *</label>
+          <input type="text" id="afastObs" placeholder="Descreva o motivo do afastamento">
+        </div>
+      </div>
+      <div id="afastMsg" style="display:none;background:#FFEBEE;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:8px 12px;font-size:11px;margin-top:8px;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moAfast')">Cancelar</button>
+        <button class="mcok" id="afastBtn" onclick="afastSalvar()">✓ Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL VER NLs ══ -->
 <div class="mo" id="moNL">
   <div class="mc lg">
@@ -1298,6 +1339,9 @@ function renderSB() {
         <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
         Gestão Grupo
       </div>
+      ${isCoordi?`<div class="sb-item" id="mi-afast" onclick="irAfastamentos()">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>Férias e Afastamentos
+      </div>`:''}
     </div>` : ''}
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
@@ -5139,6 +5183,160 @@ function tagsEstadoPC(p) {
     t += `<span class="bdg" style="background:#FFF6E0;color:#8A6100;border:1px solid #8A6100;">↩ Retornou do CI</span> `
   }
   return t || '<span style="color:var(--ct);font-size:10px;">—</span>'
+}
+
+// ══════════════════════════════════════
+//  FÉRIAS E AFASTAMENTOS
+// ══════════════════════════════════════
+let _afastLista = []
+let _afastUsers = []
+let _afastEditId = null
+
+async function irAfastamentos() {
+  if(U.perfil !== 'superadmin' && U.perfil !== 'coordenador') { toast('Acesso restrito.','err'); return }
+  ativarMenu('afast')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">Férias e Afastamentos</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:2px;">Registros utilizados no relatório de monitoramento da CGE</div>
+      </div>
+      <button onclick="afastNovo()" class="btn-buscar" style="height:34px;background:var(--v);color:#fff;border:none;">+ Novo afastamento</button>
+    </div>
+    <div class="tbl-wrap"><div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Servidor</th><th>Início</th><th>Fim</th><th>Dias</th><th>Motivo</th><th style="width:100px;">Ações</th>
+        </tr></thead>
+        <tbody id="afastBody"><tr><td colspan="6"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
+      </table>
+    </div></div>
+  `
+  await afastCarregar()
+}
+
+async function afastCarregar() {
+  try {
+    const { data: users } = await db.from('usuarios').select('id,nome,grupo,perfil').order('nome')
+    _afastUsers = (users||[]).filter(u => U.perfil==='coordenador' ? String(u.grupo)===String(U.grupo) : true)
+    const r = await fetch(`${API_URL}/afastamentos?setorial_id=${U.setorialFiltro||'FCEE'}&limit=999`)
+    const j = await r.json()
+    _afastLista = j.data || []
+    if(U.perfil==='coordenador') {
+      const ids = _afastUsers.map(u=>String(u.id))
+      _afastLista = _afastLista.filter(a => ids.includes(String(a.analista_id)))
+    }
+    afastRender()
+  } catch(e) {
+    document.getElementById('afastBody').innerHTML = `<tr><td colspan="6" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+  }
+}
+
+function afastRender() {
+  const tb = document.getElementById('afastBody')
+  if(!tb) return
+  if(!_afastLista.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ct);">Nenhum afastamento registrado.</td></tr>'
+    return
+  }
+  const fmt = d => d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'
+  const dias = (a,b) => { try { return Math.round((new Date(b)-new Date(a))/86400000)+1 } catch(e){ return '—' } }
+  tb.innerHTML = _afastLista.map((a,i)=>`<tr class="${i%2===0?'zebra-a':'zebra-b'}">
+    <td style="font-weight:600;">${a.analista_nome||'—'}</td>
+    <td>${fmt(a.data_inicio)}</td>
+    <td>${fmt(a.data_fim)}</td>
+    <td style="text-align:center;">${dias(a.data_inicio,a.data_fim)}</td>
+    <td>${a.motivo==='Outro' ? (a.observacao||'Outro') : a.motivo}</td>
+    <td style="text-align:center;white-space:nowrap;">
+      <button class="btn-acao btn-ver" onclick="afastEditar(${a.id})">Editar</button>
+      <button class="btn-acao" style="background:var(--r);color:#fff;margin-left:3px;" onclick="afastExcluir(${a.id})">Excluir</button>
+    </td>
+  </tr>`).join('')
+}
+
+function afastToggleObs() {
+  const m = document.getElementById('afastMotivo').value
+  document.getElementById('afastObsWrap').style.display = m==='Outro' ? '' : 'none'
+}
+
+function afastNovo() {
+  _afastEditId = null
+  document.getElementById('moAfastTit').textContent = 'Novo Afastamento'
+  document.getElementById('afastAnalista').innerHTML = _afastUsers.map(u=>`<option value="${u.id}">${u.nome}</option>`).join('')
+  document.getElementById('afastInicio').value = ''
+  document.getElementById('afastFim').value = ''
+  document.getElementById('afastMotivo').value = 'Férias'
+  document.getElementById('afastObs').value = ''
+  document.getElementById('afastMsg').style.display = 'none'
+  afastToggleObs()
+  document.getElementById('moAfast').classList.add('open')
+}
+
+function afastEditar(id) {
+  const a = _afastLista.find(x=>String(x.id)===String(id))
+  if(!a) return
+  _afastEditId = id
+  document.getElementById('moAfastTit').textContent = 'Editar Afastamento'
+  document.getElementById('afastAnalista').innerHTML = _afastUsers.map(u=>`<option value="${u.id}" ${String(u.id)===String(a.analista_id)?'selected':''}>${u.nome}</option>`).join('')
+  document.getElementById('afastInicio').value = String(a.data_inicio||'').slice(0,10)
+  document.getElementById('afastFim').value = String(a.data_fim||'').slice(0,10)
+  document.getElementById('afastMotivo').value = a.motivo || 'Férias'
+  document.getElementById('afastObs').value = a.observacao || ''
+  document.getElementById('afastMsg').style.display = 'none'
+  afastToggleObs()
+  document.getElementById('moAfast').classList.add('open')
+}
+
+async function afastSalvar() {
+  const analistaId = document.getElementById('afastAnalista').value
+  const inicio = document.getElementById('afastInicio').value
+  const fim = document.getElementById('afastFim').value
+  const motivo = document.getElementById('afastMotivo').value
+  const obs = document.getElementById('afastObs').value.trim()
+  const msg = document.getElementById('afastMsg')
+  const err = m => { msg.textContent = m; msg.style.display='block' }
+
+  if(!analistaId) { err('Selecione o servidor.'); return }
+  if(!inicio || !fim) { err('Informe as datas de início e fim.'); return }
+  if(new Date(fim) < new Date(inicio)) { err('A data de fim não pode ser anterior à de início.'); return }
+  if(motivo==='Outro' && !obs) { err('Especifique o motivo do afastamento.'); return }
+
+  const btn = document.getElementById('afastBtn')
+  btn.disabled = true; btn.textContent = 'Salvando...'
+  try {
+    const u = _afastUsers.find(x=>String(x.id)===String(analistaId))
+    const payload = {
+      analista_id: parseInt(analistaId),
+      analista_nome: u ? u.nome : null,
+      data_inicio: inicio, data_fim: fim, motivo,
+      observacao: obs || null,
+      setorial_id: U.setorialFiltro || 'FCEE',
+      registrado_por: U.id
+    }
+    const url = _afastEditId ? `${API_URL}/afastamentos/${_afastEditId}` : `${API_URL}/afastamentos`
+    const r = await fetch(url, {
+      method: _afastEditId ? 'PATCH' : 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    fm('moAfast')
+    toast(_afastEditId ? 'Afastamento atualizado!' : 'Afastamento registrado!','ok')
+    await afastCarregar()
+  } catch(e) { err('Erro: '+e.message) }
+  finally { btn.disabled=false; btn.textContent='✓ Salvar' }
+}
+
+async function afastExcluir(id) {
+  if(!confirm('Excluir este registro de afastamento?')) return
+  try {
+    const r = await fetch(`${API_URL}/afastamentos/${id}`, { method:'DELETE' })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Afastamento excluído.','ok')
+    await afastCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 function toast(msg, tipo='ok') {
