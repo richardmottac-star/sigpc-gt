@@ -5546,6 +5546,17 @@ async function cgeCarregarTextos() {
   return _cgeTexto
 }
 
+async function cgeCarregarAnterior() {
+  try {
+    const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
+    const r = await fetch(`${API_URL}/relatorios_cge?setorial_id=${sid}&status=fechado&limit=1`)
+    const j = await r.json()
+    const reg = (j.data||[])[0]
+    _cgeAnterior = reg || null
+  } catch(e) { _cgeAnterior = null }
+  return _cgeAnterior
+}
+
 function cgeJustRender() {
   const box = document.getElementById('cgeTxtJustBox')
   if(!box) return
@@ -5607,6 +5618,7 @@ const CGE_SECOES = [
 
 async function cgeAbrirTextos() {
   await cgeCarregarTextos()
+  await cgeCarregarAnterior()
   ativarMenu('rel')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap;">
@@ -5709,12 +5721,40 @@ function cgeVerAnterior() {
   if(!box) return
   const aberto = box.style.display !== 'none'
   box.style.display = aberto ? 'none' : ''
-  if(!aberto) {
-    const alvo = document.getElementById('cgeAnteriorTxt')
-    const ant = _cgeAnterior ? _cgeAnterior[_cgeSecAtual] : null
-    alvo.innerHTML = ant ? (typeof ant === 'string' ? ant : '<em>Seção com estrutura própria — consulte o relatório anterior.</em>')
-                         : '<em style="color:var(--ct);">Nenhuma versão anterior encontrada para esta seção.</em>'
+  if(aberto) return
+
+  const alvo = document.getElementById('cgeAnteriorTxt')
+  if(!_cgeAnterior) {
+    alvo.innerHTML = '<em style="color:var(--ct);">Nenhum relatório fechado anteriormente. A versão anterior aparece aqui a partir do segundo relatório gerado.</em>'
+    return
   }
+
+  const dtAnt = _cgeAnterior.atualizado_em ? new Date(_cgeAnterior.atualizado_em).toLocaleDateString('pt-BR') : ''
+  const cab = dtAnt ? `<div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Relatório de ${dtAnt}</div>` : ''
+  const sec = _cgeSecAtual
+  const val = _cgeAnterior[sec]
+  let html = ''
+
+  if(sec === 'justificativas') {
+    const arr = Array.isArray(val) ? val : []
+    html = arr.length
+      ? arr.map((t,i)=>`<p style="margin:0 0 5px;">${String.fromCharCode(97+i)}) ${t}</p>`).join('')
+      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
+  } else if(sec === 'quadro3') {
+    const arr = Array.isArray(val) ? val : []
+    html = arr.length
+      ? arr.map(q=>`<div style="margin-bottom:8px;"><strong>${q.aspecto||''}</strong><br>${(q.itens||[]).map(t=>'• '+t).join('<br>')}</div>`).join('')
+      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
+  } else if(sec === 'signatarios') {
+    const arr = Array.isArray(val) ? val : []
+    html = arr.length
+      ? arr.map(s=>`<div style="margin-bottom:6px;"><strong>${s.nome||''}</strong><br><span style="font-size:11px;">${s.cargo||''}${s.portaria?' · '+s.portaria:''}</span></div>`).join('')
+      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
+  } else {
+    html = val ? val : '<em style="color:var(--ct);">Sem registro anterior para esta seção.</em>'
+  }
+
+  alvo.innerHTML = cab + html
 }
 
 async function cgeSalvarTextos() {
