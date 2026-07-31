@@ -835,6 +835,13 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         <button onclick="cgeJustAdd()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar justificativa</button>
       </div>
 
+      <div class="mc-campo">
+        <label>Quadro 3 — Avaliação qualitativa</label>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Uma linha por item. Cada linha vira um marcador na tabela.</div>
+        <div id="cgeTxtQ3Box"></div>
+        <button onclick="cgeQ3Add()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar aspecto</button>
+      </div>
+
       <div class="mc-campo"><label>Conclusão</label>
         <textarea id="cgeTxtConclusao" rows="3" style="resize:vertical;"></textarea></div>
 
@@ -3041,6 +3048,9 @@ async function cgeExportPDF() {
   const justHtml = (TXT.justificativas && TXT.justificativas.length ? TXT.justificativas : CGE_TXT_PADRAO.justificativas)
     .map((t,i) => `<p>${String.fromCharCode(97+i)}) ${t}</p>`).join('\n')
 
+  const q3Rows = (TXT.quadro3 && TXT.quadro3.length ? TXT.quadro3 : CGE_TXT_PADRAO.quadro3)
+    .map(q => `<tr><td style="font-weight:700;background:#F0F0F0;">${q.aspecto||''}</td><td>${(q.itens||[]).map(t=>'• '+t).join('<br>')}</td></tr>`).join('\n')
+
   const defConclusao = [
     `Diante dos dados apresentados, constata-se o cumprimento parcial das metas estabelecidas no Plano de Ação para o período de ${periodoLong}. Tendo como meta acumulada ${metaAcumFmt}, tendo sido registradas até o momento baixa de ${totBxFmt} PCs, correspondendo a ${pctMeta} de cumprimento da meta planejada.`,
     `O desempenho observado foi impactado, principalmente, pela elevada complexidade de parte dos processos analisados, pela predominância de pendências de natureza documental e formal, pela dependência de retorno tempestivo das entidades conveniadas, pelas reiterações de diligências, fatores que influenciaram diretamente a capacidade operacional e o tempo médio de finalização dos processos.`,
@@ -3300,17 +3310,7 @@ ${justHtml}
 <div class="qtit">Quadro 3 – Avaliação Qualitativa do Processo</div>
 <table>
   <thead><tr><th style="width:22%;text-align:left;">Aspecto Avaliado</th><th style="text-align:left;">Observações e Ações</th></tr></thead>
-  <tbody>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Atividades Desenvolvidas</td><td>• Estruturação do trabalho em três grupos operacionais.<br>• Distribuição equilibrada das análises.<br>• Coordenação descentralizada com acompanhamento individualizado.<br>• Reuniões com CGE, PGE e Tribunal de Contas.<br>• Atuação da Consultoria Jurídica da FCEE na emissão de parecer técnico de respaldo às análises.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Comunicação e Alinhamento</td><td>• Reuniões virtuais periódicas.<br>• Criação de grupo institucional de comunicação.<br>• Compartilhamento contínuo de orientações técnicas.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Análise Técnica</td><td>• Priorização de processos em estoque.<br>• Identificação sistemática de inconsistências.<br>• Registro formal das análises.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Padronização dos Procedimentos</td><td>• Elaboração de modelos de pareceres.<br>• Planejamento de capacitações técnicas.<br>• Uniformização dos fluxos internos.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Principais Dificuldades</td><td>• Elevada complexidade dos processos.<br>• Dependência do retorno documental.<br>• Impacto do recesso e férias no período.<br>• Dificuldade na conferência de cálculos de rendimentos.<br>• Instabilidade no acesso às planilhas compartilhadas.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Ações Corretivas Implementadas</td><td>• Ajuste no acesso às planilhas por e-mail individual.<br>• Reuniões mensais de alinhamento.<br>• Monitoramento sistemático da produtividade.<br>• Redistribuição de processos complexos.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Resultados das Ações</td><td>• Eliminação da perda de dados.<br>• Melhoria gradual na uniformidade dos pareceres.<br>• Redução de inconsistências recorrentes.<br>• Fortalecimento do controle interno.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Propostas de Aperfeiçoamento</td><td>• Intensificação das capacitações.<br>• Implementação de revisão cruzada.<br>• Ampliação dos mecanismos preventivos.<br>• Aumento do quantitativo dos servidores públicos nos Núcleos de Gestão de Convênios.</td></tr>
-    <tr><td style="font-weight:700;background:#F0F0F0;">Planilha</td><td>• Sugere-se o aperfeiçoamento da planilha de monitoramento, com a inclusão de campos específicos que evidenciem a produtividade individual dos técnicos, contemplando: (i) quantitativo de prestações de contas analisadas por servidor.<br>• Tal medida permitirá maior transparência, rastreabilidade e precisão na avaliação do desempenho, fortalecendo a gestão por resultados.</td></tr>
-  </tbody>
+  <tbody>${q3Rows}</tbody>
 </table>
 
 <p>Segue Planilha com situações de processos em análise e diligenciados:</p>
@@ -5513,6 +5513,50 @@ const CGE_TXT_PADRAO = {
     { nome:'Zadir Teresinha Machado Ferreira', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 170 – 24/06/2025' },
     { nome:'Gustavo', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'' },
     { nome:'Jeane Rauh Probst Leite', cargo:'Presidente da FCEE', portaria:'' }
+  ],
+  quadro3: [
+    { aspecto:'Atividades Desenvolvidas', itens:[
+      'Estruturação do trabalho em três grupos operacionais.',
+      'Distribuição equilibrada das análises.',
+      'Coordenação descentralizada com acompanhamento individualizado.',
+      'Reuniões com CGE, PGE e Tribunal de Contas.',
+      'Atuação da Consultoria Jurídica da FCEE na emissão de parecer técnico de respaldo às análises.' ] },
+    { aspecto:'Comunicação e Alinhamento', itens:[
+      'Reuniões virtuais periódicas.',
+      'Criação de grupo institucional de comunicação.',
+      'Compartilhamento contínuo de orientações técnicas.' ] },
+    { aspecto:'Análise Técnica', itens:[
+      'Priorização de processos em estoque.',
+      'Identificação sistemática de inconsistências.',
+      'Registro formal das análises.' ] },
+    { aspecto:'Padronização dos Procedimentos', itens:[
+      'Elaboração de modelos de pareceres.',
+      'Planejamento de capacitações técnicas.',
+      'Uniformização dos fluxos internos.' ] },
+    { aspecto:'Principais Dificuldades', itens:[
+      'Elevada complexidade dos processos.',
+      'Dependência do retorno documental.',
+      'Impacto do recesso e férias no período.',
+      'Dificuldade na conferência de cálculos de rendimentos.',
+      'Instabilidade no acesso às planilhas compartilhadas.' ] },
+    { aspecto:'Ações Corretivas Implementadas', itens:[
+      'Ajuste no acesso às planilhas por e-mail individual.',
+      'Reuniões mensais de alinhamento.',
+      'Monitoramento sistemático da produtividade.',
+      'Redistribuição de processos complexos.' ] },
+    { aspecto:'Resultados das Ações', itens:[
+      'Eliminação da perda de dados.',
+      'Melhoria gradual na uniformidade dos pareceres.',
+      'Redução de inconsistências recorrentes.',
+      'Fortalecimento do controle interno.' ] },
+    { aspecto:'Propostas de Aperfeiçoamento', itens:[
+      'Intensificação das capacitações.',
+      'Implementação de revisão cruzada.',
+      'Ampliação dos mecanismos preventivos.',
+      'Aumento do quantitativo dos servidores públicos nos Núcleos de Gestão de Convênios.' ] },
+    { aspecto:'Planilha', itens:[
+      'Sugere-se o aperfeiçoamento da planilha de monitoramento, com a inclusão de campos específicos que evidenciem a produtividade individual dos técnicos.',
+      'Tal medida permitirá maior transparência, rastreabilidade e precisão na avaliação do desempenho, fortalecendo a gestão por resultados.' ] }
   ]
 }
 
@@ -5532,7 +5576,8 @@ async function cgeCarregarTextos() {
         analise_grupo3: reg.analise_grupo3 || '',
         justificativas: Array.isArray(reg.justificativas) && reg.justificativas.length ? reg.justificativas : CGE_TXT_PADRAO.justificativas,
         conclusao: reg.conclusao || '',
-        signatarios: Array.isArray(reg.signatarios) && reg.signatarios.length ? reg.signatarios : CGE_TXT_PADRAO.signatarios
+        signatarios: Array.isArray(reg.signatarios) && reg.signatarios.length ? reg.signatarios : CGE_TXT_PADRAO.signatarios,
+        quadro3: Array.isArray(reg.quadro3) && reg.quadro3.length ? reg.quadro3 : CGE_TXT_PADRAO.quadro3
       }
     } else {
       _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
@@ -5577,6 +5622,21 @@ function cgeAssRender() {
 function cgeAssAdd() { _cgeTexto.signatarios.push({nome:'',cargo:'',portaria:''}); cgeAssRender() }
 function cgeAssDel(i) { _cgeTexto.signatarios.splice(i,1); cgeAssRender() }
 
+function cgeQ3Render() {
+  const box = document.getElementById('cgeTxtQ3Box')
+  if(!box) return
+  box.innerHTML = (_cgeTexto.quadro3||[]).map((q,i)=>`
+    <div style="border:1px solid var(--cb);border-radius:6px;padding:8px;margin-bottom:6px;">
+      <div style="display:flex;gap:6px;margin-bottom:5px;">
+        <input type="text" value="${(q.aspecto||'').replace(/"/g,'&quot;')}" placeholder="Aspecto avaliado" oninput="_cgeTexto.quadro3[${i}].aspecto=this.value" style="flex:1;font-size:12px;font-weight:700;">
+        <button onclick="cgeQ3Del(${i})" style="background:var(--r);color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;">✕</button>
+      </div>
+      <textarea rows="4" oninput="_cgeTexto.quadro3[${i}].itens=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)" placeholder="Um item por linha" style="width:100%;resize:vertical;font-size:11px;">${(q.itens||[]).join('\\n')}</textarea>
+    </div>`).join('')
+}
+function cgeQ3Add() { _cgeTexto.quadro3.push({aspecto:'',itens:[]}); cgeQ3Render() }
+function cgeQ3Del(i) { _cgeTexto.quadro3.splice(i,1); cgeQ3Render() }
+
 async function cgeAbrirTextos() {
   await cgeCarregarTextos()
   document.getElementById('cgeTxtContext').value = _cgeTexto.contextualizacao || ''
@@ -5584,7 +5644,7 @@ async function cgeAbrirTextos() {
   document.getElementById('cgeTxtG2').value = _cgeTexto.analise_grupo2 || ''
   document.getElementById('cgeTxtG3').value = _cgeTexto.analise_grupo3 || ''
   document.getElementById('cgeTxtConclusao').value = _cgeTexto.conclusao || ''
-  cgeJustRender(); cgeAssRender()
+  cgeJustRender(); cgeAssRender(); cgeQ3Render()
   document.getElementById('moCgeTxt').classList.add('open')
 }
 
@@ -5606,6 +5666,7 @@ async function cgeSalvarTextos() {
       justificativas: _cgeTexto.justificativas,
       conclusao: _cgeTexto.conclusao,
       signatarios: _cgeTexto.signatarios,
+      quadro3: _cgeTexto.quadro3,
       setorial_id: sid, criado_por: U.id, status: 'rascunho'
     }
     const url = _cgeTexto.id ? `${API_URL}/relatorios_cge/${_cgeTexto.id}` : `${API_URL}/relatorios_cge`
