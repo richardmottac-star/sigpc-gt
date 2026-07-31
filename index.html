@@ -1740,7 +1740,7 @@ async function abrirTR(tr) {
         ? '<span style="color:var(--ct);font-size:10px;">—</span>'
         : p.enviado_ci
           ? '<span style="color:#00838F;font-size:10px;font-weight:700;">No Controle Interno</span>'
-          : `<button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}')">Enviar ao CI</button>`
+          : `<button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}', ${p.baixada === true})">Enviar ao CI</button>`
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
@@ -4615,7 +4615,7 @@ async function ciConfirmarDevolucao() {
   try {
     const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(p.codigo_pc)}`, {
       method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ enviado_ci: false, dt_envio_ci: null })
+      body: JSON.stringify({ enviado_ci: false })
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
@@ -4639,16 +4639,23 @@ async function ciConfirmarDevolucao() {
 }
 
 // Chamado pelo botão "Enviar ao Controle Interno" no modal abrirTR
-async function enviarAoCI(codigoPc) {
-  if(!confirm('Enviar esta PC ao Controle Interno?')) return
+async function enviarAoCI(codigoPc, jaBaixada) {
+  if(!confirm('Enviar esta PC ao Controle Interno?\n\nO encaminhamento registra a baixa da PC.')) return
   try {
+    const corpo = { enviado_ci: true, dt_envio_ci: new Date().toISOString() }
+    if(jaBaixada !== true) {
+      corpo.baixada = true
+      corpo.status = 'baixada'
+      corpo.data_baixa = new Date().toISOString()
+      corpo.origem_baixa = 'controle_interno'
+    }
     const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(codigoPc)}`, {
       method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ enviado_ci: true, dt_envio_ci: new Date().toISOString() })
+      body: JSON.stringify(corpo)
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    toast('PC enviada ao Controle Interno!','ok')
+    toast(jaBaixada===true ? 'PC enviada ao Controle Interno!' : 'PC enviada ao CI e baixada!','ok')
     if(TR_DETALHE_ATUAL) abrirTR(TR_DETALHE_ATUAL)
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
@@ -5082,6 +5089,20 @@ async function confDevM() {
     if(typeof buscar === 'function') { PAG = 0; buscar() }
     if(typeof carregarContadores === 'function') carregarContadores()
   }
+}
+
+// Etiquetas de estado da PC — produtividade e tramitação são independentes
+function tagsEstadoPC(p) {
+  let t = ''
+  if(p.baixada === true) {
+    t += `<span class="bdg" style="background:#E8F5E9;color:#006B3C;border:1px solid #006B3C;">✓ Baixada</span> `
+  }
+  if(p.enviado_ci === true) {
+    t += `<span class="bdg" style="background:#EAF1F9;color:#1A4E8A;border:1px solid #1A4E8A;">🏛 No Controle Interno</span> `
+  } else if(p.dt_envio_ci) {
+    t += `<span class="bdg" style="background:#FFF6E0;color:#8A6100;border:1px solid #8A6100;">↩ Retornou do CI</span> `
+  }
+  return t || '<span style="color:var(--ct);font-size:10px;">—</span>'
 }
 
 function toast(msg, tipo='ok') {
