@@ -2733,7 +2733,7 @@ async function cgeGerar() {
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
-    const dtIni = new Date(dtInicio+'T00:00:00')
+    const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
     const dtFim = new Date(dtCorte)
     const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
 
@@ -2783,7 +2783,7 @@ async function cgeGerar() {
     const estoque = estoqueBase
     const totPctMeta = metaTotal>0 ? (totBx/metaTotal*100).toFixed(1) : '—'
     const dt = new Date().toLocaleDateString('pt-BR')
-    const periodoTxt = `${new Date(dtInicio+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
+    const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
     _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
@@ -2974,8 +2974,8 @@ async function cgeExportPDF() {
   const pctEst   = totalPlano>0 ? (totBx/totalPlano*100).toFixed(1).replace('.',',')+'%' : '—'
   const metaInd  = '—'
 
-  const fmtPeriodo = (s) => { if(!s) return '—'; const d=new Date(s+'T12:00:00'); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
-  const fmtAbrev   = (s) => { if(!s) return '—'; const d=new Date(s+'T12:00:00'); const m=d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''); const a=String(d.getFullYear()).slice(2); return `${m.charAt(0).toUpperCase()+m.slice(1)}/${a}` }
+  const fmtPeriodo = (s) => { if(!s) return '—'; const d=new Date(String(s).slice(0,10)+'T12:00:00'); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
+  const fmtAbrev   = (s) => { if(!s) return '—'; const d=new Date(String(s).slice(0,10)+'T12:00:00'); const m=d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''); const a=String(d.getFullYear()).slice(2); return `${m.charAt(0).toUpperCase()+m.slice(1)}/${a}` }
   const periodoLong  = dtInicio&&dtCorte ? `${fmtPeriodo(dtInicio)} a ${fmtPeriodo(dtCorte)}` : 'Período não definido'
   const periodoAbrev = dtInicio&&dtCorte ? `${fmtAbrev(dtInicio)} a ${fmtAbrev(dtCorte)}` : '—'
   const mesCorte     = dtCorte ? fmtPeriodo(dtCorte) : 'período atual'
