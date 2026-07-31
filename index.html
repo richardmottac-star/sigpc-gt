@@ -813,52 +813,6 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
-<div class="mo" id="moCgeTxt">
-  <div class="mc" style="width:760px;max-height:88vh;">
-    <div class="mch v"><h3>Textos do Relatório CGE</h3><button class="mcx" onclick="fm('moCgeTxt')">✕</button></div>
-    <div class="mcb" style="max-height:74vh;overflow-y:auto;">
-      <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Os textos ficam salvos e são reaproveitados nos próximos relatórios. Os quadros continuam sendo gerados pelo sistema.</div>
-
-      <div class="mc-campo"><label>Contextualização</label>
-        <textarea id="cgeTxtContext" rows="3" style="resize:vertical;"></textarea></div>
-
-      <div class="mc-campo"><label>Análise — Grupo 1</label>
-        <textarea id="cgeTxtG1" rows="2" style="resize:vertical;"></textarea></div>
-      <div class="mc-campo"><label>Análise — Grupo 2</label>
-        <textarea id="cgeTxtG2" rows="2" style="resize:vertical;"></textarea></div>
-      <div class="mc-campo"><label>Análise — Grupo 3</label>
-        <textarea id="cgeTxtG3" rows="2" style="resize:vertical;"></textarea></div>
-
-      <div class="mc-campo">
-        <label>Justificativas do período</label>
-        <div id="cgeTxtJustBox"></div>
-        <button onclick="cgeJustAdd()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar justificativa</button>
-      </div>
-
-      <div class="mc-campo">
-        <label>Quadro 3 — Avaliação qualitativa</label>
-        <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Uma linha por item. Cada linha vira um marcador na tabela.</div>
-        <div id="cgeTxtQ3Box"></div>
-        <button onclick="cgeQ3Add()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar aspecto</button>
-      </div>
-
-      <div class="mc-campo"><label>Conclusão</label>
-        <textarea id="cgeTxtConclusao" rows="3" style="resize:vertical;"></textarea></div>
-
-      <div class="mc-campo">
-        <label>Signatários</label>
-        <div id="cgeTxtAssBox"></div>
-        <button onclick="cgeAssAdd()" style="margin-top:6px;font-size:11px;padding:4px 10px;background:#fff;border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;font-family:Barlow,sans-serif;">+ Adicionar signatário</button>
-      </div>
-
-      <div class="mcbt">
-        <button class="mccn" onclick="fm('moCgeTxt')">Cancelar</button>
-        <button class="mcok" id="cgeTxtBtn" onclick="cgeSalvarTextos()">✓ Salvar textos</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ══ MODAL VER NLs ══ -->
 <div class="mo" id="moNL">
   <div class="mc lg">
@@ -3040,7 +2994,7 @@ async function cgeExportPDF() {
   const gSt   = (arr) => ({ bx:arr.reduce((s,d)=>s+d.totalBaixadas,0), tot:arr.reduce((s,d)=>s+d.totalBaixadas,0), acima:arr.filter(d=>d.pctMeta!==null && d.pctMeta>=100).length })
   const g1=gSt(gList(1)), g2=gSt(gList(2)), g3=gSt(gList(3))
 
-  // Textos editáveis (moCgeTxt) — usa o que foi salvo em relatorios_cge; cai no texto padrão quando vazio
+  // Textos editáveis (tela cgeAbrirTextos) — usa o que foi salvo em relatorios_cge; cai no texto padrão quando vazio
   const defG1 = `O Grupo 1 apresentou bom desempenho com ${g1.acima} técnico(s) atingindo ou ultrapassando a meta estabelecida${g1.acima>0?', demonstrando comprometimento e expertise crescente nos processos analisados':'. Alguns técnicos apresentam percentual menor em virtude de processos mais complexos, causando uma morosidade nestas análises e consequentemente nas respectivas baixas'}.`
   const defG2 = `O Grupo 2 possui um percentual mais equilibrado de PCs baixadas entre os técnicos, com ${g2.acima} técnico(s) ultrapassando a meta prevista. Apresenta um grande volume de processos em fase de diligência no período avaliado, evidenciando dependência significativa do retorno tempestivo de documentação por parte das entidades parceiras.`
   const defG3 = `O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente pela questão de em sua maioria ser apenas 1 PC por parcial, impactando diretamente no resultado. Muitos desse grupo também não possuíam contato com esta função de convênios, prestações de contas, criando cada vez mais conhecimento e isso refletindo na melhora da produtividade.`
@@ -5494,6 +5448,7 @@ function cgeLerParams() {
 // ══════════════════════════════════════
 let _cgeTexto = null
 let _cgeTextoSid = null
+let _cgeAnterior = null
 
 const CGE_TXT_PADRAO = {
   contextualizacao: 'O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.',
@@ -5637,27 +5592,137 @@ function cgeQ3Render() {
 function cgeQ3Add() { _cgeTexto.quadro3.push({aspecto:'',itens:[]}); cgeQ3Render() }
 function cgeQ3Del(i) { _cgeTexto.quadro3.splice(i,1); cgeQ3Render() }
 
+let _cgeSecAtual = 'contextualizacao'
+
+const CGE_SECOES = [
+  { id:'contextualizacao', nav:'Contextualização',  titulo:'Contextualização',              onde:'Item 1 do relatório' },
+  { id:'analise_grupo1',   nav:'Grupo 1',           titulo:'Grupo 1',                        onde:'Análise por Grupo › Grupo 1' },
+  { id:'analise_grupo2',   nav:'Grupo 2',           titulo:'Grupo 2',                        onde:'Análise por Grupo › Grupo 2' },
+  { id:'analise_grupo3',   nav:'Grupo 3',           titulo:'Grupo 3',                        onde:'Análise por Grupo › Grupo 3' },
+  { id:'justificativas',   nav:'Justificativas',    titulo:'Justificativas do período',      onde:'Item 1.3 › lista a) b) c)' },
+  { id:'quadro3',          nav:'Quadro 3',          titulo:'Quadro 3 — Avaliação qualitativa', onde:'Tabela do item 1.3' },
+  { id:'conclusao',        nav:'Conclusão',         titulo:'Conclusão',                      onde:'Item 1.4' },
+  { id:'signatarios',      nav:'Signatários',       titulo:'Signatários',                    onde:'Assinaturas ao final' }
+]
+
 async function cgeAbrirTextos() {
   await cgeCarregarTextos()
-  document.getElementById('cgeTxtContext').value = _cgeTexto.contextualizacao || ''
-  document.getElementById('cgeTxtG1').value = _cgeTexto.analise_grupo1 || ''
-  document.getElementById('cgeTxtG2').value = _cgeTexto.analise_grupo2 || ''
-  document.getElementById('cgeTxtG3').value = _cgeTexto.analise_grupo3 || ''
-  document.getElementById('cgeTxtConclusao').value = _cgeTexto.conclusao || ''
-  cgeJustRender(); cgeAssRender(); cgeQ3Render()
-  document.getElementById('moCgeTxt').classList.add('open')
+  ativarMenu('rel')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="irRel()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ct);">←</button>
+        <div>
+          <div style="font-size:15px;font-weight:700;">Textos do relatório CGE</div>
+          <div style="font-size:11px;color:var(--ct);" id="cgeSalvoInfo">Os textos são reaproveitados nos próximos relatórios</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="cgeVerAnterior()" class="btn-buscar" style="height:32px;background:#fff;color:var(--az);border:1.5px solid var(--az);">Ver versão anterior</button>
+        <button onclick="cgeSalvarTextos()" id="cgeTxtBtn" class="btn-buscar" style="height:32px;">✓ Salvar</button>
+      </div>
+    </div>
+
+    <div id="cgeAnteriorBox" style="display:none;background:#F5F7FA;border:1px solid #C8D3DD;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:700;color:var(--az);">Versão anterior</span>
+        <button onclick="cgeVerAnterior()" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--ct);">✕</button>
+      </div>
+      <div id="cgeAnteriorTxt" style="font-size:12px;line-height:1.6;color:#333;max-height:180px;overflow-y:auto;"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:10px;">
+      <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:10px;height:fit-content;">
+        <div style="font-size:10px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;padding:2px 6px 8px;">Seções</div>
+        <div id="cgeNav"></div>
+      </div>
+      <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--cb);">
+          <div style="font-size:14px;font-weight:700;" id="cgeSecTitulo">—</div>
+          <div style="font-size:11px;color:var(--ct);margin-top:2px;">Sai no relatório em: <span id="cgeSecOnde">—</span></div>
+        </div>
+        <div id="cgeToolbar" style="display:flex;align-items:center;gap:2px;padding:6px 10px;border-bottom:1px solid var(--cb);background:#F7F9F8;flex-wrap:wrap;"></div>
+        <div id="cgeEditorArea" style="padding:14px 16px;min-height:340px;"></div>
+      </div>
+    </div>
+  `
+  cgeNavRender()
+  cgeIrSecao('contextualizacao')
+}
+
+function cgeNavRender() {
+  const nav = document.getElementById('cgeNav')
+  if(!nav) return
+  nav.innerHTML = CGE_SECOES.map(s=>{
+    const on = s.id===_cgeSecAtual
+    return `<div onclick="cgeIrSecao('${s.id}')" style="font-size:12px;padding:5px 8px;border-radius:6px;cursor:pointer;margin-bottom:2px;${on?'background:#E8F5EE;color:var(--v);font-weight:700;':'color:var(--ct);'}">${s.nav}</div>`
+  }).join('')
+}
+
+const CGE_TOOLBAR_HTML = `
+  <button onclick="cgeFmt('bold')" title="Negrito" style="font-weight:800;font-size:13px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">B</button>
+  <button onclick="cgeFmt('italic')" title="Itálico" style="font-style:italic;font-size:13px;padding:4px 10px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">I</button>
+  <button onclick="cgeFmt('underline')" title="Sublinhado" style="text-decoration:underline;font-size:13px;padding:4px 10px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">U</button>
+  <span style="width:1px;height:18px;background:var(--cb);margin:0 4px;"></span>
+  <button onclick="cgeFmt('insertUnorderedList')" title="Lista com marcadores" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">• Lista</button>
+  <button onclick="cgeFmt('insertOrderedList')" title="Lista numerada" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">1. Lista</button>
+  <span style="width:1px;height:18px;background:var(--cb);margin:0 4px;"></span>
+  <button onclick="cgeFmt('justifyLeft')" title="Alinhar à esquerda" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">⬅</button>
+  <button onclick="cgeFmt('justifyCenter')" title="Centralizar" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">↔</button>
+  <button onclick="cgeFmt('justifyFull')" title="Justificar" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">☰</button>
+  <span style="width:1px;height:18px;background:var(--cb);margin:0 4px;"></span>
+  <button onclick="cgeFmt('removeFormat')" title="Limpar formatação" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">✕ Formato</button>
+`
+
+function cgeFmt(cmd) { document.execCommand(cmd, false, null); document.getElementById('cgeEditor')?.focus() }
+
+function cgeIrSecao(id) {
+  cgeSalvarSecaoAtual()
+  _cgeSecAtual = id
+  const s = CGE_SECOES.find(x=>x.id===id)
+  document.getElementById('cgeSecTitulo').textContent = s.titulo
+  document.getElementById('cgeSecOnde').textContent = s.onde
+  const tb = document.getElementById('cgeToolbar')
+  const area = document.getElementById('cgeEditorArea')
+  const simples = ['contextualizacao','analise_grupo1','analise_grupo2','analise_grupo3','conclusao']
+  if(simples.includes(id)) {
+    tb.innerHTML = CGE_TOOLBAR_HTML
+    tb.style.display = 'flex'
+    area.innerHTML = `<div id="cgeEditor" contenteditable="true" style="min-height:300px;font-size:13px;line-height:1.7;outline:none;">${_cgeTexto[id]||''}</div>`
+  } else {
+    tb.innerHTML = ''
+    tb.style.display = 'none'
+    if(id==='justificativas') { area.innerHTML = `<div id="cgeTxtJustBox"></div><button onclick="cgeJustAdd()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar justificativa</button>`; cgeJustRender() }
+    if(id==='quadro3')        { area.innerHTML = `<div id="cgeTxtQ3Box"></div><button onclick="cgeQ3Add()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar aspecto</button>`; cgeQ3Render() }
+    if(id==='signatarios')    { area.innerHTML = `<div id="cgeTxtAssBox"></div><button onclick="cgeAssAdd()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar signatário</button>`; cgeAssRender() }
+  }
+  cgeNavRender()
+}
+
+function cgeSalvarSecaoAtual() {
+  const ed = document.getElementById('cgeEditor')
+  if(ed && _cgeTexto) _cgeTexto[_cgeSecAtual] = ed.innerHTML
+}
+
+function cgeVerAnterior() {
+  const box = document.getElementById('cgeAnteriorBox')
+  if(!box) return
+  const aberto = box.style.display !== 'none'
+  box.style.display = aberto ? 'none' : ''
+  if(!aberto) {
+    const alvo = document.getElementById('cgeAnteriorTxt')
+    const ant = _cgeAnterior ? _cgeAnterior[_cgeSecAtual] : null
+    alvo.innerHTML = ant ? (typeof ant === 'string' ? ant : '<em>Seção com estrutura própria — consulte o relatório anterior.</em>')
+                         : '<em style="color:var(--ct);">Nenhuma versão anterior encontrada para esta seção.</em>'
+  }
 }
 
 async function cgeSalvarTextos() {
+  cgeSalvarSecaoAtual()
   const btn = document.getElementById('cgeTxtBtn')
   btn.disabled = true; btn.textContent = 'Salvando...'
   try {
     const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
-    _cgeTexto.contextualizacao = document.getElementById('cgeTxtContext').value
-    _cgeTexto.analise_grupo1 = document.getElementById('cgeTxtG1').value
-    _cgeTexto.analise_grupo2 = document.getElementById('cgeTxtG2').value
-    _cgeTexto.analise_grupo3 = document.getElementById('cgeTxtG3').value
-    _cgeTexto.conclusao = document.getElementById('cgeTxtConclusao').value
     const payload = {
       contextualizacao: _cgeTexto.contextualizacao,
       analise_grupo1: _cgeTexto.analise_grupo1,
@@ -5678,10 +5743,11 @@ async function cgeSalvarTextos() {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
     if(j.data && j.data.id) _cgeTexto.id = j.data.id
-    fm('moCgeTxt')
+    const info = document.getElementById('cgeSalvoInfo')
+    if(info) info.textContent = `Salvo em ${new Date().toLocaleString('pt-BR')}`
     toast('Textos salvos!','ok')
   } catch(e) { toast('Erro: '+e.message,'err') }
-  finally { btn.disabled=false; btn.textContent='✓ Salvar textos' }
+  finally { btn.disabled=false; btn.textContent='✓ Salvar' }
 }
 
 function toast(msg, tipo='ok') {
