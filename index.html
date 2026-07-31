@@ -1247,7 +1247,7 @@ function sair() {
 //  SIDEBAR
 // ══════════════════════════════════════
 function renderSB() {
-  const isAdmin = U.setorialAcesso === 'ADMIN'
+  const isAdmin = U.perfil === 'superadmin'
   const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   const podeGerirUsuarios = isAdmin || U.perfil === 'coordenador'
   const podeCI = U.perfil === 'superadmin' || U.perfil === 'coordenador' || U.perfil === 'controle_interno'
@@ -3985,7 +3985,7 @@ function admPodeGerenciar(u) {
 
 function irAdmin() {
   const souCoord = U.perfil === 'coordenador'
-  if(U.setorialAcesso !== 'ADMIN' && !souCoord) { toast('Acesso restrito a SUPERADMIN e Coordenadores.','err'); return }
+  if(U.perfil !== 'superadmin' && !souCoord) { toast('Acesso restrito a SUPERADMIN e Coordenadores.','err'); return }
   ativarMenu('admin')
   const perfisModal = souCoord ? ['analista'] : PERFIS
   document.getElementById('BODY').innerHTML = `
