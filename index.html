@@ -2650,11 +2650,47 @@ function irRel() {
           <div class="fg"><label>Data Inicial</label>
             <input type="date" id="cgeDtInicio" value="2025-08-01" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
-          <div class="fg"><label>Data Final</label>
-            <input type="date" id="cgeDtCorte" value="${new Date().toISOString().split('T')[0]}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          <div class="fg"><label>Data e hora de corte</label>
+            <input type="datetime-local" id="cgeDtCorte" value="${new Date().toISOString().slice(0,16)}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
+          </div>
+        </div>
+        <div style="margin-top:14px;border-top:1px dashed var(--cb);padding-top:12px;">
+          <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="cgeToggleParams()">
+            <span id="cgeParamSeta" style="font-size:11px;color:var(--ct);">▶</span>
+            <span style="font-size:12px;font-weight:700;color:var(--te);">Parâmetros de exceção</span>
+            <span id="cgeParamBadge" style="display:none;font-size:9px;background:#FFF6E0;color:#8A6100;border:1px solid #8A6100;border-radius:4px;padding:1px 6px;">0 sobrescritos</span>
+          </div>
+          <div id="cgeParamBox" style="display:none;margin-top:10px;">
+            <div style="font-size:11px;color:var(--ct);margin-bottom:10px;">Deixe em branco para usar o valor calculado pelo sistema. Preencha apenas quando precisar sobrescrever pontualmente.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+              <div class="fg"><label>Nº de PCs total</label>
+                <input type="number" id="cgePmTotalPCs" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Estoque</label>
+                <input type="number" id="cgePmEstoque" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Meta do período</label>
+                <input type="number" id="cgePmMeta" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Meta mín. por servidor/mês</label>
+                <input type="number" id="cgePmMetaMin" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Nº de técnicos</label>
+                <input type="number" id="cgePmTecnicos" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Nº de coordenadores</label>
+                <input type="number" id="cgePmCoords" placeholder="3" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>PCs baixadas</label>
+                <input type="number" id="cgePmBaixadas" placeholder="calculado" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+              <div class="fg"><label>Baixas do Secretário</label>
+                <input type="number" id="cgePmBxSec" placeholder="0" oninput="cgeContaParams()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2683,6 +2719,7 @@ async function cgeGerar() {
   const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
   const dtInicio = document.getElementById('cgeDtInicio')?.value || ''
   const dtCorte  = document.getElementById('cgeDtCorte')?.value  || ''
+  const PM = cgeLerParams()
 
   if(!dtInicio || !dtCorte) { cont.innerHTML = '<p style="color:var(--r);padding:20px;">Informe a Data Inicial e a Data Final.</p>'; return }
 
@@ -2749,6 +2786,16 @@ async function cgeGerar() {
     const periodoTxt = `${new Date(dtInicio+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(dtCorte+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
     _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+
+    if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
+    if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
+    if(PM.meta     !== null) _cgeParams.metaTotal = PM.meta
+    if(PM.baixadas !== null) _cgeParams.totBx = PM.baixadas
+    if(PM.bxSec    !== null) _cgeParams.totBxSec = PM.bxSec
+    _cgeParams.metaMinManual  = PM.metaMin
+    _cgeParams.tecnicosManual = PM.tecnicos
+    _cgeParams.coordsManual   = PM.coords
+    _cgeParams.dtCorteHora    = dtCorte
 
     // Renderizar quadros — Quadro 2 e Quadro 4 sempre ordenados por nome
     const q2Sorted = [..._cgeDados].sort((a,b) => a.u.nome.localeCompare(b.u.nome))
@@ -2888,7 +2935,7 @@ function cgeExportExcel() {
 async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0 } = _cgeParams||{}
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
   try {
@@ -2917,8 +2964,9 @@ async function cgeExportPDF() {
   const totEmAnd = totAn+totDil+totRean+totCtrl
   // Compatibilidade com o texto fixo do relatório (metodologia antiga de meta por técnico/mês) —
   // metaMes/numTec/totalPlano saíram do formulário; aproximados aqui a partir da meta real por analista.
-  const numTec   = _cgeDados.length
-  const metaMes  = meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0
+  const numTec   = tecnicosManual !== null ? tecnicosManual : _cgeDados.length
+  const numCoords = coordsManual !== null ? coordsManual : 3
+  const metaMes  = metaMinManual !== null ? metaMinManual : (meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0)
   const totalPlano = estoque
   const metaAcum = metaTotal
   const metaTrim = metaTotal
@@ -2932,6 +2980,7 @@ async function cgeExportPDF() {
   const periodoAbrev = dtInicio&&dtCorte ? `${fmtAbrev(dtInicio)} a ${fmtAbrev(dtCorte)}` : '—'
   const mesCorte     = dtCorte ? fmtPeriodo(dtCorte) : 'período atual'
   const dtGerado     = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})
+  const dtCorteHoraFmt = dtCorteHora ? new Date(dtCorteHora).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'
   const totBxFmt     = totBx.toLocaleString('pt-BR')
   const metaAcumFmt  = metaAcum.toLocaleString('pt-BR')
   const totalPlanoFmt= totalPlano.toLocaleString('pt-BR')
@@ -3045,7 +3094,8 @@ ${HDR}
   <p><strong>Processo:</strong> CGE nº 727/2025</p>
   <p><strong>Período de Monitoramento:</strong> ${periodoLong}</p>
   <p><strong>Número PCs Total:</strong> ${totalGeralPCsFmt} PCs (total geral de prestações de contas no sistema)</p>
-  <p><strong>Número de servidores GT-PC:</strong> ${numTec+3} servidores (${numTec} técnicos + 3 coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</p>
+  <p><strong>Número de servidores GT-PC:</strong> ${numTec+numCoords} servidores (${numTec} técnicos + ${numCoords} coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</p>
+  <p><strong>Dados extraídos em:</strong> ${dtCorteHoraFmt}</p>
 </div>
 </div>
 
@@ -5355,6 +5405,41 @@ async function afastExcluir(id) {
     toast('Afastamento excluído.','ok')
     await afastCarregar()
   } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════
+//  PARÂMETROS DE EXCEÇÃO — RELATÓRIO CGE
+// ══════════════════════════════════════
+const CGE_PARAM_IDS = ['cgePmTotalPCs','cgePmEstoque','cgePmMeta','cgePmMetaMin','cgePmTecnicos','cgePmCoords','cgePmBaixadas','cgePmBxSec']
+
+function cgeToggleParams() {
+  const box = document.getElementById('cgeParamBox')
+  const seta = document.getElementById('cgeParamSeta')
+  if(!box) return
+  const aberto = box.style.display !== 'none'
+  box.style.display = aberto ? 'none' : ''
+  if(seta) seta.textContent = aberto ? '▶' : '▼'
+}
+
+function cgeContaParams() {
+  let n = 0
+  CGE_PARAM_IDS.forEach(id => {
+    const el = document.getElementById(id)
+    if(el && el.value !== '') { n++; el.style.borderColor = '#8A6100'; el.style.background = '#FFFDF5' }
+    else if(el) { el.style.borderColor = 'var(--cb)'; el.style.background = '' }
+  })
+  const b = document.getElementById('cgeParamBadge')
+  if(b) { b.style.display = n>0 ? '' : 'none'; b.textContent = `${n} sobrescrito${n>1?'s':''}` }
+  return n
+}
+
+function cgeLerParams() {
+  const v = id => { const el=document.getElementById(id); const s=el?el.value.trim():''; return s===''?null:parseInt(s) }
+  return {
+    totalPCs: v('cgePmTotalPCs'), estoque: v('cgePmEstoque'), meta: v('cgePmMeta'),
+    metaMin: v('cgePmMetaMin'), tecnicos: v('cgePmTecnicos'), coords: v('cgePmCoords'),
+    baixadas: v('cgePmBaixadas'), bxSec: v('cgePmBxSec')
+  }
 }
 
 function toast(msg, tipo='ok') {
