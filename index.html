@@ -2744,8 +2744,18 @@ async function cgeGerar() {
     ;(usersRes.data||[]).forEach(u => { if(u.perfil === 'analista') usuariosPorId[u.id] = u })
 
     // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
+    let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0
     const mapaAn = {}
     todosPcs.forEach(p => {
+      const t  = (p.tipo||'').toLowerCase()
+      const pt = (p.parecer_tipo||'')
+      const ehRegular   = pt.startsWith('Parecer Regular')
+      const ehIrregular = pt.includes('Irregular')
+      if(t === 'parcial' && ehRegular)   totParcReg++
+      if(t === 'parcial' && ehIrregular) totParcIrr++
+      if(t === 'final'   && ehRegular)   totFinReg++
+      if(t === 'final'   && ehIrregular) totFinIrr++
+
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
       if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0}
       const m = mapaAn[p.analista_id]
@@ -2788,7 +2798,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -2938,7 +2948,7 @@ function cgeExportExcel() {
 async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
   const TXT = await cgeCarregarTextos()
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
@@ -3183,8 +3193,8 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
       <td style="font-weight:700;">Resultado até o período — ${periodoLong}</td>
       <td class="tc fw">${metaAcumFmt}</td>
       <td class="tc fw">${pctMeta}</td>
-      <td class="tc">${totBx}</td><td class="tc">0</td>
-      <td class="tc">0</td><td class="tc">0</td>
+      <td class="tc">${totParcReg}</td><td class="tc">${totParcIrr}</td>
+      <td class="tc">${totFinReg}</td><td class="tc">${totFinIrr}</td>
       <td class="tc">0</td><td class="tc">0</td>
       <td class="tc fw">${totBxFmt}</td>
       <td class="tc">${totalPlanoFmt}</td>
