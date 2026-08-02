@@ -2740,8 +2740,12 @@ async function cgeGerar() {
     const dtFim = new Date(dtCorte)
     const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
 
+    const analistaIdsComPC = new Set(todosPcs.filter(p=>p.analista_id).map(p=>String(p.analista_id)))
     const usuariosPorId = {}
-    ;(usersRes.data||[]).forEach(u => { if(u.perfil === 'analista') usuariosPorId[u.id] = u })
+    ;(usersRes.data||[]).forEach(u => {
+      if(u.perfil === 'analista') usuariosPorId[u.id] = u
+      else if(u.perfil === 'superadmin' && analistaIdsComPC.has(String(u.id))) usuariosPorId[u.id] = u
+    })
 
     // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
     let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0
