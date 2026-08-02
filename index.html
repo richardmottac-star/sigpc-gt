@@ -1787,11 +1787,8 @@ async function abrirTR(tr) {
       const acao = p.baixada === true
         ? '<span style="color:var(--ct);font-size:10px;">Já baixada</span>'
         : `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
-      const acaoCI = p.baixada
-        ? '<span style="color:var(--ct);font-size:10px;">—</span>'
-        : p.enviado_ci
-          ? '<span style="color:#00838F;font-size:10px;font-weight:700;">No Controle Interno</span>'
-          : `<button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}', ${p.baixada === true})">Enviar ao CI</button>`
+      const podeEnviarCI = !p.baixada && !p.enviado_ci
+      const acaoCI = `${tagsEstadoPC(p, false)}${podeEnviarCI ? ` <button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}', ${p.baixada === true})">Enviar ao CI</button>` : ''}`
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
@@ -5262,9 +5259,10 @@ async function confDevM() {
 }
 
 // Etiquetas de estado da PC — produtividade e tramitação são independentes
-function tagsEstadoPC(p) {
+// mostrarBaixada=false omite a tag "✓ Baixada" (útil quando já existe outra coluna mostrando o status)
+function tagsEstadoPC(p, mostrarBaixada = true) {
   let t = ''
-  if(p.baixada === true) {
+  if(mostrarBaixada && p.baixada === true) {
     t += `<span class="bdg" style="background:#E8F5E9;color:#006B3C;border:1px solid #006B3C;">✓ Baixada</span> `
   }
   if(p.enviado_ci === true) {
