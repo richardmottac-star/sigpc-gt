@@ -2557,6 +2557,9 @@ function irRel() {
   ativarMenu('rel')
   const isAdmin = U.perfil==='superadmin'
   const isCoordi = U.perfil==='coordenador'
+  // Valor padrão do campo "Data e hora de corte" em hora LOCAL do navegador (não UTC)
+  const agoraCorte = new Date()
+  const dtCorteLocalDefault = new Date(agoraCorte.getTime() - agoraCorte.getTimezoneOffset()*60000).toISOString().slice(0,16)
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:16px;font-weight:700;">📊 Relatórios — SIGPC-GT</div>
@@ -2655,7 +2658,7 @@ function irRel() {
             <input type="date" id="cgeDtInicio" value="2025-08-01" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
           <div class="fg"><label>Data e hora de corte</label>
-            <input type="datetime-local" id="cgeDtCorte" value="${new Date().toISOString().slice(0,16)}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+            <input type="datetime-local" id="cgeDtCorte" value="${dtCorteLocalDefault}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
           </div>
           <div style="display:flex;align-items:flex-end;">
             <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
