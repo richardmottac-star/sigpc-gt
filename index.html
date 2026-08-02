@@ -1229,7 +1229,7 @@ async function login() {
       ...u,
       setorialAcesso: sec,
       // setorialFiltro: null = admin vê tudo; 'FCEE' = vê só FCEE
-      setorialFiltro: sec === 'ADMIN' ? null : (u.setorial_id || sec),
+      setorialFiltro: sec === 'ADMIN' ? null : sec,
       modoAnalista: sec !== 'ADMIN'
     }
     iniciarApp()
