@@ -1346,6 +1346,9 @@ function renderSB() {
       ${isCoordi?`<div class="sb-item" id="mi-afast" onclick="irAfastamentos()">
         <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>Férias e Afastamentos
       </div>`:''}
+      ${isCoordi?`<div class="sb-item" id="mi-estlog" onclick="irEstornosRealizados()">
+        <svg viewBox="0 0 24 24"><path d="M12 8v4l3 3 .75-.75-2.5-2.5V8H12zm0-6a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>Estornos Realizados
+      </div>`:''}
     </div>` : ''}
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
@@ -5855,6 +5858,9 @@ async function cgeSalvarTextos() {
 let _estDados = []
 let _estSelecionados = new Set()
 let _estNomePorId = {}
+let _estBusca = ''
+let _estPag = 0
+const EST_PP = 50
 
 async function irEstornar() {
   ativarMenu('estornar')
@@ -5867,8 +5873,8 @@ async function irEstornar() {
         : 'PCs baixadas ' + (U.perfil==='coordenador' ? 'pelos analistas do seu grupo' : 'no sistema') + '. Marque uma ou mais e informe o motivo para estornar — elas voltam para análise.'}
     </div>
 
-    ${souSuper ? `<div class="filtros" style="gap:10px;margin-bottom:12px;">
-      <div class="fg"><label>Grupo</label>
+    <div class="filtros" style="gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      ${souSuper ? `<div class="fg"><label>Grupo</label>
         <select id="estFiltroGrupo" onchange="estCarregar()">
           <option value="">Todos os Grupos</option>
           <option value="1">Grupo 1 — Nayara</option>
@@ -5880,8 +5886,11 @@ async function irEstornar() {
         <select id="estFiltroAnalista" onchange="estCarregar()">
           <option value="">Todos</option>
         </select>
+      </div>` : ''}
+      <div class="fg"><label>Buscar</label>
+        <input type="text" id="estBusca" placeholder="Código PC, SGPe, TR ou entidade" oninput="estBuscarInput(this.value)" style="min-width:220px;">
       </div>
-    </div>` : ''}
+    </div>
 
     <div id="estAvisoWrap" style="display:none;background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7A4800;font-weight:700;"></div>
 
@@ -5896,12 +5905,22 @@ async function irEstornar() {
       </table>
     </div></div>
 
-    <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:16px;margin-top:14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;margin-top:8px;">
+      <span class="pag-info" id="estPagInf">—</span>
+      <div class="pag-btns">
+        <button class="pag-btn" id="estBtnAnt" onclick="estPg(-1)" disabled>◀ Anterior</button>
+        <span id="estPagNum" style="padding:4px 8px;font-size:11px;color:var(--ct);">1</span>
+        <button class="pag-btn" id="estBtnPrx" onclick="estPg(1)">Próximo ▶</button>
+      </div>
+    </div>
+
+    <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:16px;margin-top:6px;">
       <div class="mc-campo">
         <label>Motivo do estorno * (mínimo 15 caracteres)</label>
         <textarea id="estMotivo" rows="3" oninput="estContarMotivo()" placeholder="Descreva o motivo do estorno..." style="resize:vertical;"></textarea>
         <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="estMotivoContador">0/15 caracteres</div>
       </div>
+      <div id="estContadorSel" style="font-size:11px;color:var(--ct);margin-bottom:6px;text-align:right;font-weight:700;"></div>
       <div style="text-align:right;">
         <button class="mcok rv" id="estBtnConfirmar" onclick="estConfirmar()" disabled>↩ Estornar selecionadas</button>
       </div>
@@ -5947,6 +5966,10 @@ async function estCarregar() {
     }
 
     _estSelecionados = new Set()
+    _estBusca = ''
+    _estPag = 0
+    const inpBusca = document.getElementById('estBusca')
+    if(inpBusca) inpBusca.value = ''
     estRender()
     estAtualizarAviso()
   } catch(e) {
@@ -5954,46 +5977,119 @@ async function estCarregar() {
   }
 }
 
+function estDadosFiltrados() {
+  if(!_estBusca) return _estDados
+  const q = _estBusca.toLowerCase()
+  return _estDados.filter(p =>
+    (p.codigo_pc||'').toLowerCase().includes(q) ||
+    (p.processo_pc||'').toLowerCase().includes(q) ||
+    (p.tr||'').toLowerCase().includes(q) ||
+    (p.entidade||'').toLowerCase().includes(q)
+  )
+}
+
+// Agrupa por NL e distribui em páginas de até EST_PP registros,
+// nunca dividindo uma NL entre duas páginas
+function estMontarPaginas(dados) {
+  const grupos = {}
+  dados.forEach(p => {
+    const nl = p.codigo_nl || '—'
+    if(!grupos[nl]) grupos[nl] = []
+    grupos[nl].push(p)
+  })
+  const chaves = Object.keys(grupos).sort()
+  const paginas = []
+  let paginaAtual = []
+  let contAtual = 0
+  chaves.forEach(nl => {
+    const pcs = grupos[nl]
+    if(contAtual > 0 && contAtual + pcs.length > EST_PP) {
+      paginas.push(paginaAtual)
+      paginaAtual = []
+      contAtual = 0
+    }
+    paginaAtual.push({ nl, pcs })
+    contAtual += pcs.length
+  })
+  if(paginaAtual.length) paginas.push(paginaAtual)
+  return paginas
+}
+
+function estBuscarInput(v) {
+  _estBusca = v
+  _estPag = 0
+  estRender()
+}
+
+function estPg(d) {
+  _estPag += d
+  estRender()
+  document.getElementById('estBody')?.scrollIntoView({behavior:'smooth',block:'start'})
+}
+
 function estRender() {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
   const souAnalista = U.perfil === 'analista'
   const cols = souAnalista ? 6 : 7
-  if(!_estDados.length) {
-    tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:20px;color:var(--ct);">${souAnalista?'Você não tem PCs baixadas.':'Nenhuma PC baixada encontrada para o filtro selecionado.'}</td></tr>`
-    return
-  }
-  const grupos = {}
-  _estDados.forEach(p => {
-    const nl = p.codigo_nl || '—'
-    if(!grupos[nl]) grupos[nl] = []
-    grupos[nl].push(p)
-  })
-  let html = ''
-  Object.keys(grupos).sort().forEach(nl => {
-    const pcs = grupos[nl]
-    const todasMarcadas = pcs.every(p => _estSelecionados.has(p.codigo_pc))
-    html += `<tr class="grupo-sep"><td colspan="${cols}">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" ${todasMarcadas?'checked':''} onchange="estToggleNL('${nl}', this.checked)">
-        <span class="bdg" style="font-size:10px;">NL ${nl}</span>
-        <span style="font-size:11px;color:var(--ct);">${pcs.length} PC${pcs.length>1?'s':''} — selecionar todas desta NL</span>
-      </label>
-    </td></tr>`
-    pcs.forEach(p => {
-      const marcado = _estSelecionados.has(p.codigo_pc)
-      html += `<tr>
-        <td style="text-align:center;"><input type="checkbox" ${marcado?'checked':''} onchange="estToggleLinha('${p.codigo_pc}', this.checked)"></td>
-        ${!souAnalista?`<td style="font-size:11px;font-weight:600;white-space:nowrap;">${_estNomePorId[p.analista_id]||p.analista_nome||'—'}</td>`:''}
-        <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
-        <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
-        <td style="font-size:11px;color:var(--az);font-weight:600;white-space:nowrap;">${p.tr||'—'}</td>
-        <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.entidade||''}">${p.entidade||'—'}</td>
-        <td style="font-size:11px;">${p.parecer_tipo||'—'}</td>
-      </tr>`
+
+  const dadosFiltrados = estDadosFiltrados()
+  const paginas = estMontarPaginas(dadosFiltrados)
+  const totalPaginas = paginas.length || 1
+  if(_estPag >= totalPaginas) _estPag = Math.max(0, totalPaginas-1)
+  const grupoPagina = paginas[_estPag] || []
+
+  if(!dadosFiltrados.length) {
+    const msgVazio = _estBusca ? 'Nenhum resultado para a busca.' : (souAnalista?'Você não tem PCs baixadas.':'Nenhuma PC baixada encontrada para o filtro selecionado.')
+    tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:20px;color:var(--ct);">${msgVazio}</td></tr>`
+  } else {
+    let html = ''
+    grupoPagina.forEach(({nl, pcs}) => {
+      const todasMarcadas = pcs.every(p => _estSelecionados.has(p.codigo_pc))
+      html += `<tr class="grupo-sep"><td colspan="${cols}">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" ${todasMarcadas?'checked':''} onchange="estToggleNL('${nl}', this.checked)">
+          <span class="bdg" style="font-size:10px;">NL ${nl}</span>
+          <span style="font-size:11px;color:var(--ct);">${pcs.length} PC${pcs.length>1?'s':''} — selecionar todas desta NL</span>
+        </label>
+      </td></tr>`
+      pcs.forEach(p => {
+        const marcado = _estSelecionados.has(p.codigo_pc)
+        html += `<tr>
+          <td style="text-align:center;"><input type="checkbox" ${marcado?'checked':''} onchange="estToggleLinha('${p.codigo_pc}', this.checked)"></td>
+          ${!souAnalista?`<td style="font-size:11px;font-weight:600;white-space:nowrap;">${_estNomePorId[p.analista_id]||p.analista_nome||'—'}</td>`:''}
+          <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
+          <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
+          <td style="font-size:11px;color:var(--az);font-weight:600;white-space:nowrap;">${p.tr||'—'}</td>
+          <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.entidade||''}">${p.entidade||'—'}</td>
+          <td style="font-size:11px;">${p.parecer_tipo||'—'}</td>
+        </tr>`
+      })
     })
-  })
-  tbody.innerHTML = html
+    tbody.innerHTML = html
+  }
+
+  const inf = document.getElementById('estPagInf')
+  const num = document.getElementById('estPagNum')
+  const bAnt = document.getElementById('estBtnAnt')
+  const bPrx = document.getElementById('estBtnPrx')
+  if(inf) inf.textContent = `Pág. ${_estPag+1} de ${totalPaginas} — ${dadosFiltrados.length} registros`
+  if(num) num.textContent = `${_estPag+1}/${totalPaginas}`
+  if(bAnt) bAnt.disabled = _estPag === 0
+  if(bPrx) bPrx.disabled = _estPag >= totalPaginas-1
+
+  estAtualizarContador()
+}
+
+// Conta a seleção inteira (todas as páginas), não só a página visível
+function estAtualizarContador() {
+  const el = document.getElementById('estContadorSel')
+  if(!el) return
+  const n = _estSelecionados.size
+  if(n === 0) { el.textContent = ''; return }
+  const nls = new Set()
+  _estDados.forEach(p => { if(_estSelecionados.has(p.codigo_pc)) nls.add(p.codigo_nl||'—') })
+  el.textContent = `${n} PC${n>1?'s':''} selecionada${n>1?'s':''} em ${nls.size} NL${nls.size>1?'s':''}`
 }
 
 function estToggleLinha(codigoPc, checked) {
