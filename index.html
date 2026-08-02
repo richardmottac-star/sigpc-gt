@@ -1292,6 +1292,7 @@ function renderSB() {
   const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   const podeGerirUsuarios = isAdmin || U.perfil === 'coordenador'
   const podeCI = U.perfil === 'superadmin' || U.perfil === 'coordenador' || U.perfil === 'controle_interno'
+  const podeEstornar = U.perfil === 'analista' || U.perfil === 'coordenador' || U.perfil === 'superadmin'
   document.getElementById('SB').innerHTML = `
     <div class="sb-sec">
       <div class="sb-lbl">Principal</div>
@@ -1307,6 +1308,9 @@ function renderSB() {
       <div class="sb-item" id="mi-plan" onclick="irPlanilha()" style="position:relative;">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Minha Planilha
       </div>
+      ${podeEstornar?`<div class="sb-item" id="mi-estornar" onclick="irEstornar()">
+        <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>Estornar Baixa
+      </div>`:''}
       <div class="sb-item" id="mi-prod" onclick="irProd()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Produtividade (NL)
       </div>
@@ -5843,6 +5847,247 @@ async function cgeSalvarTextos() {
     toast('Textos salvos!','ok')
   } catch(e) { toast('Erro: '+e.message,'err') }
   finally { btn.disabled=false; btn.textContent='✓ Salvar' }
+}
+
+// ══════════════════════════════════════
+//  ESTORNAR BAIXA
+// ══════════════════════════════════════
+let _estDados = []
+let _estSelecionados = new Set()
+let _estNomePorId = {}
+
+async function irEstornar() {
+  ativarMenu('estornar')
+  const souAnalista = U.perfil === 'analista'
+  const souSuper = U.perfil === 'superadmin'
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px;">Estornar Baixa</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">
+      ${souAnalista ? 'Suas PCs baixadas. Marque uma ou mais e informe o motivo para estornar — elas voltam para análise.'
+        : 'PCs baixadas ' + (U.perfil==='coordenador' ? 'pelos analistas do seu grupo' : 'no sistema') + '. Marque uma ou mais e informe o motivo para estornar — elas voltam para análise.'}
+    </div>
+
+    ${souSuper ? `<div class="filtros" style="gap:10px;margin-bottom:12px;">
+      <div class="fg"><label>Grupo</label>
+        <select id="estFiltroGrupo" onchange="estCarregar()">
+          <option value="">Todos os Grupos</option>
+          <option value="1">Grupo 1 — Nayara</option>
+          <option value="2">Grupo 2 — Zadir</option>
+          <option value="3">Grupo 3 — Gustavo</option>
+        </select>
+      </div>
+      <div class="fg"><label>Analista</label>
+        <select id="estFiltroAnalista" onchange="estCarregar()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+    </div>` : ''}
+
+    <div id="estAvisoWrap" style="display:none;background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7A4800;font-weight:700;"></div>
+
+    <div class="tbl-wrap"><div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th style="width:30px;"></th>
+          ${!souAnalista?'<th>Analista</th>':''}
+          <th>Código PC</th><th>SGPe PC</th><th>TR</th><th>Entidade</th><th>Parecer</th>
+        </tr></thead>
+        <tbody id="estBody"><tr><td colspan="${souAnalista?6:7}"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
+      </table>
+    </div></div>
+
+    <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:16px;margin-top:14px;">
+      <div class="mc-campo">
+        <label>Motivo do estorno * (mínimo 15 caracteres)</label>
+        <textarea id="estMotivo" rows="3" oninput="estContarMotivo()" placeholder="Descreva o motivo do estorno..." style="resize:vertical;"></textarea>
+        <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="estMotivoContador">0/15 caracteres</div>
+      </div>
+      <div style="text-align:right;">
+        <button class="mcok rv" id="estBtnConfirmar" onclick="estConfirmar()" disabled>↩ Estornar selecionadas</button>
+      </div>
+    </div>
+  `
+  if(souSuper) await estPopularFiltroAnalista()
+  await estCarregar()
+}
+
+async function estPopularFiltroAnalista() {
+  const sel = document.getElementById('estFiltroAnalista')
+  if(!sel) return
+  try {
+    const { data } = await db.from('usuarios').select('id,nome').eq('perfil','analista').order('nome')
+    sel.innerHTML = '<option value="">Todos</option>' + (data||[]).map(u=>`<option value="${u.id}">${u.nome}</option>`).join('')
+  } catch(e) {}
+}
+
+async function estCarregar() {
+  const tbody = document.getElementById('estBody')
+  if(!tbody) return
+  try {
+    const params = new URLSearchParams({ baixada: 'true', limit: 9999 })
+    if(U.perfil === 'analista') {
+      params.set('analista_id', U.id)
+    } else if(U.perfil === 'coordenador') {
+      params.set('grupo', U.grupo)
+    } else if(U.perfil === 'superadmin') {
+      const g = document.getElementById('estFiltroGrupo')?.value || ''
+      const a = document.getElementById('estFiltroAnalista')?.value || ''
+      if(g) params.set('grupo', g)
+      if(a) params.set('analista_id', a)
+    }
+    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    _estDados = j.data || []
+
+    if(U.perfil !== 'analista') {
+      const { data: users } = await db.from('usuarios').select('id,nome')
+      _estNomePorId = {}
+      ;(users||[]).forEach(u => { _estNomePorId[u.id] = u.nome })
+    }
+
+    _estSelecionados = new Set()
+    estRender()
+    estAtualizarAviso()
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+  }
+}
+
+function estRender() {
+  const tbody = document.getElementById('estBody')
+  if(!tbody) return
+  const souAnalista = U.perfil === 'analista'
+  const cols = souAnalista ? 6 : 7
+  if(!_estDados.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:20px;color:var(--ct);">${souAnalista?'Você não tem PCs baixadas.':'Nenhuma PC baixada encontrada para o filtro selecionado.'}</td></tr>`
+    return
+  }
+  const grupos = {}
+  _estDados.forEach(p => {
+    const nl = p.codigo_nl || '—'
+    if(!grupos[nl]) grupos[nl] = []
+    grupos[nl].push(p)
+  })
+  let html = ''
+  Object.keys(grupos).sort().forEach(nl => {
+    const pcs = grupos[nl]
+    const todasMarcadas = pcs.every(p => _estSelecionados.has(p.codigo_pc))
+    html += `<tr class="grupo-sep"><td colspan="${cols}">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" ${todasMarcadas?'checked':''} onchange="estToggleNL('${nl}', this.checked)">
+        <span class="bdg" style="font-size:10px;">NL ${nl}</span>
+        <span style="font-size:11px;color:var(--ct);">${pcs.length} PC${pcs.length>1?'s':''} — selecionar todas desta NL</span>
+      </label>
+    </td></tr>`
+    pcs.forEach(p => {
+      const marcado = _estSelecionados.has(p.codigo_pc)
+      html += `<tr>
+        <td style="text-align:center;"><input type="checkbox" ${marcado?'checked':''} onchange="estToggleLinha('${p.codigo_pc}', this.checked)"></td>
+        ${!souAnalista?`<td style="font-size:11px;font-weight:600;white-space:nowrap;">${_estNomePorId[p.analista_id]||p.analista_nome||'—'}</td>`:''}
+        <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
+        <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
+        <td style="font-size:11px;color:var(--az);font-weight:600;white-space:nowrap;">${p.tr||'—'}</td>
+        <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.entidade||''}">${p.entidade||'—'}</td>
+        <td style="font-size:11px;">${p.parecer_tipo||'—'}</td>
+      </tr>`
+    })
+  })
+  tbody.innerHTML = html
+}
+
+function estToggleLinha(codigoPc, checked) {
+  if(checked) _estSelecionados.add(codigoPc)
+  else _estSelecionados.delete(codigoPc)
+  estRender()
+  estAtualizarAviso()
+}
+
+function estToggleNL(nl, checked) {
+  _estDados.filter(p => (p.codigo_nl||'—') === nl).forEach(p => {
+    if(checked) _estSelecionados.add(p.codigo_pc)
+    else _estSelecionados.delete(p.codigo_pc)
+  })
+  estRender()
+  estAtualizarAviso()
+}
+
+function estAtualizarAviso() {
+  const wrap = document.getElementById('estAvisoWrap')
+  const n = _estSelecionados.size
+  if(wrap) {
+    if(n === 0) {
+      wrap.style.display = 'none'
+    } else {
+      wrap.style.display = ''
+      if(U.perfil === 'analista') {
+        const totalX = _estDados.length
+        const totalY = totalX - n
+        wrap.textContent = `⚠️ Estornar reduz sua produtividade de ${totalX} para ${totalY} PCs baixadas. As PCs voltam para análise e o registro fica visível para a coordenação.`
+      } else {
+        const porAnalista = {}
+        _estDados.forEach(p => {
+          const id = p.analista_id
+          if(!porAnalista[id]) porAnalista[id] = { nome: _estNomePorId[id] || p.analista_nome || 'Desconhecido', total: 0, sel: 0 }
+          porAnalista[id].total++
+          if(_estSelecionados.has(p.codigo_pc)) porAnalista[id].sel++
+        })
+        const linhas = Object.values(porAnalista).filter(a => a.sel > 0).map(a =>
+          `⚠️ Estornar reduz a produtividade de ${a.nome} de ${a.total} para ${a.total-a.sel} PCs baixadas.`
+        )
+        wrap.innerHTML = linhas.join('<br>')
+      }
+    }
+  }
+  estAtualizarBotao()
+}
+
+function estContarMotivo() {
+  const v = document.getElementById('estMotivo')?.value || ''
+  const el = document.getElementById('estMotivoContador')
+  if(el) el.textContent = `${v.length}/15 caracteres`
+  estAtualizarBotao()
+}
+
+function estAtualizarBotao() {
+  const btn = document.getElementById('estBtnConfirmar')
+  if(!btn) return
+  const motivo = document.getElementById('estMotivo')?.value || ''
+  btn.disabled = !(_estSelecionados.size > 0 && motivo.trim().length >= 15)
+}
+
+async function estConfirmar() {
+  const motivo = document.getElementById('estMotivo').value.trim()
+  if(_estSelecionados.size === 0) { toast('Selecione ao menos uma PC.','err'); return }
+  if(motivo.length < 15) { toast('Motivo deve ter no mínimo 15 caracteres.','err'); return }
+  const btn = document.getElementById('estBtnConfirmar')
+  btn.disabled = true; btn.textContent = 'Estornando...'
+  const qtd = _estSelecionados.size
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/estornar`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        codigos_pc: [..._estSelecionados],
+        motivo,
+        usuario_id: U.id,
+        usuario_nome: U.nome,
+        perfil: U.perfil,
+        grupo: U.grupo
+      })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast(`✓ ${qtd} PC${qtd>1?'s':''} estornada${qtd>1?'s':''}!`,'ok')
+    document.getElementById('estMotivo').value = ''
+    estContarMotivo()
+    await estCarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+  } finally {
+    btn.textContent = '↩ Estornar selecionadas'
+    estAtualizarBotao()
+  }
 }
 
 function toast(msg, tipo='ok') {
