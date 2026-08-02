@@ -6186,6 +6186,198 @@ async function estConfirmar() {
   }
 }
 
+// ══════════════════════════════════════
+//  ESTORNOS REALIZADOS (coordenação — somente leitura)
+// ══════════════════════════════════════
+let _estLogDados = []
+let _estLogEventos = []
+
+async function irEstornosRealizados() {
+  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Acesso restrito.','err'); return }
+  ativarMenu('estlog')
+  const souSuper = U.perfil === 'superadmin'
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">Estornos Realizados</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:2px;">${souSuper?'Todos os grupos':'Analistas do seu grupo'} — somente consulta</div>
+      </div>
+      <button onclick="estLogExportarCSV()" class="btn-buscar" style="height:32px;background:var(--v);color:#fff;border:none;">📥 Exportar</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--r);">
+        <div style="font-size:24px;font-weight:800;color:var(--r);" id="estLogCardTotal">—</div>
+        <div style="font-size:10px;color:var(--ct);text-transform:uppercase;">Total de Estornos</div>
+      </div>
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
+        <div style="font-size:24px;font-weight:800;color:var(--am);" id="estLogCardPCs">—</div>
+        <div style="font-size:10px;color:var(--ct);text-transform:uppercase;">PCs Afetadas</div>
+      </div>
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--az);">
+        <div style="font-size:24px;font-weight:800;color:var(--az);" id="estLogCardAnalistas">—</div>
+        <div style="font-size:10px;color:var(--ct);text-transform:uppercase;">Analistas Envolvidos</div>
+      </div>
+    </div>
+
+    <div class="filtros" style="gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      ${souSuper?`<div class="fg"><label>Grupo</label>
+        <select id="estLogGrupo" onchange="estLogCarregar()">
+          <option value="">Todos os Grupos</option>
+          <option value="1">Grupo 1 — Nayara</option>
+          <option value="2">Grupo 2 — Zadir</option>
+          <option value="3">Grupo 3 — Gustavo</option>
+        </select>
+      </div>`:''}
+      <div class="fg"><label>Analista</label>
+        <select id="estLogAnalista" onchange="estLogFiltrar()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="fg"><label>Data Inicial</label>
+        <input type="date" id="estLogDtIni" onchange="estLogFiltrar()">
+      </div>
+      <div class="fg"><label>Data Final</label>
+        <input type="date" id="estLogDtFim" onchange="estLogFiltrar()">
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn-limpar" onclick="estLogLimpar()">✕ Limpar</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap"><div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Analista</th><th>Data/Hora</th><th>Qtd. PCs</th><th>TR</th><th>NL</th><th>Motivo</th>
+        </tr></thead>
+        <tbody id="estLogBody"><tr><td colspan="6"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
+      </table>
+    </div></div>
+  `
+  await estLogCarregar()
+}
+
+async function estLogCarregar() {
+  const tbody = document.getElementById('estLogBody')
+  if(!tbody) return
+  tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
+  try {
+    const params = new URLSearchParams({ estornada: 'true', limit: 9999 })
+    if(U.perfil === 'coordenador') {
+      params.set('grupo', U.grupo)
+    } else if(U.perfil === 'superadmin') {
+      const g = document.getElementById('estLogGrupo')?.value || ''
+      if(g) params.set('grupo', g)
+    }
+    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    _estLogDados = j.data || []
+
+    const { data: users } = await db.from('usuarios').select('id,nome')
+    const nomePorId = {}
+    ;(users||[]).forEach(u => { nomePorId[u.id] = u.nome })
+
+    // Agrupa cada evento de estorno: mesma pessoa que estornou + mesmo instante + mesmo analista dono da PC
+    const grupos = {}
+    _estLogDados.forEach(p => {
+      if(!p.data_estorno) return
+      const chave = `${p.analista_id}|${p.data_estorno}|${p.estornado_por||''}`
+      if(!grupos[chave]) grupos[chave] = {
+        analista_id: p.analista_id,
+        analista_nome: nomePorId[p.analista_id] || p.analista_nome || 'Desconhecido',
+        data_estorno: p.data_estorno,
+        estornado_por: p.estornado_por,
+        motivo: p.motivo_estorno || '',
+        trs: new Set(), nls: new Set(), pcs: []
+      }
+      grupos[chave].trs.add(p.tr||'—')
+      grupos[chave].nls.add(p.codigo_nl||'—')
+      grupos[chave].pcs.push(p.codigo_pc)
+    })
+    _estLogEventos = Object.values(grupos).sort((a,b) => new Date(b.data_estorno) - new Date(a.data_estorno))
+
+    const selAn = document.getElementById('estLogAnalista')
+    if(selAn) {
+      const vistos = {}
+      _estLogEventos.forEach(ev => { vistos[ev.analista_id] = ev.analista_nome })
+      const atual = selAn.value
+      selAn.innerHTML = '<option value="">Todos</option>' + Object.entries(vistos)
+        .sort((a,b)=>a[1].localeCompare(b[1]))
+        .map(([id,nome]) => `<option value="${id}">${nome}</option>`).join('')
+      selAn.value = atual
+    }
+
+    estLogFiltrar()
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--r);padding:16px;">Erro: ${e.message}</td></tr>`
+  }
+}
+
+function estLogFiltrar() {
+  const analista = document.getElementById('estLogAnalista')?.value || ''
+  const dtIni = document.getElementById('estLogDtIni')?.value || ''
+  const dtFim = document.getElementById('estLogDtFim')?.value || ''
+
+  let lista = _estLogEventos
+  if(analista) lista = lista.filter(ev => String(ev.analista_id) === String(analista))
+  if(dtIni) lista = lista.filter(ev => new Date(ev.data_estorno) >= new Date(dtIni+'T00:00:00'))
+  if(dtFim) lista = lista.filter(ev => new Date(ev.data_estorno) <= new Date(dtFim+'T23:59:59'))
+
+  window._estLogListaAtual = lista
+  estLogRenderCards(lista)
+  estLogRenderTabela(lista)
+}
+
+function estLogRenderCards(lista) {
+  const totalEstornos = lista.length
+  const totalPCs = lista.reduce((s,ev)=>s+ev.pcs.length,0)
+  const analistas = new Set(lista.map(ev=>ev.analista_id)).size
+  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent = v }
+  set('estLogCardTotal', totalEstornos)
+  set('estLogCardPCs', totalPCs)
+  set('estLogCardAnalistas', analistas)
+}
+
+function estLogRenderTabela(lista) {
+  const tbody = document.getElementById('estLogBody')
+  if(!tbody) return
+  if(!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ct);">Nenhum estorno encontrado.</td></tr>'
+    return
+  }
+  tbody.innerHTML = lista.map(ev => `<tr>
+    <td style="font-size:11px;font-weight:600;">${ev.analista_nome}</td>
+    <td style="font-size:11px;white-space:nowrap;">${new Date(ev.data_estorno).toLocaleString('pt-BR')}</td>
+    <td style="font-size:11px;text-align:center;font-weight:700;">${ev.pcs.length}</td>
+    <td style="font-size:11px;">${[...ev.trs].join(', ')}</td>
+    <td style="font-size:11px;">${[...ev.nls].join(', ')}</td>
+    <td style="font-size:11px;white-space:normal;max-width:320px;">${ev.motivo}</td>
+  </tr>`).join('')
+}
+
+function estLogLimpar() {
+  ['estLogAnalista','estLogDtIni','estLogDtFim'].forEach(id => { const el=document.getElementById(id); if(el) el.value='' })
+  const g = document.getElementById('estLogGrupo')
+  if(g) { g.value=''; estLogCarregar(); return }
+  estLogFiltrar()
+}
+
+function estLogExportarCSV() {
+  const lista = window._estLogListaAtual || []
+  if(!lista.length) { toast('Nada para exportar.','err'); return }
+  const dt = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')
+  let csv = '﻿Analista;Data/Hora;Qtd. PCs;TR;NL;Motivo\n'
+  lista.forEach(ev => {
+    const dtFmt = new Date(ev.data_estorno).toLocaleString('pt-BR')
+    const motivo = (ev.motivo||'').replace(/;/g,',').replace(/\n/g,' ')
+    csv += `"${ev.analista_nome}";"${dtFmt}";${ev.pcs.length};"${[...ev.trs].join(', ')}";"${[...ev.nls].join(', ')}";"${motivo}"\n`
+  })
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
+  a.download=`estornos_realizados_${dt}.csv`; a.click()
+}
+
 function toast(msg, tipo='ok') {
   const el = document.getElementById('toast')
   el.textContent = msg
