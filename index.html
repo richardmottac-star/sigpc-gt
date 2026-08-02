@@ -1343,7 +1343,7 @@ function renderSB() {
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z"/></svg>
         Controle Interno
       </div>
-      <div class="sb-item" id="mi-admin" onclick="irAdmin()" style="color:#C8102E;">
+      <div class="sb-item" id="mi-admin" onclick="irAdmin()" style="color:var(--am);">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 14c-2.67 0-5.03-1.33-6.47-3.36.35-1.63 2.95-2.64 6.47-2.64s6.12 1.01 6.47 2.64C17.03 17.67 14.67 19 12 19z"/></svg>
         <span style="font-weight:800;">${isAdmin ? 'Painel ADMIN' : 'Gestão de Usuários'}</span>
         ${isAdmin?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:auto;">SA</span>':''}
@@ -4440,6 +4440,7 @@ function adminFiltrar() {
         <button class="btn-acao btn-ver" onclick="admEditarUsuario('${u.id}')" style="margin-right:3px;">✏️ Editar</button>
         <button class="btn-acao" style="background:#fff;color:var(--am);border:1.5px solid var(--am);" onclick="admAbrirSenha('${u.id}','${u.nome.replace(/'/g,"\'")}')">🔑 Senha</button>
         <button class="btn-acao ${u.ativo?'btn-dev':'btn-ass'}" style="margin-left:3px;" onclick="admToggleAtivo('${u.id}',${u.ativo})">${u.ativo?'🚫 Desativar':'✅ Ativar'}</button>
+        ${U.perfil==='superadmin'?`<button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);margin-left:3px;" onclick="admExcluirUsuario('${u.id}','${u.nome.replace(/'/g,"\\'")}')">🗑️ Excluir</button>`:''}
         ` : '<span style="font-size:10px;color:var(--ct);">Somente SUPERADMIN</span>'}
       </td>
     </tr>`
@@ -4607,6 +4608,35 @@ async function admToggleAtivo(id, atual) {
     }).eq('id', id)
     if(error) throw error
     toast(`Usuário ${atual?'desativado':'ativado'} com sucesso!`,'ok')
+    await adminCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function admExcluirUsuario(id, nome) {
+  if(U.perfil !== 'superadmin') { toast('Apenas superadmin pode excluir usuários.','err'); return }
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas?analista_id=${id}&limit=1`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    const qtd = j.count || 0
+    if(qtd > 0) {
+      toast(`Este usuário tem ${qtd} PC${qtd>1?'s':''} vinculada${qtd>1?'s':''} e não pode ser excluído. Use Desativar para bloquear o acesso sem perder o histórico.`,'err')
+      return
+    }
+  } catch(e) {
+    toast('Erro ao verificar vínculo: '+e.message,'err')
+    return
+  }
+  if(!confirm(`Excluir permanentemente o usuário ${nome}? Esta ação não pode ser desfeita.`)) return
+  try {
+    const r = await fetch(`${API_URL}/usuarios/${id}`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ perfil: U.perfil })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Usuário excluído.','ok')
     await adminCarregar()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
