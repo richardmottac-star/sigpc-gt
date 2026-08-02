@@ -1368,7 +1368,9 @@ async function carregarOnline() {
     await db.from('usuarios').update({ultimo_acesso: new Date().toISOString()}).eq('id', U.id)
     // Buscar quem acessou nos últimos 30 min
     const limite = new Date(Date.now() - 30*60*1000).toISOString()
-    const r = await fetch(`${API_URL}/usuarios?ativo=true&_gte_ultimo_acesso=${encodeURIComponent(limite)}`)
+    const onlineParams = new URLSearchParams({ ativo: 'true', _gte_ultimo_acesso: limite })
+    if(U.setorialFiltro) onlineParams.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/usuarios?${onlineParams}`)
     const j = await r.json()
     const data = j.data || []
     const lista = document.getElementById('sbOnlineLista')
@@ -2059,7 +2061,9 @@ async function fetchTodasPCs(sid) {
 
 // Busca metas vigentes, somadas por analista_id
 async function fetchMetasVigentes() {
-  const r = await fetch(`${API_URL}/metas_analistas?vigente=true`)
+  const metasParams = new URLSearchParams({ vigente: 'true' })
+  if(U.setorialFiltro) metasParams.set('setorial_id', U.setorialFiltro)
+  const r = await fetch(`${API_URL}/metas_analistas?${metasParams}`)
   const j = await r.json()
   if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
   const mapa = {}
@@ -2067,9 +2071,11 @@ async function fetchMetasVigentes() {
   return mapa
 }
 
-// Contagem total de prestacoes_contas, sem nenhum filtro (setorial, período, status etc.)
+// Contagem total de prestacoes_contas, filtrada pela setorial do usuário logado (sem filtro de período/status)
 async function fetchTotalPCs() {
-  const r = await fetch(`${API_URL}/prestacoes_contas?limit=1`)
+  const params = new URLSearchParams({ limit: 1 })
+  if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
+  const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
   const j = await r.json()
   if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
   return j.count || 0
@@ -2121,7 +2127,9 @@ async function prodCarregar() {
     const sid = U.setorialFiltro
     const grupoF = document.getElementById('prodFiltGrupo')?.value||''
 
-    const { data: todosUsers } = await db.from('usuarios').select('*')
+    let prodUsersQ = db.from('usuarios').select('*')
+    if(sid) prodUsersQ = prodUsersQ.eq('setorial_id', sid)
+    const { data: todosUsers } = await prodUsersQ
     const usuariosPorId = {}
     ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
 
@@ -2357,7 +2365,7 @@ async function boardCarregar() {
     })
 
     // Stats por analista (top analistas para o gráfico) — agrupado por analista_id, nome completo via usuarios
-    const { data: todosUsers } = await db.from('usuarios').select('id,nome')
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome').eq('setorial_id', sid)
     const nomePorId = {}
     ;(todosUsers||[]).forEach(u => { nomePorId[u.id] = u.nome })
     const mapaAn = {}
@@ -2521,7 +2529,9 @@ async function irRepo() {
     <div class="repo-grid" id="repoGrid"><div class="loading"><div class="spin"></div>Carregando...</div></div>
   `
   try {
-    const { data, error } = await db.from('repositorio').select('*').order('id')
+    let repoQ = db.from('repositorio').select('*').order('id')
+    if(U.setorialFiltro) repoQ = repoQ.eq('setorial_id', U.setorialFiltro)
+    const { data, error } = await repoQ
     if(error) throw error
     const cats = {lei:'Lei/Normativa',inst:'Instrução',mod:'Modelo/Formulário',info:'Informativo',pdf:'PDF',doc:'Documento'}
     document.getElementById('repoGrid').innerHTML = !data||!data.length
@@ -2739,7 +2749,7 @@ async function cgeGerar() {
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
     const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
-      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*'), fetchTotalPCs()
+      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs()
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
@@ -3347,7 +3357,9 @@ async function relCarregarAnalistas() {
   const sel = document.getElementById('relAnalista')
   if(!sel) return
   try {
-    const { data } = await db.from('usuarios').select('id,nome').eq('perfil','analista').eq('ativo',true).order('nome')
+    let relAnQ = db.from('usuarios').select('id,nome').eq('perfil','analista').eq('ativo',true).order('nome')
+    if(U.setorialFiltro) relAnQ = relAnQ.eq('setorial_id', U.setorialFiltro)
+    const { data } = await relAnQ
     if(data) data.forEach(u => {
       const o = document.createElement('option')
       o.value = u.id; o.textContent = u.nome
@@ -3396,7 +3408,7 @@ async function relBuscar() {
     if(tr) dados = dados.filter(p => (p.tr||'').toLowerCase().includes(tr.toLowerCase()))
 
     // Nome completo do analista, via usuarios
-    const { data: todosUsers } = await db.from('usuarios').select('id,nome')
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome').eq('setorial_id', sid)
     const nomePorId = {}
     ;(todosUsers||[]).forEach(u => { nomePorId[u.id] = u.nome })
     dados = dados.map(p => ({...p, analista_completo: p.analista_id ? (nomePorId[p.analista_id]||p.analista_nome) : (p.analista_nome||'Livre')}))
@@ -3705,7 +3717,9 @@ async function carregarAlertasPrazo() {
   const cont = document.getElementById('planAlertas')
   if(!cont) return
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas/alertas_prazo?analista_id=${U.id}`)
+    const alertaParams = new URLSearchParams({ analista_id: U.id })
+    if(U.setorialFiltro) alertaParams.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/prestacoes_contas/alertas_prazo?${alertaParams}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     renderAlertasPrazo(j.data)
@@ -3773,6 +3787,7 @@ async function buscarPlan() {
   try {
     const params = new URLSearchParams({ analista_id: U.id, limit: 9999, offset: 0 })
     if(sit) params.set('status', sit)
+    if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
 
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
     const j = await r.json()
@@ -3987,7 +4002,7 @@ async function gestCarregar() {
   const sid = U.setorialFiltro || 'FCEE'
 
   try {
-    const { data: todosUsers } = await db.from('usuarios').select('*')
+    const { data: todosUsers } = await db.from('usuarios').select('*').eq('setorial_id', sid)
     const usuariosPorId = {}
     ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
 
@@ -4334,6 +4349,7 @@ async function adminCarregar() {
   try {
     let q = db.from('usuarios').select('*').order('nome')
     if(U.perfil === 'coordenador') q = q.eq('grupo', U.grupo)
+    if(U.setorialFiltro) q = q.eq('setorial_id', U.setorialFiltro)
     const { data, error } = await q
     if(error) throw error
     _admUsers = data || []
@@ -4599,7 +4615,9 @@ async function admCarregarPendentes() {
   const cont = document.getElementById('admPendentesArea')
   if(!cont) return
   try {
-    const r = await fetch(`${API_URL}/usuarios?aguardando_aprovacao=true`)
+    const pendParams = new URLSearchParams({ aguardando_aprovacao: 'true' })
+    if(U.setorialFiltro) pendParams.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/usuarios?${pendParams}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
     _admPendentes = (j.data||[]).sort((a,b) => new Date(a.criado_em||0) - new Date(b.criado_em||0))
@@ -4721,7 +4739,9 @@ async function ciCarregar() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas?enviado_ci=true&limit=9999`)
+    const ciParams = new URLSearchParams({ enviado_ci: 'true', limit: 9999 })
+    if(U.setorialFiltro) ciParams.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/prestacoes_contas?${ciParams}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pcs = (j.data||[]).filter(p => p.dt_envio_ci)
@@ -4836,7 +4856,9 @@ async function verProdDetalhe(analistaId, nome) {
   document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
   document.getElementById('moNL').classList.add('open')
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas?analista_id=${analistaId}&limit=99999`)
+    const prodParams = new URLSearchParams({ analista_id: analistaId, limit: 99999 })
+    if(U.setorialFiltro) prodParams.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/prestacoes_contas?${prodParams}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pcs = j.data||[]
@@ -5308,7 +5330,9 @@ async function irAfastamentos() {
 
 async function afastCarregar() {
   try {
-    const { data: users } = await db.from('usuarios').select('id,nome,grupo,perfil').order('nome')
+    let afastUsersQ = db.from('usuarios').select('id,nome,grupo,perfil').order('nome')
+    if(U.setorialFiltro) afastUsersQ = afastUsersQ.eq('setorial_id', U.setorialFiltro)
+    const { data: users } = await afastUsersQ
     _afastUsers = (users||[]).filter(u => U.perfil==='coordenador' ? String(u.grupo)===String(U.grupo) : true)
     const r = await fetch(`${API_URL}/afastamentos?setorial_id=${U.setorialFiltro||'FCEE'}&limit=999`)
     const j = await r.json()
@@ -5935,7 +5959,9 @@ async function estPopularFiltroAnalista() {
   const sel = document.getElementById('estFiltroAnalista')
   if(!sel) return
   try {
-    const { data } = await db.from('usuarios').select('id,nome').eq('perfil','analista').order('nome')
+    let estAnQ = db.from('usuarios').select('id,nome').eq('perfil','analista').order('nome')
+    if(U.setorialFiltro) estAnQ = estAnQ.eq('setorial_id', U.setorialFiltro)
+    const { data } = await estAnQ
     sel.innerHTML = '<option value="">Todos</option>' + (data||[]).map(u=>`<option value="${u.id}">${u.nome}</option>`).join('')
   } catch(e) {}
 }
@@ -5945,6 +5971,7 @@ async function estCarregar() {
   if(!tbody) return
   try {
     const params = new URLSearchParams({ baixada: 'true', limit: 9999 })
+    if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
     if(U.perfil === 'analista') {
       params.set('analista_id', U.id)
     } else if(U.perfil === 'coordenador') {
@@ -5961,7 +5988,9 @@ async function estCarregar() {
     _estDados = j.data || []
 
     if(U.perfil !== 'analista') {
-      const { data: users } = await db.from('usuarios').select('id,nome')
+      let estNomesQ = db.from('usuarios').select('id,nome')
+      if(U.setorialFiltro) estNomesQ = estNomesQ.eq('setorial_id', U.setorialFiltro)
+      const { data: users } = await estNomesQ
       _estNomePorId = {}
       ;(users||[]).forEach(u => { _estNomePorId[u.id] = u.nome })
     }
@@ -6275,7 +6304,9 @@ async function estLogCarregar() {
     if(j.error) throw new Error(j.error.message || j.error)
     _estLogDados = j.data || []
 
-    const { data: users } = await db.from('usuarios').select('id,nome')
+    let estLogUsersQ = db.from('usuarios').select('id,nome')
+    if(U.setorialFiltro) estLogUsersQ = estLogUsersQ.eq('setorial_id', U.setorialFiltro)
+    const { data: users } = await estLogUsersQ
     const nomePorId = {}
     ;(users||[]).forEach(u => { nomePorId[u.id] = u.nome })
 
