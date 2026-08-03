@@ -1466,7 +1466,7 @@ async function carregarContadores() {
       contar(),
       contar({status:'analise'}),
       contar({status:'livre'}),
-      contar({baixada:'true', estornada:'false'})
+      contar({baixada:'true'})
     ])
 
     DASH = { total, analise, livres, baixadas }
@@ -2270,6 +2270,7 @@ async function irProd() {
         </div>
       </div>
     </div>
+    <div id="prodCarimbo" style="font-size:11px;color:var(--ct);background:#FCFDFC;border:1px solid var(--cb);border-radius:8px;padding:8px 12px;margin-bottom:10px;"></div>
     <div id="prodCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
   `
   await prodCarregar()
@@ -2329,6 +2330,11 @@ async function prodCarregar() {
       return !grupoF || String(d.grupo) === grupoF
     }).sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
+    const carimbo = document.getElementById('prodCarimbo')
+    if(carimbo) {
+      const ag = new Date()
+      carimbo.innerHTML = '<b>Apurado em ' + ag.toLocaleDateString('pt-BR') + ' as ' + ag.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) + '</b> — acumulado total de baixas desde o inicio do monitoramento, sem recorte de periodo. O Quadro 2 do relatorio CGE considera apenas as baixas dentro do periodo informado, portanto os percentuais podem divergir.'
+    }
     prodRender(_prodDados)
   } catch(e) { document.getElementById('prodCont').innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
@@ -2824,6 +2830,7 @@ function irRel() {
     <!-- SUMÁRIO -->
     <div id="relSumario" style="display:none;background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);margin-bottom:12px;">
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;" id="relSumCont"></div>
+      <div id="relCarimbo" style="font-size:11px;color:var(--ct);margin-top:10px;padding-top:8px;border-top:1px solid var(--cb);"></div>
     </div>
     <!-- TABELA -->
     <div class="tbl-wrap" id="relTblWrap" style="display:none;">
@@ -2971,10 +2978,11 @@ async function cgeGerar() {
       const pt = (p.parecer_tipo||'')
       const ehRegular   = pt.startsWith('Parecer Regular')
       const ehIrregular = pt.includes('Irregular')
-      if(t === 'parcial' && ehRegular)   totParcReg++
-      if(t === 'parcial' && ehIrregular) totParcIrr++
-      if(t === 'final'   && ehRegular)   totFinReg++
-      if(t === 'final'   && ehIrregular) totFinIrr++
+      const contaQ1 = p.baixada === true && noPeriodo(p)
+      if(contaQ1 && t === 'parcial' && ehRegular)   totParcReg++
+      if(contaQ1 && t === 'parcial' && ehIrregular) totParcIrr++
+      if(contaQ1 && t === 'final'   && ehRegular)   totFinReg++
+      if(contaQ1 && t === 'final'   && ehIrregular) totFinIrr++
 
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
       if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0}
@@ -3632,6 +3640,9 @@ function relRenderTabela() {
 
   // Sumário
   document.getElementById('relSumario').style.display='block'
+  const relAg = new Date()
+  const relCar = document.getElementById('relCarimbo')
+  if(relCar) relCar.innerHTML = '<b>Consulta realizada em ' + relAg.toLocaleDateString('pt-BR') + ' as ' + relAg.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) + '</b> — ' + _relDados.length + ' registros. Os dados refletem a situacao do banco neste momento.'
   document.getElementById('relSumCont').innerHTML = `
     <div style="background:var(--cl);border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;">${total}</div><div style="font-size:10px;color:var(--ct);">Total Registros</div></div>
     <div style="background:#E0F2E9;border-radius:8px;padding:10px;"><div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas}</div><div style="font-size:10px;color:var(--ct);">Baixadas ✓</div></div>
