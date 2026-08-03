@@ -110,7 +110,13 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .mn-top p{margin:2px 0 0;font-size:11px;opacity:.9;}
 .mn-top .btn-guia{margin-left:auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);color:#fff;font-family:Barlow,sans-serif;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;}
 .mn-top .btn-guia:hover{background:rgba(255,255,255,.28);}
-.mn-list{padding:8px 0 4px;}
+.mn-list{padding:8px 0 4px;display:none;}
+.mn.aberto .mn-list{display:block;}
+.mn-ft{display:none !important;}
+.mn.aberto .mn-ft{display:flex !important;}
+.mn-top{cursor:pointer;}
+.mn-top .mn-seta{width:20px;height:20px;fill:#fff;margin-left:10px;transition:.2s;flex-shrink:0;}
+.mn.aberto .mn-top .mn-seta{transform:rotate(180deg);}
 .mn-item{border-bottom:1px solid var(--cl);}
 .mn-item:last-child{border-bottom:none;}
 .mn-hd{width:100%;background:none;border:none;display:flex;align-items:center;gap:11px;padding:12px 20px;cursor:pointer;font-family:Barlow,sans-serif;text-align:left;transition:.15s;}
@@ -1484,6 +1490,11 @@ function renderDashNums() {
   set('d-bnRepo', DASH.baixadas)
 }
 
+function manualCardTg(ev) {
+  var c = document.getElementById('manualCard')
+  if (c) c.classList.toggle('aberto')
+}
+
 function manualTg(i) {
   var el = document.getElementById('manual' + i)
   if (el) el.classList.toggle('on')
@@ -1520,11 +1531,12 @@ function irDash() {
         Produtividade (NL)
       </button>
     </div>
-    <div class="mn">
-      <div class="mn-top">
+    <div class="mn" id="manualCard">
+      <div class="mn-top" onclick="manualCardTg(event)">
         <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5l-1-.75L9 9V4zm9 16H6V4h1v9l3-2.25L13 13V4h5v16z"/></svg>
         <div><h3>Manual do Sistema</h3><p>Como usar o SIGPC-GT no dia a dia — clique em cada etapa</p></div>
-        <button class="btn-guia" onclick="irRepo()">Guia completo (Word)</button>
+        <button class="btn-guia" onclick="event.stopPropagation(); irRepo()">Guia completo (Word)</button>
+        <svg class="mn-seta" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
       </div>
       <div class="mn-list">
         <div class="mn-item" id="manual0">
