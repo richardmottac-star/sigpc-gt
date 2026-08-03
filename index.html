@@ -2971,7 +2971,7 @@ async function cgeGerar() {
     })
 
     // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
-    let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0
+    let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0
     const mapaAn = {}
     todosPcs.forEach(p => {
       const t  = (p.tipo||'').toLowerCase()
@@ -2983,6 +2983,7 @@ async function cgeGerar() {
       if(contaQ1 && t === 'parcial' && ehIrregular) totParcIrr++
       if(contaQ1 && t === 'final'   && ehRegular)   totFinReg++
       if(contaQ1 && t === 'final'   && ehIrregular) totFinIrr++
+      if(contaQ1 && !ehRegular && !ehIrregular) totCI++
 
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
       if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0}
@@ -3026,7 +3027,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -3176,7 +3177,7 @@ function cgeExportExcel() {
 async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
   const TXT = await cgeCarregarTextos()
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
@@ -3399,7 +3400,7 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
       <th rowspan="3" style="width:18%;">Período<br>(1)</th>
       <th rowspan="3">Meta<br>(2)</th>
       <th rowspan="3">Execução<br>Meta %<br>(3)</th>
-      <th colspan="4">Técnico</th>
+      <th colspan="5">Técnico</th>
       <th colspan="2">Secretário</th>
       <th rowspan="3">Total<br>(10)</th>
       <th rowspan="3">Estoque<br>(11)</th>
@@ -3408,6 +3409,7 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
     <tr>
       <th class="th2" colspan="2">Parcial</th>
       <th class="th2" colspan="2">Final</th>
+      <th class="th2" rowspan="2">Controle<br>Interno<br>(7a)</th>
       <th class="th2" rowspan="2">Regular<br>(8)</th>
       <th class="th2" rowspan="2">Irregular<br>(9)</th>
     </tr>
@@ -3423,6 +3425,7 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
       <td class="tc fw">${pctMeta}</td>
       <td class="tc">${totParcReg}</td><td class="tc">${totParcIrr}</td>
       <td class="tc">${totFinReg}</td><td class="tc">${totFinIrr}</td>
+      <td class="tc">${totCI}</td>
       <td class="tc">0</td><td class="tc">0</td>
       <td class="tc fw">${totBxFmt}</td>
       <td class="tc">${totalPlanoFmt}</td>
