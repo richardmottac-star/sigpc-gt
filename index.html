@@ -3262,6 +3262,7 @@ async function cgeExportPDF() {
   const assRowHtml = sigPrincipais.map(s => `
     <div class="ass-col">
       <div class="ass-linha">
+        <div class="ass-dig">[ASSINANDO DIGITALMENTE]</div>
         <div class="ass-nome">${s.nome||''}</div>
         <div class="ass-cargo">${s.cargo||''}</div>
         ${s.portaria?`<div class="ass-cargo">${s.portaria}</div>`:''}
@@ -3270,6 +3271,7 @@ async function cgeExportPDF() {
   const assFinalHtml = sigFinal ? `
   <div class="ass-center">
     <div class="ass-linha">
+      <div class="ass-dig">[ASSINANDO DIGITALMENTE]</div>
       <div class="ass-nome">${sigFinal.nome||''}</div>
       <div class="ass-cargo">${sigFinal.cargo||''}</div>
       ${sigFinal.portaria?`<div class="ass-cargo">${sigFinal.portaria}</div>`:''}
@@ -3364,6 +3366,7 @@ tr:nth-child(even) td{background:#F5F5F5;}
 .ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
 .ass-col{width:31%;text-align:center;}
 .ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
+.ass-dig{font-size:8pt;font-style:italic;color:#444;margin-bottom:2px;}
 .ass-nome{font-size:10.5px;font-weight:700;}
 .ass-cargo{font-size:9.5px;color:#000;}
 .ass-center{text-align:center;margin:0 auto;width:50%;}
@@ -5758,7 +5761,7 @@ const CGE_TXT_PADRAO = {
   signatarios: [
     { nome:'Nayara Limas Ferreira', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 170 – 24/06/2025' },
     { nome:'Zadir Teresinha Machado Ferreira', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 170 – 24/06/2025' },
-    { nome:'Gustavo', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'' },
+    { nome:'Gustavo Hallack Porto', cargo:'Coord. Grupo de Trabalho Prest. de Contas', portaria:'Portaria FCEE 95 – 13/05/2026' },
     { nome:'Jeane Rauh Probst Leite', cargo:'Presidente da FCEE', portaria:'' }
   ],
   quadro3: [
