@@ -102,16 +102,43 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .btn-rap.az{background:var(--az);}
 .btn-rap:hover{opacity:.9;transform:translateY(-1px);}
 .btn-rap svg{width:20px;height:20px;fill:#fff;}
-/* Faixa de governanca - Dashboard */
-.pb{margin-top:16px;background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:16px 18px 14px;border-left:4px solid var(--v);}
-.pb-hd{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v);margin-bottom:14px;display:flex;align-items:center;gap:6px;}
-.pb-hd svg{width:13px;height:13px;fill:var(--v);}
-.lgb-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.lgb-item{background:#FAFCFB;border:1px solid var(--cb);border-radius:9px;padding:14px 10px 9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;transition:.18s;}
-.lgb-item:hover{border-color:var(--vc);box-shadow:0 3px 10px rgba(0,107,60,.13);transform:translateY(-2px);}
-.lgb-item img{height:34px;width:auto;max-width:100%;object-fit:contain;}
-.lgb-item span{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ct);}
-@media(max-width:820px){.lgb-grid{grid-template-columns:repeat(2,1fr);}}
+/* Manual do Sistema - Dashboard */
+.mn{margin-top:16px;background:#fff;border-radius:12px;box-shadow:var(--sombra);overflow:hidden;}
+.mn-top{background:linear-gradient(135deg,var(--v) 0%,var(--vm) 100%);color:#fff;padding:15px 20px;display:flex;align-items:center;gap:12px;}
+.mn-top svg{width:22px;height:22px;fill:#fff;flex-shrink:0;}
+.mn-top h3{margin:0;font-size:15px;font-weight:800;}
+.mn-top p{margin:2px 0 0;font-size:11px;opacity:.9;}
+.mn-top .btn-guia{margin-left:auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);color:#fff;font-family:Barlow,sans-serif;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+.mn-top .btn-guia:hover{background:rgba(255,255,255,.28);}
+.mn-list{padding:8px 0 4px;}
+.mn-item{border-bottom:1px solid var(--cl);}
+.mn-item:last-child{border-bottom:none;}
+.mn-hd{width:100%;background:none;border:none;display:flex;align-items:center;gap:11px;padding:12px 20px;cursor:pointer;font-family:Barlow,sans-serif;text-align:left;transition:.15s;}
+.mn-hd:hover{background:#FAFCFB;}
+.mn-n{width:22px;height:22px;border-radius:50%;background:var(--vbg);color:var(--v);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.mn-ic{width:16px;height:16px;fill:var(--v);flex-shrink:0;opacity:.75;}
+.mn-t{font-size:13px;font-weight:700;color:var(--te);}
+.mn-ch{width:18px;height:18px;fill:var(--ct);margin-left:auto;transition:.2s;flex-shrink:0;}
+.mn-item.on .mn-ch{transform:rotate(180deg);}
+.mn-item.on .mn-n{background:var(--v);color:#fff;}
+.mn-bd{display:none;padding:0 20px 14px 53px;}
+.mn-item.on .mn-bd{display:block;}
+.mn-bd ol{margin:0;padding-left:16px;}
+.mn-bd li{font-size:12.5px;line-height:1.55;color:var(--ct);margin-bottom:7px;}
+.mn-bd li b{color:var(--te);}
+.mn-ft{background:#FFF8E1;border-top:1px solid #F0E0B0;padding:10px 20px;font-size:11.5px;color:#7A5B00;display:flex;gap:8px;align-items:flex-start;}
+.mn-ft svg{width:15px;height:15px;fill:var(--am);flex-shrink:0;margin-top:1px;}
+/* Rodape de governanca - Dashboard */
+.gov-ft{margin-top:22px;background:#fff;border-radius:12px;box-shadow:var(--sombra);border-top:3px solid var(--v);padding:16px 20px 13px;}
+.gov-ft-hd{font-size:9.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:var(--ct);text-align:center;margin-bottom:13px;}
+.gov-ft-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:center;}
+.ft-lg{display:flex;flex-direction:column;align-items:center;gap:7px;padding:6px 8px;position:relative;transition:.18s;}
+.ft-lg+.ft-lg::before{content:"";position:absolute;left:0;top:16%;height:68%;width:1px;background:var(--cb);}
+.ft-lg img{height:30px;width:auto;max-width:100%;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.18s;}
+.ft-lg:hover img{filter:none;opacity:1;}
+.ft-lg span{font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ct);}
+.gov-ft-legal{margin-top:12px;padding-top:10px;border-top:1px solid var(--cl);text-align:center;font-size:10px;color:var(--ct);line-height:1.5;}
+@media(max-width:820px){.gov-ft-grid{grid-template-columns:repeat(2,1fr);}.ft-lg+.ft-lg::before{display:none;}}
 
 /* ══ ESTOQUE ══ */
 .filtros{background:#FCFDFC;border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--sombra);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
@@ -1457,6 +1484,11 @@ function renderDashNums() {
   set('d-bnRepo', DASH.baixadas)
 }
 
+function manualTg(i) {
+  var el = document.getElementById('manual' + i)
+  if (el) el.classList.toggle('on')
+}
+
 function irDash() {
   ativarMenu('dash')
   document.getElementById('BODY').innerHTML = `
@@ -1488,16 +1520,120 @@ function irDash() {
         Produtividade (NL)
       </button>
     </div>
-    <div class="pb">
-      <div class="pb-hd"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Estrutura de Governanca do Grupo de Trabalho</div>
-      <div class="lgb-grid">
-        <div class="lgb-item"><img src="assets/logos/segov.png" alt="SEGOV - Secretaria de Governo"><span>SEGOV</span></div>
-        <div class="lgb-item"><img src="assets/logos/casacivil.png" alt="Secretaria da Casa Civil"><span>Casa Civil</span></div>
-        <div class="lgb-item"><img src="assets/logos/fcee.png" alt="Fundacao Catarinense de Educacao Especial"><span>FCEE</span></div>
-        <div class="lgb-item"><img src="assets/logos/cge.png" alt="Controladoria-Geral do Estado"><span>CGE</span></div>
+    <div class="mn">
+      <div class="mn-top">
+        <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5l-1-.75L9 9V4zm9 16H6V4h1v9l3-2.25L13 13V4h5v16z"/></svg>
+        <div><h3>Manual do Sistema</h3><p>Como usar o SIGPC-GT no dia a dia — clique em cada etapa</p></div>
+        <button class="btn-guia" onclick="irRepo()">Guia completo (Word)</button>
+      </div>
+      <div class="mn-list">
+        <div class="mn-item on" id="manual0">
+          <button class="mn-hd" onclick="manualTg(0)">
+            <span class="mn-n">1</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <span class="mn-t">Primeiro acesso</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>Na tela de login, clique em <b>Primeiro Acesso — Solicitar Cadastro</b>.</li>
+            <li>Informe seu CPF, e-mail e telefone. No campo <b>Setorial</b>, selecione <b>FCEE</b>.</li>
+            <li>Crie uma senha de no minimo 6 caracteres e anote — e ela que voce usara daqui em diante.</li>
+            <li>Seu cadastro fica aguardando aprovacao da coordenacao. So depois disso o login funciona.</li>
+            <li><b>Seu historico ja esta no sistema.</b> O primeiro acesso apenas vincula sua senha ao cadastro existente — nenhuma analise sua se perde.</li>
+          </ol></div>
+        </div>
+        <div class="mn-item" id="manual1">
+          <button class="mn-hd" onclick="manualTg(1)">
+            <span class="mn-n">2</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+            <span class="mn-t">Assumir uma TR no Estoque</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>Abra <b>Estoque de TRs</b> no menu lateral.</li>
+            <li>Use a busca por numero da TR, nome da entidade ou processo SGPE. O filtro <b>Livre</b> mostra o que ainda nao tem responsavel.</li>
+            <li>Clique na TR para abrir o detalhe e confira entidade, objeto e parcelas antes de assumir.</li>
+            <li>Clique em <b>Assumir</b>. A TR passa a constar como sua e some do estoque livre dos colegas.</li>
+            <li><b>Atencao a NL:</b> ao assumir uma parcela, todas as parcelas da mesma NL (mesmo processo SGPE) vem junto automaticamente. Isso e proposital — um parecer baixa todas elas de uma vez.</li>
+          </ol></div>
+        </div>
+        <div class="mn-item" id="manual2">
+          <button class="mn-hd" onclick="manualTg(2)">
+            <span class="mn-n">3</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            <span class="mn-t">Analisar e registrar o parecer</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>Va em <b>Minha Planilha</b> — e onde ficam as PCs sob sua responsabilidade.</li>
+            <li>Clique na PC para abrir o detalhe. Registre a <b>situacao</b> (em analise, diligencia, reanalise) conforme o andamento.</li>
+            <li>Concluida a analise, informe o <b>tipo de parecer</b>: Regular, Regular com Ressalva ou Irregular.</li>
+            <li>Salve. A PC e marcada como <b>baixada</b> e entra na sua produtividade automaticamente.</li>
+            <li>Um parecer pode baixar varias PCs de uma vez quando elas pertencem a mesma NL.</li>
+          </ol></div>
+        </div>
+        <div class="mn-item" id="manual3">
+          <button class="mn-hd" onclick="manualTg(3)">
+            <span class="mn-n">4</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="mn-t">Encaminhar ao Controle Interno</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>No detalhe da PC, use a acao <b>Enviar ao Controle Interno</b>.</li>
+            <li><b>O envio ao CI conta como baixa</b>, conforme orientacao da CGE de 30/04/2026. Nao e preciso fazer nada alem disso.</li>
+            <li>Se o CI devolver o processo, a PC recebe a marca <b>Retornou do CI</b> — mas a baixa permanece. Sua produtividade nao e afetada pela devolucao.</li>
+            <li>Trate a devolucao como uma nova etapa de analise, nao como retrabalho perdido.</li>
+          </ol></div>
+        </div>
+        <div class="mn-item" id="manual4">
+          <button class="mn-hd" onclick="manualTg(4)">
+            <span class="mn-n">5</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+            <span class="mn-t">Estornar uma baixa</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>Errou o parecer ou baixou a PC por engano? Use <b>Estornar Baixa</b> no menu.</li>
+            <li>Voce enxerga apenas as suas proprias baixas. Coordenador ve as do grupo.</li>
+            <li>As PCs aparecem agrupadas por NL. Selecione o que precisa estornar — a selecao nao se perde ao mudar de pagina.</li>
+            <li>O sistema avisa quantas PCs saem da sua produtividade antes de confirmar.</li>
+            <li>Todo estorno fica registrado e visivel para a coordenacao. Use com criterio.</li>
+          </ol></div>
+        </div>
+        <div class="mn-item" id="manual5">
+          <button class="mn-hd" onclick="manualTg(5)">
+            <span class="mn-n">6</span>
+            <svg class="mn-ic" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+            <span class="mn-t">Repositorio e Meu Perfil</span>
+            <svg class="mn-ch" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </button>
+          <div class="mn-bd"><ol>
+            <li>No <b>Repositorio</b> ficam modelos de parecer, orientacoes da CGE, legislacao e este manual em versao completa.</li>
+            <li>Em <b>Meu Perfil</b> voce atualiza e-mail, telefone e senha.</li>
+            <li>Confira se sua matricula e portaria estao corretas — esses dados vao para o relatorio trimestral da CGE.</li>
+          </ol></div>
+        </div>
+      </div>
+      <div class="mn-ft">
+        <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg>
+        <div>Duvida que o manual nao resolve? Fale com seu coordenador — <b>Nayara</b> (G1), <b>Zadir</b> (G2) ou <b>Gustavo</b> (G3).</div>
       </div>
     </div>
     <div style="margin-top:12px;" id="d-repo-area"></div>
+    <div class="gov-ft">
+      <div class="gov-ft-hd">Estrutura de Governanca do Grupo de Trabalho</div>
+      <div class="gov-ft-grid">
+        <div class="ft-lg"><img src="assets/logos/segov.png" alt="SEGOV"><span>SEGOV</span></div>
+        <div class="ft-lg"><img src="assets/logos/casacivil.png" alt="Casa Civil"><span>Casa Civil</span></div>
+        <div class="ft-lg"><img src="assets/logos/fcee.png" alt="FCEE"><span>FCEE</span></div>
+        <div class="ft-lg"><img src="assets/logos/cge.png" alt="CGE"><span>CGE</span></div>
+      </div>
+      <div class="gov-ft-legal">
+        <b>SIGPC-GT</b> — Sistema de Gestao de Prestacoes de Contas<br>
+        Sistema desenvolvido pelo Tecnico Richard Motta Coelho — &copy; 2026
+      </div>
+    </div>
   `
   // Carregar dados frescos e atualizar tela
   carregarContadores()
