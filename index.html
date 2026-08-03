@@ -3262,7 +3262,7 @@ async function cgeExportPDF() {
   const assRowHtml = sigPrincipais.map(s => `
     <div class="ass-col">
       <div class="ass-linha">
-        <div class="ass-dig">[ASSINANDO DIGITALMENTE]</div>
+        <div class="ass-dig">[assinado digitalmente]</div>
         <div class="ass-nome">${s.nome||''}</div>
         <div class="ass-cargo">${s.cargo||''}</div>
         ${s.portaria?`<div class="ass-cargo">${s.portaria}</div>`:''}
@@ -3271,7 +3271,7 @@ async function cgeExportPDF() {
   const assFinalHtml = sigFinal ? `
   <div class="ass-center">
     <div class="ass-linha">
-      <div class="ass-dig">[ASSINANDO DIGITALMENTE]</div>
+      <div class="ass-dig">[assinado digitalmente]</div>
       <div class="ass-nome">${sigFinal.nome||''}</div>
       <div class="ass-cargo">${sigFinal.cargo||''}</div>
       ${sigFinal.portaria?`<div class="ass-cargo">${sigFinal.portaria}</div>`:''}
