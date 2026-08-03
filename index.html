@@ -167,10 +167,12 @@ tr:last-child td{border-bottom:none;}
 
 /* ══ REPOSITÓRIO ══ */
 .repo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}
-.repo-card{background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);border-left:3px solid var(--az);}
+.repo-card{position:relative;background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);border-left:3px solid var(--az);}
 .repo-card h4{font-size:13px;margin-bottom:4px;}
 .repo-card p{font-size:11px;color:var(--ct);margin-bottom:8px;}
 .repo-tipo{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;background:var(--azbg);color:var(--az);margin-bottom:5px;text-transform:uppercase;}
+.repo-del{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;font-size:13px;opacity:.55;padding:2px;}
+.repo-del:hover{opacity:1;}
 .repo-card a{color:var(--az);font-size:11px;text-decoration:none;}
 .repo-card a:hover{text-decoration:underline;}
 
@@ -861,12 +863,8 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <div class="mc-campo"><label>Descrição</label><textarea id="rDesc" rows="2"></textarea></div>
       <div class="mc-campo"><label>URL / Link</label><input type="url" id="rUrl"></div>
       <div class="mc-campo"><label>Categoria</label>
-        <select id="rCat">
-          <option value="lei">Lei / Normativa</option>
-          <option value="inst">Instrução / Orientação</option>
-          <option value="mod">Modelo / Formulário</option>
-          <option value="info">Informativo / Link</option>
-        </select>
+        <input type="text" id="rCat" list="rCatList" placeholder="Digite ou selecione...">
+        <datalist id="rCatList"></datalist>
       </div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moRepo')">Cancelar</button>
@@ -2529,7 +2527,7 @@ async function irRepo() {
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div style="font-size:16px;font-weight:700;">Repositório</div>
-      ${podeAdd?'<button class="btn-buscar" onclick="document.getElementById(\'moRepo\').classList.add(\'open\')">+ Adicionar</button>':''}
+      ${podeAdd?'<button class="btn-buscar" onclick="repoAbrirModal()">+ Adicionar</button>':''}
     </div>
     <div class="repo-grid" id="repoGrid"><div class="loading"><div class="spin"></div>Carregando...</div></div>
   `
@@ -2538,30 +2536,60 @@ async function irRepo() {
     if(U.setorialFiltro) repoQ = repoQ.eq('setorial_id', U.setorialFiltro)
     const { data, error } = await repoQ
     if(error) throw error
-    const cats = {lei:'Lei/Normativa',inst:'Instrução',mod:'Modelo/Formulário',info:'Informativo',pdf:'PDF',doc:'Documento'}
+    _repoCategorias = [...new Set((data||[]).map(r=>r.categoria).filter(Boolean))]
     document.getElementById('repoGrid').innerHTML = !data||!data.length
       ? '<p style="color:var(--ct);">Nenhum item no repositório.</p>'
       : data.map(r=>`<div class="repo-card">
-          <span class="repo-tipo">${cats[r.categoria]||cats[r.tipo]||r.tipo||'—'}</span>
-          <h4>${r.nome||r.titulo||'—'}</h4>
+          <span class="repo-tipo">${r.categoria||'—'}</span>
+          <h4>${r.nome||'—'}</h4>
           <p>${r.descricao||''}</p>
           ${r.url?`<a href="${r.url}" target="_blank">🔗 Acessar link</a>`:''}
+          ${podeAdd?`<button class="repo-del" title="Excluir" onclick="repoExcluir(${r.id},'${(r.nome||'').replace(/'/g,"\\'")}')">🗑️</button>`:''}
         </div>`).join('')
   } catch(e) { document.getElementById('repoGrid').innerHTML=`<p style="color:var(--r);">Erro: ${e.message}</p>` }
+}
+
+let _repoCategorias = []
+
+function repoAbrirModal() {
+  const sugeridas = ['Relatórios','Documentos','Outros']
+  const todas = [...new Set([..._repoCategorias, ...sugeridas])].sort()
+  document.getElementById('rCatList').innerHTML = todas.map(c=>`<option value="${c}">`).join('')
+  document.getElementById('rTit').value = ''
+  document.getElementById('rDesc').value = ''
+  document.getElementById('rUrl').value = ''
+  document.getElementById('rCat').value = ''
+  document.getElementById('moRepo').classList.add('open')
 }
 
 async function salvarRepo() {
   const tit = document.getElementById('rTit').value.trim()
   if(!tit) { toast('Informe o título.','err'); return }
+  const cat = document.getElementById('rCat').value.trim() || 'Outros'
   try {
     const { error } = await db.from('repositorio').insert({
       nome:tit, descricao:document.getElementById('rDesc').value.trim(),
       url:document.getElementById('rUrl').value.trim(),
-      tipo:document.getElementById('rCat').value,
+      categoria:cat,
       setorial_id:U.setorial_id, adicionado_por:U.nome
     })
     if(error) throw error
     fm('moRepo'); toast('Adicionado com sucesso!','ok'); irRepo()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function repoExcluir(id, nome) {
+  if(!confirm(`Excluir "${nome}" do repositório?`)) return
+  try {
+    const r = await fetch(`${API_URL}/repositorio/${id}`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ perfil: U.perfil })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Item excluído.','ok')
+    await irRepo()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
