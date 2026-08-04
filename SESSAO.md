@@ -66,6 +66,50 @@ As 24 chaves: cab · ctx, cron, desemp_intro, ingressantes, aval, motivos, pos_m
 
 ---
 
+## ADENDO — 04/08 à tarde
+
+### J) Rótulo da linha do Quadro 1 está chumbado no código — DIVERGE DO OFICIAL
+
+O texto "Resultado até o período — agosto de 2025 a agosto de 2026" NÃO vem
+do banco nem do relatório oficial. Está escrito no index.html:
+
+    // ~linha 2107 na cópia v62
+    <td style="font-weight:700;">Resultado até o período — ${periodoLong}</td>
+
+    // ~linha 1930-1932
+    const fmtPeriodo = (s) => new Date(s+'T12:00:00')
+      .toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+    const periodoLong = `${fmtPeriodo(dtInicio)} a ${fmtPeriodo(dtCorte)}`
+
+Comparação com o relatório oficial de 14/05:
+
+| | Oficial (14/05) | Sistema (04/08) |
+|---|---|---|
+| Rótulo da linha do Quadro 1 | Resultado até o 3º trimestre | Resultado até o período — agosto de 2025 a agosto de 2026 |
+| Cabeçalho | Período de Monitoramento: Agosto/2025 a Abril/2026 | agosto de 2025 a agosto de 2026 |
+
+Dois problemas distintos:
+1. Semântica — o oficial nomeia o trimestre; o sistema descreve o intervalo de datas.
+2. Formato — oficial "Agosto/2025"; fmtPeriodo devolve "agosto de 2025".
+
+Causa de fundo: o Quadro 1 é seção do tipo `q1` (tabela gerada por código).
+O rótulo da primeira coluna não está no JSONB `secoes`, então a coordenação
+não consegue corrigir pela tela do editor.
+
+Três saídas avaliadas:
+1. Voltar ao padrão oficial: `Resultado até o ${rotuloTrimestre}`, com campo
+   novo no painel de parâmetros (ex.: "4º trimestre"). ← reproduz o documento anterior
+2. Criar `{{rotulo_periodo}}` como 11º token editável.
+3. Só ajustar o fmtPeriodo para "Agosto/2025", se o incômodo for apenas o formato.
+
+Decisão: PENDENTE. Nada foi alterado no código ainda.
+
+Atenção ao aplicar: os números de linha são da cópia v62 anexada ao projeto.
+Os commits de 04/08 deslocaram tudo — localizar pelo trecho de texto
+("Resultado até o período"), nunca pela linha.
+
+---
+
 ## PENDÊNCIAS
 
 ### A) Textos ainda com dados de maio (a coordenação corrige na tela)
@@ -174,6 +218,8 @@ Regular → `ILIKE 'Parecer Regular%'` · Irregular → `ILIKE '%Irregular%'`
 **Whitelist da API descarta campo fora da lista em silêncio e responde sucesso.** Sempre conferir antes de mandar campo novo.
 
 **Data de corte: sempre 23:59.**
+
+**Textos do Quadro 1 e Quadro 2 são gerados por código**, não estão em `secoes` — ver adendo J.
 
 **Repositório local:** `C:\Users\Richard\sigpc-gt` e `C:\Users\Richard\sigpc-api` (no PC de casa). No PC do trabalho não foi localizado.
 
