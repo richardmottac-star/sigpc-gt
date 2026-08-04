@@ -155,6 +155,9 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .btn-buscar{background:var(--v);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;height:32px;display:flex;align-items:center;gap:6px;}
 .btn-buscar svg{width:15px;height:15px;fill:#fff;}
 .btn-limpar{background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;padding:7px 12px;font-size:12px;font-family:'Barlow',sans-serif;cursor:pointer;height:32px;}
+.cge-grid{display:grid;grid-template-columns:180px minmax(0,1fr);gap:10px;}
+.cge-grid.com-prev{grid-template-columns:180px minmax(0,1fr) minmax(0,1fr);}
+@media(max-width:1150px){.cge-grid.com-prev{grid-template-columns:180px minmax(0,1fr);}.cge-grid.com-prev>.cge-prev{grid-column:1/-1;}}
 .tbl-wrap{background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;}
 .tbl-header{padding:11px 14px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;}
 .tbl-header strong{font-size:13px;}
@@ -3182,19 +3185,31 @@ function cgeExportExcel() {
   a.download=`relatorio_cge_${sid}_${dt}.csv`; a.click()
 }
 
-async function cgeExportPDF() {
-  if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
-
+// Monta o HTML completo do relatório. Fonte única: usada tanto pelo
+// cgeExportPDF quanto pela pré-visualização ao lado do editor.
+// Com _cgeDados vazio, os quadros 1, 2 e 4 viram caixas tracejadas —
+// o resto do documento continua sendo montado normalmente.
+let _cgeAfastCache = null
+async function cgeMontarDocumento() {
   const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
   await cgeCarregarTextos()
+
+  const semDados = !_cgeDados.length
+  const quadroVazio = (n) => `<div style="border:1.5px dashed #B0B8C0;border-radius:6px;padding:20px;text-align:center;color:#666;font-size:10px;font-style:italic;margin:6px 0 10px;">Quadro ${n} — gere o relatório para visualizar</div>`
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
   let _afastDaApi = false
   try {
-    const rAf = await fetch(`${API_URL}/afastamentos?setorial_id=${sid}&limit=999`)
-    const jAf = await rAf.json()
+    // Memoizado por setorial+período: a pré-visualização remonta o documento a
+    // cada segundo de digitação e não pode bater na API a cada remontagem.
+    const chaveAf = `${sid}|${dtInicio}|${dtCorte}`
+    if(!_cgeAfastCache || _cgeAfastCache.chave !== chaveAf) {
+      const rAf = await fetch(`${API_URL}/afastamentos?setorial_id=${sid}&limit=999`)
+      const jAf = await rAf.json()
+      _cgeAfastCache = { chave: chaveAf, dados: jAf.data||[] }
+    }
     const fmtD = d => d ? String(d).slice(0,10).split('-').reverse().slice(0,2).join('/') : '—'
-    const lista = (jAf.data||[]).filter(a => {
+    const lista = _cgeAfastCache.dados.filter(a => {
       if(!dtInicio || !dtCorte) return true
       return String(a.data_fim).slice(0,10) >= dtInicio && String(a.data_inicio).slice(0,10) <= dtCorte
     }).sort((a,b)=> String(a.data_inicio).localeCompare(String(b.data_inicio)))
@@ -3388,6 +3403,9 @@ tr:nth-child(even) td{background:#F5F5F5;}
 .ass{margin-top:28px;}
 .ass-local{margin-bottom:16px;}
 .ass-local p{text-align:center;margin-bottom:0;}
+.sec-anchor{scroll-margin-top:8px;}
+.cge-foco{background:#FFF6C4;box-shadow:0 0 0 4px #FFF6C4;border-radius:3px;}
+@media print{.cge-foco{background:none;box-shadow:none;}}
 .ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
 .ass-col{width:31%;text-align:center;}
 .ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
@@ -3402,7 +3420,7 @@ ${HDR}
 
 <div class="keep">
 <h2>RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO ANÁLISE DE<br>PRESTAÇÕES DE CONTAS</h2>
-<div class="ficha">
+<div class="ficha sec-anchor" data-sec="cab">
   <p><strong>Órgão/Entidade:</strong> ${cabOrgao}</p>
   <p><strong>Grupo de Trabalho:</strong> ${cabGT}</p>
   <p><strong>Processo:</strong> ${cabProc}</p>
@@ -3414,13 +3432,14 @@ ${HDR}
 </div>
 
 <div class="sec">1. Contextualização</div>
-${R('ctx')}
+<div class="sec-anchor" data-sec="ctx">${R('ctx')}</div>
 
 <div class="sec">1.1 Cronograma e Metas Mensais</div>
-${R('cron')}
+<div class="sec-anchor" data-sec="cron">${R('cron')}</div>
 
+<div class="sec-anchor" data-sec="q1">
 <div class="qtit">1. QUADRO GERAL DE METAS</div>
-<table>
+${semDados ? quadroVazio(1) : `<table>
   <thead>
     <tr>
       <th rowspan="3" style="width:18%;">Período<br>(1)</th>
@@ -3458,14 +3477,16 @@ ${R('cron')}
       <td class="tc fw">${pctEst}</td>
     </tr>
   </tbody>
-</table>
+</table>`}
 ${q1Nota ? `<p class="nota">Nota: ${q1Nota}</p>` : ''}
+</div>
 
 <div class="sec">1.2 Desempenho Individual dos Servidores do GT-PC</div>
-${R('desemp_intro')}
+<div class="sec-anchor" data-sec="desemp_intro">${R('desemp_intro')}</div>
 
+<div class="sec-anchor" data-sec="q2">
 <div class="qtit">Quadro 2: Desempenho dos servidores do Grupo GT-PC*</div>
-<table>
+${semDados ? quadroVazio(2) : `<table>
   <thead>
     <tr>
       <th>#</th>
@@ -3489,35 +3510,38 @@ ${R('desemp_intro')}
       <td style="text-align:right;font-weight:700;">${pctTotQ2}</td>
     </tr>
   </tfoot>
-</table>
+</table>`}
 <p class="nota">(1) A Meta por Técnico Acumulada corresponde ao somatório das metas individuais no período (${periodoLong}).${q2Notas?`<br>\n${q2Notas}`:''}</p>
+</div>
 
-${R('ingressantes')}
+<div class="sec-anchor" data-sec="ingressantes">${R('ingressantes')}</div>
 
 <div class="sec">Análise do Desempenho Individual e Avaliação Técnica</div>
-${R('aval')}
-${Rl('motivos').length ? `<ul>\n${Rl('motivos').map(t=>`  <li>${cgeResolverCampos(t)}</li>`).join('\n')}\n</ul>` : ''}
-${R('pos_motivos')}
+<div class="sec-anchor" data-sec="aval">${R('aval')}</div>
+<div class="sec-anchor" data-sec="motivos">${Rl('motivos').length ? `<ul>\n${Rl('motivos').map(t=>`  <li>${cgeResolverCampos(t)}</li>`).join('\n')}\n</ul>` : ''}</div>
+<div class="sec-anchor" data-sec="pos_motivos">${R('pos_motivos')}</div>
 
 <div class="sec">Análise por Grupo</div>
-${R('g1') ? `<p><strong>Grupo 1</strong></p>\n${R('g1')}` : ''}
-${R('g2') ? `<p><strong>Grupo 2</strong></p>\n${R('g2')}` : ''}
-${R('g3') ? `<p><strong>Grupo 3</strong></p>\n${R('g3')}` : ''}
+<div class="sec-anchor" data-sec="g1">${R('g1') ? `<p><strong>Grupo 1</strong></p>\n${R('g1')}` : ''}</div>
+<div class="sec-anchor" data-sec="g2">${R('g2') ? `<p><strong>Grupo 2</strong></p>\n${R('g2')}` : ''}</div>
+<div class="sec-anchor" data-sec="g3">${R('g3') ? `<p><strong>Grupo 3</strong></p>\n${R('g3')}` : ''}</div>
 
 <div class="sec">1.3 Análise Qualitativa e Ações Corretivas</div>
-${R('qual_intro')}
-${justHtml}
-${R('pos_just')}
+<div class="sec-anchor" data-sec="qual_intro">${R('qual_intro')}</div>
+<div class="sec-anchor" data-sec="just">${justHtml}</div>
+<div class="sec-anchor" data-sec="pos_just">${R('pos_just')}</div>
 
+<div class="sec-anchor" data-sec="q3">
 <div class="qtit">Quadro 3 – Avaliação Qualitativa do Processo</div>
 <table>
   <thead><tr><th style="width:22%;text-align:left;">Aspecto Avaliado</th><th style="text-align:left;">Observações e Ações</th></tr></thead>
   <tbody>${q3Rows}</tbody>
 </table>
+</div>
 
-${R('q4_abre')}
+<div class="sec-anchor" data-sec="q4_abre">${R('q4_abre')}</div>
 <div class="qtit">Quadro 4 – Processos por técnico – em análises, diligência e reanálise:</div>
-<table>
+${semDados ? quadroVazio(4) : `<table>
   <thead>
     <tr>
       <th>#</th>
@@ -3536,32 +3560,42 @@ ${R('q4_abre')}
       <td></td>
     </tr>
   </tfoot>
-</table>
+</table>`}
 
 <div class="sec">Análise Qualitativa Consolidada</div>
-${R('consol')}
+<div class="sec-anchor" data-sec="consol">${R('consol')}</div>
 
+<div class="sec-anchor" data-sec="afast_tab">
 <p style="font-weight:900;text-align:center;font-size:10.5px;margin:8px 0 4px;">SERVIDORES COM AFASTAMENTO DURANTE O PERÍODO</p>
 <table style="width:70%;margin:0 auto;">
   <thead><tr><th style="text-align:left;">Nome</th><th>Período</th><th>Motivo</th></tr></thead>
   <tbody>${_afastRows}</tbody>
 </table>
+</div>
 
-${R('afast')}
+<div class="sec-anchor" data-sec="afast">${R('afast')}</div>
 
 <div class="sec">1.4 Conclusão</div>
-${conclusaoHtml}
+<div class="sec-anchor" data-sec="concl">${conclusaoHtml}</div>
 
 <div class="ass">
-  <div class="ass-local">${localHtml}</div>
+  <div class="ass-local sec-anchor" data-sec="local">${localHtml}</div>
+  <div class="sec-anchor" data-sec="sign">
   <div class="ass-row">${assRowHtml}
   </div>${assFinalHtml}
+  </div>
 </div>
 
 <div class="rodape">Relatório gerado automaticamente pelo SIGPC-GT v2.1 em ${dtGerado} | Dados extraídos do sistema em tempo real<br>Sistema desenvolvido pelo técnico Richard Motta Coelho — Copyright © 2026</div>
 
 </div></body></html>`
 
+  return html
+}
+
+async function cgeExportPDF() {
+  if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
+  const html = await cgeMontarDocumento()
   const w = window.open('','_blank')
   if(!w) { toast('Permita pop-ups para gerar o PDF.','err'); return }
   w.document.write(html)
@@ -5896,6 +5930,7 @@ function cgeSecSet(chave, valor) {
   s.v = valor
   s.orig = 'editado'
   s.editado_em = new Date().toISOString()
+  _cgePrevSujo = true
 }
 
 function cgeSecReverter(chave) {
@@ -5905,6 +5940,7 @@ function cgeSecReverter(chave) {
   delete s.v_orig
   delete s.editado_em
   s.orig = 'oficial'
+  _cgePrevSujo = true
   cgeIrSecao(chave)
   cgeAgendarSalvar()
 }
@@ -6076,6 +6112,12 @@ function cgeQ3Del(i) { _cgeTexto.quadro3.splice(i,1); cgeQ3Render() }
 
 let _cgeSecAtual = 'cab'
 let _cgeAutoTimer = null
+// Pré-visualização: preferência e zoom valem pela sessão
+let _cgePrevAberto = true
+let _cgePrevZoom = 85
+let _cgePrevSujo = true
+let _cgePrevMontando = false
+let _cgePrevFocoTimer = null
 // Só grava o editor rico se o usuário realmente digitou. Sem isso, a normalização
 // de HTML do navegador marcaria a seção como "editado" só por abri-la.
 let _cgeEditorSujo = false
@@ -6092,7 +6134,11 @@ function cgeStatus(txt, cor) {
 function cgeAgendarSalvar() {
   cgeStatus('Alterações pendentes…', '#8A6100')
   clearTimeout(_cgeAutoTimer)
-  _cgeAutoTimer = setTimeout(() => { cgeSalvarSecaoAtual(); cgeSalvarTextos() }, 1000)
+  _cgeAutoTimer = setTimeout(() => {
+    cgeSalvarSecaoAtual()
+    cgeSalvarTextos()
+    cgePrevAtualizar(_cgeSecAtual)
+  }, 1000)
 }
 
 // Toda edição passa por aqui: grava, marca como editado e atualiza faixa e menu
@@ -6124,9 +6170,11 @@ async function cgeAbrirTextos() {
           <div style="font-size:11px;color:var(--ct);" id="cgeSalvoInfo">Os textos são reaproveitados nos próximos relatórios</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button onclick="cgePrevToggle()" id="cgePrevBtn" class="btn-buscar" style="height:32px;background:#fff;color:#1B4F82;border:1.5px solid #1B4F82;">${_cgePrevAberto ? 'Ocultar pré-visualização' : 'Pré-visualização ao lado'}</button>
         <button onclick="cgeVerAnterior()" class="btn-buscar" style="height:32px;background:#fff;color:var(--az);border:1.5px solid var(--az);">Ver versão anterior</button>
         <button onclick="cgeFecharVersao()" class="btn-buscar" style="height:32px;background:#fff;color:#8A6100;border:1.5px solid #8A6100;">Fechar versão</button>
+        <button onclick="cgeExportPDF()" class="btn-buscar" style="height:32px;background:#fff;color:var(--v);border:1.5px solid var(--v);">Imprimir / salvar PDF</button>
         <button onclick="cgeSalvarTextos()" id="cgeTxtBtn" class="btn-buscar" style="height:32px;">✓ Salvar</button>
       </div>
     </div>
@@ -6139,7 +6187,7 @@ async function cgeAbrirTextos() {
       <div id="cgeAnteriorTxt" style="font-size:12px;line-height:1.6;color:#333;max-height:180px;overflow-y:auto;"></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:10px;">
+    <div class="cge-grid${_cgePrevAberto ? ' com-prev' : ''}" id="cgeGrid">
       <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:10px;height:fit-content;">
         <div style="font-size:10px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;padding:2px 6px 8px;">Seções</div>
         <div id="cgeNav"></div>
@@ -6154,10 +6202,83 @@ async function cgeAbrirTextos() {
         <div id="cgeCamposMenu" style="display:none;border-bottom:1px solid var(--cb);background:#F2F7FC;padding:6px 10px;"></div>
         <div id="cgeEditorArea" style="padding:14px 16px;min-height:340px;"></div>
       </div>
+      <div class="cge-prev" id="cgePrev" style="display:${_cgePrevAberto?'flex':'none'};background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid var(--cb);">
+          <span style="font-size:12px;font-weight:700;">Pré-visualização</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button onclick="cgePrevZoomar(-10)" title="Diminuir" style="width:24px;height:24px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;font-size:14px;line-height:1;">−</button>
+            <span id="cgePrevZoomTxt" style="font-size:11px;color:var(--ct);min-width:34px;text-align:center;">${_cgePrevZoom}%</span>
+            <button onclick="cgePrevZoomar(10)" title="Aumentar" style="width:24px;height:24px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;font-size:14px;line-height:1;">+</button>
+          </div>
+        </div>
+        <iframe id="cgePrevFrame" title="Pré-visualização do relatório" style="width:100%;height:calc(100vh - 250px);min-height:420px;border:none;background:#E8E8E8;"></iframe>
+      </div>
     </div>
   `
   cgeNavRender()
-  cgeIrSecao(_cgeSecAtual)
+  cgeIrSecao(_cgeSecAtual)  // já dispara a pré-visualização no final
+}
+
+// ── Pré-visualização ao vivo ────────────────────────────────────────
+// Usa cgeMontarDocumento(), a mesma função do cgeExportPDF — sem render paralelo.
+function cgePrevToggle() {
+  _cgePrevAberto = !_cgePrevAberto
+  const grid = document.getElementById('cgeGrid')
+  const painel = document.getElementById('cgePrev')
+  const btn = document.getElementById('cgePrevBtn')
+  if(grid) grid.classList.toggle('com-prev', _cgePrevAberto)
+  if(painel) painel.style.display = _cgePrevAberto ? 'flex' : 'none'
+  if(btn) btn.textContent = _cgePrevAberto ? 'Ocultar pré-visualização' : 'Pré-visualização ao lado'
+  if(_cgePrevAberto) { _cgePrevSujo = true; cgePrevAtualizar(_cgeSecAtual) }
+}
+
+function cgePrevZoomar(d) {
+  _cgePrevZoom = Math.max(55, Math.min(130, _cgePrevZoom + d))
+  const t = document.getElementById('cgePrevZoomTxt')
+  if(t) t.textContent = _cgePrevZoom + '%'
+  cgePrevAplicarZoom()
+}
+
+function cgePrevAplicarZoom() {
+  const fr = document.getElementById('cgePrevFrame')
+  const doc = fr && fr.contentDocument
+  if(doc && doc.body) doc.body.style.zoom = _cgePrevZoom + '%'
+}
+
+function cgePrevFocar(chave) {
+  const fr = document.getElementById('cgePrevFrame')
+  const doc = fr && fr.contentDocument
+  if(!doc || !chave) return
+  const alvo = doc.querySelector(`[data-sec="${chave}"]`)
+  if(!alvo) return
+  alvo.scrollIntoView({ block:'start', behavior:'smooth' })
+  alvo.classList.add('cge-foco')
+  clearTimeout(_cgePrevFocoTimer)
+  _cgePrevFocoTimer = setTimeout(() => alvo.classList.remove('cge-foco'), 1500)
+}
+
+async function cgePrevAtualizar(chave) {
+  if(!_cgePrevAberto) return
+  const fr = document.getElementById('cgePrevFrame')
+  if(!fr) return
+  if(!_cgePrevSujo && fr.contentDocument && fr.contentDocument.querySelector('[data-sec]')) {
+    cgePrevFocar(chave)
+    return
+  }
+  if(_cgePrevMontando) return
+  _cgePrevMontando = true
+  try {
+    const html = await cgeMontarDocumento()
+    const doc = fr.contentDocument
+    const topo = (doc && doc.documentElement) ? doc.documentElement.scrollTop : 0
+    doc.open(); doc.write(html); doc.close()
+    _cgePrevSujo = false
+    cgePrevAplicarZoom()
+    if(chave) cgePrevFocar(chave)
+    else if(doc.documentElement) doc.documentElement.scrollTop = topo
+  } catch(e) {
+    console.warn('cgePrevAtualizar:', e.message)
+  } finally { _cgePrevMontando = false }
 }
 
 function cgeNavRender() {
@@ -6303,6 +6424,7 @@ function cgeIrSecao(id) {
   }
   _cgeEditorSujo = false
   cgeNavRender()
+  cgePrevAtualizar(id)
 }
 
 function cgeListaRender() {
