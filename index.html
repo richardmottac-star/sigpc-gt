@@ -2943,6 +2943,85 @@ function relMudaAba(aba) {
 let _cgeDados = []
 let _cgeParams = {}
 
+// Agregação das PCs por analista — fonte única das regras do relatório CGE.
+// Usada por cgeGerar() (que monta os quadros) e por cgeCarregarNumeros()
+// (que só precisa dos totais para a tela de textos). Não faz rede: recebe
+// os dados já buscados. Alterar uma regra aqui vale para os dois caminhos.
+function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
+  const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
+  const dtFim = new Date(dtCorte)
+  const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+
+  const analistaIdsComPC = new Set(todosPcs.filter(p=>p.analista_id).map(p=>String(p.analista_id)))
+  const usuariosPorId = {}
+  ;(usuariosLista||[]).forEach(u => {
+    if(u.perfil === 'analista') usuariosPorId[u.id] = u
+    else if(u.perfil === 'superadmin' && analistaIdsComPC.has(String(u.id))) usuariosPorId[u.id] = u
+  })
+
+  // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
+  let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0
+  const mapaAn = {}
+  todosPcs.forEach(p => {
+    const t  = (p.tipo||'').toLowerCase()
+    const pt = (p.parecer_tipo||'')
+    const ehRegular   = pt.startsWith('Parecer Regular')
+    const ehIrregular = pt.includes('Irregular')
+    const contaQ1 = p.baixada === true && noPeriodo(p)
+    if(contaQ1 && t === 'parcial' && ehRegular)   totParcReg++
+    if(contaQ1 && t === 'parcial' && ehIrregular) totParcIrr++
+    if(contaQ1 && t === 'final'   && ehRegular)   totFinReg++
+    if(contaQ1 && t === 'final'   && ehIrregular) totFinIrr++
+    if(contaQ1 && !ehRegular && !ehIrregular) totCI++
+
+    if(!p.analista_id || !usuariosPorId[p.analista_id]) return
+    if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    const m = mapaAn[p.analista_id]
+    if(p.status==='analise') m.analise++
+    else if(p.status==='diligencia') m.dilig++
+    else if(p.status==='reanalise') m.reanalise++
+    if(p.status==='analise' || p.status==='diligencia' || p.status==='reanalise') {
+      if(p.codigo_nl) m.nlsPend.add(p.codigo_nl)
+      if(p.tr) m.trsPend.add(p.tr)
+    }
+    if(p.enviado_ci) m.ctrl++
+    if(p.baixada && noPeriodo(p)) {
+      if(p.origem_baixa === 'secretario') m.bxSecretario++
+      else m.bxTecnico++
+    }
+  })
+
+  // Coordenadores não aparecem; analista inativo só aparece se teve baixa no período
+  const linhas = Object.keys(usuariosPorId).map(id => {
+    const u = usuariosPorId[id]
+    const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    const totalBaixadas = m.bxSecretario + m.bxTecnico
+    if(!u.ativo && totalBaixadas === 0) return null
+    const grupo = u.grupo ? parseInt(u.grupo) : null
+    const meta = metaPorId[id] || 0
+    const pctMeta = meta>0 ? Math.round(totalBaixadas/meta*100) : null
+    return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, totalBaixadas, pctMeta, ...m }
+  }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
+
+  const cargaHistoricaNoPeriodo = todosPcs.filter(p => p.baixada && noPeriodo(p) && p.origem_baixa==='carga_historica').length
+  const metaTotal = linhas.reduce((s,d)=>s+d.meta,0)
+  const totBx    = linhas.reduce((s,d)=>s+d.totalBaixadas,0)
+  const totBxSec = linhas.reduce((s,d)=>s+d.bxSecretario,0)
+  const totBxTec = linhas.reduce((s,d)=>s+d.bxTecnico,0)
+  const totAn    = linhas.reduce((s,d)=>s+d.analise,0)
+  const totDil   = linhas.reduce((s,d)=>s+d.dilig,0)
+  const totRean  = linhas.reduce((s,d)=>s+d.reanalise,0)
+  const totCtrl  = linhas.reduce((s,d)=>s+d.ctrl,0)
+  const estoqueRemanescente = todosPcs.filter(p => p.baixada !== true).length
+  const estoqueBase = estoqueRemanescente + totBx
+
+  return {
+    linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI,
+    metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
+    estoqueRemanescente, estoqueBase, estoque: estoqueBase, cargaHistoricaNoPeriodo
+  }
+}
+
 async function cgeGerar() {
   const cont = document.getElementById('cgeCont')
   const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
@@ -2962,74 +3041,14 @@ async function cgeGerar() {
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
-    const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
-    const dtFim = new Date(dtCorte)
-    const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+    const A = cgeAgregar(todosPcs, metaPorId, usersRes.data||[], dtInicio, dtCorte)
+    _cgeDados = A.linhas
+    const {
+      totParcReg, totParcIrr, totFinReg, totFinIrr, totCI,
+      metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
+      estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
+    } = A
 
-    const analistaIdsComPC = new Set(todosPcs.filter(p=>p.analista_id).map(p=>String(p.analista_id)))
-    const usuariosPorId = {}
-    ;(usersRes.data||[]).forEach(u => {
-      if(u.perfil === 'analista') usuariosPorId[u.id] = u
-      else if(u.perfil === 'superadmin' && analistaIdsComPC.has(String(u.id))) usuariosPorId[u.id] = u
-    })
-
-    // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
-    let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0
-    const mapaAn = {}
-    todosPcs.forEach(p => {
-      const t  = (p.tipo||'').toLowerCase()
-      const pt = (p.parecer_tipo||'')
-      const ehRegular   = pt.startsWith('Parecer Regular')
-      const ehIrregular = pt.includes('Irregular')
-      const contaQ1 = p.baixada === true && noPeriodo(p)
-      if(contaQ1 && t === 'parcial' && ehRegular)   totParcReg++
-      if(contaQ1 && t === 'parcial' && ehIrregular) totParcIrr++
-      if(contaQ1 && t === 'final'   && ehRegular)   totFinReg++
-      if(contaQ1 && t === 'final'   && ehIrregular) totFinIrr++
-      if(contaQ1 && !ehRegular && !ehIrregular) totCI++
-
-      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
-      const m = mapaAn[p.analista_id]
-      if(p.status==='analise') m.analise++
-      else if(p.status==='diligencia') m.dilig++
-      else if(p.status==='reanalise') m.reanalise++
-      if(p.status==='analise' || p.status==='diligencia' || p.status==='reanalise') {
-        if(p.codigo_nl) m.nlsPend.add(p.codigo_nl)
-        if(p.tr) m.trsPend.add(p.tr)
-      }
-      if(p.enviado_ci) m.ctrl++
-      if(p.baixada && noPeriodo(p)) {
-        if(p.origem_baixa === 'secretario') m.bxSecretario++
-        else m.bxTecnico++
-      }
-    })
-
-    // Coordenadores não aparecem; analista inativo só aparece se teve baixa no período
-    _cgeDados = Object.keys(usuariosPorId).map(id => {
-      const u = usuariosPorId[id]
-      const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
-      const totalBaixadas = m.bxSecretario + m.bxTecnico
-      if(!u.ativo && totalBaixadas === 0) return null
-      const grupo = u.grupo ? parseInt(u.grupo) : null
-      const meta = metaPorId[id] || 0
-      const pctMeta = meta>0 ? Math.round(totalBaixadas/meta*100) : null
-      return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, totalBaixadas, pctMeta, ...m }
-    }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
-
-    const cargaHistoricaNoPeriodo = todosPcs.filter(p => p.baixada && noPeriodo(p) && p.origem_baixa==='carga_historica').length
-
-    const metaTotal = _cgeDados.reduce((s,d)=>s+d.meta,0)
-    const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
-    const totBxSec = _cgeDados.reduce((s,d)=>s+d.bxSecretario,0)
-    const totBxTec = _cgeDados.reduce((s,d)=>s+d.bxTecnico,0)
-    const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
-    const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
-    const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
-    const totCtrl  = _cgeDados.reduce((s,d)=>s+d.ctrl,0)
-    const estoqueRemanescente = todosPcs.filter(p => p.baixada !== true).length
-    const estoqueBase = estoqueRemanescente + totBx
-    const estoque = estoqueBase
     const totPctMeta = metaTotal>0 ? (totBx/metaTotal*100).toFixed(1) : '—'
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
@@ -6000,45 +6019,19 @@ async function cgeCarregarNumeros(forcar) {
     const dtCorte  = P.dtCorte  || new Date(agora.getTime() - agora.getTimezoneOffset()*60000).toISOString().slice(0,16)
     const meses = Math.max(1, Math.round((new Date(dtCorte) - new Date(dtInicio)) / (1000*60*60*24*30.44)))
 
-    const qs = (o) => new URLSearchParams(o).toString()
-    const [jTudo, jBx, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
-      fetch(`${API_URL}/prestacoes_contas?${qs({ setorial_id: sid, limit: 1 })}`).then(r => r.json()),
-      fetch(`${API_URL}/prestacoes_contas?${qs({ setorial_id: sid, baixada: 'true', limit: 99999 })}`).then(r => r.json()),
-      fetchMetasVigentes(),
-      db.from('usuarios').select('*').eq('setorial_id', sid),
-      fetchTotalPCs()
+    // Mesmas buscas do cgeGerar, para a agregação receber exatamente os mesmos dados
+    const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
+      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs()
     ])
-    const baixadas = jBx.data || []
 
-    const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
-    const dtFim = new Date(dtCorte)
-    const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+    const A = cgeAgregar(todosPcs, metaPorId, usersRes.data||[], dtInicio, dtCorte)
+    const numTec = A.linhas.length
+    const metaMes = (meses > 0 && numTec > 0) ? Math.round(A.metaTotal/numTec/meses) : 0
 
-    const idsComPC = new Set(baixadas.filter(p => p.analista_id).map(p => String(p.analista_id)))
-    const usuariosPorId = {}
-    ;(usersRes.data||[]).forEach(u => {
-      if(u.perfil === 'analista') usuariosPorId[u.id] = u
-      else if(u.perfil === 'superadmin' && idsComPC.has(String(u.id))) usuariosPorId[u.id] = u
-    })
-
-    const bxPorId = {}
-    let totBx = 0
-    baixadas.forEach(p => {
-      if(!noPeriodo(p)) return
-      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      bxPorId[p.analista_id] = (bxPorId[p.analista_id]||0) + 1
-      totBx++
-    })
-
-    // Analista inativo só conta se teve baixa no período (regra do cgeGerar)
-    const ativos = Object.keys(usuariosPorId).filter(id => usuariosPorId[id].ativo || (bxPorId[id]||0) > 0)
-    const numTec = ativos.length
-    const metaTotal = ativos.reduce((s,id) => s + (metaPorId[id]||0), 0)
-    // baixada !== true inclui NULL, por isso a subtração em vez de um filtro baixada=false
-    const estoque = Math.max(0, (jTudo.count||0) - (jBx.count||0)) + totBx
-    const metaMes = (meses > 0 && numTec > 0) ? Math.round(metaTotal/numTec/meses) : 0
-
-    _cgeNumeros = { sid, dtInicio, dtCorte, meses, metaTotal, numTec, metaMes, totBx, totalGeralPCs, estoque }
+    _cgeNumeros = {
+      sid, dtInicio, dtCorte, meses, numTec, metaMes,
+      metaTotal: A.metaTotal, totBx: A.totBx, estoque: A.estoque, totalGeralPCs
+    }
     return _cgeNumeros
   })()
   try { return await _cgeNumerosPromise }
