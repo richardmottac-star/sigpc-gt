@@ -3186,9 +3186,10 @@ async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
 
   const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
-  const TXT = await cgeCarregarTextos()
+  await cgeCarregarTextos()
 
   let _afastRows = '<tr><td colspan="3" style="text-align:center;font-style:italic;padding:8px;">Nenhum afastamento registrado no período.</td></tr>'
+  let _afastDaApi = false
   try {
     const rAf = await fetch(`${API_URL}/afastamentos?setorial_id=${sid}&limit=999`)
     const jAf = await rAf.json()
@@ -3203,6 +3204,7 @@ async function cgeExportPDF() {
         <td class="tc">${fmtD(a.data_inicio)} a ${fmtD(a.data_fim)}</td>
         <td class="tc">${a.motivo==='Outro' ? (a.observacao||'Outro') : a.motivo}</td>
       </tr>`).join('')
+      _afastDaApi = true
     }
   } catch(e) { console.warn('afastamentos:', e.message) }
 
@@ -3241,30 +3243,41 @@ async function cgeExportPDF() {
   const gSt   = (arr) => ({ bx:arr.reduce((s,d)=>s+d.totalBaixadas,0), tot:arr.reduce((s,d)=>s+d.totalBaixadas,0), acima:arr.filter(d=>d.pctMeta!==null && d.pctMeta>=100).length })
   const g1=gSt(gList(1)), g2=gSt(gList(2)), g3=gSt(gList(3))
 
-  // Textos editáveis (tela cgeAbrirTextos) — usa o que foi salvo em relatorios_cge; cai no texto padrão quando vazio
-  const defG1 = `O Grupo 1 apresentou bom desempenho com ${g1.acima} técnico(s) atingindo ou ultrapassando a meta estabelecida${g1.acima>0?', demonstrando comprometimento e expertise crescente nos processos analisados':'. Alguns técnicos apresentam percentual menor em virtude de processos mais complexos, causando uma morosidade nestas análises e consequentemente nas respectivas baixas'}.`
-  const defG2 = `O Grupo 2 possui um percentual mais equilibrado de PCs baixadas entre os técnicos, com ${g2.acima} técnico(s) ultrapassando a meta prevista. Apresenta um grande volume de processos em fase de diligência no período avaliado, evidenciando dependência significativa do retorno tempestivo de documentação por parte das entidades parceiras.`
-  const defG3 = `O grupo 3 demonstrou desempenho mais equilibrado, como mencionado anteriormente pela questão de em sua maioria ser apenas 1 PC por parcial, impactando diretamente no resultado. Muitos desse grupo também não possuíam contato com esta função de convênios, prestações de contas, criando cada vez mais conhecimento e isso refletindo na melhora da produtividade.`
+  // Textos do relatório — todos vêm de _cgeSecoes (coluna secoes). Sem texto padrão
+  // embutido: seção vazia imprime vazio, para nunca sobrescrever o oficial em silêncio.
+  const SEC = _cgeSecoes || {}
+  const R  = (k) => cgeResolverCampos((SEC[k] && SEC[k].v) ? SEC[k].v : '')
+  const Rl = (k) => (SEC[k] && Array.isArray(SEC[k].v)) ? SEC[k].v : []
 
-  const justHtml = (TXT.justificativas && TXT.justificativas.length ? TXT.justificativas : CGE_TXT_PADRAO.justificativas)
-    .map((t,i) => `<p>${String.fromCharCode(97+i)}) ${t}</p>`).join('\n')
+  const cabV = (SEC.cab && SEC.cab.v && typeof SEC.cab.v === 'object') ? SEC.cab.v : {}
+  const cabOrgao     = cabV.orgao || CGE_CAB_PADRAO.orgao
+  const cabGT        = cabV.gt || CGE_CAB_PADRAO.gt
+  const cabProc      = cabV.processo || CGE_CAB_PADRAO.processo
+  const cabPeriodo   = (cabV.periodo_inicio || cabV.periodo_fim)
+    ? [cabV.periodo_inicio, cabV.periodo_fim].filter(Boolean).join(' a ') : periodoLong
+  const cabMetaMin   = cabV.meta_min || metaMes
+  const cabDataCorte = cabV.data_corte_txt || dtCorteHoraFmt
 
-  const q3Rows = (TXT.quadro3 && TXT.quadro3.length ? TXT.quadro3 : CGE_TXT_PADRAO.quadro3)
-    .map(q => `<tr><td style="font-weight:700;background:#F0F0F0;">${q.aspecto||''}</td><td>${(q.itens||[]).map(t=>'• '+t).join('<br>')}</td></tr>`).join('\n')
+  // Afastamentos: a API manda; a lista editada só entra quando a API não devolve nada
+  if(!_afastDaApi && Rl('afast_tab').length) {
+    _afastRows = Rl('afast_tab').map(a => `<tr>
+        <td style="text-align:left;">${a[0]||'—'}</td>
+        <td class="tc">${a[1]||'—'}</td>
+        <td class="tc">${a[2]||'—'}</td>
+      </tr>`).join('')
+  }
 
-  const defConclusao = [
-    `Diante dos dados apresentados, constata-se o cumprimento parcial das metas estabelecidas no Plano de Ação para o período de ${periodoLong}. Tendo como meta acumulada ${metaAcumFmt}, tendo sido registradas até o momento baixa de ${totBxFmt} PCs, correspondendo a ${pctMeta} de cumprimento da meta planejada.`,
-    `O desempenho observado foi impactado, principalmente, pela elevada complexidade de parte dos processos analisados, pela predominância de pendências de natureza documental e formal, pela dependência de retorno tempestivo das entidades conveniadas, pelas reiterações de diligências, fatores que influenciaram diretamente a capacidade operacional e o tempo médio de finalização dos processos.`,
-    `Ressalta-se, contudo, que, mesmo diante das limitações verificadas, o Grupo de Trabalho manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, com observância aos normativos vigentes e à preservação da segurança jurídica dos pareceres emitidos.`,
-    `Destaca-se, ainda, que estamos implementando um sistema para monitoramento e acompanhamento tanto da coordenação como técnicos dando mais transparência e controle nas atividades.`,
-    `Quanto ao impacto no resultado global das metas pactuadas, registra-se que o desempenho do período não inviabiliza o alcance dos objetivos estabelecidos no Plano de Ação, desde que mantidas e aperfeiçoadas as estratégias de gestão, capacitação técnica, padronização dos procedimentos e acompanhamento sistemático, com reforço das ações de orientação às entidades conveniadas e do apoio institucional à uniformização dos critérios de análise.`,
-    `Por fim, ressalta-se o comprometimento da equipe do GT-PC com a execução das atividades de análise de prestações de contas e a importância de preservar a continuidade do monitoramento, mantendo o alinhamento permanente com as orientações técnicas da Controladoria-Geral do Estado, com vistas ao fortalecimento do controle interno, à melhoria dos indicadores institucionais e à preservação do interesse público.`
-  ].map(p=>`<p>${p}</p>`).join('\n')
-  const conclusaoHtml = TXT.conclusao && TXT.conclusao.trim()
-    ? TXT.conclusao.split('\n').filter(l=>l.trim()).map(l=>`<p>${l}</p>`).join('\n')
-    : defConclusao
+  const justHtml = Rl('just').map((t,i) => `<p>${String.fromCharCode(97+i)}) ${cgeResolverCampos(t)}</p>`).join('\n')
 
-  const sigList = (TXT.signatarios && TXT.signatarios.length) ? TXT.signatarios : CGE_TXT_PADRAO.signatarios
+  const q3Rows = Rl('q3').map(r => `<tr><td style="font-weight:700;background:#F0F0F0;">${r[0]||''}</td><td>${String(r[1]||'').split('\n').map(t=>t.trim()).filter(Boolean).map(t=>'• '+t).join('<br>')}</td></tr>`).join('\n')
+
+  const q1Nota  = cgeResolverCampos((SEC.q1 && SEC.q1.v) ? SEC.q1.v : '')
+  const q2Notas = Rl('q2').map((t,i) => `(${i+2}) ${cgeResolverCampos(t)}`).join('<br>\n')
+
+  const conclusaoHtml = R('concl')
+  const localHtml     = R('local')
+
+  const sigList = Rl('sign').map(r => ({ nome:r[0]||'', cargo:r[1]||'', portaria:r[2]||'' }))
   const sigPrincipais = sigList.slice(0, -1)
   const sigFinal = sigList[sigList.length-1]
   const assRowHtml = sigPrincipais.map(s => `
@@ -3373,6 +3386,8 @@ tr:nth-child(even) td{background:#F5F5F5;}
 .keep{page-break-inside:avoid;}
 .new-page{page-break-before:always;}
 .ass{margin-top:28px;}
+.ass-local{margin-bottom:16px;}
+.ass-local p{text-align:center;margin-bottom:0;}
 .ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
 .ass-col{width:31%;text-align:center;}
 .ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
@@ -3388,23 +3403,21 @@ ${HDR}
 <div class="keep">
 <h2>RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO ANÁLISE DE<br>PRESTAÇÕES DE CONTAS</h2>
 <div class="ficha">
-  <p><strong>Órgão/Entidade:</strong> FCEE - Fundação Catarinense de Educação Especial - UG 450021</p>
-  <p><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</p>
-  <p><strong>Processo:</strong> CGE nº 727/2025</p>
-  <p><strong>Período de Monitoramento:</strong> ${periodoLong}</p>
+  <p><strong>Órgão/Entidade:</strong> ${cabOrgao}</p>
+  <p><strong>Grupo de Trabalho:</strong> ${cabGT}</p>
+  <p><strong>Processo:</strong> ${cabProc}</p>
+  <p><strong>Período de Monitoramento:</strong> ${cabPeriodo}</p>
   <p><strong>Número PCs Total:</strong> ${totalGeralPCsFmt} PCs (total geral de prestações de contas no sistema)</p>
-  <p><strong>Número de servidores GT-PC:</strong> ${numTec+numCoords} servidores (${numTec} técnicos + ${numCoords} coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${metaMes} PCs/servidor/mês</p>
-  <p><strong>Dados extraídos em:</strong> ${dtCorteHoraFmt}</p>
+  <p><strong>Número de servidores GT-PC:</strong> ${numTec+numCoords} servidores (${numTec} técnicos + ${numCoords} coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${cabMetaMin} PCs/servidor/mês</p>
+  <p><strong>Dados extraídos em:</strong> ${cabDataCorte}</p>
 </div>
 </div>
 
 <div class="sec">1. Contextualização</div>
-<p>${TXT.contextualizacao || CGE_TXT_PADRAO.contextualizacao}</p>
+${R('ctx')}
 
 <div class="sec">1.1 Cronograma e Metas Mensais</div>
-<p>Conforme o Plano de Ação aprovado, a meta global para o período de ${periodoLong} foi de ${metaTrim.toLocaleString('pt-BR')} prestações de contas analisadas, correspondendo à meta de ${metaMes} prestações de contas por técnico/mês${meses>0?`, totalizando ${metaMes*meses} processos por técnico neste período`:''}.
-Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como demonstrado mais adiante muitos pegaram férias nesse respectivo período.</p>
-<p>Os resultados consolidados do período são apresentados no Quadro 1, que demonstra a execução acumulada e o percentual de cumprimento das metas.</p>
+${R('cron')}
 
 <div class="qtit">1. QUADRO GERAL DE METAS</div>
 <table>
@@ -3446,10 +3459,10 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
     </tr>
   </tbody>
 </table>
-<p class="nota">Nota: O cumprimento da meta foi apurado com base no total de PCs baixadas (Secretária + Técnico), conforme metodologia do Plano de Ação e controle de distribuição das PCs no âmbito do GT-PC.</p>
+${q1Nota ? `<p class="nota">Nota: ${q1Nota}</p>` : ''}
 
 <div class="sec">1.2 Desempenho Individual dos Servidores do GT-PC</div>
-<p>O monitoramento individual da produtividade tem como objetivo verificar a contribuição de cada membro do Grupo de Trabalho para o cumprimento da meta global de análise de prestações de contas, permitindo identificar variações de desempenho, necessidades de capacitação técnica e oportunidades de ajuste na distribuição das análises. Os resultados estão apresentados no Quadro 2.</p>
+${R('desemp_intro')}
 
 <div class="qtit">Quadro 2: Desempenho dos servidores do Grupo GT-PC*</div>
 <table>
@@ -3477,43 +3490,24 @@ Foram considerados os ${numTec} técnicos disponíveis para o cálculo, mas como
     </tr>
   </tfoot>
 </table>
-<p class="nota">(1) A Meta por Técnico Acumulada corresponde ao somatório das metas individuais no período (${periodoLong}).<br>
-(2) O total de PCs baixadas pelo Presidente corresponde ao total informado na coluna (3) do Quadro 1.<br>
-(3) O total de PCs baixadas pelo Técnico corresponde ao total informado na coluna (4) do Quadro 1.<br>
-(4) O total de PCs baixadas corresponde à soma das colunas (2) e (3).<br>
-(5) O percentual de cumprimento da meta corresponde à relação entre as PCs baixadas e a meta acumulada.</p>
+<p class="nota">(1) A Meta por Técnico Acumulada corresponde ao somatório das metas individuais no período (${periodoLong}).${q2Notas?`<br>\n${q2Notas}`:''}</p>
 
-<p>Registra-se que alguns servidores ingressaram no Grupo de Trabalho em momento posterior ao início do período de monitoramento, substituindo outros técnicos, razão pela qual tiveram metas proporcionais ao tempo efetivo de atuação, conforme pactuado e validado junto à Controladoria-Geral do Estado.</p>
+${R('ingressantes')}
 
 <div class="sec">Análise do Desempenho Individual e Avaliação Técnica</div>
-<p>A partir dos dados apresentados no Quadro 2, observa-se que nem todos os integrantes do grupo de trabalho atingiu sua meta no volume de prestações de contas baixadas. Em muitos casos isso ocorre pelas mesmas estarem em diligência conforme quadro 4, refletindo também diferenças quanto à complexidade dos processos analisados, dependência de retorno documental por parte dos convenentes como também a diferença de situações no sistema sigef que em alguns casos um parecer impacta em baixa de apenas 1 PC e em outros casos esse parecer baixar 8 PCs, como já presenciamos nos grupos. Essa situação causa uma complexidade ao analisar os dados de maneira isolada e pensar em produção por si só, devendo essas situações sempre serem levadas em consideração. O grupo 3 é o que possui menor número de PCs baixadas, haja vista na sua maioria cada parcial ser relacionada a apenas 1 PC.</p>
-<p>Em relação aos motivos que impactam diretamente na celeridade do processo e nas baixas dos mesmos decorrem de pontos já evidenciados no relatório anterior, que são:</p>
-<ul>
-  <li>Ausência ou incompletude de documentos comprobatórios;</li>
-  <li>Necessidade de regularização de encargos trabalhistas e previdenciários;</li>
-  <li>Inconsistências nos registros do SIGEF;</li>
-  <li>Pendências relacionadas à aplicação financeira e extratos bancários;</li>
-  <li>Falhas na identificação dos instrumentos de parceria.</li>
-</ul>
-<p>Esses fatores impactaram diretamente o tempo médio de tramitação dos processos, exigindo reiterações de diligência e reanálises sucessivas.</p>
-<p>Ressalta-se que o acúmulo de prestações de contas sem análise em período anterior gera neste momento um recebimento de número elevado de diligências e as entidades convenentes com esta Fundação não possuem grande corpo administrativo, causando diretamente um impacto no envio das respostas e sucessivos pedidos de aumento de prazo.</p>
-<p>Apesar de a meta não ter sido cumprida percebemos um aumento considerável neste trimestre nas baixas efetuadas, demonstrando comprometimento do grupo com essa ação e melhoria contínua nas análises por estarem criando cada vez mais expertise no processo.</p>
+${R('aval')}
+${Rl('motivos').length ? `<ul>\n${Rl('motivos').map(t=>`  <li>${cgeResolverCampos(t)}</li>`).join('\n')}\n</ul>` : ''}
+${R('pos_motivos')}
 
 <div class="sec">Análise por Grupo</div>
-<p><strong>Grupo 1</strong><br>
-${TXT.analise_grupo1 || defG1}</p>
-<p><strong>Grupo 2</strong><br>
-${TXT.analise_grupo2 || defG2}</p>
-<p><strong>Grupo 3</strong><br>
-${TXT.analise_grupo3 || defG3}</p>
+${R('g1') ? `<p><strong>Grupo 1</strong></p>\n${R('g1')}` : ''}
+${R('g2') ? `<p><strong>Grupo 2</strong></p>\n${R('g2')}` : ''}
+${R('g3') ? `<p><strong>Grupo 3</strong></p>\n${R('g3')}` : ''}
 
 <div class="sec">1.3 Análise Qualitativa e Ações Corretivas</div>
-<p>A análise qualitativa permite identificar aspectos relevantes quanto à organização do trabalho, à padronização dos procedimentos e à efetividade das ações desenvolvidas pelo Grupo de Trabalho de Prestação de Contas (GT-PC) no período de monitoramento.</p>
-<p><strong>Justificativas Complementares sobre o Desempenho no Período</strong></p>
-<p>A análise dos resultados apresentados nos Quadros 1 e 2 deve ser interpretada à luz das especificidades operacionais verificadas no período monitorado, as quais impactaram diretamente o ritmo de tramitação e conclusão das prestações de contas, destacando-se:</p>
+${R('qual_intro')}
 ${justHtml}
-<p>Diante desse contexto, verifica-se que mesmo com ajuste das metas quantitativas, se torna muito difícil precisar um número em virtude dos diversos pontos que impactam esse processo, considerando as peculiaridades de cada convênio, das parcerias, o volume documental, a complexidade das análises e a dependência de fatores externos à atuação do GT-PC.</p>
-<p>Ressalta-se, contudo, que a equipe manteve atuação técnica diligente, assegurando a regularidade, a consistência e a conformidade das análises, priorizando a qualidade e a segurança jurídica dos pareceres emitidos. As informações encontram-se detalhadas no Quadro 3.</p>
+${R('pos_just')}
 
 <div class="qtit">Quadro 3 – Avaliação Qualitativa do Processo</div>
 <table>
@@ -3521,7 +3515,7 @@ ${justHtml}
   <tbody>${q3Rows}</tbody>
 </table>
 
-<p>Segue Planilha com situações de processos em análise e diligenciados:</p>
+${R('q4_abre')}
 <div class="qtit">Quadro 4 – Processos por técnico – em análises, diligência e reanálise:</div>
 <table>
   <thead>
@@ -3545,26 +3539,21 @@ ${justHtml}
 </table>
 
 <div class="sec">Análise Qualitativa Consolidada</div>
-<p>Durante o período de ${periodoLong}, o GT-PC concentrou esforços nos pontos de dificuldade dos técnicos, fazendo algumas alterações de pessoal, bem como fazendo reuniões online inclusive com a participação da Presidente da FCEE, visando demonstrar a importância desse trabalho e a necessidade da entrega pública e cumprimento das metas.</p>
-<p>A emissão de parecer jurídico pela Consultoria da FCEE no final de 2025 contribuiu para conferir maior segurança técnica às análises, e dirimir alguns pontos que estavam sendo questionados, procurando a melhor conclusão possível para o atendimento público.</p>
-<p>Também tivemos reuniões e encontros com TCE neste período, o qual demonstrou que estamos no caminho certo, buscando o resultado de baixar esse estoque mas de forma a seguir a legislação, mas sem prejudicar as instituições que atenderam ao objeto proposto, bem como pelo longo período de tempo entre os acontecimentos e as análises das prestações de contas, dificultando muitas vezes a reconstituição dos fatos, pela rotatividade de pessoal e mudança de diretorias nas instituições. O qual enfatizou que devemos ser pautados no princípio da razoabilidade e verificar o nexo de causalidade entre a documentação apresentada e o atendimento do objeto pactuado.</p>
-<p>Verifica-se, assim, que pelos resultados apresentados estamos tendo evolução gradual do desempenho institucional, com perspectivas de melhora no cumprimento das metas nos períodos subsequentes.</p>
+${R('consol')}
 
-<p>Um dos motivos que afetam os resultados elencamos abaixo os afastamentos de férias e saúde:</p>
 <p style="font-weight:900;text-align:center;font-size:10.5px;margin:8px 0 4px;">SERVIDORES COM AFASTAMENTO DURANTE O PERÍODO</p>
 <table style="width:70%;margin:0 auto;">
   <thead><tr><th style="text-align:left;">Nome</th><th>Período</th><th>Motivo</th></tr></thead>
   <tbody>${_afastRows}</tbody>
 </table>
 
-<p style="margin-top:8px;">No período monitorado, registraram-se afastamentos de servidores, predominantemente em razão de férias regulamentares. Ressalta-se, ainda, o reduzido quantitativo de servidores lotados nos Núcleos de Gestão de Convênios, responsáveis por orientar, acompanhar e conferir celeridade aos trâmites das prestações de contas nas 21 Regiões do Estado. A redução gradativa do quadro funcional tem impactado negativamente a capacidade de atendimento, a tempestividade das análises e a diminuição do estoque processual.</p>
-<p>Nesse contexto, evidencia-se a necessidade de fortalecimento da estrutura dos Núcleos de Gestão de Convênios, por meio da ampliação do quadro de servidores, como medida essencial para aprimorar o atendimento, garantir o cumprimento de prazos, assegurar a adequada orientação às entidades e promover a redução do passivo de processos, contribuindo, assim, para o alcance das metas institucionais estabelecidas.</p>
+${R('afast')}
 
 <div class="sec">1.4 Conclusão</div>
 ${conclusaoHtml}
 
 <div class="ass">
-  <p style="text-align:center;margin-bottom:16px;">São José, ${dtGerado}.</p>
+  <div class="ass-local">${localHtml}</div>
   <div class="ass-row">${assRowHtml}
   </div>${assFinalHtml}
 </div>
@@ -5855,20 +5844,136 @@ async function cgeCarregarTextos() {
     _cgeTexto.id = null
     _cgeSecoes = {}
   }
+  cgeSemearSecoes()
   _cgeTextoSid = sid
   return _cgeTexto
 }
 
-// Acesso às seções novas (coluna secoes, JSONB) — ainda sem uso na tela
+// ── Seções do relatório (coluna secoes, JSONB) ──────────────────────
+// Ordem de exibição na tela. A ordem do PDF é outra (ver cgeExportPDF),
+// porque os quadros ficam intercalados no meio do texto corrido.
+const CGE_ORDEM = [
+  'cab',
+  'ctx','cron','desemp_intro','ingressantes','aval','motivos','pos_motivos',
+  'g1','g2','g3','qual_intro','just','pos_just','q4_abre','consol','afast','concl',
+  'q1','q2','q3','afast_tab',
+  'local','sign'
+]
+const CGE_GRUPOS_ORDEM = ['Identificação','Texto corrido','Quadros','Fechamento']
+
+// Valores fixos da ficha institucional — semeados em cab.v quando vem nulo do banco
+const CGE_CAB_PADRAO = {
+  orgao: 'FCEE - Fundação Catarinense de Educação Especial - UG 450021',
+  gt: 'GT de Prestação de Contas – Decreto nº 1.008/2025',
+  processo: 'CGE nº 727/2025',
+  periodo_inicio: '', periodo_fim: '', meta_min: '', meses: '', data_corte_txt: ''
+}
+
+// Campos entre chaves — {{chave}} no texto vira chip na tela e valor real no PDF
+const CGE_CAMPOS = [
+  { k:'periodo',          r:'período' },
+  { k:'meta_global',      r:'meta global' },
+  { k:'meta_mensal',      r:'meta mensal' },
+  { k:'meta_por_tecnico', r:'meta por técnico' },
+  { k:'qtd_tecnicos',     r:'qtd. técnicos' },
+  { k:'total_pcs',        r:'total de PCs' },
+  { k:'baixadas',         r:'baixadas' },
+  { k:'percentual',       r:'% da meta' },
+  { k:'estoque',          r:'estoque' },
+  { k:'data_corte',       r:'data de corte' }
+]
+const CGE_CHIP_CSS = 'background:#E7F0FA;color:#1B4F82;border:1px solid #A8C6E4;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600;white-space:nowrap;'
+
 function cgeSecGet(chave) {
   return _cgeSecoes[chave] || null
 }
 
+// Guarda o valor anterior na primeira edição, para o "Voltar ao texto anterior"
 function cgeSecSet(chave, valor) {
   if(!_cgeSecoes[chave]) _cgeSecoes[chave] = {}
-  _cgeSecoes[chave].v = valor
-  _cgeSecoes[chave].orig = 'editado'
-  _cgeSecoes[chave].editado_em = new Date().toISOString()
+  const s = _cgeSecoes[chave]
+  if(s.v_orig === undefined) s.v_orig = (s.v === undefined || s.v === null) ? null : JSON.parse(JSON.stringify(s.v))
+  s.v = valor
+  s.orig = 'editado'
+  s.editado_em = new Date().toISOString()
+}
+
+function cgeSecReverter(chave) {
+  const s = _cgeSecoes[chave]
+  if(!s || s.v_orig === undefined) return
+  s.v = s.v_orig
+  delete s.v_orig
+  delete s.editado_em
+  s.orig = 'oficial'
+  cgeIrSecao(chave)
+  cgeAgendarSalvar()
+}
+
+function cgeChavesOrdenadas() {
+  const existe = Object.keys(_cgeSecoes)
+  const naOrdem = CGE_ORDEM.filter(k => existe.includes(k))
+  return naOrdem.concat(existe.filter(k => !CGE_ORDEM.includes(k)))
+}
+
+// cab e sign chegam do banco com v nulo — semeia com o que o PDF já usava,
+// para o documento sair idêntico ao de hoje e ficar editável na tela
+function cgeSemearSecoes() {
+  const cab = _cgeSecoes.cab
+  if(cab && (cab.v === null || cab.v === undefined)) cab.v = Object.assign({}, CGE_CAB_PADRAO)
+  const sg = _cgeSecoes.sign
+  if(sg && (sg.v === null || sg.v === undefined || !sg.v.length)) {
+    const base = (_cgeTexto && _cgeTexto.signatarios && _cgeTexto.signatarios.length)
+      ? _cgeTexto.signatarios : CGE_TXT_PADRAO.signatarios
+    sg.v = base.map(s => [s.nome||'', s.cargo||'', s.portaria||''])
+  }
+}
+
+// Valores do sistema para os {{campos}} — mesma origem dos quadros (_cgeParams/_cgeDados)
+function cgeCamposValores() {
+  const P = _cgeParams || {}
+  const dados = _cgeDados || []
+  if(!dados.length) { const v = {}; CGE_CAMPOS.forEach(c => v[c.k] = '—'); return v }
+  const meses = P.meses || 1
+  const metaTotal = P.metaTotal || 0
+  const numTec = (P.tecnicosManual !== null && P.tecnicosManual !== undefined) ? P.tecnicosManual : dados.length
+  const metaMes = (P.metaMinManual !== null && P.metaMinManual !== undefined)
+    ? P.metaMinManual : (meses > 0 && numTec > 0 ? Math.round(metaTotal/numTec/meses) : 0)
+  const totBx = dados.reduce((s,d) => s+d.totalBaixadas, 0)
+  const fmtP = (s) => { if(!s) return '—'; const d = new Date(String(s).slice(0,10)+'T12:00:00'); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
+  return {
+    periodo:          (P.dtInicio && P.dtCorte) ? `${fmtP(P.dtInicio)} a ${fmtP(P.dtCorte)}` : '—',
+    meta_global:      metaTotal.toLocaleString('pt-BR'),
+    meta_mensal:      String(metaMes),
+    meta_por_tecnico: String(metaMes*meses),
+    qtd_tecnicos:     String(numTec),
+    total_pcs:        (P.totalGeralPCs||0).toLocaleString('pt-BR'),
+    baixadas:         totBx.toLocaleString('pt-BR'),
+    percentual:       metaTotal > 0 ? (totBx/metaTotal*100).toFixed(1).replace('.',',')+'%' : '—',
+    estoque:          (P.estoque||0).toLocaleString('pt-BR'),
+    data_corte:       P.dtCorte ? new Date(String(P.dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
+  }
+}
+
+function cgeResolverCampos(txt) {
+  if(!txt) return ''
+  const V = cgeCamposValores()
+  return String(txt).replace(/\{\{(\w+)\}\}/g, (m,k) => V[k] !== undefined ? V[k] : m)
+}
+
+function cgeTextoParaChips(html) {
+  return String(html||'').replace(/\{\{(\w+)\}\}/g, (m,k) => {
+    const c = CGE_CAMPOS.find(x => x.k === k)
+    return c ? `<span data-campo="${k}" contenteditable="false" style="${CGE_CHIP_CSS}">${c.r}</span>` : m
+  })
+}
+
+function cgeChipsParaTexto(el) {
+  if(!el) return ''
+  const clone = el.cloneNode(true)
+  clone.querySelectorAll('[data-campo]').forEach(sp => {
+    sp.parentNode.replaceChild(document.createTextNode('{{'+sp.getAttribute('data-campo')+'}}'), sp)
+  })
+  return clone.innerHTML
 }
 
 async function cgeCarregarAnterior() {
@@ -5969,23 +6074,47 @@ function cgeQ3Render() {
 function cgeQ3Add() { _cgeTexto.quadro3.push({aspecto:'',itens:[]}); cgeQ3Render() }
 function cgeQ3Del(i) { _cgeTexto.quadro3.splice(i,1); cgeQ3Render() }
 
-let _cgeSecAtual = 'contextualizacao'
+let _cgeSecAtual = 'cab'
+let _cgeAutoTimer = null
+// Só grava o editor rico se o usuário realmente digitou. Sem isso, a normalização
+// de HTML do navegador marcaria a seção como "editado" só por abri-la.
+let _cgeEditorSujo = false
 
-const CGE_SECOES = [
-  { id:'contextualizacao', nav:'Contextualização',  titulo:'Contextualização',              onde:'Item 1 do relatório' },
-  { id:'analise_grupo1',   nav:'Grupo 1',           titulo:'Grupo 1',                        onde:'Análise por Grupo › Grupo 1' },
-  { id:'analise_grupo2',   nav:'Grupo 2',           titulo:'Grupo 2',                        onde:'Análise por Grupo › Grupo 2' },
-  { id:'analise_grupo3',   nav:'Grupo 3',           titulo:'Grupo 3',                        onde:'Análise por Grupo › Grupo 3' },
-  { id:'justificativas',   nav:'Justificativas',    titulo:'Justificativas do período',      onde:'Item 1.3 › lista a) b) c)' },
-  { id:'quadro3',          nav:'Quadro 3',          titulo:'Quadro 3 — Avaliação qualitativa', onde:'Tabela do item 1.3' },
-  { id:'conclusao',        nav:'Conclusão',         titulo:'Conclusão',                      onde:'Item 1.4' },
-  { id:'signatarios',      nav:'Signatários',       titulo:'Signatários',                    onde:'Assinaturas ao final' }
-]
+function cgeStatus(txt, cor) {
+  const el = document.getElementById('cgeSalvoInfo')
+  if(!el) return
+  el.textContent = txt
+  el.style.color = cor || 'var(--ct)'
+}
+
+// Salvamento automático — 1s sem digitação e grava; o indicador só diz
+// "salvo" depois da confirmação do servidor (ver cgeSalvarTextos)
+function cgeAgendarSalvar() {
+  cgeStatus('Alterações pendentes…', '#8A6100')
+  clearTimeout(_cgeAutoTimer)
+  _cgeAutoTimer = setTimeout(() => { cgeSalvarSecaoAtual(); cgeSalvarTextos() }, 1000)
+}
+
+// Toda edição passa por aqui: grava, marca como editado e atualiza faixa e menu
+function cgeTocar(valor) {
+  cgeSecSet(_cgeSecAtual, valor)
+  cgeFaixaRender()
+  cgeNavRender()
+  cgeAgendarSalvar()
+}
 
 async function cgeAbrirTextos() {
   await cgeCarregarTextos()
   await cgeCarregarAnterior()
   ativarMenu('rel')
+  const chaves = cgeChavesOrdenadas()
+  if(!chaves.length) {
+    document.getElementById('BODY').innerHTML = `<div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:24px;text-align:center;">
+      <p style="font-size:13px;color:var(--ct);">Nenhuma seção cadastrada neste rascunho.</p>
+      <button onclick="irRel()" class="btn-buscar" style="margin-top:12px;height:32px;">Voltar</button></div>`
+    return
+  }
+  if(!_cgeSecoes[_cgeSecAtual]) _cgeSecAtual = chaves[0]
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -6019,23 +6148,60 @@ async function cgeAbrirTextos() {
         <div style="padding:12px 16px;border-bottom:1px solid var(--cb);">
           <div style="font-size:14px;font-weight:700;" id="cgeSecTitulo">—</div>
           <div style="font-size:11px;color:var(--ct);margin-top:2px;">Sai no relatório em: <span id="cgeSecOnde">—</span></div>
+          <div id="cgeFaixa" style="margin-top:8px;"></div>
         </div>
         <div id="cgeToolbar" style="display:flex;align-items:center;gap:2px;padding:6px 10px;border-bottom:1px solid var(--cb);background:#F7F9F8;flex-wrap:wrap;"></div>
+        <div id="cgeCamposMenu" style="display:none;border-bottom:1px solid var(--cb);background:#F2F7FC;padding:6px 10px;"></div>
         <div id="cgeEditorArea" style="padding:14px 16px;min-height:340px;"></div>
       </div>
     </div>
   `
   cgeNavRender()
-  cgeIrSecao('contextualizacao')
+  cgeIrSecao(_cgeSecAtual)
 }
 
 function cgeNavRender() {
   const nav = document.getElementById('cgeNav')
   if(!nav) return
-  nav.innerHTML = CGE_SECOES.map(s=>{
-    const on = s.id===_cgeSecAtual
-    return `<div onclick="cgeIrSecao('${s.id}')" style="font-size:12px;padding:5px 8px;border-radius:6px;cursor:pointer;margin-bottom:2px;${on?'background:#E8F5EE;color:var(--v);font-weight:700;':'color:var(--ct);'}">${s.nav}</div>`
+  const porGrupo = {}
+  cgeChavesOrdenadas().forEach(k => {
+    const g = _cgeSecoes[k].g || 'Outros'
+    if(!porGrupo[g]) porGrupo[g] = []
+    porGrupo[g].push(k)
+  })
+  const grupos = CGE_GRUPOS_ORDEM.filter(g => porGrupo[g])
+    .concat(Object.keys(porGrupo).filter(g => !CGE_GRUPOS_ORDEM.includes(g)))
+  nav.innerHTML = grupos.map(g => {
+    const itens = porGrupo[g].map(k => {
+      const s = _cgeSecoes[k]
+      const on = k === _cgeSecAtual
+      const cor = s.orig === 'editado' ? '#15803D' : '#8FA6BC'
+      return `<div onclick="cgeIrSecao('${k}')" title="${escHtml(s.t||k)}" style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;border-radius:6px;cursor:pointer;margin-bottom:2px;${on?'background:#E8F5EE;color:var(--v);font-weight:700;':'color:var(--ct);'}">
+        <span style="width:7px;height:7px;border-radius:50%;background:${cor};flex:none;"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(s.t||k)}</span>
+      </div>`
+    }).join('')
+    return `<div style="font-size:10px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;padding:8px 6px 4px;">${g}</div>${itens}`
   }).join('')
+}
+
+// Faixa de origem: verde quando editado nesta versão, azul quando é o texto oficial
+function cgeFaixaRender() {
+  const el = document.getElementById('cgeFaixa')
+  const s = _cgeSecoes[_cgeSecAtual]
+  if(!el || !s) return
+  if(s.orig === 'editado') {
+    const q = s.editado_em ? new Date(s.editado_em).toLocaleString('pt-BR') : 'agora'
+    const btn = s.v_orig !== undefined
+      ? `<button onclick="cgeSecReverter('${_cgeSecAtual}')" style="background:#fff;color:#15803D;border:1px solid #15803D;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;">Voltar ao texto anterior</button>`
+      : ''
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#E8F5EE;border:1px solid #A8D5BC;border-radius:6px;padding:5px 10px;font-size:11px;color:#15803D;">
+      <span>alterado nesta versão em ${q}</span>${btn}</div>`
+  } else {
+    const m = String(s.fonte||'').match(/(\d{2}\/\d{2}\/\d{4})/)
+    const txt = m ? `texto do relatório de ${m[1]}` : 'texto do relatório oficial'
+    el.innerHTML = `<div style="background:#EEF4FA;border:1px solid #C3D7EA;border-radius:6px;padding:5px 10px;font-size:11px;color:#1B4F82;">${txt}</div>`
+  }
 }
 
 const CGE_TOOLBAR_HTML = `
@@ -6053,34 +6219,219 @@ const CGE_TOOLBAR_HTML = `
   <button onclick="cgeFmt('removeFormat')" title="Limpar formatação" style="font-size:12px;padding:4px 9px;background:#fff;border:1px solid var(--cb);border-radius:5px;cursor:pointer;">✕ Formato</button>
 `
 
-function cgeFmt(cmd) { document.execCommand(cmd, false, null); document.getElementById('cgeEditor')?.focus() }
+function cgeFmt(cmd) {
+  document.execCommand(cmd, false, null)
+  document.getElementById('cgeEditor')?.focus()
+  _cgeEditorSujo = true
+  cgeAgendarSalvar()
+}
+
+const CGE_BTN_CAMPO = `
+  <span style="width:1px;height:18px;background:var(--cb);margin:0 4px;"></span>
+  <button onclick="cgeCamposMenu()" title="Inserir valor calculado pelo sistema" style="font-size:12px;padding:4px 9px;background:#EEF4FA;border:1px solid #C3D7EA;color:#1B4F82;border-radius:5px;cursor:pointer;">+ Inserir valor do sistema</button>
+`
+
+function cgeCamposMenu() {
+  const area = document.getElementById('cgeCamposMenu')
+  if(!area) return
+  if(area.style.display !== 'none') { area.style.display = 'none'; return }
+  const V = cgeCamposValores()
+  area.innerHTML = `<div style="font-size:10px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Clique para inserir no ponto do cursor</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">` + CGE_CAMPOS.map(c =>
+      `<button onclick="cgeInserirCampo('${c.k}')" style="${CGE_CHIP_CSS}cursor:pointer;">${c.r} <span style="opacity:.7;font-weight:400;">${escHtml(String(V[c.k]))}</span></button>`
+    ).join('') + `</div>`
+  area.style.display = 'block'
+}
+
+function cgeInserirCampo(k) {
+  const ed = document.getElementById('cgeEditor')
+  if(!ed) return
+  const c = CGE_CAMPOS.find(x => x.k === k)
+  if(!c) return
+  ed.focus()
+  document.execCommand('insertHTML', false, `<span data-campo="${k}" contenteditable="false" style="${CGE_CHIP_CSS}">${c.r}</span>&nbsp;`)
+  const menu = document.getElementById('cgeCamposMenu')
+  if(menu) menu.style.display = 'none'
+  _cgeEditorSujo = true
+  cgeSalvarSecaoAtual()
+  cgeAgendarSalvar()
+}
+
+// Colunas dos editores em forma de tabela (arrays de tuplas)
+const CGE_TUPLA_COLS = {
+  q3:    [['Aspecto avaliado','input'], ['Observações e ações — uma por linha','textarea']],
+  afast: [['Servidor','input'], ['Período','input'], ['Motivo','input']],
+  sign:  [['Nome','input'], ['Cargo','input'], ['Portaria','input']]
+}
+const CGE_TUPLA_ADD = { q3:'+ Adicionar aspecto', afast:'+ Adicionar afastamento', sign:'+ Adicionar signatário' }
 
 function cgeIrSecao(id) {
   cgeSalvarSecaoAtual()
   _cgeSecAtual = id
-  const s = CGE_SECOES.find(x=>x.id===id)
-  document.getElementById('cgeSecTitulo').textContent = s.titulo
-  document.getElementById('cgeSecOnde').textContent = s.onde
+  const s = _cgeSecoes[id]
+  if(!s) return
+  const menu = document.getElementById('cgeCamposMenu')
+  if(menu) { menu.style.display = 'none'; menu.innerHTML = '' }
+  document.getElementById('cgeSecTitulo').textContent = s.t || id
+  document.getElementById('cgeSecOnde').textContent = s.onde || '—'
+  cgeFaixaRender()
   const tb = document.getElementById('cgeToolbar')
   const area = document.getElementById('cgeEditorArea')
-  const simples = ['contextualizacao','analise_grupo1','analise_grupo2','analise_grupo3','conclusao']
-  if(simples.includes(id)) {
-    tb.innerHTML = CGE_TOOLBAR_HTML
+  const tipo = s.tipo || 'rico'
+  tb.innerHTML = ''
+  tb.style.display = 'none'
+  const btnAdd = (fn, rot) => `<button onclick="${fn}" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">${rot}</button>`
+
+  if(tipo === 'rico') {
+    tb.innerHTML = CGE_TOOLBAR_HTML + CGE_BTN_CAMPO
     tb.style.display = 'flex'
-    area.innerHTML = `<div id="cgeEditor" contenteditable="true" style="min-height:300px;font-size:13px;line-height:1.7;outline:none;">${_cgeTexto[id]||''}</div>`
+    area.innerHTML = `<div id="cgeEditor" contenteditable="true" oninput="_cgeEditorSujo=true;cgeAgendarSalvar()" style="min-height:300px;font-size:13px;line-height:1.7;outline:none;">${cgeTextoParaChips(s.v||'')}</div>`
+  } else if(tipo === 'lista' || tipo === 'notas') {
+    area.innerHTML = `<div id="cgeListaBox"></div>${btnAdd('cgeListaAdd()', tipo === 'notas' ? '+ Adicionar nota' : '+ Adicionar item')}`
+    cgeListaRender()
+  } else if(tipo === 'q1') {
+    area.innerHTML = `<div style="font-size:11px;color:var(--ct);margin-bottom:6px;">O cabeçalho e os números do Quadro 1 vêm do sistema. Aqui só se edita a nota de rodapé.</div>
+      <textarea rows="5" oninput="cgeTocar(this.value)" style="width:100%;resize:vertical;font-size:12px;">${escHtml(String(s.v||''))}</textarea>`
+  } else if(tipo === 'campos') {
+    area.innerHTML = `<div id="cgeCabBox"></div>`
+    cgeCabRender()
+  } else if(CGE_TUPLA_COLS[tipo]) {
+    area.innerHTML = `<div id="cgeTuplaBox"></div>${btnAdd('cgeTuplaAdd()', CGE_TUPLA_ADD[tipo] || '+ Adicionar linha')}`
+    cgeTuplaRender()
   } else {
-    tb.innerHTML = ''
-    tb.style.display = 'none'
-    if(id==='justificativas') { area.innerHTML = `<div id="cgeTxtJustBox"></div><button onclick="cgeJustAdd()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar justificativa</button>`; cgeJustRender() }
-    if(id==='quadro3')        { area.innerHTML = `<div id="cgeTxtQ3Box"></div><button onclick="cgeQ3Add()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar aspecto</button>`; cgeQ3Render() }
-    if(id==='signatarios')    { area.innerHTML = `<div id="cgeTxtAssBox"></div><button onclick="cgeAssAdd()" class="btn-buscar" style="margin-top:8px;height:30px;background:#fff;color:var(--v);border:1.5px solid var(--v);">+ Adicionar signatário</button>`; cgeAssRender() }
+    area.innerHTML = `<div style="font-size:12px;color:var(--ct);">Tipo de seção não reconhecido: ${escHtml(tipo)}</div>`
   }
+  _cgeEditorSujo = false
   cgeNavRender()
+}
+
+function cgeListaRender() {
+  const s = _cgeSecoes[_cgeSecAtual]
+  const box = document.getElementById('cgeListaBox')
+  if(!box || !s) return
+  const notas = s.tipo === 'notas'
+  box.innerHTML = (s.v||[]).map((t,i) => {
+    const rot = notas ? `(${i+2})` : `${String.fromCharCode(97+i)})`
+    return `<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px;">
+      <span style="font-size:11px;color:var(--ct);padding-top:7px;min-width:22px;">${rot}</span>
+      <textarea rows="3" oninput="cgeListaSet(${i},this.value)" style="flex:1;resize:vertical;font-size:12px;">${escHtml(String(t||''))}</textarea>
+      <button onclick="cgeListaDel(${i})" style="background:var(--r);color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;">✕</button>
+    </div>`
+  }).join('')
+}
+function cgeListaSet(i, val) {
+  const arr = (_cgeSecoes[_cgeSecAtual].v||[]).slice()
+  arr[i] = val
+  cgeTocar(arr)
+}
+function cgeListaAdd() {
+  const arr = (_cgeSecoes[_cgeSecAtual].v||[]).slice()
+  arr.push('')
+  cgeTocar(arr)
+  cgeListaRender()
+}
+function cgeListaDel(i) {
+  const arr = (_cgeSecoes[_cgeSecAtual].v||[]).slice()
+  arr.splice(i,1)
+  cgeTocar(arr)
+  cgeListaRender()
+}
+
+function cgeTuplaRender() {
+  const s = _cgeSecoes[_cgeSecAtual]
+  const box = document.getElementById('cgeTuplaBox')
+  if(!box || !s) return
+  const cols = CGE_TUPLA_COLS[s.tipo] || []
+  box.innerHTML = (s.v||[]).map((linha,i) => {
+    const campos = cols.map((c,j) => {
+      const val = escHtml(String((linha||[])[j] || ''))
+      return c[1] === 'textarea'
+        ? `<textarea rows="4" placeholder="${c[0]}" oninput="cgeTuplaSet(${i},${j},this.value)" style="width:100%;resize:vertical;font-size:11px;">${val}</textarea>`
+        : `<input type="text" value="${val}" placeholder="${c[0]}" oninput="cgeTuplaSet(${i},${j},this.value)" style="flex:1;font-size:12px;">`
+    })
+    const primeira = cols[0][1] === 'textarea' ? '' : campos.shift()
+    const resto = campos.length
+      ? (cols.some(c => c[1] === 'textarea')
+          ? campos.join('')
+          : `<div style="display:flex;gap:6px;">${campos.join('')}</div>`)
+      : ''
+    return `<div style="border:1px solid var(--cb);border-radius:6px;padding:8px;margin-bottom:6px;">
+      <div style="display:flex;gap:6px;margin-bottom:5px;">
+        ${primeira}
+        <button onclick="cgeTuplaDel(${i})" style="background:var(--r);color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;">✕</button>
+      </div>
+      ${resto}
+    </div>`
+  }).join('')
+}
+function cgeTuplaSet(i, j, val) {
+  const arr = (_cgeSecoes[_cgeSecAtual].v||[]).map(l => (l||[]).slice())
+  if(!arr[i]) arr[i] = []
+  arr[i][j] = val
+  cgeTocar(arr)
+}
+function cgeTuplaAdd() {
+  const s = _cgeSecoes[_cgeSecAtual]
+  const arr = (s.v||[]).map(l => (l||[]).slice())
+  arr.push((CGE_TUPLA_COLS[s.tipo]||[]).map(() => ''))
+  cgeTocar(arr)
+  cgeTuplaRender()
+}
+function cgeTuplaDel(i) {
+  const arr = (_cgeSecoes[_cgeSecAtual].v||[]).map(l => (l||[]).slice())
+  arr.splice(i,1)
+  cgeTocar(arr)
+  cgeTuplaRender()
+}
+
+function cgeCabRender() {
+  const s = _cgeSecoes[_cgeSecAtual]
+  const box = document.getElementById('cgeCabBox')
+  if(!box || !s) return
+  const v = s.v || {}
+  const V = cgeCamposValores()
+  const campo = (k, rot, ph) => `<div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--ct);margin-bottom:2px;">${rot}</div>
+      <input type="text" value="${escHtml(String(v[k]||''))}" placeholder="${escHtml(String(ph||''))}" oninput="cgeCabSet('${k}',this.value)" style="width:100%;font-size:12px;">
+    </div>`
+  const ro = (rot, val) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--cb);">
+      <span style="color:var(--ct);">${rot}</span><strong>${escHtml(String(val))}</strong></div>`
+  const coords = (_cgeParams && _cgeParams.coordsManual !== null && _cgeParams.coordsManual !== undefined) ? _cgeParams.coordsManual : 3
+  box.innerHTML = `
+    ${campo('orgao','Órgão/Entidade')}
+    ${campo('gt','Grupo de Trabalho')}
+    ${campo('processo','Processo')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      ${campo('periodo_inicio','Período — início', V.periodo)}
+      ${campo('periodo_fim','Período — fim', V.periodo)}
+      ${campo('meta_min','Meta mínima mensal', V.meta_mensal)}
+      ${campo('meses','Meses do período', String((_cgeParams&&_cgeParams.meses)||''))}
+      ${campo('data_corte_txt','Data de corte', V.data_corte)}
+    </div>
+    <div style="font-size:11px;color:var(--ct);margin-top:2px;">Em branco, cada campo acima usa o valor do sistema mostrado como dica.</div>
+    <div style="margin-top:14px;background:#F7F9F8;border:1px solid var(--cb);border-radius:8px;padding:10px 12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Vindo do sistema — somente leitura</div>
+      ${ro('Técnicos', V.qtd_tecnicos)}
+      ${ro('Coordenadores', coords)}
+      ${ro('Total de PCs', V.total_pcs)}
+      ${ro('Meta global', V.meta_global)}
+      ${ro('Baixadas', V.baixadas)}
+      ${ro('Percentual da meta', V.percentual)}
+    </div>`
+}
+function cgeCabSet(k, val) {
+  const v = Object.assign({}, _cgeSecoes[_cgeSecAtual].v || {})
+  v[k] = val
+  cgeTocar(v)
 }
 
 function cgeSalvarSecaoAtual() {
   const ed = document.getElementById('cgeEditor')
-  if(ed && _cgeTexto) _cgeTexto[_cgeSecAtual] = ed.innerHTML
+  const s = _cgeSecoes[_cgeSecAtual]
+  if(!ed || !s || !_cgeEditorSujo) return
+  const novo = cgeChipsParaTexto(ed)
+  _cgeEditorSujo = false
+  if(novo !== (s.v||'')) { cgeSecSet(_cgeSecAtual, novo); cgeFaixaRender(); cgeNavRender() }
 }
 
 function cgeVerAnterior() {
@@ -6098,27 +6449,29 @@ function cgeVerAnterior() {
 
   const dtAnt = _cgeAnterior.atualizado_em ? new Date(_cgeAnterior.atualizado_em).toLocaleDateString('pt-BR') : ''
   const cab = dtAnt ? `<div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Relatório de ${dtAnt}</div>` : ''
-  const sec = _cgeSecAtual
-  const val = _cgeAnterior[sec]
+  const secAnt = _cgeAnterior.secoes || {}
+  const ant = secAnt[_cgeSecAtual]
+  const val = ant ? ant.v : null
+  const vazio = '<em style="color:var(--ct);">Sem registro anterior para esta seção.</em>'
   let html = ''
 
-  if(sec === 'justificativas') {
-    const arr = Array.isArray(val) ? val : []
-    html = arr.length
-      ? arr.map((t,i)=>`<p style="margin:0 0 5px;">${String.fromCharCode(97+i)}) ${t}</p>`).join('')
-      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
-  } else if(sec === 'quadro3') {
-    const arr = Array.isArray(val) ? val : []
-    html = arr.length
-      ? arr.map(q=>`<div style="margin-bottom:8px;"><strong>${q.aspecto||''}</strong><br>${(q.itens||[]).map(t=>'• '+t).join('<br>')}</div>`).join('')
-      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
-  } else if(sec === 'signatarios') {
-    const arr = Array.isArray(val) ? val : []
-    html = arr.length
-      ? arr.map(s=>`<div style="margin-bottom:6px;"><strong>${s.nome||''}</strong><br><span style="font-size:11px;">${s.cargo||''}${s.portaria?' · '+s.portaria:''}</span></div>`).join('')
-      : '<em style="color:var(--ct);">Sem registro anterior.</em>'
+  if(val === null || val === undefined || val === '') {
+    html = vazio
+  } else if(Array.isArray(val)) {
+    html = !val.length ? vazio : val.map((linha,i) => {
+      if(Array.isArray(linha)) {
+        return `<div style="margin-bottom:8px;"><strong>${escHtml(String(linha[0]||''))}</strong>` +
+          linha.slice(1).map(c => `<br><span style="font-size:11px;">${escHtml(String(c||'')).replace(/\n/g,'<br>')}</span>`).join('') + `</div>`
+      }
+      const rot = ant.tipo === 'notas' ? `(${i+2})` : `${String.fromCharCode(97+i)})`
+      return `<p style="margin:0 0 5px;">${rot} ${escHtml(String(linha))}</p>`
+    }).join('')
+  } else if(typeof val === 'object') {
+    const chaves = Object.keys(val).filter(k => val[k] !== '' && val[k] !== null)
+    html = !chaves.length ? vazio : chaves.map(k =>
+      `<div style="margin-bottom:4px;"><span style="color:var(--ct);">${escHtml(k)}:</span> ${escHtml(String(val[k]))}</div>`).join('')
   } else {
-    html = val ? val : '<em style="color:var(--ct);">Sem registro anterior para esta seção.</em>'
+    html = cgeTextoParaChips(String(val))
   }
 
   alvo.innerHTML = cab + html
@@ -6127,7 +6480,8 @@ function cgeVerAnterior() {
 async function cgeSalvarTextos() {
   cgeSalvarSecaoAtual()
   const btn = document.getElementById('cgeTxtBtn')
-  btn.disabled = true; btn.textContent = 'Salvando...'
+  if(btn) { btn.disabled = true; btn.textContent = 'Salvando...' }
+  cgeStatus('Salvando…', '#8A6100')
   try {
     const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
     const payload = {
@@ -6148,14 +6502,16 @@ async function cgeSalvarTextos() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     })
+    if(!r.ok) throw new Error('HTTP '+r.status)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
     if(j.data && j.data.id) _cgeTexto.id = j.data.id
-    const info = document.getElementById('cgeSalvoInfo')
-    if(info) info.textContent = `Salvo em ${new Date().toLocaleString('pt-BR')}`
-    toast('Textos salvos!','ok')
-  } catch(e) { toast('Erro: '+e.message,'err') }
-  finally { btn.disabled=false; btn.textContent='✓ Salvar' }
+    cgeStatus(`Rascunho salvo às ${new Date().toLocaleTimeString('pt-BR')}`, '#15803D')
+  } catch(e) {
+    cgeStatus('Não foi possível salvar', '#991B1B')
+    console.warn('cgeSalvarTextos:', e.message)
+  }
+  finally { if(btn) { btn.disabled=false; btn.textContent='✓ Salvar' } }
 }
 
 // ══════════════════════════════════════
