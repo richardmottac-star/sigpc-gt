@@ -1,106 +1,180 @@
-# SESSÃO 03/08/2026 — SIGPC-GT
+# SIGPC-GT — ESTADO EM 04/08/2026 (manhã)
+Cole no início do chat novo.
 
-## Estado atual do sistema
+---
+
+## NÚMEROS DO RELATÓRIO — conferidos e fechados
 
 | Indicador | Valor |
 |---|---|
 | Total de PCs | 14.652 |
-| Baixadas | **3.733** |
-| Meta do período | 4.631 |
-| Cumprimento | **80,6%** |
-| Estoque livre | ~6.700 |
-| Técnicos monitorados | 45 |
+| Baixadas | **3.760** |
+| Meta do período | **5.041** |
+| Cumprimento | **74,6%** |
+| Baixas sem analista | **0** |
+| Quadro 1 = Quadro 2 | sim |
+| Meta mínima | **10 PCs/servidor/mês** (12 meses = 120 por técnico) |
 
-Relatório anterior (14/05/2026): 2.186 PCs · 56,5%. Evolução: +1.547 PCs · +24,1 p.p.
+Quadro 1: 3452 + 4 + 284 + 4 + 16 = 3.760. Quadro 2: soma das 45 linhas = 3.760.
 
-## O que foi feito hoje
+---
 
-### Importação das planilhas (definitiva — planilhas descontinuadas a partir de 04/08)
-- 2.237 linhas com parecer/CI nas planilhas → 2.203 processos únicos após normalização
-- 1.768 já estavam baixados no banco (ignorados pelo `IS DISTINCT FROM true`)
-- **435 NLs novas → 622 PCs baixadas** (fator de expansão 1,43)
-- Banco: 3.130 → 3.752 → 3.733 (ajustes posteriores)
-- `origem_baixa = 'planilha_ago2026'`, `data_baixa = 03/08/2026`
+## O QUE FOI FEITO EM 04/08
 
-Origens de baixa no banco:
-- `carga_historica` (30/06/2026): 3.127 — carimbo de migração, **sem valor cronológico**
-- `sistema` (18/07/2026): 3 — testes
-- `planilha_ago2026` (03/08/2026): 622 → 603 após ajustes
+### Editor do relatório CGE — 4 partes, todas no ar e testadas
 
-### Correção de vínculo — Claudia
-As 135 PCs da Claudia (id 36, G3) estavam com `analista_id = 22` (Ana Claudia, G2). Bug de substring: "Claudia" dentro de "Ana Claudia".
-- Antes: Claudia 0 (0%) · Ana Claudia 105
-- Depois: Claudia 56 (51%) · Ana Claudia 49 (45%)
-- Verificado: era o **único** caso de divergência nome↔cadastro (só resta "Richard" vs "Richard Motta Coelho", que é grafia curta e não afeta contagem)
+**Banco:** coluna `secoes` JSONB criada em `relatorios_cge`. Registro id=1 carregado com as **24 seções** do relatório oficial de 14/05/2026.
 
-### Alterações no código (commits do dia)
-1. Dashboard: removido filtro `estornada=false` — PC rebaixada após estorno não some mais
-2. Quadro 1: passou a exigir `baixada === true && noPeriodo(p)` — antes contava qualquer PC com `parecer_tipo` preenchido
-3. Quadro 1: nova coluna **Controle Interno (7a)** via `totCI`, contando `!ehRegular && !ehIrregular`
-4. Produtividade e Relatórios: carimbo de data/hora da apuração
-5. Quadro 4: colunas **NLs** e **TRs** (Sets `nlsPend` / `trsPend`)
-6. Manual do sistema no Dashboard (card colapsável, 6 etapas)
-7. Rodapé de governança com logos SEGOV / Casa Civil / FCEE / CGE em `assets/logos/`
-8. Assinaturas: `[assinado digitalmente]` em itálico + Gustavo Hallack Porto, Portaria FCEE 95 – 13/05/2026
-9. Crédito no rodapé do relatório
+Formato de cada seção:
+```json
+{"chave":{"t":"título","g":"grupo","onde":"onde sai","tipo":"rico|lista|notas|campos|q1|q3|afast|sign","v":conteúdo,"orig":"oficial|editado","fonte":"..."}}
+```
 
-## PENDÊNCIAS ABERTAS
+As 24 chaves: cab · ctx, cron, desemp_intro, ingressantes, aval, motivos, pos_motivos, g1, g2, g3, qual_intro, just, pos_just, q4_abre, consol, afast, concl · q1, q2, q3, afast_tab · local, sign
 
-### Diagnóstico de consistência — 3 dos 4 achados NÃO resolvidos
-1. ~~Dashboard vs Produtividade — campo de baixa divergente~~ (parcialmente: Dashboard corrigido)
-2. **ABERTO** — Produtividade não filtra por período; Quadro 2 filtra. Os percentuais nunca batem, por definição.
-3. ~~Quadro 1 não filtrava~~ RESOLVIDO
-4. **ABERTO** — Produtividade e Quadro 2 listam universos diferentes de servidores (`perfil !== 'coordenador'` vs `perfil === 'analista'` + superadmin)
+**API (repo sigpc-api, server.js):** `secoes` acrescentado a `RELATORIOS_CGE_PATCH_PERMITIDOS` e `RELATORIOS_CGE_CAMPOS_JSONB`, e ao POST ($1..$17). Testado gravando de verdade via console do navegador + SELECT no banco.
 
-**ABERTO** — `status === 'baixada'` ainda aparece em ~15 lugares (Board, Relatórios, Minha Planilha, Painel Técnico). O canônico é `baixada === true`. Risco latente.
+**Commits no sigpc-gt (index.html):**
 
-### 19 PCs baixadas sem analista
-7 TRs, 17 NLs. Baixadas por efeito de NL compartilhada em TRs não atribuídos. Não há de quem herdar (testado por NL e por TR, ambos `UPDATE 0`). Só o 2022TR000830 foi resolvido (Graciane, +1 baixa).
-TRs: 2020TR000632, 2020TR000723, 2020TR000940, 2020TR001636, 2021TR002029, 2022TR001157, 2023TR000039.
+| Commit | O que |
+|---|---|
+| 1392eee | Parte 1 — `_cgeSecoes`, leitura/gravação de `secoes`, `cgeSecGet/cgeSecSet`, removido `criado_por` (era descartado em silêncio pela API) |
+| ff53921 | Partes 2 e 3 — tela de 24 seções + PDF lendo de `secoes` |
+| fe51c3e | Parte 4 — pré-visualização ao lado, `cgeMontarDocumento()` como fonte única |
+| 09d45ee | Correção — `{{campos}}` apareciam como travessão no preview |
+| 1d362f1 | `cgeAgregar()` — agregação extraída do `cgeGerar`, com prova de equivalência em 3 períodos |
 
-### Cadastros
-- **Gustavo Hallack Porto** — CPF 020.839.609-80, Portaria FCEE 95 de 13/05/2026 — criar conta de coordenador G3
-- CPFs faltantes: Aline, Ana Leticia, Daniela, Franciani, Marisa, Miriam, Marlene, Scheila, Nayara, Zadir (vários estão na aba "Novos Resultados" das planilhas)
-- Caroline (G3) — existe na planilha, não existe no banco
+**Funcionalidades entregues:**
+- 24 seções editáveis agrupadas em Identificação · Texto corrido · Quadros · Fechamento
+- Bolinha verde (editado) / azul (herdado do relatório de 14/05)
+- Faixa de origem por seção + botão "Voltar ao texto anterior"
+- Salvamento automático com debounce de 1s; aviso vermelho se o servidor não confirmar
+- 10 campos `{{token}}`: periodo, meta_global, meta_mensal, meta_por_tecnico, qtd_tecnicos, total_pcs, baixadas, percentual, estoque, data_corte — resolvidos só na geração, então o texto não envelhece
+- Pré-visualização ao vivo em 3ª coluna, com zoom 55–130%, rolagem automática e destaque amarelo na seção sendo editada
+- Botão "Imprimir / salvar PDF" na própria tela
+- Removidos os textos padrão `defG1`, `defG2`, `defG3`, `defConclusao` do código — eram eles que substituíam silenciosamente os textos oficiais
+
+**Funções novas importantes:**
+- `cgeMontarDocumento()` (~linha 3185) — devolve o HTML do documento; usada pelo PDF **e** pelo preview. Fonte única.
+- `cgeAgregar(todosPcs, metaPorId, usuarios, dtInicio, dtCorte)` — regras de agregação compartilhadas entre `cgeGerar` e `cgeCarregarNumeros`
+- `cgeCarregarNumeros()` / `cgeCamposFonte()` — alimentam os `{{campos}}` sem exigir gerar o relatório antes
+
+### Textos já corrigidos na tela
+- **Conclusão** — primeiro parágrafo com `{{periodo}}`, `{{meta_global}}`, `{{baixadas}}`, `{{percentual}}`; os outros 5 parágrafos preservados
+- **Local e data** — `São José, {{data_corte}}`
+- **Cabeçalho e metas** — meta mínima 10, meses do período 12
+
+---
+
+## PENDÊNCIAS
+
+### A) Textos ainda com dados de maio (a coordenação corrige na tela)
+| Seção | O que está errado |
+|---|---|
+| **1.1 Cronograma** | "fevereiro a abril de 2026", "1.290", "30 processos", "43 técnicos" — contradiz o Quadro 1 logo abaixo |
+| Análise consolidada | "Durante o período de fevereiro a abril de 2026" |
+| Afastamentos — texto | "No período de fevereiro a abril de 2026" |
+| Metas proporcionais | cita Luis Filipe, Caroline, Elquier, Marilza como substituídos |
+| Grupo 2 | "2 técnicos ultrapassado a meta" |
+| Conclusão | ainda tem a palavra **"teste"** no fim do último parágrafo — APAGAR |
+
+### B) BOMBA — `data_baixa` não tem valor histórico
+Medido em teste: no período **fev–abr/2026 o total de baixas dá ZERO**. As 3.760 estão carimbadas em 30/06/2026 (carga histórica), não nas datas reais.
+O relatório da CGE é trimestral. Se alguém colocar o período do trimestre, sai tudo zerado.
+**Resolver antes do próximo relatório.**
+
+### C) Estoque do Quadro 1
+Sai 14.652 (igual ao total). A fórmula é *não-baixadas + baixadas-no-período*; com período largo, soma o universo inteiro.
+Conversa com a pendência antiga de o estoque mostrar 14.622 em vez de 11.552 — parece ser a mesma questão de período, não de cálculo. **Não investigado.**
+
+### D) Gabriele — NÃO VERIFICADO
+Planilha do G1 diz **56** baixas, sistema diz **1**. Única divergência grande na direção contrária.
+Se ela baixou mesmo 56, o sistema perde 55 baixas e o Quadro 2 está errado.
+SQL para checar:
+```sql
+SELECT COUNT(*) FILTER (WHERE baixada=true) AS baixadas,
+       COUNT(*) FILTER (WHERE baixada=false) AS nao_baixadas,
+       COUNT(*) AS total
+FROM prestacoes_contas WHERE setorial_id='FCEE' AND analista_nome='Gabriele';
+```
+
+### E) 4 PCs atribuídas pela regra de NL (não por parcial)
+2020PC000845, 2020PC003459, 2022PC003974, 2022PC003191 — atribuídas em 03/08 usando NL, regra derrubada na reunião. 0,1% do total.
+```sql
+SELECT codigo_nl, parcial_num, codigo_pc, processo_pc, analista_nome
+FROM prestacoes_contas WHERE setorial_id='FCEE'
+AND codigo_nl IN ('2020NL008835','2020NL010150','2022NL009114','2022NL020539')
+ORDER BY codigo_nl, parcial_num;
+```
+
+### F) Não testado
+- **"Fechar versão"** — congela o relatório e abre rascunho novo herdando tudo. Nunca foi acionado. Testar antes de a coordenação usar.
+- Preview no Firefox (zoom CSS só a partir da v126)
+- Altura do preview: `calc(100vh - 250px)`, pode precisar de ajuste
+
+### G) Passos 2 a 5 da decisão de 03/08 — NÃO FEITOS
+Tela por parcial · situação por parcial · `registrar_parecer` expandindo por parcial em vez de NL · CI só habilita com parecer
+
+### H) Cadastros
+- **Gustavo Hallack Porto** — conta de coordenador G3 (CPF 020.839.609-80, Portaria FCEE 95 de 13/05/2026)
+- **Caroline** (G3) — meta 27 em `metas_analistas` com `analista_id` órfão; não existe em `usuarios`
+- **Eduardo** — meta 17 na planilha do G3, não existe no banco
+- CPFs faltantes: Aline, Ana Leticia, Daniela, Franciani, Marisa, Miriam, Marlene, Scheila, Nayara, Zadir
 - Janaína duplicada (inativa) — excluir
-- Eduardo — confirmar situação
-- Afastamentos: só o Willian está lançado
+- Afastamentos: só o Willian lançado (o relatório de maio tinha 12)
 
-### Técnicas
-- **API sem camada de autorização** — filtra só pelo que o front manda. Resolver antes de FCC/SED/SES
-- Distribuição do estoque: qualquer analista vê e assume qualquer TR livre. Sem divisão por grupo
-- Upload de arquivo no Repositório (hoje só link)
-- Fase 6 — matriz de permissões
+### I) Débitos técnicos
+- **API sem camada de autorização** — resolver antes de FCC/SED/SES
+- `status === 'baixada'` ainda em ~15 lugares (canônico é `baixada === true`)
+- Produtividade não filtra período; Quadro 2 filtra — percentuais nunca batem
+- Código morto: `CGE_TXT_PADRAO`, `cgeJustRender/Add/Del`, `cgeAssRender/Add/Del`, `cgeQ3Render/Add/Del`, `cgeSecGet`
+- Chip `{{campo}}` gruda no texto vizinho — dificulta digitar espaço antes/depois
+- `tmp_parc_ok` pode ser dropada
 
-## ARMADILHAS (aprendidas hoje)
+---
 
-**Railway — aba Query só aceita SELECT.** UPDATE dá `syntax error at or near "LIMIT"`. Para UPDATE use a aba **Console** → `psql $DATABASE_URL` → prompt `railway=#`.
+## DIAGNÓSTICO SISTEMA × PLANILHA (fechado em 03/08)
 
-**Data de corte do relatório.** Se a hora for anterior ao momento da importação, o total volta a 3.130. Usar sempre 23:59.
+| Grupo | Planilha | Sistema | Dif |
+|---|---|---|---|
+| G1 | 1.531 | 1.586 | +55 |
+| G2 | 1.902 | 1.309 | **−593** |
+| G3 | 916 | 865 | −51 |
+| **Total** | **4.349** | **3.760** | **−589** |
 
-**data_baixa não tem valor histórico** para as 3.127 da carga. Qualquer filtro de período sobre elas mente. As baixas feitas no sistema a partir de agora gravam NOW() real.
+**Causa:** a aba Monitoramento usa
+`=SUMIFS(backup!E:E, backup!A:A, "<nome>", backup!G:G, "*Parecer*")`
+somando a coluna **"Número de PCs"**. Quando uma NL cobre várias parciais, o analista repetiu o total da NL em CADA linha de parcial.
 
-**Chave de conciliação planilha↔banco:** prefixo alfabético + dígitos sem zeros à esquerda, aplicado nos dois lados. **NUNCA por TR+Parcial** — a numeração da planilha não corresponde a `parcela_seq`.
+Exemplo real — Ana Claudia, TR 2020TR000725: parciais 2, 3 e 4, cada uma com "Número de PCs" = 4. Planilha soma 12; PCs reais: 4.
 
-**Três contagens nas planilhas, todas diferentes:**
-- Aba Monitoramento: 3.959 (PCs, usa "Número de PCs")
-- Aba Novos Resultados: 2.134 (pareceres)
-- Recálculo da fórmula do Monitoramento: 4.098 (diferença de 139 por descarte de nome no SUMIFS)
-- Sistema: 3.733 (auditável registro a registro)
+**Prova pela correlação:** G3 (multiplicador 1 em 654 de 762 linhas) → −51 · G2 (153 linhas com multiplicador 4) → −593.
 
-**Coluna "Parecer" das planilhas é imprestável** — no G3 tem "Aguardando Lei FCEE" e "AGUARDANDO PARECER CONIN". Usar a coluna **Situação**, que é padronizada.
+**A planilha discorda dela mesma.** Ana Claudia: aba Monitoramento **136**, aba Novos Resultados **31**, sistema **52**.
 
-**G2 não tem linha de cabeçalho** na aba Planilha1 — a primeira linha já é dado.
+**Conclusão: 3.760 é o número defensável.**
 
-## Leitura do Quadro 4 (nova)
+---
 
-Volume de PC não mede carga:
-- Gabriele: 361 PCs em **9 TRs** (202 NLs)
-- Sandra Paul: 279 PCs em **8 TRs**
-- Grazielly: 155 PCs em **54 TRs** (36 NLs)
-- Graciane: 5 PCs em 5 TRs
+## ARMADILHAS CONFIRMADAS
 
-## Método de trabalho
-- Código via Claude Code, um passo por vez, `node --check` antes de commitar
-- `git add index.html assets/logos` — **nunca `-A` nem `.`** (existem `identidade_sigpc.css` e `logo_sc_base64.js` untracked na raiz)
-- Diagnóstico antes de alterar; mockup antes de implementar tela
+**Railway:** aba Query aceita SELECT e UPDATE simples, mas quebra com LIMIT. Para blocos grandes: aba **Console** → `psql $DATABASE_URL` → esperar `railway=#`. Comandos `\pset` etc. têm que ficar SOZINHOS na linha. Limite de colagem ~32 KB (gerar arquivos de até 19 KB).
+
+**Coluna do TR é `tr`**, não `codigo_tr`.
+
+**41 colunas de `prestacoes_contas`:**
+id, tr, codigo_pc, codigo_nl, processo_pc, processo_mae, parcela_seq, entidade, cnpj_cpf, valor, situacao_origem, status, analista_nome, analista_id, grupo, conflito, parecer_tipo, baixada, data_baixa, origem_baixa, registrado_por, setorial_id, criado_em, atualizado_em, estornada, data_estorno, motivo_estorno, estornado_por, tipo, dt_limite_pc, dt_recebimento_pc, prazo_analise_dias, dias_atraso, prazo_diligencia, num_diligencia, enviado_ci, dt_envio_ci, parcial_num, qtd_diligencias, dt_situacao, obs_situacao
+
+**IDs:** Aline 7 · Richard 4 · Franciani 12 · Ana Claudia 22 · Noici 31 · Higor 43 · Juliana 45 · Samoel 48 · Scheila 49 · Willian 50
+
+**Variantes de parecer** (usar ILIKE, NUNCA igualdade):
+Parecer Regular com Ressalvas 1.981 · com Ressalva 1.166 · Parecer Regular 586 · Encaminhado ao Controle Interno 16 · Parecer Irregular 8 · com Ressalva(s) 3
+Regular → `ILIKE 'Parecer Regular%'` · Irregular → `ILIKE '%Irregular%'`
+
+**Whitelist da API descarta campo fora da lista em silêncio e responde sucesso.** Sempre conferir antes de mandar campo novo.
+
+**Data de corte: sempre 23:59.**
+
+**Repositório local:** `C:\Users\Richard\sigpc-gt` e `C:\Users\Richard\sigpc-api` (no PC de casa). No PC do trabalho não foi localizado.
+
+**Método:** um prompt por vez no Claude Code; `node --check` (extrair os `<script>` para arquivo .js, o comando não roda em HTML); `git add index.html` — nunca `-A` nem `.`
