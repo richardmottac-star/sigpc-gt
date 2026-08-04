@@ -3191,8 +3191,24 @@ function cgeExportExcel() {
 // o resto do documento continua sendo montado normalmente.
 let _cgeAfastCache = null
 async function cgeMontarDocumento() {
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _cgeParams||{}
   await cgeCarregarTextos()
+
+  // Sem relatório gerado (pré-visualização), completa o que falta com os números
+  // buscados por cgeCarregarNumeros(). Com _cgeDados preenchido, NUM é nulo e
+  // nada muda em relação ao PDF de hoje.
+  const NUM = (!_cgeDados.length && _cgeNumeros) ? _cgeNumeros : null
+  const _P = Object.assign({}, _cgeParams||{})
+  if(NUM) {
+    if(!_P.sid)           _P.sid = NUM.sid
+    if(!_P.dtInicio)      _P.dtInicio = NUM.dtInicio
+    if(!_P.dtCorte)       _P.dtCorte = NUM.dtCorte
+    if(!_P.dtCorteHora)   _P.dtCorteHora = NUM.dtCorte
+    if(!_P.meses)         _P.meses = NUM.meses
+    if(!_P.metaTotal)     _P.metaTotal = NUM.metaTotal
+    if(!_P.estoque)       _P.estoque = NUM.estoque
+    if(!_P.totalGeralPCs) _P.totalGeralPCs = NUM.totalGeralPCs
+  }
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _P
 
   const semDados = !_cgeDados.length
   const quadroVazio = (n) => `<div style="border:1.5px dashed #B0B8C0;border-radius:6px;padding:20px;text-align:center;color:#666;font-size:10px;font-style:italic;margin:6px 0 10px;">Quadro ${n} — gere o relatório para visualizar</div>`
@@ -3224,7 +3240,7 @@ async function cgeMontarDocumento() {
   } catch(e) { console.warn('afastamentos:', e.message) }
 
   const totalGeralPCsFmt = totalGeralPCs.toLocaleString('pt-BR')
-  const totBx    = _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
+  const totBx    = NUM ? NUM.totBx : _cgeDados.reduce((s,d)=>s+d.totalBaixadas,0)
   const totAn    = _cgeDados.reduce((s,d)=>s+d.analise,0)
   const totDil   = _cgeDados.reduce((s,d)=>s+d.dilig,0)
   const totRean  = _cgeDados.reduce((s,d)=>s+d.reanalise,0)
@@ -3232,7 +3248,7 @@ async function cgeMontarDocumento() {
   const totEmAnd = totAn+totDil+totRean+totCtrl
   // Compatibilidade com o texto fixo do relatório (metodologia antiga de meta por técnico/mês) —
   // metaMes/numTec/totalPlano saíram do formulário; aproximados aqui a partir da meta real por analista.
-  const numTec   = tecnicosManual !== null ? tecnicosManual : _cgeDados.length
+  const numTec   = tecnicosManual !== null ? tecnicosManual : (NUM ? NUM.numTec : _cgeDados.length)
   const numCoords = coordsManual !== null ? coordsManual : 3
   const metaMes  = metaMinManual !== null ? metaMinManual : (meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0)
   const totalPlano = estoque
@@ -5964,29 +5980,106 @@ function cgeSemearSecoes() {
   }
 }
 
-// Valores do sistema para os {{campos}} — mesma origem dos quadros (_cgeParams/_cgeDados)
-function cgeCamposValores() {
+// Números do sistema para a tela de textos e para a pré-visualização.
+// A tela de textos não roda cgeGerar(), então _cgeDados e _cgeParams ficam
+// vazios e todo {{campo}} sairia como travessão. Aqui buscamos só o necessário
+// e guardamos em _cgeNumeros pela sessão.
+// As regras de agregação abaixo espelham cgeGerar() — se mudarem lá, rever aqui.
+let _cgeNumeros = null
+let _cgeNumerosPromise = null
+
+async function cgeCarregarNumeros(forcar) {
+  if(_cgeNumeros && !forcar) return _cgeNumeros
+  if(_cgeNumerosPromise) return _cgeNumerosPromise
+  _cgeNumerosPromise = (async () => {
+    const P = _cgeParams || {}
+    const sid = document.getElementById('cgeSetorial')?.value || P.sid || U.setorialFiltro || 'FCEE'
+    // Mesmos padrões do formulário do relatório (irRel): 01/08/2025 até agora
+    const agora = new Date()
+    const dtInicio = P.dtInicio || '2025-08-01'
+    const dtCorte  = P.dtCorte  || new Date(agora.getTime() - agora.getTimezoneOffset()*60000).toISOString().slice(0,16)
+    const meses = Math.max(1, Math.round((new Date(dtCorte) - new Date(dtInicio)) / (1000*60*60*24*30.44)))
+
+    const qs = (o) => new URLSearchParams(o).toString()
+    const [jTudo, jBx, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
+      fetch(`${API_URL}/prestacoes_contas?${qs({ setorial_id: sid, limit: 1 })}`).then(r => r.json()),
+      fetch(`${API_URL}/prestacoes_contas?${qs({ setorial_id: sid, baixada: 'true', limit: 99999 })}`).then(r => r.json()),
+      fetchMetasVigentes(),
+      db.from('usuarios').select('*').eq('setorial_id', sid),
+      fetchTotalPCs()
+    ])
+    const baixadas = jBx.data || []
+
+    const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
+    const dtFim = new Date(dtCorte)
+    const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+
+    const idsComPC = new Set(baixadas.filter(p => p.analista_id).map(p => String(p.analista_id)))
+    const usuariosPorId = {}
+    ;(usersRes.data||[]).forEach(u => {
+      if(u.perfil === 'analista') usuariosPorId[u.id] = u
+      else if(u.perfil === 'superadmin' && idsComPC.has(String(u.id))) usuariosPorId[u.id] = u
+    })
+
+    const bxPorId = {}
+    let totBx = 0
+    baixadas.forEach(p => {
+      if(!noPeriodo(p)) return
+      if(!p.analista_id || !usuariosPorId[p.analista_id]) return
+      bxPorId[p.analista_id] = (bxPorId[p.analista_id]||0) + 1
+      totBx++
+    })
+
+    // Analista inativo só conta se teve baixa no período (regra do cgeGerar)
+    const ativos = Object.keys(usuariosPorId).filter(id => usuariosPorId[id].ativo || (bxPorId[id]||0) > 0)
+    const numTec = ativos.length
+    const metaTotal = ativos.reduce((s,id) => s + (metaPorId[id]||0), 0)
+    // baixada !== true inclui NULL, por isso a subtração em vez de um filtro baixada=false
+    const estoque = Math.max(0, (jTudo.count||0) - (jBx.count||0)) + totBx
+    const metaMes = (meses > 0 && numTec > 0) ? Math.round(metaTotal/numTec/meses) : 0
+
+    _cgeNumeros = { sid, dtInicio, dtCorte, meses, metaTotal, numTec, metaMes, totBx, totalGeralPCs, estoque }
+    return _cgeNumeros
+  })()
+  try { return await _cgeNumerosPromise }
+  finally { _cgeNumerosPromise = null }
+}
+
+// Origem única dos números: _cgeDados quando o relatório foi gerado,
+// senão o que cgeCarregarNumeros() trouxe.
+function cgeCamposFonte() {
   const P = _cgeParams || {}
   const dados = _cgeDados || []
-  if(!dados.length) { const v = {}; CGE_CAMPOS.forEach(c => v[c.k] = '—'); return v }
-  const meses = P.meses || 1
-  const metaTotal = P.metaTotal || 0
-  const numTec = (P.tecnicosManual !== null && P.tecnicosManual !== undefined) ? P.tecnicosManual : dados.length
-  const metaMes = (P.metaMinManual !== null && P.metaMinManual !== undefined)
-    ? P.metaMinManual : (meses > 0 && numTec > 0 ? Math.round(metaTotal/numTec/meses) : 0)
-  const totBx = dados.reduce((s,d) => s+d.totalBaixadas, 0)
+  if(dados.length) {
+    const meses = P.meses || 1
+    const metaTotal = P.metaTotal || 0
+    const numTec = (P.tecnicosManual !== null && P.tecnicosManual !== undefined) ? P.tecnicosManual : dados.length
+    const metaMes = (P.metaMinManual !== null && P.metaMinManual !== undefined)
+      ? P.metaMinManual : (meses > 0 && numTec > 0 ? Math.round(metaTotal/numTec/meses) : 0)
+    return {
+      dtInicio: P.dtInicio, dtCorte: P.dtCorte, meses, metaTotal, numTec, metaMes,
+      totBx: dados.reduce((s,d) => s+d.totalBaixadas, 0),
+      totalGeralPCs: P.totalGeralPCs || 0, estoque: P.estoque || 0
+    }
+  }
+  return _cgeNumeros
+}
+
+function cgeCamposValores() {
+  const N = cgeCamposFonte()
+  if(!N) { const v = {}; CGE_CAMPOS.forEach(c => v[c.k] = '—'); return v }
   const fmtP = (s) => { if(!s) return '—'; const d = new Date(String(s).slice(0,10)+'T12:00:00'); return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) }
   return {
-    periodo:          (P.dtInicio && P.dtCorte) ? `${fmtP(P.dtInicio)} a ${fmtP(P.dtCorte)}` : '—',
-    meta_global:      metaTotal.toLocaleString('pt-BR'),
-    meta_mensal:      String(metaMes),
-    meta_por_tecnico: String(metaMes*meses),
-    qtd_tecnicos:     String(numTec),
-    total_pcs:        (P.totalGeralPCs||0).toLocaleString('pt-BR'),
-    baixadas:         totBx.toLocaleString('pt-BR'),
-    percentual:       metaTotal > 0 ? (totBx/metaTotal*100).toFixed(1).replace('.',',')+'%' : '—',
-    estoque:          (P.estoque||0).toLocaleString('pt-BR'),
-    data_corte:       P.dtCorte ? new Date(String(P.dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
+    periodo:          (N.dtInicio && N.dtCorte) ? `${fmtP(N.dtInicio)} a ${fmtP(N.dtCorte)}` : '—',
+    meta_global:      (N.metaTotal||0).toLocaleString('pt-BR'),
+    meta_mensal:      String(N.metaMes||0),
+    meta_por_tecnico: String((N.metaMes||0)*(N.meses||1)),
+    qtd_tecnicos:     String(N.numTec||0),
+    total_pcs:        (N.totalGeralPCs||0).toLocaleString('pt-BR'),
+    baixadas:         (N.totBx||0).toLocaleString('pt-BR'),
+    percentual:       N.metaTotal > 0 ? (N.totBx/N.metaTotal*100).toFixed(1).replace('.',',')+'%' : '—',
+    estoque:          (N.estoque||0).toLocaleString('pt-BR'),
+    data_corte:       N.dtCorte ? new Date(String(N.dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
   }
 }
 
@@ -6217,6 +6310,21 @@ async function cgeAbrirTextos() {
   `
   cgeNavRender()
   cgeIrSecao(_cgeSecAtual)  // já dispara a pré-visualização no final
+
+  // Números do sistema em segundo plano: a tela abre na hora e os valores
+  // entram quando chegam, sem obrigar a passar pela tela do relatório.
+  if(!cgeCamposFonte()) {
+    cgeStatus('Carregando números do sistema…', '#8A6100')
+    cgeCarregarNumeros().then(() => {
+      cgeStatus('Os textos são reaproveitados nos próximos relatórios')
+      if(_cgeSecoes[_cgeSecAtual] && _cgeSecoes[_cgeSecAtual].tipo === 'campos') cgeCabRender()
+      _cgePrevSujo = true
+      cgePrevAtualizar(null)
+    }).catch(e => {
+      cgeStatus('Não foi possível carregar os números do sistema', '#991B1B')
+      console.warn('cgeCarregarNumeros:', e.message)
+    })
+  }
 }
 
 // ── Pré-visualização ao vivo ────────────────────────────────────────
