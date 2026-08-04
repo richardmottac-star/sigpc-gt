@@ -5758,6 +5758,7 @@ function cgeLerParams() {
 let _cgeTexto = null
 let _cgeTextoSid = null
 let _cgeAnterior = null
+let _cgeSecoes = {}
 
 const CGE_TXT_PADRAO = {
   contextualizacao: 'O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.',
@@ -5843,16 +5844,31 @@ async function cgeCarregarTextos() {
         signatarios: Array.isArray(reg.signatarios) && reg.signatarios.length ? reg.signatarios : CGE_TXT_PADRAO.signatarios,
         quadro3: Array.isArray(reg.quadro3) && reg.quadro3.length ? reg.quadro3 : CGE_TXT_PADRAO.quadro3
       }
+      _cgeSecoes = (reg.secoes && typeof reg.secoes === 'object' && !Array.isArray(reg.secoes)) ? reg.secoes : {}
     } else {
       _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
       _cgeTexto.id = null
+      _cgeSecoes = {}
     }
   } catch(e) {
     _cgeTexto = JSON.parse(JSON.stringify(CGE_TXT_PADRAO))
     _cgeTexto.id = null
+    _cgeSecoes = {}
   }
   _cgeTextoSid = sid
   return _cgeTexto
+}
+
+// Acesso às seções novas (coluna secoes, JSONB) — ainda sem uso na tela
+function cgeSecGet(chave) {
+  return _cgeSecoes[chave] || null
+}
+
+function cgeSecSet(chave, valor) {
+  if(!_cgeSecoes[chave]) _cgeSecoes[chave] = {}
+  _cgeSecoes[chave].v = valor
+  _cgeSecoes[chave].orig = 'editado'
+  _cgeSecoes[chave].editado_em = new Date().toISOString()
 }
 
 async function cgeCarregarAnterior() {
@@ -5889,7 +5905,8 @@ async function cgeFecharVersao() {
       quadro3: _cgeTexto.quadro3,
       conclusao: _cgeTexto.conclusao,
       signatarios: _cgeTexto.signatarios,
-      setorial_id: sid, criado_por: U.id, status: 'rascunho'
+      secoes: _cgeSecoes,
+      setorial_id: sid, status: 'rascunho'
     }
     const rN = await fetch(`${API_URL}/relatorios_cge`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -6122,7 +6139,8 @@ async function cgeSalvarTextos() {
       conclusao: _cgeTexto.conclusao,
       signatarios: _cgeTexto.signatarios,
       quadro3: _cgeTexto.quadro3,
-      setorial_id: sid, criado_por: U.id, status: 'rascunho'
+      secoes: _cgeSecoes,
+      setorial_id: sid, status: 'rascunho'
     }
     const url = _cgeTexto.id ? `${API_URL}/relatorios_cge/${_cgeTexto.id}` : `${API_URL}/relatorios_cge`
     const r = await fetch(url, {
