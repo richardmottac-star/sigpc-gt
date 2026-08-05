@@ -2020,7 +2020,7 @@ async function abrirTR(tr) {
         : `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
       const podeEnviarCI = !p.baixada && !p.enviado_ci
       const acaoCI = `${tagsEstadoPC(p, false)}${podeEnviarCI ? ` <button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}', ${p.baixada === true})">Enviar ao CI</button>` : ''}`
-      const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+      const valorFmt = planMoedaPC(p)   // PC final nao tem valor proprio — ver planEhFinal
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
         <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
