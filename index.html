@@ -900,6 +900,64 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ══ MODAL SITUACAO DA PARCIAL (azul — NAO baixa) ══ -->
+<div class="mo" id="moPSit">
+  <div class="mc">
+    <div class="mch" style="background:var(--az);"><h3 id="moPSitT">Situação da Parcial</h3><button class="mcx" onclick="fm('moPSit')">✕</button></div>
+    <div class="mcb">
+      <div class="mc-campo"><label>Situação *</label>
+        <select id="pSitTipo" onchange="pSitToggle()">
+          <option value="Em análise">Em análise</option>
+          <option value="Diligência">Diligência</option>
+          <option value="Reanálise">Reanálise</option>
+          <option value="Aguardando documentação">Aguardando documentação</option>
+        </select>
+      </div>
+      <div id="pSitDilig" style="display:none;">
+        <div class="mc-campo"><label>Prazo de resposta da entidade *</label>
+          <input type="date" id="pSitPrazo"></div>
+        <div class="mc-campo"><label>Nº de diligências</label>
+          <input type="number" id="pSitQtd" min="0" step="1" value="1"></div>
+      </div>
+      <div class="mc-campo"><label>Observação</label>
+        <textarea id="pSitObs" rows="2" style="resize:vertical;"></textarea></div>
+      <div style="background:var(--azbg);border-left:4px solid var(--az);padding:11px 14px;border-radius:8px;font-size:12px;line-height:1.55;">
+        Situação de acompanhamento. <b>Não baixa a parcial</b> e não altera sua produtividade.
+        A PC continua no seu estoque de trabalho e aparece no Quadro 4 do relatório.
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moPSit')">Cancelar</button>
+        <button class="mcok" id="btnPSit" onclick="pSitSalvar()">Salvar situação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL PARECER DA PARCIAL (verde — BAIXA) ══ -->
+<div class="mo" id="moPPar">
+  <div class="mc">
+    <div class="mch v"><h3 id="moPParT">Registrar parecer</h3><button class="mcx" onclick="fm('moPPar')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="pParInfo"></div>
+      <div class="mc-campo"><label>Tipo de parecer *</label>
+        <select id="pParTipo">
+          <option value="">Selecione…</option>
+          <option>Parecer Regular</option>
+          <option>Parecer Regular com Ressalvas</option>
+          <option>Parecer Irregular</option>
+        </select>
+      </div>
+      <div class="mc-campo"><label>Observação</label>
+        <textarea id="pParObs" rows="2" style="resize:vertical;"></textarea></div>
+      <div id="pParAviso"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moPPar')">Cancelar</button>
+        <button class="mcok" id="btnPPar" onclick="pParSalvar()">Confirmar e baixar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL REPO ══ -->
 <div class="mo" id="moRepo">
   <div class="mc">
@@ -2960,7 +3018,7 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
   })
 
   // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
-  let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0
+  let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0, totSemParecer = 0
   const mapaAn = {}
   todosPcs.forEach(p => {
     const t  = (p.tipo||'').toLowerCase()
@@ -2972,7 +3030,11 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
     if(contaQ1 && t === 'parcial' && ehIrregular) totParcIrr++
     if(contaQ1 && t === 'final'   && ehRegular)   totFinReg++
     if(contaQ1 && t === 'final'   && ehIrregular) totFinIrr++
-    if(contaQ1 && !ehRegular && !ehIrregular) totCI++
+    // CI virou INFORMATIVO: a PC ja conta pelo parecer dela nas colunas 4/5/6/7.
+    // Antes esta linha era o "resto" (nem Regular nem Irregular), o que somava o CI
+    // como se fosse um parecer proprio.
+    if(contaQ1 && p.enviado_ci === true) totCI++
+    if(contaQ1 && !ehRegular && !ehIrregular) totSemParecer++
 
     if(!p.analista_id || !usuariosPorId[p.analista_id]) return
     if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
@@ -3016,7 +3078,7 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
   const estoqueBase = estoqueRemanescente + totBx
 
   return {
-    linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI,
+    linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
     metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
     estoqueRemanescente, estoqueBase, estoque: estoqueBase, cargaHistoricaNoPeriodo
   }
@@ -3044,7 +3106,7 @@ async function cgeGerar() {
     const A = cgeAgregar(todosPcs, metaPorId, usersRes.data||[], dtInicio, dtCorte)
     _cgeDados = A.linhas
     const {
-      totParcReg, totParcIrr, totFinReg, totFinIrr, totCI,
+      totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
       metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
       estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
     } = A
@@ -3053,7 +3115,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -3227,7 +3289,7 @@ async function cgeMontarDocumento() {
     if(!_P.estoque)       _P.estoque = NUM.estoque
     if(!_P.totalGeralPCs) _P.totalGeralPCs = NUM.totalGeralPCs
   }
-  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _P
+  const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, totSemParecer=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _P
 
   const semDados = !_cgeDados.length
   const quadroVazio = (n) => `<div style="border:1.5px dashed #B0B8C0;border-radius:6px;padding:20px;text-align:center;color:#666;font-size:10px;font-style:italic;margin:6px 0 10px;">Quadro ${n} — gere o relatório para visualizar</div>`
@@ -3489,7 +3551,7 @@ ${semDados ? quadroVazio(1) : `<table>
     <tr>
       <th class="th2" colspan="2">Parcial</th>
       <th class="th2" colspan="2">Final</th>
-      <th class="th2" rowspan="2">Controle<br>Interno<br>(7a)</th>
+      <th class="th2" rowspan="2">Controle<br>Interno<br>(7a) *</th>
       <th class="th2" rowspan="2">Regular<br>(8)</th>
       <th class="th2" rowspan="2">Irregular<br>(9)</th>
     </tr>
@@ -3513,6 +3575,7 @@ ${semDados ? quadroVazio(1) : `<table>
     </tr>
   </tbody>
 </table>`}
+<p class="nota">* A coluna (7a) Controle Interno é <b>informativa</b> e não soma no total (10): cada PC encaminhada ao CI já é contada pelo parecer do técnico nas colunas (4) a (7).${totSemParecer ? ` Há ${totSemParecer} PC${totSemParecer>1?'s':''} baixada${totSemParecer>1?'s':''} no período sem parecer registrado.` : ''}</p>
 ${q1Nota ? `<p class="nota">Nota: ${q1Nota}</p>` : ''}
 </div>
 
@@ -3953,12 +4016,19 @@ async function irPlanilha() {
       </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
-          <option value="">Todas</option>
-          <option value="livre">○ Livre</option>
-          <option value="analise">🔵 Análise</option>
-          <option value="diligencia">🟡 Diligência</option>
-          <option value="reanalise">🔴 Reanálise</option>
-          <option value="baixada">✅ Baixada</option>
+          <option value="">Todas as situações</option>
+          <option value="Em análise">🔵 Em análise</option>
+          <option value="Diligência">🟡 Diligência</option>
+          <option value="Reanálise">🟣 Reanálise</option>
+          <option value="Aguardando documentação">⚪ Aguardando documentação</option>
+          <option value="__baixadas">✅ Concluídas</option>
+        </select>
+      </div>
+      <div class="fg"><label>Prazo</label>
+        <select id="plPrazo">
+          <option value="">Todos os prazos</option>
+          <option value="venc">Vencidas</option>
+          <option value="30d">A vencer em 30 dias</option>
         </select>
       </div>
       <button class="btn-buscar" onclick="buscarPlan()">
@@ -4070,11 +4140,11 @@ async function buscarPlan() {
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
   const busca = document.getElementById('plBusca')?.value.trim().toLowerCase()||''
-  const sit = document.getElementById('plSit')?.value||''
+  const sit   = document.getElementById('plSit')?.value||''
+  const prazo = document.getElementById('plPrazo')?.value||''
 
   try {
     const params = new URLSearchParams({ analista_id: U.id, limit: 9999, offset: 0 })
-    if(sit) params.set('status', sit)
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
 
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
@@ -4086,39 +4156,64 @@ async function buscarPlan() {
 
     renderPlanResumo(pcs, window._planMeta)
 
-    // Agrupar por TR
+    // Agrupar TR -> Parcial. Uma parcial = PCs do mesmo (tr, parcial_num).
     const grupos = {}
     pcs.forEach(p => {
-      if(!grupos[p.tr]) grupos[p.tr] = { tr: p.tr, entidade: p.entidade, processo_mae: p.processo_mae, nls: new Set(), total_pcs: 0, baixadas: 0, statuses: [] }
-      const g = grupos[p.tr]
-      g.total_pcs++
-      if(p.codigo_nl) g.nls.add(p.codigo_nl)
-      if(p.status === 'baixada') g.baixadas++
-      g.statuses.push(p.status)
-    })
-    const trs = Object.values(grupos).map(g => ({
-      tr: g.tr,
-      entidade: g.entidade,
-      processo_mae: g.processo_mae,
-      total_pcs: g.total_pcs,
-      total_nls: g.nls.size,
-      baixadas: g.baixadas,
-      status_predominante: planStatusPredominante(g.statuses)
-    })).sort((a,b) => {
-      const oa = PLAN_ORDEM_EXIBICAO.indexOf(a.status_predominante)
-      const ob = PLAN_ORDEM_EXIBICAO.indexOf(b.status_predominante)
-      if(oa !== ob) return oa - ob
-      return (a.tr||'').localeCompare(b.tr||'')
+      const tr = p.tr||'—'
+      if(!grupos[tr]) grupos[tr] = { tr, entidade: p.entidade, processo_mae: p.processo_mae, parciais: {} }
+      const g = grupos[tr]
+      const num = (p.parcial_num===null||p.parcial_num===undefined||p.parcial_num==='') ? '—' : String(p.parcial_num)
+      if(!g.parciais[num]) g.parciais[num] = { num, pcs: [], valor: 0 }
+      const pa = g.parciais[num]
+      pa.pcs.push(p)
+      pa.valor += parseFloat(p.valor)||0
     })
 
-    // Contagem por grupo de status, para as linhas separadoras
-    const contagemGrupos = {}
-    trs.forEach(t => { contagemGrupos[t.status_predominante] = (contagemGrupos[t.status_predominante]||0)+1 })
+    const hoje = new Date(); hoje.setHours(0,0,0,0)
+    const diasDe = (d) => d ? Math.round((hoje - new Date(String(d).slice(0,10)+'T00:00:00'))/86400000) : null
+
+    let trs = Object.values(grupos).map(g => {
+      const parciais = Object.values(g.parciais).map(pa => {
+        const ref = pa.pcs[0]
+        // a parcial so conta como baixada quando TODAS as suas PCs estao baixadas
+        const baixada = pa.pcs.every(x => x.baixada === true)
+        const dias = pa.pcs.map(x => diasDe(x.dt_limite_pc)).filter(x => x !== null)
+        return {
+          num: pa.num, pcs: pa.pcs, qtd: pa.pcs.length, valor: pa.valor, baixada,
+          parecer_tipo:   pa.pcs.find(x=>x.parecer_tipo)?.parecer_tipo || null,
+          data_baixa:     pa.pcs.find(x=>x.data_baixa)?.data_baixa || null,
+          situacao_atual: pa.pcs.find(x=>x.situacao_atual)?.situacao_atual || null,
+          prazo_diligencia: ref.prazo_diligencia || null,
+          qtd_diligencias:  ref.qtd_diligencias || 0,
+          dt_situacao:      pa.pcs.find(x=>x.dt_situacao)?.dt_situacao || null,
+          enviado_ci:     pa.pcs.some(x => x.enviado_ci === true),
+          maxDias: dias.length ? Math.max(...dias) : null
+        }
+      })
+      return {
+        tr: g.tr, entidade: g.entidade, processo_mae: g.processo_mae, parciais,
+        total_pcs: parciais.reduce((s,p)=>s+p.qtd,0),
+        valor: parciais.reduce((s,p)=>s+p.valor,0),
+        pendentes: parciais.filter(p=>!p.baixada).reduce((s,p)=>s+p.qtd,0)
+      }
+    })
+
+    // Filtros de parcial: escondem as parciais que nao casam, e o TR se ficar vazio
+    if(sit || prazo) {
+      trs = trs.map(t => ({...t, parciais: t.parciais.filter(pa => {
+        if(sit === '__baixadas' && !pa.baixada) return false
+        if(sit && sit !== '__baixadas' && (pa.baixada || pa.situacao_atual !== sit)) return false
+        if(prazo === 'venc' && !(pa.maxDias !== null && pa.maxDias > 0)) return false
+        if(prazo === '30d' && !(pa.maxDias !== null && pa.maxDias <= 0 && pa.maxDias >= -30)) return false
+        return true
+      })})).filter(t => t.parciais.length)
+    }
+
+    // TRs com trabalho pendente primeiro
+    trs.sort((a,b) => (b.pendentes>0) - (a.pendentes>0) || (a.tr||'').localeCompare(b.tr||''))
 
     window._planTot = trs.length
     window._planDadosCache = trs
-    window._planGruposContagem = contagemGrupos
-    window._planMostrarSep = !sit
 
     const from = (window._planPag||0)*PP
     renderPlan(trs.slice(from, from+PP))
@@ -4127,6 +4222,35 @@ async function buscarPlan() {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
 }
+
+// Ordena parciais: numericas em ordem, FINAL por ultimo, sem numero no fim
+function planOrdParciais(a, b) {
+  const na = parseInt(a.num,10), nb = parseInt(b.num,10)
+  const va = Number.isFinite(na), vb = Number.isFinite(nb)
+  if(va && vb) return na - nb
+  if(va) return -1
+  if(vb) return 1
+  return String(a.num).localeCompare(String(b.num))
+}
+
+const PARCIAL_SIT_BADGE = {
+  'Em análise':               {bg:'var(--azbg)', cor:'var(--az)'},
+  'Diligência':               {bg:'var(--ambg)', cor:'#8a5a00'},
+  'Reanálise':                {bg:'#F3E5F5',     cor:'#7B1FA2'},
+  'Aguardando documentação':  {bg:'#EEF1EF',     cor:'var(--ct)'}
+}
+function planBadgeSit(s) {
+  if(!s) return ''
+  const c = PARCIAL_SIT_BADGE[s] || {bg:'#EEF1EF', cor:'var(--ct)'}
+  return `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${c.bg};color:${c.cor};">${escHtml(s)}</span>`
+}
+function planBadgeParecer(p) {
+  if(!p) return ''
+  const irr = /Irregular/i.test(p)
+  return `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${irr?'#FDE8EA':'var(--vbg)'};color:${irr?'var(--r)':'var(--v)'};">${escHtml(p)}</span>`
+}
+const planMoeda = (v) => (parseFloat(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+const planData  = (d) => d ? new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
 function renderPlanResumo(pcs, meta) {
   const resumo = document.getElementById('planResumo')
@@ -4169,62 +4293,114 @@ function renderPlan(rows) {
     return
   }
 
-  const offset = (window._planPag||0)*PP
-  const dadosCompletos = window._planDadosCache||rows
-  const mostrarSep = window._planMostrarSep !== false
-  const contagem = window._planGruposContagem||{}
-  let linhas = ''
-  rows.forEach((r,i) => {
-    const idxGlobal = offset+i
-    const statusAnterior = idxGlobal>0 ? dadosCompletos[idxGlobal-1].status_predominante : null
-    if(mostrarSep && r.status_predominante !== statusAnterior) {
-      const stSep = PLAN_STATUS_STYLE[r.status_predominante] || {cor:'#999',label:r.status_predominante||'—',icone:'○'}
-      const qtd = contagem[r.status_predominante]||0
-      linhas += `<tr class="grupo-sep"><td colspan="${U.perfil==='superadmin'?10:9}">
-        <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${stSep.cor};color:${stSep.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${stSep.icone} ${stSep.label}</span>
-        <span style="margin-left:6px;color:${stSep.cor};">— ${qtd} TR${qtd!==1?'s':''}</span>
-      </td></tr>`
-    }
-    const st = PLAN_STATUS_STYLE[r.status_predominante] || {cor:'#999',label:r.status_predominante||'—',icone:'○'}
-    linhas += `<tr class="${i%2===0?'zebra-a':'zebra-b'}" style="cursor:pointer;" onclick="abrirTR('${r.tr}')">
-      <td style="font-size:10px;color:var(--ct);text-align:center;">${idxGlobal+1}</td>
-      <td style="padding:0;">
-        <div style="width:5px;height:100%;min-height:40px;background:${st.cor};"></div>
-      </td>
-      <td>
-        <span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${st.cor};color:${st.cor};border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;white-space:nowrap;">${st.icone} ${st.label}</span>
-      </td>
-      <td style="font-size:11px;font-weight:600;color:var(--az);white-space:nowrap;">${r.tr||'—'}</td>
-      <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${normalizarProcesso(r.processo_mae)}</td>
-      <td style="max-width:220px;">
-        <div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.entidade||''}">${r.entidade||'—'}</div>
-      </td>
-      <td style="text-align:center;font-size:11px;font-weight:700;">${r.total_pcs}</td>
-      <td style="text-align:center;font-size:11px;">${r.total_nls}</td>
-      <td style="text-align:center;font-size:11px;font-weight:700;color:var(--v);">${r.baixadas}</td>
-      ${U.perfil==='superadmin'?`<td style="text-align:center;"><button class="btn-acao" style="background:#8A6100;color:#fff;font-size:9px;" onclick="event.stopPropagation();abrirDevM('${r.tr}')" title="Devolver TR inteira ao estoque (master)">↩ Master</button></td>`:''}
-    </tr>`
-  })
+  const cards = rows.map(r => {
+    const parciais = [...r.parciais].sort(planOrdParciais)
 
-  cont.innerHTML = `
-    <div class="tbl-wrap">
-      <div style="overflow-x:auto;">
-        <table>
+    const blocos = parciais.map(pa => {
+      const chave = `'${escHtml(r.tr)}','${escHtml(String(pa.num))}'`
+      const semNum = pa.num === '—'
+
+      // ── parcial ja baixada: verde, so leitura
+      if(pa.baixada) {
+        return `<div style="border-bottom:1px solid var(--cl);">
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#F2FAF5;flex-wrap:wrap;">
+            <span style="background:var(--vc);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">✓ PARCIAL ${escHtml(pa.num)}</span>
+            <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoeda(pa.valor)} ${planBadgeParecer(pa.parecer_tipo)}
+              ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}</span>
+            <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:12px;color:var(--ct);">baixada em ${planData(pa.data_baixa)}</span>
+              <button class="btn-acao" style="background:#8A9A90;color:#fff;" onclick="pVerParecer(${chave})">Ver parecer</button>
+              ${(U.perfil==='coordenador'||U.perfil==='superadmin')?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})">↩ Estornar</button>`:''}
+            </span>
+          </div>
+        </div>`
+      }
+
+      // ── parcial em aberto
+      const podeCI = !!pa.parecer_tipo
+      const linhasPC = pa.pcs.map(p => {
+        const dias = p.dt_limite_pc ? Math.round((new Date().setHours(0,0,0,0) - new Date(String(p.dt_limite_pc).slice(0,10)+'T00:00:00'))/86400000) : null
+        const vencida = dias !== null && dias > 0
+        return `<tr>
+          <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;">${normalizarProcesso(p.processo_pc)}</td>
+          <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoeda(p.valor)}</td>
+          <td style="padding:8px 10px;font-size:12px;${vencida?'color:var(--r);font-weight:700;':''}">${planData(p.dt_limite_pc)}</td>
+          <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
+        </tr>`
+      }).join('')
+
+      const sub = (pa.situacao_atual === 'Diligência' || pa.dt_situacao) ? `
+        <div style="padding:0 16px 11px;background:#FAFCFB;display:flex;gap:16px;align-items:center;font-size:11.5px;color:var(--ct);flex-wrap:wrap;">
+          ${pa.prazo_diligencia?`<span><b style="color:var(--te);">Prazo da diligência:</b> ${planData(pa.prazo_diligencia)}</span>`:''}
+          ${pa.qtd_diligencias?`<span><b style="color:var(--te);">Nº de diligências:</b> ${pa.qtd_diligencias}</span>`:''}
+          ${pa.dt_situacao?`<span><b style="color:var(--te);">Última movimentação:</b> ${planData(pa.dt_situacao)}</span>`:''}
+        </div>` : ''
+
+      return `<div style="border-bottom:1px solid var(--cl);">
+        <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#FAFCFB;flex-wrap:wrap;">
+          <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">PARCIAL ${escHtml(pa.num)}</span>
+          <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoeda(pa.valor)} ${planBadgeSit(pa.situacao_atual)}
+            ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
+          <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+            ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
+            <button class="btn-acao" style="background:#fff;color:var(--az);border:1.5px solid var(--az);" onclick="pAbrirSit(${chave})">Salvar situação</button>
+            <button class="btn-acao" style="background:var(--v);color:#fff;" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
+            <button class="btn-acao" style="background:${podeCI?'#1A4E8A':'#C8D2CB'};color:#fff;${podeCI?'':'cursor:not-allowed;'}"
+              ${podeCI?`onclick="pEnviarCI(${chave})"`:'disabled'}
+              title="${podeCI?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}">🏛 Encaminhar ao CI</button>`}
+          </span>
+        </div>
+        ${sub}
+        <table style="width:100%;border-collapse:collapse;">
           <thead><tr>
-            <th style="width:30px;">#</th>
-            <th style="width:5px;padding:0;"></th>
-            <th style="min-width:110px;">Status</th>
-            <th>TR</th>
-            <th>SGPe MÃE</th>
-            <th>Entidade</th>
-            <th>PCs</th>
-            <th>NLs</th>
-            <th>Baixadas</th>
-            ${U.perfil==='superadmin'?'<th style="width:70px;">Devolver</th>':''}
+            <th style="width:130px;">PC</th><th style="width:150px;">Processo SGPE</th>
+            <th style="width:110px;text-align:right;">Valor</th><th style="width:100px;">Prazo PC</th><th>NL</th>
           </tr></thead>
-          <tbody>${linhas}</tbody>
+          <tbody>${linhasPC}</tbody>
         </table>
+      </div>`
+    }).join('')
+
+    return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:13px;">
+      <div style="background:linear-gradient(135deg,#2E1760,#1A237E);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+        <div>
+          <b style="font-size:15px;cursor:pointer;" onclick="abrirTR('${escHtml(r.tr)}')">${escHtml(r.tr||'—')}</b>
+          <div style="font-size:11.5px;opacity:.85;margin-top:1px;">${escHtml(r.entidade||'—')}</div>
+        </div>
+        <div style="margin-left:auto;font-size:11px;opacity:.9;text-align:right;line-height:1.5;">
+          <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
+          <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.total_pcs} PC${r.total_pcs>1?'s':''}</span>
+          <br>${planMoeda(r.valor)}
+        </div>
       </div>
+      ${blocos}
+    </div>`
+  }).join('')
+
+  cont.innerHTML = cards + `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:6px;">
+      <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:13px 16px;">
+        <h4 style="margin:0 0 9px;font-size:12px;color:var(--v);">Situações que NÃO baixam</h4>
+        <div style="font-size:11.5px;color:var(--ct);line-height:2;">
+          ${planBadgeSit('Em análise')} técnico com o processo em mãos<br>
+          ${planBadgeSit('Diligência')} aguardando a entidade · exige prazo<br>
+          ${planBadgeSit('Reanálise')} documentação retornou, em revisão<br>
+          ${planBadgeSit('Aguardando documentação')} pendência externa sem diligência formal
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:13px 16px;">
+        <h4 style="margin:0 0 9px;font-size:12px;color:var(--v);">Pareceres que BAIXAM a parcial</h4>
+        <div style="font-size:11.5px;color:var(--ct);line-height:2;">
+          ${planBadgeParecer('Parecer Regular')} conta na produtividade<br>
+          ${planBadgeParecer('Parecer Regular com Ressalvas')} conta na produtividade<br>
+          ${planBadgeParecer('Parecer Irregular')} conta na produtividade<br>
+          <span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 Controle Interno</span> informativo · a PC conta pelo parecer dela
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--ct);font-style:italic;margin-top:6px;">
+      A diferença é essa: situação é acompanhamento e pode ir e voltar quantas vezes for preciso. Parecer é encerramento e gera baixa.
     </div>`
 }
 
@@ -4250,8 +4426,185 @@ function planPg(d) {
 function limparPlan() {
   document.getElementById('plBusca').value=''
   document.getElementById('plSit').value=''
+  const pz = document.getElementById('plPrazo'); if(pz) pz.value=''
   window._planPag=0
   buscarPlan()
+}
+
+// ══════════════════════════════════════
+//  AÇÕES POR PARCIAL — situação, parecer, CI, estorno
+//  Uma parcial = (tr, parcial_num). Um parecer baixa todas as PCs dela.
+// ══════════════════════════════════════
+let _pAtual = null   // { tr, num, parcial }
+
+function pBuscar(tr, num) {
+  const t = (window._planDadosCache||[]).find(x => x.tr === tr)
+  return t ? t.parciais.find(p => String(p.num) === String(num)) : null
+}
+
+function pSitToggle() {
+  const dilig = document.getElementById('pSitTipo').value === 'Diligência'
+  document.getElementById('pSitDilig').style.display = dilig ? '' : 'none'
+}
+
+function pAbrirSit(tr, num) {
+  const pa = pBuscar(tr, num)
+  if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
+  _pAtual = { tr, num, parcial: pa }
+  document.getElementById('moPSitT').textContent = `Situação da Parcial ${num} — ${tr}`
+  document.getElementById('pSitTipo').value  = pa.situacao_atual || 'Em análise'
+  document.getElementById('pSitPrazo').value = pa.prazo_diligencia ? String(pa.prazo_diligencia).slice(0,10) : ''
+  document.getElementById('pSitQtd').value   = pa.qtd_diligencias || 1
+  document.getElementById('pSitObs').value   = ''
+  pSitToggle()
+  document.getElementById('moPSit').classList.add('open')
+}
+
+async function pSitSalvar() {
+  if(!_pAtual) return
+  const situacao = document.getElementById('pSitTipo').value
+  const prazo    = document.getElementById('pSitPrazo').value
+  const qtd      = document.getElementById('pSitQtd').value
+  const obs      = document.getElementById('pSitObs').value.trim()
+  if(situacao === 'Diligência' && !prazo) { toast('Diligência exige o prazo de resposta.','err'); return }
+
+  const bt = document.getElementById('btnPSit'); bt.disabled = true
+  try {
+    const corpo = {
+      tr: _pAtual.tr, parcial_num: _pAtual.num, situacao,
+      analista_id: U.id, observacao: obs || null,
+      setorial_id: U.setorialFiltro || 'FCEE'
+    }
+    if(situacao === 'Diligência') { corpo.prazo_diligencia = prazo; corpo.qtd_diligencias = parseInt(qtd)||1 }
+    const r = await fetch(`${API_URL}/parcela/situacao`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo)
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`Situação salva em ${j.count} PC${j.count>1?'s':''}.`,'ok')
+    fm('moPSit'); buscarPlan()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { bt.disabled = false }
+}
+
+function pAbrirPar(tr, num) {
+  const pa = pBuscar(tr, num)
+  if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
+  _pAtual = { tr, num, parcial: pa }
+  const t = (window._planDadosCache||[]).find(x => x.tr === tr)
+  document.getElementById('moPParT').textContent = `Registrar parecer — Parcial ${num} · ${tr}`
+  document.getElementById('pParInfo').innerHTML =
+    `${escHtml(t?.entidade||'—')} · Parcial ${escHtml(String(num))} · ${planMoeda(pa.valor)}`
+  document.getElementById('pParTipo').value = ''
+  document.getElementById('pParObs').value = ''
+  const outras = (t?.parciais||[]).filter(x => String(x.num) !== String(num) && !x.baixada).map(x => x.num)
+  const nls = [...new Set(pa.pcs.map(p=>p.codigo_nl).filter(Boolean))]
+  document.getElementById('pParAviso').innerHTML = `
+    <div style="background:var(--vbg);border-left:4px solid var(--v);padding:11px 14px;border-radius:8px;font-size:12px;line-height:1.55;">
+      <b>Este parecer baixa ${pa.qtd} PC${pa.qtd>1?'s':''}:</b><br>
+      ${pa.pcs.map(p=>escHtml(p.codigo_pc)).join(' · ')}<br><br>
+      Todas da <b>Parcial ${escHtml(String(num))}</b>.${outras.length?` As parciais ${outras.map(escHtml).join(', ')} <b>não</b> são afetadas${nls.length?`, mesmo compartilhando a NL ${escHtml(nls[0])}`:''}.`:''}<br>
+      Produtividade no período: <b>+${pa.qtd} PC${pa.qtd>1?'s':''}</b>.
+    </div>`
+  document.getElementById('btnPPar').textContent = `Confirmar e baixar ${pa.qtd} PC${pa.qtd>1?'s':''}`
+  document.getElementById('moPPar').classList.add('open')
+}
+
+async function pParSalvar() {
+  if(!_pAtual) return
+  const parecer_tipo = document.getElementById('pParTipo').value
+  if(!parecer_tipo) { toast('Selecione o tipo de parecer.','err'); return }
+  const obs = document.getElementById('pParObs').value.trim()
+
+  const bt = document.getElementById('btnPPar'); bt.disabled = true
+  try {
+    const r = await fetch(`${API_URL}/parcela/parecer`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tr: _pAtual.tr, parcial_num: _pAtual.num, parecer_tipo,
+        analista_id: U.id, registrado_por: U.nome, observacao: obs || null,
+        setorial_id: U.setorialFiltro || 'FCEE'
+      })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`Parecer registrado. ${j.count} PC${j.count>1?'s':''} baixada${j.count>1?'s':''}.`,'ok')
+    fm('moPPar'); carregarAlertasPrazo(); buscarPlan()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { bt.disabled = false }
+}
+
+async function pEnviarCI(tr, num) {
+  const pa = pBuscar(tr, num)
+  if(!pa) { toast('Parcial não encontrada.','err'); return }
+  if(!pa.parecer_tipo) { toast('Registre o parecer antes de encaminhar ao Controle Interno.','err'); return }
+  if(!confirm(`Encaminhar a Parcial ${num} da ${tr} ao Controle Interno?\n\nO parecer registrado é mantido.`)) return
+  try {
+    const r = await fetch(`${API_URL}/parcela/ci`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, parcial_num: num, analista_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`Parcial encaminhada ao CI (${j.count} PC${j.count>1?'s':''}).`,'ok')
+    buscarPlan()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function pEstornar(tr, num) {
+  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
+  const motivo = prompt(`Estornar a Parcial ${num} da ${tr}?\n\nMotivo (mínimo 15 caracteres):`)
+  if(motivo === null) return
+  if(motivo.trim().length < 15) { toast('O motivo precisa ter no mínimo 15 caracteres.','err'); return }
+  try {
+    const r = await fetch(`${API_URL}/parcela/estornar`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tr, parcial_num: num, motivo: motivo.trim(),
+        usuario_id: U.id, usuario_nome: U.nome, perfil: U.perfil,
+        setorial_id: U.setorialFiltro || 'FCEE'
+      })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`Parcial estornada (${j.count} PC${j.count>1?'s':''}).`,'ok')
+    buscarPlan()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function pVerParecer(tr, num) {
+  document.getElementById('moNLT').textContent = `Parcial ${num} — ${tr}`
+  document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
+  document.getElementById('moNL').classList.add('open')
+  try {
+    const params = new URLSearchParams({ tr, parcial_num: num, setorial_id: U.setorialFiltro || 'FCEE' })
+    const r = await fetch(`${API_URL}/parcela/historico?${params}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const pa = pBuscar(tr, num)
+    const evLabel = {parecer:'📝 Parecer', situacao:'🔄 Situação', ci:'🏛 Controle Interno', estorno:'↩ Estorno', migracao_ci:'⚙ Migração CI'}
+    const hist = (j.data||[]).map(h => `
+      <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--cb);font-size:11px;">
+        <span style="font-weight:700;white-space:nowrap;">${evLabel[h.evento]||escHtml(h.evento)}</span>
+        <div style="flex:1;">
+          <div>${h.valor_anterior?escHtml(h.valor_anterior)+' → ':''}<b>${escHtml(h.valor_novo||'—')}</b></div>
+          ${h.observacao?`<div style="color:var(--ct);font-size:10px;">${escHtml(h.observacao)}</div>`:''}
+        </div>
+        <span style="color:var(--ct);font-size:10px;white-space:nowrap;">${new Date(h.criado_em).toLocaleString('pt-BR')}</span>
+      </div>`).join('') || '<div style="color:var(--ct);font-size:11px;padding:8px 0;">Sem histórico registrado.</div>'
+
+    document.getElementById('moNLB').innerHTML = `
+      <div class="mci" style="margin-bottom:12px;">
+        <strong>Parecer:</strong> ${escHtml(pa?.parecer_tipo||'—')} &nbsp;|&nbsp;
+        <strong>Baixada em:</strong> ${planData(pa?.data_baixa)} &nbsp;|&nbsp;
+        <strong>${pa?.qtd||0}</strong> PC${(pa?.qtd||0)>1?'s':''}
+        ${pa?.enviado_ci?' &nbsp;|&nbsp; 🏛 No Controle Interno':''}
+      </div>
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ct);margin-bottom:4px;">Histórico da parcial</div>
+      ${hist}`
+  } catch(e) {
+    document.getElementById('moNLB').innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
 }
 
 
