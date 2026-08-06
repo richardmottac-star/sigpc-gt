@@ -2108,14 +2108,30 @@ function normalizarProcesso(str) {
 // estimar ou interpolar esse número aqui — errar não dá erro, abre OUTRO processo em silêncio.
 //
 // SEM LINK O NÚMERO FICA TEXTO PURO, sem aviso nenhum. Cai nesse caso o que a API não resolve:
-// ADR/SDR, sigla fora da tabela de órgãos, processo que não existe no SGPe, número malformado
-// no banco, e também falha de rede. A coluna continua legível como antes.
+// sigla fora da tabela de órgãos, região colada ao número, processo que não existe no SGPe,
+// número malformado no banco, e também falha de rede. A coluna continua legível como antes.
 //
-// A regex abaixo tem de ser IDÊNTICA à de sigpc-api/lib/sgpe-link.js: é ela que produz a chave
-// canônica ("SCC 2146/2020") pela qual a resposta da API vem indexada. Se as duas divergirem,
-// a resposta chega e não casa com nada. Aqui não há tabela de órgãos de propósito — mandamos
-// tudo e a API descarta o que não sabe resolver.
-const SGPE_PADRAO = /^\s*([A-Za-z]{2,12})\s*0*(\d{1,8})\s*\/\s*(\d{4})\s*$/
+// ⚠️ A regex abaixo tem de ser IDÊNTICA à de sigpc-api/lib/sgpe-link.js: é ela que produz a
+// chave canônica ("SCC 2146/2020", "ADR17 867/2017") pela qual a resposta da API vem indexada.
+// Se as duas divergirem, a resposta chega e não casa com nada.
+//
+// JÁ DIVERGIU UMA VEZ, e o estrago foi silencioso: em 05/08 esta cópia nasceu com
+// `([A-Za-z]{2,12})`, só letras. Quando o servidor passou a aceitar região na sigla (ADR17,
+// SDR13), esta ficou para trás — "ADR17 00000867/2017" não casava, `sgpeChave` devolvia null
+// e o número virava texto puro SEM NUNCA SER PERGUNTADO À API. A tela não acusava nada: ADR
+// simplesmente não linkava, enquanto FCEE e SCC linkavam. Mexeu numa, mexa na outra.
+//
+// A regra do separador é a mesma do servidor: os dígitos só migram para a sigla quando há
+// separador explícito (espaço, ponto ou hífen). Sem separador, a sigla é só letras e todo
+// dígito pertence ao número — é o que sustenta "SCC2146/2020" e "FCEE264/2017".
+//
+// O que NÃO é replicado aqui é a trava de ambiguidade do servidor, que devolve null para
+// "ADR223151/2017" (ADR não é órgão, ADR22 é). Ela depende da tabela ORGAOS, e uma quarta
+// cópia dessa tabela seria justamente o tipo de duplicata que causou o bug acima. Não faz
+// falta: esta tela nunca monta link sozinha, só exibe o que a API devolveu. Para um valor
+// ambíguo o servidor não devolve chave nenhuma, a busca no cache falha e o número fica texto
+// puro — o mesmo resultado, decidido por quem tem a tabela.
+const SGPE_PADRAO = /^\s*([A-Za-z]{2,12})(?:([0-9]{1,2})[\s.\-]+|([\s.\-]*))(\d{1,20})\s*\/\s*(\d{4})\s*$/
 
 // chave canônica -> url, ou null quando a API já respondeu que não há link
 const _sgpeCache = new Map()
@@ -2125,7 +2141,11 @@ let _sgpeTimer = null
 function sgpeChave(bruto) {
   const m = String(bruto ?? '').match(SGPE_PADRAO)
   if(!m) return null
-  return `${m[1].toUpperCase()} ${Number(m[2])}/${Number(m[3])}`
+  const letras = m[1].toUpperCase()
+  const regiao = m[2]              // só existe quando veio seguida de separador
+  const numero = m[4].replace(/^0+/, '')   // zeros à esquerda saem depois de casar, como no servidor
+  if(numero === '' || numero.length > 8) return null
+  return `${regiao === undefined ? letras : letras + regiao} ${Number(numero)}/${Number(m[5])}`
 }
 
 // HTML do número: <a> se o link já está em cache, <span data-proc> se ainda falta perguntar,
