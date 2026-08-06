@@ -569,11 +569,11 @@ tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
 .grupo-sep td { background:#F5F8F6; padding:6px 10px; font-size:11px; font-weight:800; border-top:1.5px solid var(--cb); }
 tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
 .proc-sgpe { font-family:var(--fonte-corpo); text-transform:uppercase; letter-spacing:0.3px; }
-/* Número de processo que virou link para o SGPe. Discreto de propósito: o mesmo texto de
-   antes, só sublinhado — quem não tem link fica igual, sem buraco visual na coluna. */
-.proc-link { color:inherit; text-decoration:underline; text-decoration-color:var(--v);
+/* Número de processo que virou link para o SGPe. Azul de link (--az), o mesmo já usado nos
+   TRs clicáveis, com o sublinhado na mesma cor. Quem não tem link fica preto, sem sublinhado. */
+.proc-link { color:var(--az); text-decoration:underline; text-decoration-color:var(--az);
              text-underline-offset:2px; cursor:pointer; }
-.proc-link:hover { color:var(--v); text-decoration-thickness:2px; }
+.proc-link:hover { text-decoration-thickness:2px; }
 
 /* ── Botões: sombra mais forte no hover, reduzida no active ── */
 .btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
