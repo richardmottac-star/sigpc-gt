@@ -569,6 +569,11 @@ tbody tr:hover { background: #E8F5EE; box-shadow: inset 3px 0 0 #006B3C; }
 .grupo-sep td { background:#F5F8F6; padding:6px 10px; font-size:11px; font-weight:800; border-top:1.5px solid var(--cb); }
 tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
 .proc-sgpe { font-family:var(--fonte-corpo); text-transform:uppercase; letter-spacing:0.3px; }
+/* Número de processo que virou link para o SGPe. Discreto de propósito: o mesmo texto de
+   antes, só sublinhado — quem não tem link fica igual, sem buraco visual na coluna. */
+.proc-link { color:inherit; text-decoration:underline; text-decoration-color:var(--v);
+             text-underline-offset:2px; cursor:pointer; }
+.proc-link:hover { color:var(--v); text-decoration-thickness:2px; }
 
 /* ── Botões: sombra mais forte no hover, reduzida no active ── */
 .btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
@@ -1373,6 +1378,7 @@ function iniciarApp() {
   atualizarAvatarHeader()
 
   renderSB()
+  sgpeObservar()
   irDash()
   carregarContadores()
 }
@@ -1864,7 +1870,7 @@ function renderEst(rows) {
 
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
-      <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${normalizarProcesso(t.processo_mae)}</td>
+      <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${procHtml(t.processo_mae)}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
@@ -2023,7 +2029,7 @@ async function abrirTR(tr) {
       const valorFmt = (parseFloat(p.valor)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
-        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
+        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${procHtml(p.processo_pc)}</td>
         <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
         <td style="${tdS}">${p.codigo_nl||'—'}</td>
         <td style="${tdS}text-align:right;">${valorFmt}</td>
@@ -2036,7 +2042,7 @@ async function abrirTR(tr) {
     const thS = 'position:sticky;top:0;background:var(--fundo-app);padding:6px 8px;font-size:13px;z-index:1;'
     document.getElementById('moTRB').innerHTML = `
       <div class="mci" style="margin-bottom:12px;">
-        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span class="proc-sgpe">${normalizarProcesso(pcs[0].processo_mae)}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
+        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span class="proc-sgpe">${procHtml(pcs[0].processo_mae)}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
         <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
       </div>
       <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
@@ -2090,6 +2096,106 @@ function normalizarProcesso(str) {
   if(!mNum) return `${siglaBase} ${resto}`
   const numero = mNum[1].padStart(digitos, '0')
   return `${siglaBase} ${numero}/${mNum[2]}`
+}
+
+// ══════════════════════════════════════
+//  LINKS DO SGPe
+// ══════════════════════════════════════
+// Transforma o número de processo em link direto, consumindo POST /sgpe/links.
+//
+// ⚠️ NÃO EXISTE FÓRMULA para o número interno do SGPe: o que aparece na tela NÃO é o que vai
+// na URL. Quem resolve é a API, consultando o SGPe e guardando em cache. Nunca calcular,
+// estimar ou interpolar esse número aqui — errar não dá erro, abre OUTRO processo em silêncio.
+//
+// SEM LINK O NÚMERO FICA TEXTO PURO, sem aviso nenhum. Cai nesse caso o que a API não resolve:
+// ADR/SDR, sigla fora da tabela de órgãos, processo que não existe no SGPe, número malformado
+// no banco, e também falha de rede. A coluna continua legível como antes.
+//
+// A regex abaixo tem de ser IDÊNTICA à de sigpc-api/lib/sgpe-link.js: é ela que produz a chave
+// canônica ("SCC 2146/2020") pela qual a resposta da API vem indexada. Se as duas divergirem,
+// a resposta chega e não casa com nada. Aqui não há tabela de órgãos de propósito — mandamos
+// tudo e a API descarta o que não sabe resolver.
+const SGPE_PADRAO = /^\s*([A-Za-z]{2,12})\s*0*(\d{1,8})\s*\/\s*(\d{4})\s*$/
+
+// chave canônica -> url, ou null quando a API já respondeu que não há link
+const _sgpeCache = new Map()
+let _sgpeRodando = false
+let _sgpeTimer = null
+
+function sgpeChave(bruto) {
+  const m = String(bruto ?? '').match(SGPE_PADRAO)
+  if(!m) return null
+  return `${m[1].toUpperCase()} ${Number(m[2])}/${Number(m[3])}`
+}
+
+// HTML do número: <a> se o link já está em cache, <span data-proc> se ainda falta perguntar,
+// texto puro se não é processo ou se já sabemos que não tem link.
+function procHtml(bruto) {
+  const txt = escHtml(normalizarProcesso(bruto))
+  const chave = sgpeChave(bruto)
+  if(!chave) return txt
+  const url = _sgpeCache.get(chave)
+  if(url) return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+  if(_sgpeCache.has(chave)) return txt
+  return `<span data-proc="${escHtml(chave)}">${txt}</span>`
+}
+
+async function sgpeResolverPendentes() {
+  // Já tem uma rodada em andamento: reagenda em vez de descartar, senão o que foi renderizado
+  // durante o fetch ficaria sem link até o próximo render.
+  if(_sgpeRodando) { clearTimeout(_sgpeTimer); _sgpeTimer = setTimeout(sgpeResolverPendentes, 200); return }
+  const nos = [...document.querySelectorAll('span[data-proc]')]
+  if(!nos.length) return
+  _sgpeRodando = true
+  try {
+    const faltam = []
+    for(const n of nos) {
+      const k = n.getAttribute('data-proc')
+      if(!_sgpeCache.has(k) && !faltam.includes(k)) faltam.push(k)
+    }
+    if(faltam.length) {
+      try {
+        // O teto de 400 é o mesmo da API. Ela resolve até 25 novos por chamada e devolve o
+        // resto nas próximas — o cache vai enchendo conforme a tela é usada.
+        const r = await fetch(`${API_URL}/sgpe/links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ processos: faltam.slice(0, 400) })
+        })
+        const j = await r.json()
+        for(const [k, url] of Object.entries((j.data && j.data.links) || {})) _sgpeCache.set(k, url)
+        // Processo que o SGPe não tem nunca vai ter link: guarda o null para não perguntar de novo.
+        for(const k of (j.data && j.data.naoEncontrados) || []) _sgpeCache.set(k, null)
+      } catch(e) {
+        // Silêncio proposital: sem link o número fica texto puro. Nada de aviso na tela.
+      }
+    }
+    // O data-proc sai SEMPRE, mesmo sem link — é o que faz o observador abaixo parar em vez de
+    // girar em falso. O que ficou de fora do teto vira texto puro agora e ganha nova chance no
+    // próximo render, já com o cache mais cheio.
+    for(const n of nos) {
+      const url = _sgpeCache.get(n.getAttribute('data-proc'))
+      n.removeAttribute('data-proc')
+      if(!url) continue
+      const a = document.createElement('a')
+      a.href = url; a.target = '_blank'; a.rel = 'noopener'
+      a.className = 'proc-link'; a.title = 'Abrir no SGPe'
+      a.textContent = n.textContent
+      n.replaceWith(a)
+    }
+  } finally {
+    _sgpeRodando = false
+  }
+}
+
+// As telas trocam o innerHTML inteiro do #BODY e dos modais. Em vez de chamar o resolvedor em
+// cada uma das ~11 funções de render (e esquecer da próxima que for criada), um observador só
+// pega qualquer número que apareça na página, venha de onde vier.
+function sgpeObservar() {
+  new MutationObserver(() => {
+    clearTimeout(_sgpeTimer)
+    _sgpeTimer = setTimeout(sgpeResolverPendentes, 150)
+  }).observe(document.body, { childList: true, subtree: true })
 }
 
 async function carregarAnotacoes(tr) {
@@ -3806,9 +3912,9 @@ function relRenderTabela() {
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
       <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
-      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${normalizarProcesso(r.processo_mae)}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_mae)}</td>
       <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
-      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${normalizarProcesso(r.processo_pc)}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_pc)}</td>
       <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
       <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
@@ -4108,7 +4214,7 @@ function renderAlertasPrazo(alertas) {
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
         <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
-        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${normalizarProcesso(r.processo_pc)}</span></div>
+        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${procHtml(r.processo_pc)}</span></div>
       </div>
       <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}</span>
     </div>`
@@ -4323,7 +4429,7 @@ function renderPlan(rows) {
         const vencida = dias !== null && dias > 0
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
-          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;">${normalizarProcesso(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;">${procHtml(p.processo_pc)}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoeda(p.valor)}</td>
           <td style="padding:8px 10px;font-size:12px;${vencida?'color:var(--r);font-weight:700;':''}">${planData(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
@@ -5440,9 +5546,9 @@ function ciRender(pcs) {
     return `<tr>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);cursor:pointer;white-space:nowrap;" onclick="abrirTR('${p.tr}')">${p.tr||'—'}</td>
-      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_mae)}</td>
+      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${procHtml(p.processo_mae)}</td>
       <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
-      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
+      <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${procHtml(p.processo_pc)}</td>
       <td style="font-size:11px;max-width:220px;"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.entidade||''}">${p.entidade||'—'}</div></td>
       <td style="font-size:11px;">${p.analista_nome||'—'}</td>
       <td style="font-size:11px;white-space:nowrap;">${new Date(p.dt_envio_ci).toLocaleDateString('pt-BR')}</td>
@@ -5556,7 +5662,7 @@ async function verProdDetalhe(analistaId, nome) {
         ${baixadas.slice(0,50).map(p=>`<div class="nl-row">
           <div style="min-width:0;">
             <div style="font-size:10px;font-weight:600;white-space:nowrap;">${p.tr||'—'} — ${p.codigo_pc||'—'}</div>
-            <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe mãe <span class="proc-sgpe">${normalizarProcesso(p.processo_mae)}</span> · SGPe PC <span class="proc-sgpe">${normalizarProcesso(p.processo_pc)}</span></div>
+            <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe mãe <span class="proc-sgpe">${procHtml(p.processo_mae)}</span> · SGPe PC <span class="proc-sgpe">${procHtml(p.processo_pc)}</span></div>
           </div>
           <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.entidade||'—'}</span>
           <span class="bdg bdg-livre" style="font-size:9px;">${p.parecer_tipo||'Baixada'}</span>
@@ -7303,7 +7409,7 @@ function estRender() {
           <td style="text-align:center;"><input type="checkbox" ${marcado?'checked':''} onchange="estToggleLinha('${p.codigo_pc}', this.checked)"></td>
           ${!souAnalista?`<td style="font-size:11px;font-weight:600;white-space:nowrap;">${_estNomePorId[p.analista_id]||p.analista_nome||'—'}</td>`:''}
           <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
-          <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${normalizarProcesso(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${procHtml(p.processo_pc)}</td>
           <td style="font-size:11px;color:var(--az);font-weight:600;white-space:nowrap;">${p.tr||'—'}</td>
           <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.entidade||''}">${p.entidade||'—'}</td>
           <td style="font-size:11px;">${p.parecer_tipo||'—'}</td>
