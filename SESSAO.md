@@ -1,5 +1,87 @@
+# SIGPC-GT — ESTADO EM 06/08/2026
+Cole no início do chat novo. O estado de 04/08 está preservado mais abaixo.
+
+---
+
+## REGRA CRÍTICA
+
+A regex do `index.html` (sigpc-gt) e a de `lib/sgpe-link.js` (sigpc-api) são **a mesma regra
+em dois lugares**. Mexeu numa, mexa na outra e rode o teste de paridade.
+
+Já quebrou uma vez, em 06/08: o servidor passou a aceitar região na sigla e esta cópia ficou
+para trás. O sintoma foi silencioso — ADR não linkava na tela, FCEE e SCC linkavam. O
+`sgpeChave` devolvia `null` e o número virava texto puro **sem nunca ser enviado à API**.
+Nada dá erro quando isso acontece.
+
+A regex fica em `index.html`, logo acima de `sgpeChave`, com o histórico no comentário.
+
+---
+
+## CONCLUÍDO EM 06/08
+
+- **Tabela de 183 `cdOrgaosetor`** extraída do SGPe e no ar
+  (sigpc-api `9938571`, `feature/baixa-por-parcial`)
+- **Regex da sigla aceita região** (ADR20, SDR13) com separador
+- **Trava de ambiguidade corrigida** para avaliar dígitos crus antes da remoção de zeros
+  (sigpc-api `1cf8a0f`) — 39 testes passando
+- **22 ADRs validadas** contra o SGPe por `sgOrgaosetor`
+- **UPDATE do grupo A no banco:** 76 valores, 1.641 linhas
+- **Paridade front/servidor restaurada** (`61e0d62`, `main`) — 8.159/8.159, 0 divergências
+
+### ⚠️ Correção ao registro do UPDATE
+
+A tabela `prestacoes_contas_bkp_processo_pc` **não existe**. Conferido em 06/08: as únicas
+tabelas de backup no banco são `_backup_baixada_20260805` e `_backup_parcial_num_20260805`,
+de outra frente. O UPDATE foi aplicado sem esse backup, ou ele foi removido depois.
+
+O dado está correto — a transformação foi validada valor a valor antes de rodar e o
+`ainda_colados` zerou — e o rollback continua trivial: basta remover o espaço inserido entre
+região e número. Mas a rede de segurança prevista no plano não está lá.
+
+---
+
+## PENDENTE
+
+- **Skill `sgpe-link` (SKILL.md)** — a fazer hoje à noite
+- **22 valores dos grupos B e C** (ano grudado / ambíguos) em `sigpc-api/adr_sdr_sem_link.csv`
+  — conferência manual. Atingem 345 PCs.
+- **Merge da feature na main do sigpc-api** — produção roda da feature, confirmado no painel
+  do Railway
+- **Sondar `cdOrgaosetor` das 9 regionais** agora testáveis: ADR01, 18, 21, 22, 24, 26, 28,
+  29, 32. A ADR22 (`13580`) nunca foi verificada.
+
+---
+
+## LINKS DO SGPe NA TELA — como funciona
+
+As 12 exibições de processo (8 telas) saem por `procHtml()`. Cada número vira
+`<span data-proc="chave">`; um `MutationObserver` sobre o `body`, com debounce de 150ms,
+recolhe os pendentes, pede em lote ao `POST /sgpe/links` e troca pelos `<a class="proc-link">`.
+
+- Observador em vez de chamada nas 11 funções de render, para que tela nova não nasça esquecida.
+- O `data-proc` é removido **sempre**, com link ou sem — é o que faz o observador parar.
+- **Sem link o número fica texto puro, sem aviso.** Vale para sigla fora do mapa, região
+  colada, processo inexistente e falha de rede.
+- CSV e PDF de Relatórios ficam de fora de propósito: seguem em `normalizarProcesso`.
+- O front **não tem** a tabela `ORGAOS`, de propósito — manda tudo e a API descarta. A tela
+  nunca monta link sozinha, só exibe o que a API devolveu.
+
+---
+
+## ESTADO DAS BRANCHES
+
+`main` = `61e0d62`, publicada no GitHub Pages. Em 06/08 o build do Pages demorou: cinco
+minutos depois do push o arquivo no ar ainda era o commit anterior. Conferir com:
+
+```bash
+curl -s https://richardmottac-star.github.io/sigpc-gt/index.html | grep -c '0-9\]{1,2}'
+```
+
+Deve devolver 1 quando a correção da regex estiver publicada.
+
+---
+
 # SIGPC-GT — ESTADO EM 04/08/2026 (manhã)
-Cole no início do chat novo.
 
 ---
 
