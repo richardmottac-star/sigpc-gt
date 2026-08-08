@@ -1788,7 +1788,7 @@ async function buscar() {
     if(busca) p.set('busca', busca)
 
     const r = await fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p.toString()}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
 
     TRS_EST = (j.data||[]).map(t => {
@@ -2006,7 +2006,7 @@ async function abrirTR(tr) {
 
   try {
     const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
     const pcs = j.data || []
     if(!pcs.length) throw new Error('Nenhuma PC encontrada para esta TR')
@@ -2148,14 +2148,40 @@ function sgpeChave(bruto) {
   return `${regiao === undefined ? letras : letras + regiao} ${Number(numero)}/${Number(m[5])}`
 }
 
-// HTML do número: <a> se o link já está em cache, <span data-proc> se ainda falta perguntar,
-// texto puro se não é processo ou se já sabemos que não tem link.
+// Guarda no cache local o mapa `links` que a API passou a mandar junto com os dados.
+// A chave vem CRUA, exatamente como o valor está na linha ("SCC2146/2020"), então não há
+// nada a normalizar aqui — é esse o ponto da mudança.
+//
+// ⚠️ TEM DE RODAR ANTES DO RENDER. O `procHtml` lê deste cache enquanto monta o HTML; se o
+// mapa entrar depois, a primeira pintura sai sem link.
+function sgpeAbsorver(j) {
+  if(j && j.links) for(const [k, url] of Object.entries(j.links)) _sgpeCache.set(k, url)
+  return j
+}
+
+function sgpeLinkHtml(url, txt) {
+  return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+}
+
+// HTML do número. Dois caminhos enquanto durar a transição:
+//
+//   1. CAMINHO NOVO — a API mandou o link junto, indexado pelo valor cru. Nem regex nem
+//      rodada extra: é só olhar o cache.
+//   2. CAMINHO ANTIGO — rota que ainda não devolve `links`, ou processo que entrou no banco
+//      depois da última passada do job. Vira <span data-proc> e o resolvedor pergunta à API.
+//
+// O caminho 2 sai quando estiver confirmado que nenhum <span data-proc> sobra na tela. Ele
+// é o que ainda obriga esta cópia da regex a existir.
 function procHtml(bruto) {
   const txt = escHtml(normalizarProcesso(bruto))
+
+  const direto = _sgpeCache.get(bruto)
+  if(direto) return sgpeLinkHtml(direto, txt)
+
   const chave = sgpeChave(bruto)
   if(!chave) return txt
   const url = _sgpeCache.get(chave)
-  if(url) return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+  if(url) return sgpeLinkHtml(url, txt)
   if(_sgpeCache.has(chave)) return txt
   return `<span data-proc="${escHtml(chave)}">${txt}</span>`
 }
@@ -2409,7 +2435,7 @@ async function fetchTodasPCs(sid) {
   const params = new URLSearchParams({ limit: 99999 })
   if(sid) params.set('setorial_id', sid)
   const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-  const j = await r.json()
+  const j = sgpeAbsorver(await r.json())
   if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
   return j.data || []
 }
@@ -3874,7 +3900,7 @@ async function relBuscar() {
     if(grupo) params.set('grupo', grupo)
     if(status) params.set('status', status)
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     let dados = j.data||[]
 
@@ -4204,7 +4230,7 @@ async function carregarAlertasPrazo() {
     const alertaParams = new URLSearchParams({ analista_id: U.id })
     if(U.setorialFiltro) alertaParams.set('setorial_id', U.setorialFiltro)
     const r = await fetch(`${API_URL}/prestacoes_contas/alertas_prazo?${alertaParams}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     renderAlertasPrazo(j.data)
   } catch(e) {
@@ -4279,7 +4305,7 @@ async function buscarPlan() {
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
 
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
     let pcs = j.data||[]
@@ -5551,7 +5577,7 @@ async function ciCarregar() {
     const ciParams = new URLSearchParams({ enviado_ci: 'true', limit: 9999 })
     if(U.setorialFiltro) ciParams.set('setorial_id', U.setorialFiltro)
     const r = await fetch(`${API_URL}/prestacoes_contas?${ciParams}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pcs = (j.data||[]).filter(p => p.dt_envio_ci)
     pcs.sort((a,b) => new Date(a.dt_envio_ci) - new Date(b.dt_envio_ci))
@@ -5668,7 +5694,7 @@ async function verProdDetalhe(analistaId, nome) {
     const prodParams = new URLSearchParams({ analista_id: analistaId, limit: 99999 })
     if(U.setorialFiltro) prodParams.set('setorial_id', U.setorialFiltro)
     const r = await fetch(`${API_URL}/prestacoes_contas?${prodParams}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pcs = j.data||[]
     const baixadas = pcs.filter(p=>p.status==='baixada')
@@ -5907,7 +5933,7 @@ async function priorCarregar() {
   try {
     const sid = U.setorialFiltro || 'FCEE'
     const r = await fetch(`${API_URL}/prestacoes_contas?status=livre&setorial_id=${sid}&limit=99999`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     const pcs = j.data || []
     if(!pcs.length) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--ct);">Nenhuma PC livre encontrada.</td></tr>'
@@ -6016,7 +6042,7 @@ async function abrirDevM(tr) {
     '<div class="loading"><div class="spin"></div>Carregando PCs...</div>'
   try {
     const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}&limit=9999`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     const todas = j.data || []
     if(!todas.length) throw new Error('Nenhuma PC encontrada para esta TR')
     const entidade = todas[0].entidade || '—'
@@ -7333,7 +7359,7 @@ async function estCarregar() {
       if(a) params.set('analista_id', a)
     }
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
     _estDados = j.data || []
 
@@ -7650,7 +7676,7 @@ async function estLogCarregar() {
       if(g) params.set('grupo', g)
     }
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = await r.json()
+    const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
     _estLogDados = j.data || []
 
