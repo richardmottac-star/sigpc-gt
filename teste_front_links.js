@@ -17,9 +17,9 @@ const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
 // Recorta o trecho que vai de escHtml até o fim de procHtml — é o caminho inteiro do link.
 const ini = html.indexOf('function escHtml(');
-const fimMarca = html.indexOf('async function sgpeResolverPendentes');
+const fimMarca = html.indexOf('async function carregarAnotacoes');
 if (ini < 0 || fimMarca < 0) {
-  console.error('FALHA: nao achei o bloco do link no index.html (escHtml .. sgpeResolverPendentes).');
+  console.error('FALHA: nao achei o bloco do link no index.html (escHtml .. carregarAnotacoes).');
   process.exit(1);
 }
 const codigo = html.slice(ini, fimMarca);
@@ -73,20 +73,29 @@ console.log('\n═══ 3. O QUE NAO E PROCESSO CONTINUA TEXTO PURO ═══')
   conf(procHtml(null) === '' || !procHtml(null).includes('<a '), 'null nao quebra');
 }
 
-console.log('\n═══ 4. REDE DE SEGURANCA — o que a API nao mandou ainda vira <span> ═══');
+console.log('\n═══ 4. O QUE A API NAO MANDOU FICA TEXTO PURO ═══');
 {
-  // Processo válido que não veio no mapa: tem de continuar caindo no caminho antigo, senão
-  // uma rota esquecida perderia o link em silêncio.
+  // Processo bem formado que não veio no mapa: PC que entrou depois da última passada do job,
+  // ou processo que o SGPe não tem. Some o link, some qualquer marcação — a coluna continua
+  // legível e o cron resolve na próxima hora. Nada de <span> nem de pergunta à API.
   const h = procHtml('SCC9999/2021');
-  conf(h.includes('data-proc="SCC 9999/2021"'), 'vira <span data-proc> com a chave canonica', h);
+  conf(!h.includes('<a '), 'sem link', h);
+  conf(!h.includes('<span'), 'sem marcacao residual', h);
+  conf(h === 'SCC 00009999/2021' || h.length > 0, 'o numero continua na tela', h);
 }
 
-console.log('\n═══ 5. NEGATIVA CONHECIDA NAO VIRA <span> ═══');
+console.log('\n═══ 5. A REGEX NAO PODE VOLTAR ═══');
 {
-  _sgpeCache.set('SCC 18870/2026', null);   // é assim que o resolvedor antigo grava
-  const h = procHtml('SCC18870/2026');
-  conf(!h.includes('data-proc'), 'nao pergunta de novo', h);
-  conf(!h.includes('<a '), 'e nao vira link');
+  // Guarda contra reintrodução. Enquanto esta tela não normalizar nada, não existe a segunda
+  // cópia da regra — que foi o que divergiu em silêncio em 05/08.
+  conf(!/const SGPE_PADRAO/.test(html), 'SGPE_PADRAO nao existe mais no index.html');
+  conf(!/function sgpeChave/.test(html), 'sgpeChave nao existe mais');
+  conf(!/data-proc/.test(html), 'nenhum <span data-proc> restante');
+  conf(!/sgpeResolverPendentes|sgpeObservar/.test(html), 'resolvedor e observador removidos');
+  conf(!/sgpe\/links/.test(html), 'a tela nao chama mais POST /sgpe/links');
+  // O corpo de procHtml tem de caber em um lookup — se crescer, alguem esta normalizando.
+  const corpo = (html.match(/function procHtml\(bruto\) \{([\s\S]*?)\n\}/) || [])[1] || '';
+  conf(!/match\(|replace\(|toUpperCase\(/.test(corpo), 'procHtml nao manipula o texto do processo', corpo.trim());
 }
 
 console.log('\n═══ 6. sgpeAbsorver E TOLERANTE ═══');
@@ -101,8 +110,10 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
 {
   // Guarda contra o esquecimento: se alguém criar uma tela nova e não absorver, o número
   // volta a depender do resolvedor antigo — e ninguém percebe, porque o link continua saindo.
-  const absorve = (html.match(/sgpeAbsorver\(await r\.json\(\)\)/g) || []).length;
-  conf(absorve >= 12, `${absorve} pontos absorvendo j.links (esperado >= 12)`);
+  // Só linhas de código: a âncora `const j =` no início da linha exclui o exemplo que aparece
+  // dentro do comentário de `sgpeAbsorver` — um contador inflado esconderia ponto faltando.
+  const absorve = (html.match(/^\s*const j = sgpeAbsorver\(await r\.json\(\)\)/gm) || []).length;
+  conf(absorve === 12, `${absorve} pontos absorvendo j.links (esperado exatamente 12)`);
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

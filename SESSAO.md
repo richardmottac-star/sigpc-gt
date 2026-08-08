@@ -1,19 +1,30 @@
-# SIGPC-GT — ESTADO EM 06/08/2026
-Cole no início do chat novo. O estado de 04/08 está preservado mais abaixo.
+# SIGPC-GT — ESTADO EM 08/08/2026
+Cole no início do chat novo. Os estados de 06/08 e 04/08 estão preservados mais abaixo.
 
 ---
 
-## REGRA CRÍTICA
+## A REGRA CRÍTICA DA REGEX DUPLICADA ACABOU — 08/08
 
-A regex do `index.html` (sigpc-gt) e a de `lib/sgpe-link.js` (sigpc-api) são **a mesma regra
-em dois lugares**. Mexeu numa, mexa na outra e rode o teste de paridade.
+**Não existe mais regex de processo no `index.html`.** A regra de normalização voltou a ter
+um dono só: `sigpc-api/lib/sgpe-link.js`.
 
-Já quebrou uma vez, em 06/08: o servidor passou a aceitar região na sigla e esta cópia ficou
-para trás. O sintoma foi silencioso — ADR não linkava na tela, FCEE e SCC linkavam. O
-`sgpeChave` devolvia `null` e o número virava texto puro **sem nunca ser enviado à API**.
-Nada dá erro quando isso acontece.
+O que mudou: a API passou a devolver um mapa `links` junto com os dados, **indexado pelo
+valor CRU** (`links["SCC2146/2020"]`). A tela faz `_sgpeCache.get(bruto)` e exibe — sem
+normalizar nada. `SGPE_PADRAO`, `sgpeChave`, o resolvedor e o `MutationObserver` foram
+removidos, e o `sgpe-link-standalone.js` (que nenhum `<script>` carregava) também.
 
-A regex fica em `index.html`, logo acima de `sgpeChave`, com o histórico no comentário.
+### ⚠️ NÃO REINTRODUZIR NORMALIZAÇÃO NESTE ARQUIVO
+
+Enquanto a tela não normalizar nada, não há segunda cópia para divergir. Divergiu uma vez, em
+05/08, e o estrago foi silencioso: o servidor passou a aceitar região na sigla, esta cópia
+ficou para trás, e "ADR17 00000867/2017" deixou de linkar **sem nunca ser perguntado à API**
+— enquanto FCEE e SCC linkavam normalmente. Nada acusou.
+
+Se um dia parecer necessário normalizar aqui, o certo é a **API** passar a devolver a chave
+que a tela precisa.
+
+`teste_front_links.js` tranca isso: falha se `SGPE_PADRAO`, `sgpeChave`, `data-proc` ou
+manipulação de texto dentro de `procHtml` voltarem a aparecer.
 
 ---
 
@@ -52,32 +63,45 @@ região e número. Mas a rede de segurança prevista no plano não está lá.
 
 ---
 
-## LINKS DO SGPe NA TELA — como funciona
+## LINKS DO SGPe NA TELA — como funciona (desde 08/08)
 
-As 12 exibições de processo (8 telas) saem por `procHtml()`. Cada número vira
-`<span data-proc="chave">`; um `MutationObserver` sobre o `body`, com debounce de 150ms,
-recolhe os pendentes, pede em lote ao `POST /sgpe/links` e troca pelos `<a class="proc-link">`.
+O link **vem pronto da API**. Não há rodada de resolução na tela, nem carregamento
+progressivo: o número já sai como `<a>` na primeira pintura.
 
-- Observador em vez de chamada nas 11 funções de render, para que tela nova não nasça esquecida.
-- O `data-proc` é removido **sempre**, com link ou sem — é o que faz o observador parar.
+```
+GET /prestacoes_contas          ─┐
+GET /prestacoes_contas/resumo_tr ├─ devolvem { data, count, links, error }
+GET /prestacoes_contas/alertas_prazo ─┘
+```
+
+- **12 pontos de fetch** passam a resposta por `sgpeAbsorver(await r.json())`, que joga o mapa
+  no `_sgpeCache` **antes do render**. Se entrar depois, a primeira pintura sai sem link.
+- `procHtml(bruto)` é um `Map.get` e mais nada.
 - **Sem link o número fica texto puro, sem aviso.** Vale para sigla fora do mapa, região
-  colada, processo inexistente e falha de rede.
+  colada (ambígua), processo que o SGPe não tem, e PC que entrou depois da última passada do
+  job — essa última o cron resolve em até 1 h.
 - CSV e PDF de Relatórios ficam de fora de propósito: seguem em `normalizarProcesso`.
-- O front **não tem** a tabela `ORGAOS`, de propósito — manda tudo e a API descarta. A tela
-  nunca monta link sozinha, só exibe o que a API devolveu.
+- O front **não tem** a tabela `ORGAOS` nem a regex, de propósito.
+
+Quem enche o cache é `sigpc-api/job_sgpe_links.js`, num serviço separado no Railway, de hora
+em hora, `--limite=200`. Em 08/08 a carga completa resolveu 7.311 processos em 42 min, com 6
+negativas e zero erros.
+
+`POST /sgpe/links` continua existindo na API, mas **a tela não o chama mais** — sobrou como
+ferramenta manual.
 
 ---
 
 ## ESTADO DAS BRANCHES
 
-`main` = `61e0d62`, publicada no GitHub Pages. Em 06/08 o build do Pages demorou: cinco
-minutos depois do push o arquivo no ar ainda era o commit anterior. Conferir com:
+`main` = `feature/baixa-por-parcial`, publicada no GitHub Pages. Em 06/08 o build do Pages
+demorou cinco minutos; em 08/08 saiu em menos de um. Conferir o que está no ar com:
 
 ```bash
-curl -s https://richardmottac-star.github.io/sigpc-gt/index.html | grep -c '0-9\]{1,2}'
+curl -s https://richardmottac-star.github.io/sigpc-gt/index.html | grep -c 'sgpeAbsorver'
 ```
 
-Deve devolver 1 quando a correção da regex estiver publicada.
+Deve devolver 13 (1 definição + 12 pontos de uso).
 
 ---
 

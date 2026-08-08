@@ -1378,7 +1378,6 @@ function iniciarApp() {
   atualizarAvatarHeader()
 
   renderSB()
-  sgpeObservar()
   irDash()
   carregarContadores()
 }
@@ -2101,147 +2100,53 @@ function normalizarProcesso(str) {
 // ══════════════════════════════════════
 //  LINKS DO SGPe
 // ══════════════════════════════════════
-// Transforma o número de processo em link direto, consumindo POST /sgpe/links.
+// O número de processo vira link direto porque a API MANDA O LINK PRONTO, junto com os dados.
+// Esta tela não calcula, não normaliza e não pergunta nada: só olha o mapa e exibe.
 //
 // ⚠️ NÃO EXISTE FÓRMULA para o número interno do SGPe: o que aparece na tela NÃO é o que vai
-// na URL. Quem resolve é a API, consultando o SGPe e guardando em cache. Nunca calcular,
-// estimar ou interpolar esse número aqui — errar não dá erro, abre OUTRO processo em silêncio.
+// na URL. Quem resolve é a API, consultando o SGPe e guardando em cache (`sgpe_processo_ref`),
+// e quem consulta em volume é `job_sgpe_links.js`, de hora em hora. Nunca calcular, estimar
+// ou interpolar esse número aqui — errar não dá erro, abre OUTRO processo em silêncio.
 //
 // SEM LINK O NÚMERO FICA TEXTO PURO, sem aviso nenhum. Cai nesse caso o que a API não resolve:
-// sigla fora da tabela de órgãos, região colada ao número, processo que não existe no SGPe,
-// número malformado no banco, e também falha de rede. A coluna continua legível como antes.
+// sigla fora da tabela de órgãos, região colada ao número (ambígua), processo que o SGPe não
+// tem, número malformado no banco. A coluna continua legível, como sempre foi.
 //
-// ⚠️ A regex abaixo tem de ser IDÊNTICA à de sigpc-api/lib/sgpe-link.js: é ela que produz a
-// chave canônica ("SCC 2146/2020", "ADR17 867/2017") pela qual a resposta da API vem indexada.
-// Se as duas divergirem, a resposta chega e não casa com nada.
+// ─────────────────────────────────────────────────────────────────────────────
+// A CHAVE DO MAPA É O VALOR CRU, exatamente como está na linha:
 //
-// JÁ DIVERGIU UMA VEZ, e o estrago foi silencioso: em 05/08 esta cópia nasceu com
-// `([A-Za-z]{2,12})`, só letras. Quando o servidor passou a aceitar região na sigla (ADR17,
-// SDR13), esta ficou para trás — "ADR17 00000867/2017" não casava, `sgpeChave` devolvia null
-// e o número virava texto puro SEM NUNCA SER PERGUNTADO À API. A tela não acusava nada: ADR
-// simplesmente não linkava, enquanto FCEE e SCC linkavam. Mexeu numa, mexa na outra.
+//   links["SCC2146/2020"]         links["ADR20 00001233/2017"]
 //
-// A regra do separador é a mesma do servidor: os dígitos só migram para a sigla quando há
-// separador explícito (espaço, ponto ou hífen). Sem separador, a sigla é só letras e todo
-// dígito pertence ao número — é o que sustenta "SCC2146/2020" e "FCEE264/2017".
+// Por isso `procHtml` é um `Map.get` e nada mais. É essa escolha que permitiu APAGAR a regex
+// que vivia aqui.
 //
-// O que NÃO é replicado aqui é a trava de ambiguidade do servidor, que devolve null para
-// "ADR223151/2017" (ADR não é órgão, ADR22 é). Ela depende da tabela ORGAOS, e uma quarta
-// cópia dessa tabela seria justamente o tipo de duplicata que causou o bug acima. Não faz
-// falta: esta tela nunca monta link sozinha, só exibe o que a API devolveu. Para um valor
-// ambíguo o servidor não devolve chave nenhuma, a busca no cache falha e o número fica texto
-// puro — o mesmo resultado, decidido por quem tem a tabela.
-const SGPE_PADRAO = /^\s*([A-Za-z]{2,12})(?:([0-9]{1,2})[\s.\-]+|([\s.\-]*))(\d{1,20})\s*\/\s*(\d{4})\s*$/
+// ⚠️ NÃO REINTRODUZIR NORMALIZAÇÃO NESTE ARQUIVO. Até 08/08/2026 esta tela tinha uma cópia
+// da regex de `sigpc-api/lib/sgpe-link.js` para montar a chave canônica, e as duas TINHAM de
+// ser mexidas juntas. Divergiram uma vez, em 05/08, e o estrago foi silencioso: o servidor
+// passou a aceitar região na sigla, esta cópia ficou para trás, e "ADR17 00000867/2017"
+// deixou de linkar SEM NUNCA SER PERGUNTADO À API — enquanto FCEE e SCC linkavam normalmente.
+// Nada acusou. Se algum dia parecer necessário voltar a normalizar aqui, o certo é a API
+// passar a devolver a chave que a tela precisa.
+// ─────────────────────────────────────────────────────────────────────────────
 
-// chave canônica -> url, ou null quando a API já respondeu que não há link
+// valor cru -> url
 const _sgpeCache = new Map()
-let _sgpeRodando = false
-let _sgpeTimer = null
 
-function sgpeChave(bruto) {
-  const m = String(bruto ?? '').match(SGPE_PADRAO)
-  if(!m) return null
-  const letras = m[1].toUpperCase()
-  const regiao = m[2]              // só existe quando veio seguida de separador
-  const numero = m[4].replace(/^0+/, '')   // zeros à esquerda saem depois de casar, como no servidor
-  if(numero === '' || numero.length > 8) return null
-  return `${regiao === undefined ? letras : letras + regiao} ${Number(numero)}/${Number(m[5])}`
-}
-
-// Guarda no cache local o mapa `links` que a API passou a mandar junto com os dados.
-// A chave vem CRUA, exatamente como o valor está na linha ("SCC2146/2020"), então não há
-// nada a normalizar aqui — é esse o ponto da mudança.
+// Guarda o mapa `links` que vem junto com os dados nas rotas de prestações de contas.
 //
 // ⚠️ TEM DE RODAR ANTES DO RENDER. O `procHtml` lê deste cache enquanto monta o HTML; se o
-// mapa entrar depois, a primeira pintura sai sem link.
+// mapa entrar depois, a primeira pintura sai sem link. Daí o uso encaixado na atribuição:
+//   const j = sgpeAbsorver(await r.json())
 function sgpeAbsorver(j) {
   if(j && j.links) for(const [k, url] of Object.entries(j.links)) _sgpeCache.set(k, url)
   return j
 }
 
-function sgpeLinkHtml(url, txt) {
-  return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
-}
-
-// HTML do número. Dois caminhos enquanto durar a transição:
-//
-//   1. CAMINHO NOVO — a API mandou o link junto, indexado pelo valor cru. Nem regex nem
-//      rodada extra: é só olhar o cache.
-//   2. CAMINHO ANTIGO — rota que ainda não devolve `links`, ou processo que entrou no banco
-//      depois da última passada do job. Vira <span data-proc> e o resolvedor pergunta à API.
-//
-// O caminho 2 sai quando estiver confirmado que nenhum <span data-proc> sobra na tela. Ele
-// é o que ainda obriga esta cópia da regex a existir.
 function procHtml(bruto) {
   const txt = escHtml(normalizarProcesso(bruto))
-
-  const direto = _sgpeCache.get(bruto)
-  if(direto) return sgpeLinkHtml(direto, txt)
-
-  const chave = sgpeChave(bruto)
-  if(!chave) return txt
-  const url = _sgpeCache.get(chave)
-  if(url) return sgpeLinkHtml(url, txt)
-  if(_sgpeCache.has(chave)) return txt
-  return `<span data-proc="${escHtml(chave)}">${txt}</span>`
-}
-
-async function sgpeResolverPendentes() {
-  // Já tem uma rodada em andamento: reagenda em vez de descartar, senão o que foi renderizado
-  // durante o fetch ficaria sem link até o próximo render.
-  if(_sgpeRodando) { clearTimeout(_sgpeTimer); _sgpeTimer = setTimeout(sgpeResolverPendentes, 200); return }
-  const nos = [...document.querySelectorAll('span[data-proc]')]
-  if(!nos.length) return
-  _sgpeRodando = true
-  try {
-    const faltam = []
-    for(const n of nos) {
-      const k = n.getAttribute('data-proc')
-      if(!_sgpeCache.has(k) && !faltam.includes(k)) faltam.push(k)
-    }
-    if(faltam.length) {
-      try {
-        // O teto de 400 é o mesmo da API. Ela resolve até 25 novos por chamada e devolve o
-        // resto nas próximas — o cache vai enchendo conforme a tela é usada.
-        const r = await fetch(`${API_URL}/sgpe/links`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ processos: faltam.slice(0, 400) })
-        })
-        const j = await r.json()
-        for(const [k, url] of Object.entries((j.data && j.data.links) || {})) _sgpeCache.set(k, url)
-        // Processo que o SGPe não tem nunca vai ter link: guarda o null para não perguntar de novo.
-        for(const k of (j.data && j.data.naoEncontrados) || []) _sgpeCache.set(k, null)
-      } catch(e) {
-        // Silêncio proposital: sem link o número fica texto puro. Nada de aviso na tela.
-      }
-    }
-    // O data-proc sai SEMPRE, mesmo sem link — é o que faz o observador abaixo parar em vez de
-    // girar em falso. O que ficou de fora do teto vira texto puro agora e ganha nova chance no
-    // próximo render, já com o cache mais cheio.
-    for(const n of nos) {
-      const url = _sgpeCache.get(n.getAttribute('data-proc'))
-      n.removeAttribute('data-proc')
-      if(!url) continue
-      const a = document.createElement('a')
-      a.href = url; a.target = '_blank'; a.rel = 'noopener'
-      a.className = 'proc-link'; a.title = 'Abrir no SGPe'
-      a.textContent = n.textContent
-      n.replaceWith(a)
-    }
-  } finally {
-    _sgpeRodando = false
-  }
-}
-
-// As telas trocam o innerHTML inteiro do #BODY e dos modais. Em vez de chamar o resolvedor em
-// cada uma das ~11 funções de render (e esquecer da próxima que for criada), um observador só
-// pega qualquer número que apareça na página, venha de onde vier.
-function sgpeObservar() {
-  new MutationObserver(() => {
-    clearTimeout(_sgpeTimer)
-    _sgpeTimer = setTimeout(sgpeResolverPendentes, 150)
-  }).observe(document.body, { childList: true, subtree: true })
+  const url = _sgpeCache.get(bruto)
+  if(!url) return txt
+  return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
 }
 
 async function carregarAnotacoes(tr) {
