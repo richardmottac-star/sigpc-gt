@@ -71,17 +71,28 @@ console.log('\n═══ 3. O CASO REAL — como o acervo esta gravado ═══
   conf(acha('xyz') === 0, 'termo que nao existe nao acha nada');
 }
 
-console.log('\n═══ 4. AS QUATRO BUSCAS DO FRONT USAM termoBusca ═══');
+console.log('\n═══ 4. QUEM BUSCA NA API, QUEM BUSCA NO CLIENTE ═══');
 {
-  // Guarda contra o esquecimento: tela nova que compare texto cru volta a ignorar acento.
-  const usos = (html.match(/termoBusca\(/g) || []).length;
-  conf(usos >= 5, `${usos} usos de termoBusca (1 definicao + 4 buscas)`);
+  // Tres telas mandam `busca` para a API e NAO filtram localmente.
+  const mandam = (html.match(/(params|p)\.set\('busca',/g) || []).length;
+  conf(mandam === 3, `${mandam} telas mandam busca para a API (Estoque de TRs, Relatorios, Minha Planilha)`);
 
-  // Nenhuma das quatro pode ter voltado ao toLowerCase() cru sobre o campo do usuario.
-  conf(!/getElementById\('plBusca'\)\?\.value\.trim\(\)\.toLowerCase\(\)/.test(html), 'Minha Planilha nao usa mais toLowerCase cru');
-  conf(!/getElementById\('admBusca'\)\?\.value\|\|''\)\.toLowerCase\(\)/.test(html), 'Admin nao usa mais toLowerCase cru');
-  conf(/const q = termoBusca\(_estBusca\)/.test(html), 'Estoque de PCs usa termoBusca');
-  conf(/const q = termoBusca\(tr\)/.test(html), 'Relatorios usa termoBusca');
+  // Minha Planilha: o filtro de cliente saiu.
+  conf(!/pcs = pcs\.filter\(p => \(p\.tr\|\|''\)\.toLowerCase\(\)/.test(html), 'Minha Planilha nao filtra mais no cliente');
+  conf(/if\(busca\) params\.set\('busca', busca\)/.test(html), 'Minha Planilha manda busca para a API');
+
+  // Relatorios: idem, e o campo deixou de ser so TR.
+  conf(!/dados = dados\.filter\(p => \(p\.tr\|\|''\)\.toLowerCase\(\)/.test(html), 'Relatorios nao filtra mais no cliente');
+  conf(/if\(tr\) params\.set\('busca', tr\)/.test(html), 'Relatorios manda busca para a API');
+  conf(!/placeholder="Ex: 2022TR000251"/.test(html), 'rotulo do campo de Relatorios foi corrigido');
+
+  // Estoque de PCs: filtra no cliente DE PROPOSITO (oninput por tecla + contador precisa do
+  // conjunto inteiro). Tem de continuar assim, e cobrindo os mesmos campos da API.
+  conf(/const q = termoBusca\(_estBusca\)/.test(html), 'Estoque de PCs continua filtrando no cliente');
+  const bloco = (html.match(/function estDadosFiltrados\(\)[\s\S]*?\n\}/) || [''])[0];
+  for (const campo of ['tr', 'processo_mae', 'processo_pc', 'entidade', 'codigo_nl', 'codigo_pc']) {
+    conf(bloco.includes(`p.${campo}`), `Estoque de PCs cobre ${campo}`);
+  }
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

@@ -1725,7 +1725,7 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>TR / Entidade</label><input type="text" id="fBusca" placeholder="TR, entidade ou SGPe" style="width:240px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      <div class="fg"><label>Busca</label><input type="text" id="fBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:260px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
@@ -2956,8 +2956,8 @@ function irRel() {
           <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>
-      <div class="fg" id="relFiltTR" style="display:none"><label>Número TR</label>
-        <input type="text" id="relTR" placeholder="Ex: 2022TR000251" style="width:180px;">
+      <div class="fg" id="relFiltTR" style="display:none"><label>Busca</label>
+        <input type="text" id="relTR" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;">
       </div>
       <div class="fg" id="relFiltStatus" style="display:none"><label>Status</label>
         <select id="relStatus">
@@ -3833,13 +3833,15 @@ async function relBuscar() {
     if(analistaId) params.set('analista_id', analistaId)
     if(grupo) params.set('grupo', grupo)
     if(status) params.set('status', status)
+    if(tr) params.set('busca', tr)
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     let dados = j.data||[]
 
-    // Busca por TR é substring — filtra no cliente
-    if(tr) { const q = termoBusca(tr); dados = dados.filter(p => (p.tr||'').toLowerCase().includes(q)) }
+    // Sem filtro no cliente: a busca vai como `busca` para a API, que cobre os sete campos.
+    // O campo já se chamou "Número TR" e só filtrava `tr` — agora acha por SGPe, entidade,
+    // NL e código de PC também, e o rótulo foi corrigido junto.
 
     // Nome completo do analista, via usuarios
     const { data: todosUsers } = await db.from('usuarios').select('id,nome').eq('setorial_id', sid)
@@ -4098,7 +4100,7 @@ async function irPlanilha() {
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar Entidade / TR</label>
-        <input type="text" id="plBusca" placeholder="TR, entidade ou SGPe" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
+        <input type="text" id="plBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
@@ -4230,20 +4232,22 @@ async function buscarPlan() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
-  const busca = termoBusca(document.getElementById('plBusca')?.value)
+  // Vai CRU para a API, que normaliza acento e caixa. A tela não filtra mais nada.
+  const busca = (document.getElementById('plBusca')?.value||'').trim()
   const sit   = document.getElementById('plSit')?.value||''
   const prazo = document.getElementById('plPrazo')?.value||''
 
   try {
     const params = new URLSearchParams({ analista_id: U.id, limit: 9999, offset: 0 })
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
+    if(busca) params.set('busca', busca)
 
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
     let pcs = j.data||[]
-    if(busca) pcs = pcs.filter(p => (p.tr||'').toLowerCase().includes(busca) || (p.entidade||'').toLowerCase().includes(busca) || (p.processo_mae||'').toLowerCase().includes(busca) || (p.processo_pc||'').toLowerCase().includes(busca))
+    // Sem filtro no cliente: a API já devolveu só o que casa, sobre os sete campos.
 
     renderPlanResumo(pcs, window._planMeta)
 
@@ -7223,7 +7227,7 @@ async function irEstornar() {
         </select>
       </div>` : ''}
       <div class="fg"><label>Buscar</label>
-        <input type="text" id="estBusca" placeholder="Código PC, SGPe, TR ou entidade" oninput="estBuscarInput(this.value)" style="min-width:220px;">
+        <input type="text" id="estBusca" placeholder="TR, SGPe, entidade, NL ou PC" oninput="estBuscarInput(this.value)" style="min-width:220px;">
       </div>
     </div>
 
@@ -7317,15 +7321,26 @@ async function estCarregar() {
   }
 }
 
+// ⚠️ ESTA FILTRA NO CLIENTE DE PROPÓSITO — não migrar para o `busca` da API.
+//
+// A busca dispara a cada tecla (`oninput`, sem debounce), então cada letra viraria uma
+// requisição. Pior: `_estDados` alimenta `estAtualizarContador()` e `estAtualizarAviso()`,
+// que precisam do conjunto INTEIRO — o aviso diz "reduz sua produtividade de 3.619 para X".
+// Com `_estDados` já filtrado, esse número passaria a ser o do filtro, não o real.
+//
+// Os dados já estão todos em memória; filtrar aqui é instantâneo e não gera rede.
+// Os campos são os mesmos sete da API, para as duas buscas acharem a mesma coisa.
 function estDadosFiltrados() {
   if(!_estBusca) return _estDados
   const q = termoBusca(_estBusca)
   if(!q) return _estDados
   return _estDados.filter(p =>
-    (p.codigo_pc||'').toLowerCase().includes(q) ||
-    (p.processo_pc||'').toLowerCase().includes(q) ||
     (p.tr||'').toLowerCase().includes(q) ||
-    (p.entidade||'').toLowerCase().includes(q)
+    (p.processo_mae||'').toLowerCase().includes(q) ||
+    (p.processo_pc||'').toLowerCase().includes(q) ||
+    (p.entidade||'').toLowerCase().includes(q) ||
+    (p.codigo_nl||'').toLowerCase().includes(q) ||
+    (p.codigo_pc||'').toLowerCase().includes(q)
   )
 }
 
