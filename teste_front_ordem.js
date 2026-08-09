@@ -85,13 +85,15 @@ console.log('\n═══ 5. COMO AS TELAS USAM ═══');
   conf(/compararAnoTR\(a\.tr, b\.tr\)/.test(blocoEst), 'Estoque: ano entra depois do status');
   conf(/localeCompare/.test(blocoEst), 'Estoque: numero da TR continua desempatando');
 
-  // Minha Planilha: pendentes primeiro, depois ano, depois numero.
-  // `.*` de linha unica: o arquivo tem CRLF, entao ancorar em "\n" logo apos os parenteses
-  // nao casa — o \r fica no meio.
-  const blocoPlan = (html.match(/trs\.sort\(.*/) || [''])[0];
-  conf(/pendentes>0/.test(blocoPlan), 'Planilha: pendentes continuam vindo primeiro');
-  conf(/compararAnoTR\(a\.tr, b\.tr\)/.test(blocoPlan), 'Planilha: ano entra depois dos pendentes');
+  // Minha Planilha: a ordem "Em análise primeiro" mudou de endereco em 09/08/2026 — saiu do
+  // `trs.sort` dentro do buscarPlan e virou uma das opcoes do dropdown do painel
+  // (PLAN_ORDENS.analise). A REGRA e a mesma: pendentes, depois ano, depois numero.
+  const blocoPlan = (html.match(/analise: \{ rotulo:'Em análise primeiro',[\s\S]*?\},/) || [''])[0];
+  conf(/pendentes>0/.test(blocoPlan), 'Planilha: pendentes continuam vindo primeiro', blocoPlan.trim());
+  conf(/compararAnoTR\(a\.tr,b\.tr\)/.test(blocoPlan), 'Planilha: ano entra depois dos pendentes');
   conf(/localeCompare/.test(blocoPlan), 'Planilha: numero da TR continua desempatando');
+  // e o alfinete tem de vir por cima de todas as ordens, inclusive dessa
+  conf(/\(b\.fixada\?1:0\) - \(a\.fixada\?1:0\) \|\| cmp\(a,b\)/.test(html), 'Planilha: fixada vem antes de qualquer ordem');
 
   // Estoque de PCs: NAO usa — decisao registrada no codigo.
   const blocoPag = (html.match(/function estMontarPaginas[\s\S]*?\n\}/) || [''])[0];

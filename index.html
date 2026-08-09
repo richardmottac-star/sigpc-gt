@@ -4267,6 +4267,7 @@ async function irPlanilha() {
       <button class="btn-limpar" onclick="limparPlan()">✕ Limpar</button>
     </div>
     <!-- Área de conteúdo -->
+    <div id="planBarra"></div>
     <div id="planConteudo">
       <div class="loading"><div class="spin"></div>Carregando seus registros...</div>
     </div>
@@ -4448,21 +4449,160 @@ async function buscarPlan() {
       })})).filter(t => t.parciais.length)
     }
 
-    // TRs com trabalho pendente primeiro
-    // Pendentes primeiro (o que ainda dá trabalho), depois a ordem por ano de risco — é a
-    // fila de trabalho do analista, exatamente onde a prioridade de glosa importa —, e só
-    // então o número da TR.
-    trs.sort((a,b) => (b.pendentes>0) - (a.pendentes>0) || compararAnoTR(a.tr, b.tr) || (a.tr||'').localeCompare(b.tr||''))
+    // Preferências (alfinete e painel aberto) e anotações vêm juntas, em paralelo — são o
+    // que o painel precisa para desenhar a linha recolhida.
+    await Promise.all([planCarregarPrefs(), planCarregarAnotacoes(trs.map(t => t.tr))])
 
-    window._planTot = trs.length
+    // Marca cada TR com o que o painel usa para ordenar e filtrar. Feito UMA vez aqui, e não
+    // dentro do sort: o comparador roda O(n log n) vezes e recalcular ali multiplicaria isso.
+    trs.forEach(t => {
+      const abertas = t.parciais.filter(p => !p.baixada)
+      t.fixada    = !!(_planPrefs[t.tr] || {}).fixada
+      t.expandida = !!(_planPrefs[t.tr] || {}).expandida
+      t.anotacoes = _planAnots[t.tr] || []
+      t.baixadasQtd = t.parciais.filter(p => p.baixada).reduce((s,p) => s+p.qtd, 0)
+      // pior prazo da TR: o maior número de dias vencidos entre as parciais em aberto
+      t.piorDias = abertas.reduce((m,p) => (p.maxDias !== null && (m === null || p.maxDias > m)) ? p.maxDias : m, null)
+      t.situacoes = [...new Set(abertas.map(p => p.situacao_atual).filter(Boolean))]
+    })
+
     window._planDadosCache = trs
-
-    const from = (window._planPag||0)*PP
-    renderPlan(trs.slice(from, from+PP))
-    planRenderPag()
+    planAplicar()
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
+}
+
+// ══════════════════════════════════════
+//  PAINEL DA MINHA PLANILHA — estado do analista
+// ══════════════════════════════════════
+// Alfinete e painel aberto são escolha do analista, não do dado, e vivem em `preferencia_tr`
+// (analista_id + tr). Ficam no banco, e não no navegador, porque a mesma pessoa usa a tela de
+// máquinas diferentes — recolher tudo ao trocar de computador seria perder o próprio trabalho
+// de organização.
+let _planPrefs  = {}   // tr -> {fixada, expandida}
+let _planAnots  = {}   // tr -> [anotacao]
+let _planChip   = ''   // filtro rápido ativo
+let _planOrdem  = 'analise'
+
+async function planCarregarPrefs() {
+  _planPrefs = {}
+  try {
+    const r = await fetch(`${API_URL}/preferencia_tr?analista_id=${U.id}`)
+    const j = await r.json()
+    ;(j.data||[]).forEach(p => { _planPrefs[p.tr] = { fixada: !!p.fixada, expandida: !!p.expandida } })
+  } catch(e) {
+    // Sem preferência a tela abre toda recolhida — que é o padrão pedido. Não é erro de tela.
+  }
+}
+
+async function planCarregarAnotacoes(trs) {
+  _planAnots = {}
+  if(!trs || !trs.length) return
+  try {
+    // Uma chamada só para as ~54 TRs. Ver o parâmetro `trs` em GET /anotacoes_tr.
+    const r = await fetch(`${API_URL}/anotacoes_tr?trs=${encodeURIComponent(trs.join(','))}`)
+    const j = await r.json()
+    ;(j.data||[]).forEach(a => { (_planAnots[a.tr] = _planAnots[a.tr] || []).push(a) })
+    // a rota já devolve por criado_em DESC — a primeira é a mais recente
+  } catch(e) { }
+}
+
+// Grava a preferência e atualiza o estado local na hora, sem esperar a rede: o alfinete tem
+// de responder ao clique. Se a gravação falhar, o próximo carregamento traz a verdade.
+async function planSalvarPref(tr, campos) {
+  _planPrefs[tr] = Object.assign({ fixada:false, expandida:false }, _planPrefs[tr], campos)
+  try {
+    await fetch(`${API_URL}/preferencia_tr`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({ analista_id: U.id, tr }, campos))
+    })
+  } catch(e) { }
+}
+
+// ── Filtros rápidos ─────────────────────────────────────────────────────────
+// Cada chip é uma pergunta sobre a TR inteira, não sobre uma parcial: "esta TR tem alguma
+// parcial vencida?". Por isso olham as parciais EM ABERTO — parcial baixada não é trabalho.
+const PLAN_CHIPS = [
+  { id:'vencido',   rotulo:'Prazo vencido',        teste: t => prazoFaixa(t.piorDias) === 'vencida' },
+  { id:'diligencia',rotulo:'Aguardando diligência',teste: t => t.situacoes.includes('Diligência') },
+  { id:'analise',   rotulo:'Em análise',           teste: t => t.situacoes.includes('Em análise') },
+  // "não iniciada": nada baixado E nenhuma situação registrada. Derivado aqui, e não lido de
+  // um campo pré-calculado, para não existir uma segunda definição capaz de divergir.
+  { id:'naoini',    rotulo:'Não iniciadas',        teste: t => t.baixadasQtd === 0 && t.situacoes.length === 0 },
+  { id:'anotacao',  rotulo:'Com anotação',         teste: t => t.anotacoes.length > 0 },
+]
+
+// ── Ordenações ──────────────────────────────────────────────────────────────
+// A fixada vem sempre antes, em TODAS as ordens — é o sentido do alfinete. Por isso ela fica
+// fora dos comparadores e é aplicada por cima, em `planOrdenar`.
+const PLAN_ORDENS = {
+  analise: { rotulo:'Em análise primeiro',
+             cmp: (a,b) => (b.pendentes>0)-(a.pendentes>0) || compararAnoTR(a.tr,b.tr) || a.tr.localeCompare(b.tr) },
+  prazo:   { rotulo:'Prazo mais crítico',
+             // maior atraso primeiro; TR sem prazo em aberto vai para o fim
+             cmp: (a,b) => (b.piorDias ?? -99999) - (a.piorDias ?? -99999) || a.tr.localeCompare(b.tr) },
+  pcs:     { rotulo:'Mais PCs a baixar',
+             cmp: (a,b) => b.pendentes - a.pendentes || a.tr.localeCompare(b.tr) },
+  ano:     { rotulo:'Ano da TR',
+             cmp: (a,b) => compararAnoTR(a.tr,b.tr) || a.tr.localeCompare(b.tr) },
+}
+
+function planOrdenar(lista) {
+  const cmp = (PLAN_ORDENS[_planOrdem] || PLAN_ORDENS.analise).cmp
+  return [...lista].sort((a,b) => (b.fixada?1:0) - (a.fixada?1:0) || cmp(a,b))
+}
+
+// Filtra, ordena, pagina e pinta. É o ponto único por onde a tela se redesenha — chip, ordem,
+// alfinete e expandir/recolher chamam daqui, sem refazer a busca na API.
+function planAplicar() {
+  const todas = window._planDadosCache || []
+  const chip = PLAN_CHIPS.find(c => c.id === _planChip)
+  const lista = planOrdenar(chip ? todas.filter(chip.teste) : todas)
+
+  window._planTot = lista.length
+  const totalPag = Math.max(1, Math.ceil(lista.length/PP))
+  if((window._planPag||0) >= totalPag) window._planPag = totalPag-1
+
+  planRenderBarra(todas)
+  const from = (window._planPag||0)*PP
+  renderPlan(lista.slice(from, from+PP))
+  planRenderPag()
+}
+
+function planChip(id) {
+  _planChip = (_planChip === id) ? '' : id   // clicar no chip aceso apaga
+  window._planPag = 0
+  planAplicar()
+}
+
+function planOrdemMudou(v) { _planOrdem = v; window._planPag = 0; planAplicar() }
+
+// Expandir/recolher uma TR. Grava a preferência e repinta só a partir do cache.
+function planToggle(tr) {
+  const item = (window._planDadosCache||[]).find(t => t.tr === tr)
+  if(!item) return
+  item.expandida = !item.expandida
+  planSalvarPref(tr, { expandida: item.expandida })
+  planAplicar()
+}
+
+function planFixar(tr, ev) {
+  if(ev) ev.stopPropagation()
+  const item = (window._planDadosCache||[]).find(t => t.tr === tr)
+  if(!item) return
+  item.fixada = !item.fixada
+  planSalvarPref(tr, { fixada: item.fixada })
+  window._planPag = 0            // a fixada sobe para o topo, que pode ser outra página
+  planAplicar()
+}
+
+// Expande/recolhe TODAS as da lista visível (respeitando o filtro ativo).
+function planTodas(abrir) {
+  const chip = PLAN_CHIPS.find(c => c.id === _planChip)
+  const alvo = chip ? (window._planDadosCache||[]).filter(chip.teste) : (window._planDadosCache||[])
+  alvo.forEach(t => { t.expandida = abrir; planSalvarPref(t.tr, { expandida: abrir }) })
+  planAplicar()
 }
 
 // Ordena parciais: numericas em ordem, FINAL por ultimo, sem numero no fim
@@ -4647,19 +4787,128 @@ function renderPlanResumo(pcs, meta) {
     </div>`
 }
 
+// Barra do painel: expandir todas, ordenação e os chips com contador.
+// Os contadores contam sobre o conjunto INTEIRO, não sobre o filtrado — senão o chip aceso
+// mostraria o próprio total e os outros zerariam.
+function planRenderBarra(todas) {
+  const barra = document.getElementById('planBarra')
+  if(!barra) return
+  const abertas = todas.filter(t => t.expandida).length
+
+  const chips = PLAN_CHIPS.map(c => {
+    const n = todas.filter(c.teste).length
+    const on = _planChip === c.id
+    return `<button onclick="planChip('${c.id}')" title="${on?'Clique para tirar o filtro':'Filtrar por '+c.rotulo}"
+      style="border:1.5px solid ${on?'var(--v)':'var(--cb)'};background:${on?'var(--v)':'#fff'};color:${on?'#fff':(n?'var(--te)':'var(--ct)')};
+             border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;
+             display:inline-flex;align-items:center;gap:6px;${n?'':'opacity:.55;'}">
+      ${c.rotulo}
+      <span style="background:${on?'rgba(255,255,255,.25)':'var(--cl)'};color:${on?'#fff':'var(--ct)'};
+                   border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;">${n}</span>
+    </button>`
+  }).join('')
+
+  const opcoes = Object.entries(PLAN_ORDENS)
+    .map(([k,o]) => `<option value="${k}"${_planOrdem===k?' selected':''}>${o.rotulo}</option>`).join('')
+
+  barra.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
+        onclick="planTodas(${abertas ? 'false' : 'true'})">
+        ${abertas ? '▲ Recolher todas' : '▼ Expandir todas'}
+      </button>
+      <label style="font-size:11.5px;color:var(--ct);display:flex;align-items:center;gap:6px;">
+        Ordenar por
+        <select onchange="planOrdemMudou(this.value)"
+          style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit;">${opcoes}</select>
+      </label>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px;">${chips}</div>`
+}
+
+// Anotação da TR, só ao expandir. Quando não existe, mostra o convite para criar.
+// `anotacoes_tr` guarda uma LINHA POR GRAVAÇÃO — não há update. Então a primeira (a rota
+// ordena por criado_em DESC) é a atual, e as demais são o histórico, de graça.
+function planAnotacaoBloco(r) {
+  const lista = r.anotacoes || []
+  const cab = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <b style="font-size:11.5px;color:var(--te);">🗒️ Anotação</b>`
+
+  if(!lista.length) {
+    return `<div style="padding:10px 16px;background:#FCFDFC;border-bottom:1px solid var(--cl);">
+      ${cab}
+        <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);margin-left:auto;"
+          onclick="planNovaAnotacao('${escHtml(r.tr)}')">+ Adicionar anotação</button>
+      </div>
+    </div>`
+  }
+
+  const atual = lista[0]
+  const antigas = lista.slice(1)
+  return `<div style="padding:10px 16px;background:#FCFDFC;border-bottom:1px solid var(--cl);">
+    ${cab}
+      <span style="font-size:10.5px;color:var(--ct);">
+        última edição ${planDataHora(atual.criado_em)}${atual.analista_nome?` · ${escHtml(atual.analista_nome)}`:''}
+      </span>
+      <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);margin-left:auto;"
+        onclick="planNovaAnotacao('${escHtml(r.tr)}')">Editar</button>
+    </div>
+    <div style="font-size:12px;color:var(--te);margin-top:6px;white-space:pre-wrap;">${escHtml(atual.texto||'')}</div>
+    ${antigas.length ? `
+      <details style="margin-top:7px;">
+        <summary style="font-size:10.5px;color:var(--ct);cursor:pointer;">histórico · ${antigas.length} anterior${antigas.length>1?'es':''}</summary>
+        <div style="margin-top:6px;border-left:2px solid var(--cl);padding-left:9px;">
+          ${antigas.map(a => `<div style="margin-bottom:7px;">
+            <div style="font-size:10px;color:var(--ct);">${planDataHora(a.criado_em)}${a.analista_nome?` · ${escHtml(a.analista_nome)}`:''}</div>
+            <div style="font-size:11.5px;color:var(--ct);white-space:pre-wrap;">${escHtml(a.texto||'')}</div>
+          </div>`).join('')}
+        </div>
+      </details>` : ''}
+  </div>`
+}
+
+const planDataHora = (d) => d
+  ? new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+  : '—'
+
+// Grava uma anotação nova. Não edita a anterior de propósito: o histórico é o registro de
+// quem escreveu o quê e quando, e sobrescrever apagaria isso.
+async function planNovaAnotacao(tr) {
+  const atual = (_planAnots[tr]||[])[0]
+  const texto = prompt(`Anotação da TR ${tr}:`, atual ? atual.texto : '')
+  if(texto === null) return
+  if(!texto.trim()) { toast('Anotação vazia — nada gravado.','err'); return }
+  try {
+    const r = await fetch(`${API_URL}/anotacoes_tr`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, texto: texto.trim(), analista_id: U.id, analista_nome: U.nome })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    // recarrega só as anotações e repinta do cache — sem refazer a busca das PCs
+    await planCarregarAnotacoes((window._planDadosCache||[]).map(t => t.tr))
+    ;(window._planDadosCache||[]).forEach(t => { t.anotacoes = _planAnots[t.tr] || [] })
+    planAplicar()
+    toast('Anotação salva!','ok')
+  } catch(e) { toast('Erro ao salvar: '+e.message,'err') }
+}
+
 function renderPlan(rows) {
   const cont = document.getElementById('planConteudo')
   if(!cont) return
 
   if(!rows.length) {
-    cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum registro encontrado.</div>'
+    cont.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);">${
+      _planChip ? 'Nenhuma TR neste filtro.' : 'Nenhum registro encontrado.'}</div>`
     return
   }
 
   const cards = rows.map(r => {
     const parciais = [...r.parciais].sort(planOrdParciais)
 
-    const blocos = parciais.map(pa => {
+    // Recolhida não monta os blocos: com 54 TRs abertas de uma vez, o HTML das parciais e
+    // das PCs é o grosso da página. É isso que faz a tela abrir rápido.
+    const blocos = !r.expandida ? '' : parciais.map(pa => {
       const chave = `'${escHtml(r.tr)}','${escHtml(String(pa.num))}'`
       const semNum = pa.num === '—'
 
@@ -4723,19 +4972,38 @@ function renderPlan(rows) {
       </div>`
     }).join('')
 
-    return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:13px;">
-      <div style="background:linear-gradient(135deg,#2E1760,#1A237E);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
-        <div>
-          <b style="font-size:15px;cursor:pointer;" onclick="abrirTR('${escHtml(r.tr)}')">${escHtml(r.tr||'—')}</b>
-          <div style="font-size:11.5px;opacity:.85;margin-top:1px;">${escHtml(r.entidade||'—')}</div>
+    // ── etiquetas de situação da TR: o que está em aberto, sem repetir
+    const etiquetas = r.situacoes.map(s => planBadgeSit(s)).join(' ')
+    const etqPrazo = prazoFaixa(r.piorDias) === 'vencida'
+      ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#FDE8EA;color:var(--r);">${r.piorDias}d vencida</span>` : ''
+    const anot = r.anotacoes[0] || null
+
+    return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:${r.expandida?'13px':'7px'};${r.fixada?'border-left:4px solid var(--az);':''}">
+      <div onclick="planToggle('${escHtml(r.tr)}')" title="${r.expandida?'Recolher':'Ver as parciais desta TR'}"
+        style="background:var(--header-grad);color:#fff;padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;">
+
+        <span onclick="planFixar('${escHtml(r.tr)}',event)" title="${r.fixada?'Desafixar':'Fixar no topo'}"
+          style="font-size:15px;line-height:1;cursor:pointer;${r.fixada?'':'opacity:.45;filter:grayscale(1);'}">📌</span>
+
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
+            ${etqPrazo}${etiquetas}
+            ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
+          </div>
+          <div style="font-size:11.5px;opacity:.88;margin-top:2px;">${escHtml(r.entidade||'—')}</div>
         </div>
-        <div style="margin-left:auto;font-size:11px;opacity:.9;text-align:right;line-height:1.5;">
-          <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
-          <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.total_pcs} PC${r.total_pcs>1?'s':''}</span>
-          <br>${planMoedaAgr(r)}
+
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
+          <span style="font-size:11px;opacity:.92;text-align:right;line-height:1.5;">
+            <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
+            <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.baixadasQtd} de ${r.total_pcs} baixadas</span>
+          </span>
+          <button class="btn-acao" style="background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);white-space:nowrap;"
+            onclick="planToggle('${escHtml(r.tr)}');event.stopPropagation();">${r.expandida?'▲ Recolher':'▼ Ver PCs'}</button>
         </div>
       </div>
-      ${blocos}
+      ${r.expandida ? planAnotacaoBloco(r) + blocos : ''}
     </div>`
   }).join('')
 
@@ -4778,10 +5046,9 @@ function planRenderPag() {
 }
 function planPg(d) {
   window._planPag = (window._planPag||0)+d
-  const dados = window._planDadosCache||[]
-  const from = window._planPag*PP
-  renderPlan(dados.slice(from, from+PP))
-  planRenderPag()
+  // Passa por `planAplicar` de propósito: paginar direto do `_planDadosCache` ignoraria o
+  // chip ativo e a ordenação, e a página 2 traria TRs que o filtro tinha tirado.
+  planAplicar()
   document.getElementById('planConteudo')?.scrollIntoView({behavior:'smooth',block:'start'})
 }
 function limparPlan() {
