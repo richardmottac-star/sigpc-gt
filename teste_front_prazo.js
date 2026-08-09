@@ -23,7 +23,7 @@ if (ini < 0 || fim < 0) {
 const ctx = { console, escHtml: (s) => String(s ?? '') };
 vm.createContext(ctx);
 vm.runInContext(html.slice(ini, fim), ctx);
-const { prazoDias, prazoSituacao, prazoCelula, prazoIcone } = ctx;
+const { prazoDias, prazoFaixa, prazoSituacao, prazoCelula, prazoIcone } = ctx;
 
 let ok = 0, falhou = 0;
 const conf = (passou, rotulo, detalhe) => {
@@ -145,6 +145,33 @@ console.log('\n═══ 8. ONDE O ICONE APARECE ═══');
   conf(/>Prazo de análise</.test(html), 'o cabecalho novo esta la');
   // o calculo antigo, inline, tem de ter saido — senao haveria duas formulas
   conf(!/const vencida = dias !== null && dias > 0/.test(html), 'o calculo inline duplicado foi removido');
+}
+
+console.log('\n═══ 9. AS FAIXAS SAO UMA SO — cor, balao e filtro ═══');
+{
+  // `prazoFaixa` e a unica definicao das bordas. Tres consumidores dependem dela.
+  conf(prazoFaixa(1) === 'vencida', '+1 dia -> vencida');
+  conf(prazoFaixa(0) === 'avencer', '0 -> avencer (vence hoje)');
+  conf(prazoFaixa(-30) === 'avencer', '-30 -> avencer (borda inclusiva)');
+  conf(prazoFaixa(-31) === 'noprazo', '-31 -> noprazo');
+  conf(prazoFaixa(null) === null && prazoFaixa(undefined) === null, 'null/undefined -> null');
+
+  // a situacao tem de concordar com a faixa, sempre
+  for (const n of [-500, -31, -30, -1, 0, 1, 2323]) {
+    const s = prazoSituacao(emDias(-n));   // emDias(-n) => prazoDias devolve n
+    conf(s.faixa === prazoFaixa(n), `dias ${n}: situacao e faixa concordam (${s.faixa})`);
+  }
+
+  // o filtro "Prazo" da Minha Planilha usa a MESMA funcao — sem isso a tela pintaria
+  // amarelo e o filtro "A vencer" nao traria a linha.
+  conf(/prazoFaixa\(pa\.maxDias\) !== 'vencida'/.test(html), 'filtro Vencidas usa prazoFaixa');
+  conf(/prazoFaixa\(pa\.maxDias\) !== 'avencer'/.test(html), 'filtro A vencer usa prazoFaixa');
+  conf(!/pa\.maxDias > 0/.test(html), 'a comparacao solta do filtro sumiu');
+  conf(!/pa\.maxDias >= -30/.test(html), 'a borda -30 solta do filtro sumiu');
+
+  // e a terceira copia da conta de dias tambem
+  conf(!/const diasDe = /.test(html), 'a copia local `diasDe` foi removida');
+  conf(/prazoDias\(x\.dt_limite_pc\)/.test(html), 'o resumo da parcial usa prazoDias');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

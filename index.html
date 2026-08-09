@@ -4405,15 +4405,15 @@ async function buscarPlan() {
       if(!planEhFinal(p)) pa.valor += parseFloat(p.valor)||0
     })
 
-    const hoje = new Date(); hoje.setHours(0,0,0,0)
-    const diasDe = (d) => d ? Math.round((hoje - new Date(String(d).slice(0,10)+'T00:00:00'))/86400000) : null
-
     let trs = Object.values(grupos).map(g => {
       const parciais = Object.values(g.parciais).map(pa => {
         const ref = pa.pcs[0]
         // a parcial so conta como baixada quando TODAS as suas PCs estao baixadas
         const baixada = pa.pcs.every(x => x.baixada === true)
-        const dias = pa.pcs.map(x => diasDe(x.dt_limite_pc)).filter(x => x !== null)
+        // `prazoDias` é a MESMA conta que pinta a coluna e alimenta o balão — era uma
+        // terceira cópia local (`diasDe`) até 09/08/2026. As faixas do filtro de prazo,
+        // logo abaixo, são as mesmas de `prazoSituacao`: >0 vencida, entre -30 e 0 a vencer.
+        const dias = pa.pcs.map(x => prazoDias(x.dt_limite_pc)).filter(x => x !== null)
         return {
           num: pa.num, pcs: pa.pcs, qtd: pa.pcs.length, valor: pa.valor, baixada,
           soFinal: pa.pcs.every(planEhFinal),
@@ -4441,8 +4441,9 @@ async function buscarPlan() {
       trs = trs.map(t => ({...t, parciais: t.parciais.filter(pa => {
         if(sit === '__baixadas' && !pa.baixada) return false
         if(sit && sit !== '__baixadas' && (pa.baixada || pa.situacao_atual !== sit)) return false
-        if(prazo === 'venc' && !(pa.maxDias !== null && pa.maxDias > 0)) return false
-        if(prazo === '30d' && !(pa.maxDias !== null && pa.maxDias <= 0 && pa.maxDias >= -30)) return false
+        // Mesmas faixas da cor e do balão — ver `prazoFaixa`.
+        if(prazo === 'venc' && prazoFaixa(pa.maxDias) !== 'vencida') return false
+        if(prazo === '30d'  && prazoFaixa(pa.maxDias) !== 'avencer') return false
         return true
       })})).filter(t => t.parciais.length)
     }
@@ -4520,16 +4521,28 @@ function prazoDias(dtLimite) {
   return Math.round((new Date().setHours(0,0,0,0) - new Date(String(dtLimite).slice(0,10)+'T00:00:00'))/86400000)
 }
 
+// AS FAIXAS, EM UM LUGAR SÓ. São três consumidores: a cor da coluna, o texto do balão e o
+// filtro "Prazo" da Minha Planilha. Enquanto cada um tinha a sua comparação, bastava alguém
+// mexer numa borda para a tela pintar amarelo e o filtro não trazer a linha.
+function prazoFaixa(dias) {
+  if(dias === null || dias === undefined) return null
+  if(dias > 0)    return 'vencida'   // venceu — some do filtro "A vencer"
+  if(dias >= -30) return 'avencer'   // vence hoje ou nos próximos 30 dias
+  return 'noprazo'
+}
+
+const PRAZO_COR = { vencida:'var(--r)', avencer:'var(--am)', noprazo:'var(--ct)' }
+
 // Uma função só decide cor E texto. Se a tabela e o balão calculassem separado, um dia
 // divergiriam e a tela mostraria vermelho dizendo "dentro do prazo".
 function prazoSituacao(dtLimite) {
   const dias = prazoDias(dtLimite)
+  const faixa = prazoFaixa(dias)
   const d = (n) => `${n} dia${n === 1 ? '' : 's'}`
-  if(dias === null)  return { dias:null, faixa:null, cor:'var(--ct)', texto:'Sem prazo informado para esta PC.' }
-  if(dias > 0)       return { dias, faixa:'vencida', cor:'var(--r)',  texto:`Venceu há ${d(dias)}. Continua analisável, mas com risco de prescrição.` }
-  if(dias === 0)     return { dias, faixa:'avencer', cor:'var(--am)', texto:'Vence hoje.' }
-  if(dias >= -30)    return { dias, faixa:'avencer', cor:'var(--am)', texto:`Vence em ${d(-dias)}.` }
-  return               { dias, faixa:'noprazo', cor:'var(--ct)', texto:'Dentro do prazo.' }
+  if(faixa === null)      return { dias:null, faixa:null, cor:'var(--ct)', texto:'Sem prazo informado para esta PC.' }
+  if(faixa === 'vencida') return { dias, faixa, cor:PRAZO_COR.vencida, texto:`Venceu há ${d(dias)}. Continua analisável, mas com risco de prescrição.` }
+  if(faixa === 'avencer') return { dias, faixa, cor:PRAZO_COR.avencer, texto: dias === 0 ? 'Vence hoje.' : `Vence em ${d(-dias)}.` }
+  return                       { dias, faixa, cor:PRAZO_COR.noprazo, texto:'Dentro do prazo.' }
 }
 
 // A célula pronta: data na cor da faixa + o "?" que abre o balão.
