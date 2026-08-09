@@ -24,7 +24,7 @@ if (ini < 0 || fim < 0) {
 const ctx = { console };
 vm.createContext(ctx);
 vm.runInContext(html.slice(ini, fim), ctx);
-const { semAcento, termoBusca } = ctx;
+const { semAcento, termoBusca, prepararBusca } = ctx;
 
 let ok = 0, falhou = 0;
 const conf = (passou, rotulo, detalhe) => {
@@ -87,12 +87,12 @@ console.log('\n═══ 4. QUEM BUSCA NA API, QUEM BUSCA NO CLIENTE ═══')
   conf(!/placeholder="Ex: 2022TR000251"/.test(html), 'rotulo do campo de Relatorios foi corrigido');
 
   // Estoque de PCs: filtra no cliente DE PROPOSITO (oninput por tecla + contador precisa do
-  // conjunto inteiro). Tem de continuar assim, e cobrindo os mesmos campos da API.
-  conf(/const q = termoBusca\(_estBusca\)/.test(html), 'Estoque de PCs continua filtrando no cliente');
+  // conjunto inteiro). Tem de continuar assim, e pelo `casaBusca` compartilhado — a cobertura
+  // de campos e testada na secao 4b, no proprio casaBusca, e nao mais repetida aqui.
   const bloco = (html.match(/function estDadosFiltrados\(\)[\s\S]*?\n\}/) || [''])[0];
-  for (const campo of ['tr', 'processo_mae', 'processo_pc', 'entidade', 'codigo_nl', 'codigo_pc']) {
-    conf(bloco.includes(`p.${campo}`), `Estoque de PCs cobre ${campo}`);
-  }
+  conf(/_estDados\.filter/.test(bloco), 'Estoque de PCs continua filtrando no cliente', bloco.trim());
+  conf(/casaBusca\(p, b\)/.test(bloco), 'e usa o casaBusca compartilhado, nao uma lista propria');
+  conf(/prepararBusca\(_estBusca\)/.test(bloco), 'preparando o termo uma vez, fora do filter');
 }
 
 console.log('\n═══ 4b. casaBusca — os seis campos, um por um ═══');
@@ -115,6 +115,38 @@ console.log('\n═══ 4b. casaBusca — os seis campos, um por um ═══')
   conf(!casaBusca(linha, termoBusca('zzz')), 'termo inexistente nao casa');
   conf(casaBusca(linha, ''), 'termo vazio casa tudo');
   conf(!casaBusca({}, termoBusca('x')), 'linha vazia nao estoura');
+}
+
+console.log('\n═══ 4a2. PROCESSO SGPe — zeros a esquerda e separadores ═══');
+{
+  const chaveProcesso = ctx.chaveProcesso;
+  const casaBusca = ctx.casaBusca;
+
+  // As quatro grafias reais do acervo tem de convergir.
+  const grupos = [
+    ['SCC 00019172/2020', 'SCC19172/2020', 'SCC 19172/2020'],
+    ['SCC 00002511/2020', 'SCC2511/2020'],
+    ['ADR22 2679/2017', 'ADR2226792017'],
+    ['ADR20 1233/2017', 'ADR20 00001233/2017', 'ADR20-1233/2017'],
+  ];
+  for (const g of grupos) {
+    const ks = g.map(chaveProcesso);
+    conf(ks.every(k => k === ks[0]), `${g.length} grafias de "${g[0]}" -> ${ks[0]}`, ks.join(' | '));
+  }
+
+  // Os casos exatos do relato.
+  const linha = { processo_pc: 'SCC 00019172/2020', processo_mae: 'SCC2511/2020', tr: '', entidade: '', codigo_nl: '', codigo_pc: '' };
+  for (const t of ['SCC 19172/2020', 'SCC 00019172/2020', '19172', 'SCC19172/2020']) {
+    conf(casaBusca(linha, prepararBusca(t)), `"${t}" acha a linha`);
+  }
+  const linha2 = { processo_pc: 'SCC 00002070/2023', processo_mae: '', tr: '', entidade: '', codigo_nl: '', codigo_pc: '' };
+  conf(casaBusca(linha2, prepararBusca('SCC 2070')), '"SCC 2070" acha "SCC 00002070/2023"');
+  conf(casaBusca(linha, prepararBusca('SCC 2511')), '"SCC 2511" acha "SCC2511/2020" (na mae)');
+  conf(!casaBusca(linha, prepararBusca('SCC 9999')), 'numero que nao existe na linha nao casa');
+
+  // Zeros internos nao podem sumir.
+  conf(chaveProcesso('SCC1000/2020') === 'SCC10002020', 'zero interno preservado', chaveProcesso('SCC1000/2020'));
+  conf(chaveProcesso(null) === '' && chaveProcesso('-1') === '1', 'lixo nao estoura');
 }
 
 console.log('\n═══ 4c. ADMIN — CPF com e sem mascara, e nome nulo ═══');
@@ -215,7 +247,7 @@ console.log('\n═══ 4e. CONTROLE INTERNO — busca nova ═══');
     const ctxC = {
       console, setTimeout, clearTimeout,
       _ciDados: dados, _ciBusca: '',
-      termoBusca: ctx.termoBusca, casaBusca: ctx.casaBusca,
+      termoBusca: ctx.termoBusca, casaBusca: ctx.casaBusca, prepararBusca: ctx.prepararBusca,
       ciRender: (v) => { pintou = v; },
       document: { getElementById: () => null },
     };
@@ -255,7 +287,7 @@ console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
     const els = { estLogBusca: { value: '' }, estLogAnalista: { value: '' }, estLogDtIni: { value: '' }, estLogDtFim: { value: '' } };
     const ctxL = {
       console, window: {}, _estLogEventos: eventos,
-      termoBusca: ctx.termoBusca,
+      termoBusca: ctx.termoBusca, prepararBusca: ctx.prepararBusca,
       document: { getElementById: (id) => els[id] || null },
       estLogRenderCards: (l) => { recebeu = l; },
       estLogRenderTabela: () => {},
@@ -278,6 +310,36 @@ console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
     els.estLogAnalista.value = '4';
     conf(filtrar('APAE') === 1, 'busca combina com o filtro de analista');
     els.estLogAnalista.value = '';
+  }
+}
+
+console.log('\n═══ 4g. BOTAO BUSCAR EM TODAS AS TELAS ═══');
+{
+  // O botao nasceu so no Estoque de TRs; as outras buscavam apenas ao digitar, e quem
+  // procurava o botao achava que a tela nao tinha busca.
+  const usos = (html.match(/\$\{BTN_BUSCAR\('/g) || []).length;
+  conf(usos === 6, `${usos} telas com o botao Buscar (esperado 6)`);
+
+  for (const acao of ['buscar()', 'buscarPlan()', 'adminFiltrar()', 'ciBuscarAgora()', 'estBuscarAgora()', 'estLogBuscarAgora()']) {
+    conf(html.includes(`\${BTN_BUSCAR('${acao}')}`), `botao chamando ${acao}`);
+  }
+
+  // Nao pode ter sobrado o markup antigo copiado a mao.
+  conf((html.match(/class="btn-buscar" onclick="buscar\(\)"/g) || []).length === 0, 'o botao antigo do Estoque foi trocado pelo compartilhado');
+
+  // As tres telas com debounce precisam de um "aplicar agora" que cancele o timer — senao o
+  // clique no botao pintaria, e 150ms depois o debounce pintaria de novo.
+  for (const fn of ['ciBuscarAgora', 'estBuscarAgora', 'estLogBuscarAgora']) {
+    const corpo = (html.match(new RegExp(`function ${fn}\\(\\)[\\s\\S]*?\\n\\}`)) || [''])[0];
+    conf(/clearTimeout/.test(corpo), `${fn} cancela o debounce pendente`, corpo.trim().slice(0, 60));
+  }
+
+  // A busca ao digitar continua existindo em todas.
+  for (const id of ['ciBusca', 'estBusca', 'admBusca', 'estLogBusca']) {
+    conf(new RegExp(`id="${id}"[^>]*oninput=`).test(html), `${id} mantem a busca ao digitar`);
+  }
+  for (const id of ['fBusca', 'plBusca']) {
+    conf(new RegExp(`id="${id}"[^>]*onkeydown=`).test(html), `${id} mantem a busca no Enter`);
   }
 }
 

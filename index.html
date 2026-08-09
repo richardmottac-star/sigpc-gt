@@ -1737,7 +1737,7 @@ function irEst() {
         </select>
       </div>
       ${isAdmin?`<div class="fg"><label>Setorial</label><select id="fSec"><option value="">Todas</option><option>FCEE</option><option>FCC</option><option>FESPORTE</option><option>SED</option><option>SIE</option><option>SES</option><option>SAS</option></select></div>`:''}
-      <button class="btn-buscar" onclick="buscar()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>
+      ${BTN_BUSCAR('buscar()')}
       <button class="btn-limpar" onclick="limparF()">✕ Limpar</button>
     </div>
     <div class="tbl-wrap">
@@ -2109,11 +2109,46 @@ function soDigitos(s) {
 // (sigpc-api/server.js) — as duas têm de achar a mesma coisa, senão a mesma palavra digitada
 // em duas telas dá resultados diferentes e ninguém entende por quê.
 const CAMPOS_BUSCA = ['tr', 'processo_mae', 'processo_pc', 'entidade', 'codigo_nl', 'codigo_pc']
+const CAMPOS_PROCESSO = ['processo_mae', 'processo_pc']
 
-// `q` já vem de termoBusca(). Termo vazio casa tudo.
-function casaBusca(p, q) {
+// O mesmo processo aparece escrito de quatro jeitos no acervo, todos em volume:
+//   "SCC 00019172/2020" · "SCC19172/2020" · "ADR03 395/2017" · "ADR2226792017"
+// Quem digitava de um jeito não achava o outro — "SCC 2511" devolvia 0 embora "SCC2511/2020"
+// exista em 77 linhas.
+//
+// A chave reduz as variantes a uma forma só, em duas etapas — a ORDEM importa:
+//   1. tira os zeros à esquerda de cada número, ANTES de remover os separadores;
+//   2. remove espaço, ponto, hífen e barra.
+// Invertida, a região das regionais quebraria: "ADR20 00001233/2017" viraria "ADR2000001233"
+// e os zeros deixariam de ser "à esquerda". Por isso a limpeza é feita token a token.
+//
+// Idêntica à `chaveProcesso` de sigpc-api/server.js — há teste comparando as duas contra o
+// acervo real. Sem lookbehind de propósito: o Safari só passou a suportá-lo na 16.4.
+function chaveProcesso(s) {
+  return String(s ?? '').toUpperCase()
+    .split(/[\s.\-]+/)
+    .map(t => t.replace(/\d+/g, d => d.replace(/^0+/, '') || '0'))
+    .join('')
+    .replace(/\//g, '')
+}
+
+// O botão Buscar, um só para todas as telas. Nasceu só no Estoque de TRs; as outras buscavam
+// apenas ao digitar, e quem procurava o botão achava que a tela não tinha busca.
+// A busca ao digitar continua valendo — o botão é o caminho explícito, não o único.
+const BTN_BUSCAR = (acao) => `<button class="btn-buscar" onclick="${acao}"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar</button>`
+
+// Prepara o termo UMA vez, em vez de normalizar a cada linha comparada.
+function prepararBusca(bruto) {
+  return { q: termoBusca(bruto), chave: chaveProcesso(termoBusca(bruto)) }
+}
+
+// `b` vem de prepararBusca(). Termo vazio casa tudo.
+function casaBusca(p, b) {
+  const { q, chave } = (typeof b === 'string') ? prepararBusca(b) : (b || {})
   if(!q) return true
-  return CAMPOS_BUSCA.some(c => (p[c]||'').toLowerCase().includes(q))
+  if(CAMPOS_BUSCA.some(c => (p[c]||'').toLowerCase().includes(q))) return true
+  // Os dois de processo também pela chave — é o que faz "SCC 2511" achar "SCC2511/2020".
+  return !!chave && CAMPOS_PROCESSO.some(c => chaveProcesso(p[c]).includes(chave))
 }
 
 // Busca uma lista inteira, sem cair no teto de `limit` em silêncio.
@@ -4143,6 +4178,9 @@ async function irPlanilha() {
       <div class="fg"><label>Buscar Entidade / TR</label>
         <input type="text" id="plBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
+      <div style="display:flex;align-items:flex-end;">
+        ${BTN_BUSCAR('buscarPlan()')}
+      </div>
       <div class="fg"><label>Situação</label>
         <select id="plSit">
           <option value="">Todas as situações</option>
@@ -4940,7 +4978,10 @@ function irAdmin() {
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar</label>
-        <input type="text" id="admBusca" placeholder="Nome ou CPF..." style="width:200px;" oninput="adminFiltrar()">
+        <input type="text" id="admBusca" placeholder="Nome ou CPF..." style="width:200px;" oninput="adminFiltrar()" onkeydown="if(event.key==='Enter')adminFiltrar()">
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        ${BTN_BUSCAR('adminFiltrar()')}
       </div>
       <div class="fg"><label>Perfil</label>
         <select id="admPerfil" onchange="adminFiltrar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
@@ -5532,9 +5573,10 @@ async function irCI() {
     <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">PCs enviadas para análise do Controle Interno — mais antigas primeiro</div>
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Busca</label>
-        <input type="text" id="ciBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:260px;" oninput="ciBuscarInput(this.value)">
+        <input type="text" id="ciBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:260px;" oninput="ciBuscarInput(this.value)" onkeydown="if(event.key==='Enter')ciBuscarAgora()">
       </div>
-      <div style="display:flex;align-items:flex-end;">
+      <div style="display:flex;align-items:flex-end;gap:6px;">
+        ${BTN_BUSCAR('ciBuscarAgora()')}
         <button class="btn-limpar" onclick="ciLimparBusca()">✕ Limpar</button>
       </div>
       <div style="display:flex;align-items:flex-end;font-size:11px;color:var(--ct);" id="ciContagem"></div>
@@ -5592,8 +5634,8 @@ async function ciCarregar() {
 // está em memória, e `_ciDados` precisa continuar completo — `ciAbrirDevolucao` procura a PC
 // por `codigo_pc` nele, e não acharia se estivesse filtrado.
 function ciDadosFiltrados() {
-  const q = termoBusca(_ciBusca)
-  return q ? _ciDados.filter(p => casaBusca(p, q)) : _ciDados
+  const b = prepararBusca(_ciBusca)
+  return b.q ? _ciDados.filter(p => casaBusca(p, b)) : _ciDados
 }
 
 // Debounce igual ao do Estoque de PCs: uma pintura por pausa, não uma por tecla.
@@ -5601,6 +5643,13 @@ function ciBuscarInput(v) {
   _ciBusca = v
   clearTimeout(_ciBuscaTimer)
   _ciBuscaTimer = setTimeout(() => ciRender(ciDadosFiltrados()), 150)
+}
+
+// O botão e o Enter aplicam na hora, sem esperar o debounce.
+function ciBuscarAgora() {
+  _ciBusca = document.getElementById('ciBusca')?.value || ''
+  clearTimeout(_ciBuscaTimer)
+  ciRender(ciDadosFiltrados())
 }
 
 function ciLimparBusca() {
@@ -7322,7 +7371,10 @@ async function irEstornar() {
         </select>
       </div>` : ''}
       <div class="fg"><label>Buscar</label>
-        <input type="text" id="estBusca" placeholder="TR, SGPe, entidade, NL ou PC" oninput="estBuscarInput(this.value)" style="min-width:220px;">
+        <input type="text" id="estBusca" placeholder="TR, SGPe, entidade, NL ou PC" oninput="estBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estBuscarAgora()" style="min-width:220px;">
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        ${BTN_BUSCAR('estBuscarAgora()')}
       </div>
     </div>
 
@@ -7426,16 +7478,9 @@ async function estCarregar() {
 // Os campos são os mesmos sete da API, para as duas buscas acharem a mesma coisa.
 function estDadosFiltrados() {
   if(!_estBusca) return _estDados
-  const q = termoBusca(_estBusca)
-  if(!q) return _estDados
-  return _estDados.filter(p =>
-    (p.tr||'').toLowerCase().includes(q) ||
-    (p.processo_mae||'').toLowerCase().includes(q) ||
-    (p.processo_pc||'').toLowerCase().includes(q) ||
-    (p.entidade||'').toLowerCase().includes(q) ||
-    (p.codigo_nl||'').toLowerCase().includes(q) ||
-    (p.codigo_pc||'').toLowerCase().includes(q)
-  )
+  const b = prepararBusca(_estBusca)
+  if(!b.q) return _estDados
+  return _estDados.filter(p => casaBusca(p, b))
 }
 
 // Agrupa por NL e distribui em páginas de até EST_PP registros,
@@ -7481,6 +7526,14 @@ function estBuscarInput(v) {
   _estPag = 0
   clearTimeout(_estBuscaTimer)
   _estBuscaTimer = setTimeout(estRender, 150)
+}
+
+// O botão e o Enter aplicam na hora, sem esperar o debounce.
+function estBuscarAgora() {
+  _estBusca = document.getElementById('estBusca')?.value || ''
+  _estPag = 0
+  clearTimeout(_estBuscaTimer)
+  estRender()
 }
 
 function estPg(d) {
@@ -7692,7 +7745,7 @@ async function irEstornosRealizados() {
         </select>
       </div>`:''}
       <div class="fg"><label>Busca</label>
-        <input type="text" id="estLogBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:240px;" oninput="estLogBuscarInput(this.value)">
+        <input type="text" id="estLogBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:240px;" oninput="estLogBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estLogBuscarAgora()">
       </div>
       <div class="fg"><label>Analista</label>
         <select id="estLogAnalista" onchange="estLogFiltrar()">
@@ -7705,7 +7758,8 @@ async function irEstornosRealizados() {
       <div class="fg"><label>Data Final</label>
         <input type="date" id="estLogDtFim" onchange="estLogFiltrar()">
       </div>
-      <div style="display:flex;align-items:flex-end;">
+      <div style="display:flex;align-items:flex-end;gap:6px;">
+        ${BTN_BUSCAR('estLogBuscarAgora()')}
         <button class="btn-limpar" onclick="estLogLimpar()">✕ Limpar</button>
       </div>
     </div>
@@ -7755,7 +7809,7 @@ async function estLogCarregar() {
         data_estorno: p.data_estorno,
         estornado_por: p.estornado_por,
         motivo: p.motivo_estorno || '',
-        trs: new Set(), nls: new Set(), pcs: [], _busca: []
+        trs: new Set(), nls: new Set(), pcs: [], _busca: [], _chaves: []
       }
       grupos[chave].trs.add(p.tr||'—')
       grupos[chave].nls.add(p.codigo_nl||'—')
@@ -7764,9 +7818,12 @@ async function estLogCarregar() {
       // nome do analista. Montado aqui, uma vez, porque o evento agrupa várias PCs e a tela
       // só guarda os códigos — sem isto não daria para procurar por entidade nem por SGPe.
       CAMPOS_BUSCA.forEach(c => { if(p[c]) grupos[chave]._busca.push(p[c]) })
+      // A chave dos processos entra junto, senão "SCC 2511" não acharia "SCC2511/2020" aqui.
+      CAMPOS_PROCESSO.forEach(c => { if(p[c]) grupos[chave]._chaves.push(chaveProcesso(p[c])) })
     })
     Object.values(grupos).forEach(ev => {
       ev._busca = termoBusca(ev._busca.join(' ') + ' ' + (ev.analista_nome||''))
+      ev._chaves = ev._chaves.join(' ')
     })
     _estLogEventos = Object.values(grupos).sort((a,b) => new Date(b.data_estorno) - new Date(a.data_estorno))
 
@@ -7791,12 +7848,13 @@ function estLogFiltrar() {
   const analista = document.getElementById('estLogAnalista')?.value || ''
   const dtIni = document.getElementById('estLogDtIni')?.value || ''
   const dtFim = document.getElementById('estLogDtFim')?.value || ''
-  const q = termoBusca(document.getElementById('estLogBusca')?.value)
+  const b = prepararBusca(document.getElementById('estLogBusca')?.value)
 
   let lista = _estLogEventos
-  // `_busca` foi montado no carregamento com os seis campos das PCs do evento — procurar por
-  // entidade ou SGPe aqui só é possível por causa dele.
-  if(q) lista = lista.filter(ev => (ev._busca||'').includes(q))
+  // `_busca` e `_chaves` foram montados no carregamento com os seis campos das PCs do evento
+  // — procurar por entidade ou SGPe aqui só é possível por causa deles.
+  if(b.q) lista = lista.filter(ev =>
+    (ev._busca||'').includes(b.q) || (!!b.chave && (ev._chaves||'').includes(b.chave)))
   if(analista) lista = lista.filter(ev => String(ev.analista_id) === String(analista))
   if(dtIni) lista = lista.filter(ev => new Date(ev.data_estorno) >= new Date(dtIni+'T00:00:00'))
   if(dtFim) lista = lista.filter(ev => new Date(ev.data_estorno) <= new Date(dtFim+'T23:59:59'))
@@ -7838,6 +7896,12 @@ let _estLogBuscaTimer = null
 function estLogBuscarInput() {
   clearTimeout(_estLogBuscaTimer)
   _estLogBuscaTimer = setTimeout(estLogFiltrar, 150)
+}
+
+// O botão e o Enter aplicam na hora, sem esperar o debounce.
+function estLogBuscarAgora() {
+  clearTimeout(_estLogBuscaTimer)
+  estLogFiltrar()
 }
 
 function estLogLimpar() {
