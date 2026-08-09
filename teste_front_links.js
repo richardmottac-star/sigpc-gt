@@ -110,10 +110,24 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
 {
   // Guarda contra o esquecimento: se alguém criar uma tela nova e não absorver, o número
   // volta a depender do resolvedor antigo — e ninguém percebe, porque o link continua saindo.
-  // Só linhas de código: a âncora `const j =` no início da linha exclui o exemplo que aparece
-  // dentro do comentário de `sgpeAbsorver` — um contador inflado esconderia ponto faltando.
-  const absorve = (html.match(/^\s*const j = sgpeAbsorver\(await r\.json\(\)\)/gm) || []).length;
-  conf(absorve === 12, `${absorve} pontos absorvendo j.links (esperado exatamente 12)`);
+  // Duas formas de absorver, e as duas contam:
+  //   direta ....... const j = sgpeAbsorver(await r.json())
+  //   pelo helper .. const j = await fetchListaCompleta(url)   <- chama sgpeAbsorver por dentro
+  //
+  // A âncora `const j =` no início da linha exclui o exemplo que aparece dentro do comentário
+  // de `sgpeAbsorver` — um contador inflado esconderia ponto faltando.
+  // O corpo do helper sai da contagem: o `sgpeAbsorver` que mora dentro dele nao e um ponto
+  // de tela, e sim o mecanismo pelo qual as telas que o usam absorvem.
+  const corpoHelper = (html.match(/async function fetchListaCompleta[\s\S]*?\n\}/) || [''])[0];
+  const semHelper = html.replace(corpoHelper, '');
+
+  const direto = (semHelper.match(/^\s*const j = sgpeAbsorver\(await r\.json\(\)\)/gm) || []).length;
+  const viaHelper = (semHelper.match(/^\s*const j = await fetchListaCompleta\(/gm) || []).length;
+  conf(direto + viaHelper === 12, `${direto} diretos + ${viaHelper} pelo helper = 12 telas absorvendo j.links`);
+
+  // O helper PRECISA absorver — se alguem tirar o sgpeAbsorver de dentro dele, quatro telas
+  // perdem o link de uma vez, em silencio.
+  conf((corpoHelper.match(/sgpeAbsorver\(/g) || []).length >= 2, 'fetchListaCompleta absorve nas duas requisicoes que faz');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

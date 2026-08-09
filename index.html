@@ -2099,6 +2099,47 @@ function termoBusca(s) {
   return semAcento(s).trim().toLowerCase()
 }
 
+// Só os dígitos. Serve para comparar CPF sem depender da máscara: o banco grava
+// "038.237.359-69" e a pessoa digita "03823735969" ou "038237".
+function soDigitos(s) {
+  return String(s ?? '').replace(/\D/g, '')
+}
+
+// Os campos que identificam uma PC numa busca. É a MESMA lista do `busca` da API
+// (sigpc-api/server.js) — as duas têm de achar a mesma coisa, senão a mesma palavra digitada
+// em duas telas dá resultados diferentes e ninguém entende por quê.
+const CAMPOS_BUSCA = ['tr', 'processo_mae', 'processo_pc', 'entidade', 'codigo_nl', 'codigo_pc']
+
+// `q` já vem de termoBusca(). Termo vazio casa tudo.
+function casaBusca(p, q) {
+  if(!q) return true
+  return CAMPOS_BUSCA.some(c => (p[c]||'').toLowerCase().includes(q))
+}
+
+// Busca uma lista inteira, sem cair no teto de `limit` em silêncio.
+//
+// As telas que carregam "tudo" mandam limit=9999 e tratam o resultado como completo. Hoje
+// cabe — 3.619 PCs baixadas, por exemplo —, mas no dia em que passar de 9.999 a tela mostra
+// uma lista truncada sem nada indicar, e os contadores passam a mentir.
+//
+// A API já devolve `count` com o total que casa o filtro. Se vier menos linha do que isso,
+// o teto cortou: refaz uma vez pedindo o total exato.
+async function fetchListaCompleta(url) {
+  const r = await fetch(url)
+  const j = sgpeAbsorver(await r.json())
+  if(j.error) return j
+  const total = Number(j.count)
+  const veio = (j.data||[]).length
+  if(Number.isFinite(total) && total > veio) {
+    console.warn(`[lista] o limite cortou: vieram ${veio} de ${total}. Refazendo com limit=${total}.`)
+    const u = new URL(url)
+    u.searchParams.set('limit', String(total))
+    const j2 = sgpeAbsorver(await (await fetch(u.toString())).json())
+    if(!j2.error) return j2
+  }
+  return j
+}
+
 // Normaliza processo SGPe: sigla maiúscula + espaço + número com zeros à esquerda + /ano
 // Ex: "FCEE390/2019" -> "FCEE 00000390/2019" | "ADR17867/2017" -> "ADR17 00000867/2017"
 function normalizarProcesso(str) {
@@ -4242,8 +4283,7 @@ async function buscarPlan() {
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
     if(busca) params.set('busca', busca)
 
-    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = sgpeAbsorver(await r.json())
+    const j = await fetchListaCompleta(`${API_URL}/prestacoes_contas?${params}`)
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
 
     let pcs = j.data||[]
@@ -5127,8 +5167,20 @@ function adminFiltrar() {
   const set = document.getElementById('admSetorial')?.value||''
   const ativo = document.getElementById('admAtivo')?.value||''
 
+  // CPF é gravado COM máscara ("038.237.359-69") e a pessoa digita como quiser: "038237",
+  // "03823735969" ou já pontuado. Comparar só os dígitos dos dois lados resolve os três casos.
+  // O termo só vira busca de CPF se tiver algum dígito — senão `soDigitos('joao')` seria ''
+  // e `''.includes('')` casaria TODO MUNDO.
+  const buscaDigitos = soDigitos(busca)
+
   let lista = _admUsers.filter(u => {
-    if(busca && !u.nome.toLowerCase().includes(busca) && !(u.cpf||'').includes(busca)) return false
+    if(busca) {
+      // `u.nome||''`: um nome nulo estourava aqui e derrubava o filtro inteiro. Hoje não há
+      // nenhum (49 usuários), mas o cadastro não impede.
+      const achouNome = (u.nome||'').toLowerCase().includes(busca)
+      const achouCpf  = buscaDigitos !== '' && soDigitos(u.cpf).includes(buscaDigitos)
+      if(!achouNome && !achouCpf) return false
+    }
     if(perfil && u.perfil !== perfil) return false
     if(set && u.setorial_id !== set) return false
     if(ativo === 'true' && !u.ativo) return false
@@ -5162,7 +5214,7 @@ function adminFiltrar() {
     return `<tr>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td>
-        <div style="font-weight:700;font-size:12px;">${u.nome}</div>
+        <div style="font-weight:700;font-size:12px;">${u.nome||'—'}</div>
         ${u.email?`<div style="font-size:10px;color:var(--ct);">${u.email}</div>`:''}
       </td>
       <td style="font-size:11px;font-family:monospace;">${u.cpf||'—'}</td>
@@ -5174,9 +5226,9 @@ function adminFiltrar() {
       <td style="white-space:nowrap;">
         ${podeGerir ? `
         <button class="btn-acao btn-ver" onclick="admEditarUsuario('${u.id}')" style="margin-right:3px;">✏️ Editar</button>
-        <button class="btn-acao" style="background:#fff;color:var(--am);border:1.5px solid var(--am);" onclick="admAbrirSenha('${u.id}','${u.nome.replace(/'/g,"\'")}')">🔑 Senha</button>
+        <button class="btn-acao" style="background:#fff;color:var(--am);border:1.5px solid var(--am);" onclick="admAbrirSenha('${u.id}','${(u.nome||'').replace(/'/g,"\'")}')">🔑 Senha</button>
         <button class="btn-acao ${u.ativo?'btn-dev':'btn-ass'}" style="margin-left:3px;" onclick="admToggleAtivo('${u.id}',${u.ativo})">${u.ativo?'🚫 Desativar':'✅ Ativar'}</button>
-        ${U.perfil==='superadmin'?`<button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);margin-left:3px;" onclick="admExcluirUsuario('${u.id}','${u.nome.replace(/'/g,"\\'")}')">🗑️ Excluir</button>`:''}
+        ${U.perfil==='superadmin'?`<button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);margin-left:3px;" onclick="admExcluirUsuario('${u.id}','${(u.nome||'').replace(/'/g,"\\'")}')">🗑️ Excluir</button>`:''}
         ` : '<span style="font-size:10px;color:var(--ct);">Somente SUPERADMIN</span>'}
       </td>
     </tr>`
@@ -5478,6 +5530,15 @@ async function irCI() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Controle Interno</div>
     <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">PCs enviadas para análise do Controle Interno — mais antigas primeiro</div>
+    <div class="filtros" style="margin-bottom:12px;">
+      <div class="fg"><label>Busca</label>
+        <input type="text" id="ciBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:260px;" oninput="ciBuscarInput(this.value)">
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn-limpar" onclick="ciLimparBusca()">✕ Limpar</button>
+      </div>
+      <div style="display:flex;align-items:flex-end;font-size:11px;color:var(--ct);" id="ciContagem"></div>
+    </div>
     <div id="ciCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
 
     <!-- Modal devolver ao analista -->
@@ -5506,6 +5567,8 @@ async function irCI() {
 
 let _ciDados = []
 let _ciDevAlvo = null
+let _ciBusca = ''
+let _ciBuscaTimer = null
 
 async function ciCarregar() {
   const cont = document.getElementById('ciCont')
@@ -5514,23 +5577,55 @@ async function ciCarregar() {
   try {
     const ciParams = new URLSearchParams({ enviado_ci: 'true', limit: 9999 })
     if(U.setorialFiltro) ciParams.set('setorial_id', U.setorialFiltro)
-    const r = await fetch(`${API_URL}/prestacoes_contas?${ciParams}`)
-    const j = sgpeAbsorver(await r.json())
+    const j = await fetchListaCompleta(`${API_URL}/prestacoes_contas?${ciParams}`)
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pcs = (j.data||[]).filter(p => p.dt_envio_ci)
     pcs.sort((a,b) => new Date(a.dt_envio_ci) - new Date(b.dt_envio_ci))
     _ciDados = pcs
-    ciRender(pcs)
+    ciRender(ciDadosFiltrados())
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
 }
 
+// Filtra no cliente: a lista do CI é pequena (as PCs em análise no Controle Interno), já
+// está em memória, e `_ciDados` precisa continuar completo — `ciAbrirDevolucao` procura a PC
+// por `codigo_pc` nele, e não acharia se estivesse filtrado.
+function ciDadosFiltrados() {
+  const q = termoBusca(_ciBusca)
+  return q ? _ciDados.filter(p => casaBusca(p, q)) : _ciDados
+}
+
+// Debounce igual ao do Estoque de PCs: uma pintura por pausa, não uma por tecla.
+function ciBuscarInput(v) {
+  _ciBusca = v
+  clearTimeout(_ciBuscaTimer)
+  _ciBuscaTimer = setTimeout(() => ciRender(ciDadosFiltrados()), 150)
+}
+
+function ciLimparBusca() {
+  const el = document.getElementById('ciBusca')
+  if(el) el.value = ''
+  _ciBusca = ''
+  clearTimeout(_ciBuscaTimer)
+  ciRender(ciDadosFiltrados())
+}
+
 function ciRender(pcs) {
   const cont = document.getElementById('ciCont')
   if(!cont) return
+
+  // Mostra "3 de 128" quando há busca — sem isso não dá para saber se a lista curta é o
+  // resultado do filtro ou é tudo o que existe.
+  const cnt = document.getElementById('ciContagem')
+  if(cnt) cnt.textContent = _ciBusca.trim()
+    ? `${pcs.length} de ${_ciDados.length} PCs`
+    : (_ciDados.length ? `${_ciDados.length} PCs` : '')
+
   if(!pcs.length) {
-    cont.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhuma PC no Controle Interno no momento.</div>'
+    cont.innerHTML = _ciBusca.trim()
+      ? '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum resultado para a busca.</div>'
+      : '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhuma PC no Controle Interno no momento.</div>'
     return
   }
   const hoje = Date.now()
@@ -7296,8 +7391,7 @@ async function estCarregar() {
       if(g) params.set('grupo', g)
       if(a) params.set('analista_id', a)
     }
-    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = sgpeAbsorver(await r.json())
+    const j = await fetchListaCompleta(`${API_URL}/prestacoes_contas?${params}`)
     if(j.error) throw new Error(j.error.message || j.error)
     _estDados = j.data || []
 
@@ -7597,6 +7691,9 @@ async function irEstornosRealizados() {
           <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>`:''}
+      <div class="fg"><label>Busca</label>
+        <input type="text" id="estLogBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:240px;" oninput="estLogBuscarInput(this.value)">
+      </div>
       <div class="fg"><label>Analista</label>
         <select id="estLogAnalista" onchange="estLogFiltrar()">
           <option value="">Todos</option>
@@ -7637,8 +7734,7 @@ async function estLogCarregar() {
       const g = document.getElementById('estLogGrupo')?.value || ''
       if(g) params.set('grupo', g)
     }
-    const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
-    const j = sgpeAbsorver(await r.json())
+    const j = await fetchListaCompleta(`${API_URL}/prestacoes_contas?${params}`)
     if(j.error) throw new Error(j.error.message || j.error)
     _estLogDados = j.data || []
 
@@ -7659,11 +7755,18 @@ async function estLogCarregar() {
         data_estorno: p.data_estorno,
         estornado_por: p.estornado_por,
         motivo: p.motivo_estorno || '',
-        trs: new Set(), nls: new Set(), pcs: []
+        trs: new Set(), nls: new Set(), pcs: [], _busca: []
       }
       grupos[chave].trs.add(p.tr||'—')
       grupos[chave].nls.add(p.codigo_nl||'—')
       grupos[chave].pcs.push(p.codigo_pc)
+      // Texto de busca do evento: os mesmos seis campos de cada PC que ele estornou, mais o
+      // nome do analista. Montado aqui, uma vez, porque o evento agrupa várias PCs e a tela
+      // só guarda os códigos — sem isto não daria para procurar por entidade nem por SGPe.
+      CAMPOS_BUSCA.forEach(c => { if(p[c]) grupos[chave]._busca.push(p[c]) })
+    })
+    Object.values(grupos).forEach(ev => {
+      ev._busca = termoBusca(ev._busca.join(' ') + ' ' + (ev.analista_nome||''))
     })
     _estLogEventos = Object.values(grupos).sort((a,b) => new Date(b.data_estorno) - new Date(a.data_estorno))
 
@@ -7688,8 +7791,12 @@ function estLogFiltrar() {
   const analista = document.getElementById('estLogAnalista')?.value || ''
   const dtIni = document.getElementById('estLogDtIni')?.value || ''
   const dtFim = document.getElementById('estLogDtFim')?.value || ''
+  const q = termoBusca(document.getElementById('estLogBusca')?.value)
 
   let lista = _estLogEventos
+  // `_busca` foi montado no carregamento com os seis campos das PCs do evento — procurar por
+  // entidade ou SGPe aqui só é possível por causa dele.
+  if(q) lista = lista.filter(ev => (ev._busca||'').includes(q))
   if(analista) lista = lista.filter(ev => String(ev.analista_id) === String(analista))
   if(dtIni) lista = lista.filter(ev => new Date(ev.data_estorno) >= new Date(dtIni+'T00:00:00'))
   if(dtFim) lista = lista.filter(ev => new Date(ev.data_estorno) <= new Date(dtFim+'T23:59:59'))
@@ -7726,8 +7833,16 @@ function estLogRenderTabela(lista) {
   </tr>`).join('')
 }
 
+let _estLogBuscaTimer = null
+// Debounce igual ao das outras buscas por tecla.
+function estLogBuscarInput() {
+  clearTimeout(_estLogBuscaTimer)
+  _estLogBuscaTimer = setTimeout(estLogFiltrar, 150)
+}
+
 function estLogLimpar() {
-  ['estLogAnalista','estLogDtIni','estLogDtFim'].forEach(id => { const el=document.getElementById(id); if(el) el.value='' })
+  ['estLogBusca','estLogAnalista','estLogDtIni','estLogDtFim'].forEach(id => { const el=document.getElementById(id); if(el) el.value='' })
+  clearTimeout(_estLogBuscaTimer)
   const g = document.getElementById('estLogGrupo')
   if(g) { g.value=''; estLogCarregar(); return }
   estLogFiltrar()
