@@ -575,6 +575,26 @@ tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
              text-underline-offset:2px; cursor:pointer; }
 .proc-link:hover { text-decoration-thickness:2px; }
 
+/* ── Ajuda do prazo de análise: o "?" e o balão flutuante ──
+   O balão é `position:absolute` no BODY, não dentro da célula: dentro da tabela ele seria
+   cortado pelo `overflow` do `.tbl-wrap` e ficaria preso à largura da coluna. */
+.prazo-ajuda { display:inline-flex; align-items:center; justify-content:center;
+  width:14px; height:14px; margin-left:5px; border:1px solid var(--cb); border-radius:50%;
+  background:#fff; color:var(--ct); font-size:9px; font-weight:800; line-height:1;
+  cursor:pointer; vertical-align:middle; user-select:none; }
+.prazo-ajuda:hover, .prazo-ajuda:focus { color:var(--te); border-color:var(--ct); outline:none; }
+.prazo-balao { position:absolute; z-index:9999; width:290px; background:#fff;
+  border:1px solid var(--cb); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18);
+  padding:12px 14px; font-size:11.5px; color:var(--te); line-height:1.5; }
+.prazo-balao h4 { margin:0 0 6px; font-size:12.5px; font-weight:800; color:var(--te); }
+.prazo-balao .pb-x { position:absolute; top:6px; right:8px; border:none; background:none;
+  color:var(--ct); font-size:14px; line-height:1; cursor:pointer; padding:2px 4px; }
+.prazo-balao .pb-x:hover { color:var(--te); }
+.prazo-balao hr { border:none; border-top:1px solid var(--cl); margin:9px 0; }
+.prazo-balao .pb-sit { font-weight:700; }
+.prazo-balao .pb-leg { font-size:10px; color:var(--ct); }
+.prazo-balao .pb-leg b { font-weight:800; }
+
 /* ── Botões: sombra mais forte no hover, reduzida no active ── */
 .btn-primario, button.primario, .mcok, .btn-rap, .btn-buscar,
 .btn-secundario, .mccn, .btn-limpar, .btn-neutro, .btn-perigo, .mcok.rv {
@@ -4320,7 +4340,7 @@ function renderAlertasPrazo(alertas) {
         <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
         <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${procHtml(r.processo_pc)}</span></div>
       </div>
-      <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}</span>
+      <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}${prazoIcone(r.dt_limite_pc)}</span>
     </div>`
   }
 
@@ -4476,6 +4496,112 @@ const planMoedaPC  = (p)  => planEhFinal(p) ? '—' : planMoeda(p.valor)
 const planMoedaAgr = (o)  => o?.soFinal ? '—' : planMoeda(o?.valor)
 const planData  = (d) => d ? new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
+// ══════════════════════════════════════
+//  PRAZO DE ANÁLISE — dias, cor e ajuda
+// ══════════════════════════════════════
+// `dt_limite_pc` é a data-limite para a FCEE ANALISAR a PC.
+//
+// ⚠️ Ela vem CARREGADA por lote na origem (sigpc-api/carga_prazos.js), não é calculada.
+// Conferido em 13.625 linhas: `dt_recebimento_pc + prazo_analise_dias` bate em 5 e diverge
+// em 13.620. São 267 datas distintas para 14.652 PCs — 3.253 delas caem todas em 30/01/2021.
+// Por isso o balão diz "definida por lote na origem": quem tentar explicar como
+// "recebimento + 150 dias" vai explicar errado.
+//
+// ⚠️ Existe uma coluna `dias_atraso` gravada no banco e ela NÃO é usada aqui, de propósito:
+// é um retrato congelado de quando o CSV foi gerado e já diverge do real em mais de um ano
+// (1.815 gravado contra 2.323 calculado na mesma PC). O atraso é SEMPRE recalculado.
+//
+// O sinal é o mesmo da API (`CURRENT_DATE - dt_limite_pc`): positivo = vencida.
+
+function prazoDias(dtLimite) {
+  if(!dtLimite) return null
+  // T00:00:00 na CONTA (compara dia cheio com dia cheio) e T12:00:00 na EXIBIÇÃO, em
+  // planData — o meio-dia é o que impede o fuso de empurrar a data um dia para trás.
+  return Math.round((new Date().setHours(0,0,0,0) - new Date(String(dtLimite).slice(0,10)+'T00:00:00'))/86400000)
+}
+
+// Uma função só decide cor E texto. Se a tabela e o balão calculassem separado, um dia
+// divergiriam e a tela mostraria vermelho dizendo "dentro do prazo".
+function prazoSituacao(dtLimite) {
+  const dias = prazoDias(dtLimite)
+  const d = (n) => `${n} dia${n === 1 ? '' : 's'}`
+  if(dias === null)  return { dias:null, faixa:null, cor:'var(--ct)', texto:'Sem prazo informado para esta PC.' }
+  if(dias > 0)       return { dias, faixa:'vencida', cor:'var(--r)',  texto:`Venceu há ${d(dias)}. Continua analisável, mas com risco de prescrição.` }
+  if(dias === 0)     return { dias, faixa:'avencer', cor:'var(--am)', texto:'Vence hoje.' }
+  if(dias >= -30)    return { dias, faixa:'avencer', cor:'var(--am)', texto:`Vence em ${d(-dias)}.` }
+  return               { dias, faixa:'noprazo', cor:'var(--ct)', texto:'Dentro do prazo.' }
+}
+
+// A célula pronta: data na cor da faixa + o "?" que abre o balão.
+function prazoCelula(dtLimite) {
+  const s = prazoSituacao(dtLimite)
+  const peso = s.faixa === 'vencida' ? 'font-weight:700;' : ''
+  return `<span style="color:${s.cor};${peso}">${planData(dtLimite)}</span>`
+    + prazoIcone(dtLimite)
+}
+
+// Só o ícone — para as telas que mostram o atraso sem mostrar a data.
+function prazoIcone(dtLimite) {
+  return `<span class="prazo-ajuda" role="button" tabindex="0" title="O que é este prazo?"
+    data-prazo="${escHtml(String(dtLimite ?? '').slice(0,10))}"
+    onclick="prazoAjuda(event,this)" onkeydown="if(event.key==='Enter'||event.key===' ')prazoAjuda(event,this)">?</span>`
+}
+
+// ── O balão ─────────────────────────────────────────────────────────────────
+// Um só por vez: a variável guarda o balão aberto, e abrir outro fecha o anterior.
+let _prazoBalao = null
+
+function prazoAjudaFechar() {
+  if(_prazoBalao) { _prazoBalao.remove(); _prazoBalao = null }
+}
+
+function prazoAjuda(ev, el) {
+  ev.stopPropagation()   // sem isto o clique subiria para o document e fecharia na hora
+  ev.preventDefault()
+  const jaAberto = _prazoBalao && _prazoBalao._dono === el
+  prazoAjudaFechar()
+  if(jaAberto) return    // clicar de novo no mesmo "?" fecha
+
+  const s = prazoSituacao(el.getAttribute('data-prazo'))
+  const bal = document.createElement('div')
+  bal.className = 'prazo-balao'
+  bal._dono = el
+  bal.innerHTML = `
+    <button class="pb-x" title="Fechar" onclick="prazoAjudaFechar()">✕</button>
+    <h4>Prazo de análise</h4>
+    <div>Data-limite para a FCEE analisar esta PC.<br>
+      Vem definida por lote na origem — não é recebimento mais 150 dias.</div>
+    <hr>
+    <div class="pb-sit" style="color:${s.cor};">${escHtml(s.texto)}</div>
+    <hr>
+    <div class="pb-leg">
+      <b style="color:var(--r);">vermelho</b> = vencida ·
+      <b style="color:var(--am);">amarelo</b> = vence em 30 dias ·
+      <b style="color:var(--ct);">cinza</b> = no prazo
+    </div>`
+  bal.addEventListener('click', e => e.stopPropagation())   // clicar dentro não fecha
+  document.body.appendChild(bal)
+
+  // Posiciona ao LADO do ícone. Se não couber à direita, vai para a esquerda; se não couber
+  // embaixo, sobe. Sem isso o balão sai da tela nas últimas linhas e nas colunas da direita.
+  const r = el.getBoundingClientRect()
+  const larguraTela = document.documentElement.clientWidth
+  const alturaTela  = document.documentElement.clientHeight
+  let esq = window.scrollX + r.right + 8
+  if(esq + bal.offsetWidth > window.scrollX + larguraTela - 8) esq = window.scrollX + r.left - bal.offsetWidth - 8
+  if(esq < window.scrollX + 8) esq = window.scrollX + 8
+  let topo = window.scrollY + r.top - 8
+  if(topo + bal.offsetHeight > window.scrollY + alturaTela - 8) topo = window.scrollY + alturaTela - bal.offsetHeight - 8
+  bal.style.left = esq + 'px'
+  bal.style.top  = Math.max(window.scrollY + 8, topo) + 'px'
+  _prazoBalao = bal
+}
+
+// Clique em qualquer lugar fora, Escape, ou rolagem da página fecham.
+document.addEventListener('click', prazoAjudaFechar)
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape') prazoAjudaFechar() })
+window.addEventListener('resize', prazoAjudaFechar)
+
 function renderPlanResumo(pcs, meta) {
   const resumo = document.getElementById('planResumo')
   if(!resumo) return
@@ -4543,13 +4669,11 @@ function renderPlan(rows) {
       // ── parcial em aberto
       const podeCI = !!pa.parecer_tipo
       const linhasPC = pa.pcs.map(p => {
-        const dias = p.dt_limite_pc ? Math.round((new Date().setHours(0,0,0,0) - new Date(String(p.dt_limite_pc).slice(0,10)+'T00:00:00'))/86400000) : null
-        const vencida = dias !== null && dias > 0
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
           <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;">${procHtml(p.processo_pc)}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
-          <td style="padding:8px 10px;font-size:12px;${vencida?'color:var(--r);font-weight:700;':''}">${planData(p.dt_limite_pc)}</td>
+          <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
         </tr>`
       }).join('')
@@ -4579,7 +4703,7 @@ function renderPlan(rows) {
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr>
             <th style="width:130px;">PC</th><th style="width:150px;">Processo SGPE</th>
-            <th style="width:110px;text-align:right;">Valor</th><th style="width:100px;">Prazo PC</th><th>NL</th>
+            <th style="width:110px;text-align:right;">Valor</th><th style="width:135px;">Prazo de análise</th><th>NL</th>
           </tr></thead>
           <tbody>${linhasPC}</tbody>
         </table>
