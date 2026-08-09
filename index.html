@@ -2070,6 +2070,35 @@ function escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 }
 
+// ══════════════════════════════════════
+//  BUSCA — acento
+// ══════════════════════════════════════
+// Tira o acento DO TERMO DIGITADO, não do dado.
+//
+// Funciona porque o acervo está inteiro sem acento — conferido em 09/08/2026: 0 de 14.652
+// linhas têm acento em `tr`, `entidade`, `processo_pc`, `processo_mae`, `codigo_pc` ou
+// `codigo_nl`, e 0 de 49 em `usuarios.nome`. As entidades estão gravadas assim:
+//   "ASSOC DOS PAIS E AMIGOS DOS EXCEPCIONAIS DE SAO JOSE"
+//
+// Sem isto, quem digitava "São José" — a grafia correta — via tela vazia, enquanto
+// "SAO JOSE" trazia 24 TRs. A caixa já era ignorada; o acento não.
+//
+// Mesma função existe em sigpc-api/server.js, aplicada ao `busca` do resumo_tr. As duas são
+// pequenas e independentes de propósito: normalizar acento não é regra de negócio, é
+// higiene de entrada, e cada lado limpa o que recebe. (Diferente da regex de processo, que
+// tinha de ser uma só — ver o aviso em procHtml.)
+//
+// ⚠️ Se um dia entrar dado acentuado no acervo, isto não o alcança: aproxima o termo do
+// dado, não o contrário.
+function semAcento(s) {
+  return String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '')
+}
+
+// Termo pronto para comparar: sem acento, minúsculo, sem espaço nas pontas.
+function termoBusca(s) {
+  return semAcento(s).trim().toLowerCase()
+}
+
 // Normaliza processo SGPe: sigla maiúscula + espaço + número com zeros à esquerda + /ano
 // Ex: "FCEE390/2019" -> "FCEE 00000390/2019" | "ADR17867/2017" -> "ADR17 00000867/2017"
 function normalizarProcesso(str) {
@@ -3810,7 +3839,7 @@ async function relBuscar() {
     let dados = j.data||[]
 
     // Busca por TR é substring — filtra no cliente
-    if(tr) dados = dados.filter(p => (p.tr||'').toLowerCase().includes(tr.toLowerCase()))
+    if(tr) { const q = termoBusca(tr); dados = dados.filter(p => (p.tr||'').toLowerCase().includes(q)) }
 
     // Nome completo do analista, via usuarios
     const { data: todosUsers } = await db.from('usuarios').select('id,nome').eq('setorial_id', sid)
@@ -4201,7 +4230,7 @@ async function buscarPlan() {
   if(!cont) return
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
-  const busca = document.getElementById('plBusca')?.value.trim().toLowerCase()||''
+  const busca = termoBusca(document.getElementById('plBusca')?.value)
   const sit   = document.getElementById('plSit')?.value||''
   const prazo = document.getElementById('plPrazo')?.value||''
 
@@ -5089,7 +5118,7 @@ function adminRenderCounters() {
 }
 
 function adminFiltrar() {
-  const busca = (document.getElementById('admBusca')?.value||'').toLowerCase().trim()
+  const busca = termoBusca(document.getElementById('admBusca')?.value)
   const perfil = document.getElementById('admPerfil')?.value||''
   const set = document.getElementById('admSetorial')?.value||''
   const ativo = document.getElementById('admAtivo')?.value||''
@@ -7290,7 +7319,8 @@ async function estCarregar() {
 
 function estDadosFiltrados() {
   if(!_estBusca) return _estDados
-  const q = _estBusca.toLowerCase()
+  const q = termoBusca(_estBusca)
+  if(!q) return _estDados
   return _estDados.filter(p =>
     (p.codigo_pc||'').toLowerCase().includes(q) ||
     (p.processo_pc||'').toLowerCase().includes(q) ||
