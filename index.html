@@ -4840,9 +4840,52 @@ function planRenderBarra(todas) {
 // campo vazio do que data errada.
 function planInicioAnalise(r) {
   const datas = (r.parciais||[]).flatMap(p => p.pcs||[]).map(p => p.dt_inicio_analise).filter(Boolean)
-  if(!datas.length) return ''
-  const menor = datas.sort()[0]
-  return ` · <span style="opacity:.9;">análise desde ${planData(menor)}</span>`
+  const menor = datas.length ? datas.sort()[0] : null
+  const comum = 'cursor:pointer;text-decoration:underline;text-underline-offset:2px;'
+  return menor
+    ? ` · <span onclick="planDefinirInicio('${escHtml(r.tr)}',event)" title="Clique para corrigir a data de início"
+          style="${comum}">análise desde ${planData(menor)}</span>`
+    // Sem data: convite explícito. As TRs assumidas antes da coluna existir caem aqui, e as
+    // 30 da reserva de 09/08 também — nada foi carimbado retroativamente, por decisão.
+    : ` · <span onclick="planDefinirInicio('${escHtml(r.tr)}',event)" title="Registrar quando a análise começou"
+          style="${comum}opacity:.85;font-style:italic;">definir início</span>`
+}
+
+// Edição manual da data de início. Existe para as TRs assumidas antes de a coluna existir —
+// que não têm registro nenhum — e para corrigir o carimbo automático.
+async function planDefinirInicio(tr, ev) {
+  if(ev) ev.stopPropagation()      // não pode expandir/recolher a TR junto
+  const item = (window._planDadosCache||[]).find(t => t.tr === tr)
+  const atualIso = item ? ((item.parciais||[]).flatMap(p => p.pcs||[])
+      .map(p => p.dt_inicio_analise).filter(Boolean).sort()[0] || null) : null
+  const atualBr = atualIso ? planData(atualIso) : ''
+
+  const resp = prompt(`Início da análise da TR ${tr}\n\nDigite no formato dd/mm/aaaa.\nDeixe em branco para limpar.`, atualBr)
+  if(resp === null) return
+
+  let iso = null
+  if(resp.trim()) {
+    const m = resp.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if(!m) { toast('Data inválida. Use dd/mm/aaaa.','err'); return }
+    iso = `${m[3]}-${m[2]}-${m[1]}`
+    const d = new Date(iso+'T12:00:00')
+    if(isNaN(d) || d.getDate() !== +m[1] || (d.getMonth()+1) !== +m[2]) { toast('Data inexistente.','err'); return }
+    // Armadilha 3 do CLAUDE.md: data futura zera relatório. A API também recusa.
+    if(iso > new Date().toISOString().slice(0,10)) { toast('A data de início não pode ser futura.','err'); return }
+  }
+
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/inicio_analise`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, analista_id: U.id, data: iso })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    // Atualiza o cache local em vez de refazer a busca inteira.
+    if(item) (item.parciais||[]).forEach(p => (p.pcs||[]).forEach(pc => { pc.dt_inicio_analise = iso ? iso+'T00:00:00' : null }))
+    planAplicar()
+    toast(iso ? `Início definido em ${planData(iso)} (${j.count} PCs).` : 'Início da análise limpo.','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 // O alfinete. SVG e não emoji: o 📌 é vermelho em qualquer estado, e o pedido é azul quando

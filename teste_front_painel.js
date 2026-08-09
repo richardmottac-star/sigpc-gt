@@ -202,12 +202,34 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   conf(/planBadgeSit\(s\)/.test(html), 'as etiquetas de SITUACAO continuam');
   conf(/planInicioAnalise\(r\)/.test(cab), 'o cabecalho chama a data de inicio');
   conf(/dt_inicio_analise/.test(html), 'le o campo `dt_inicio_analise`, que ainda nao existe no banco');
-  const ini = (html.match(/function planInicioAnalise\(r\)[\s\S]*?\n\}/) || [''])[0];
-  conf(/if\(!datas\.length\) return ''/.test(ini), 'sem o campo, nao mostra nada — melhor vazio que data errada');
+  // ⚠️ o comportamento MUDOU em 09/08: antes, sem o campo, nao mostrava nada. Agora mostra
+  // "definir início", clicavel — e o que permite preencher as TRs antigas, que nao tem
+  // registro nenhum. Ver a secao 9.
+  conf(/definir início/.test(html), 'sem o campo, convida a definir (nao fica vazio)');
 
   // 4. coluna do SGPe
   conf(/width:195px;">Processo SGPE/.test(html), 'coluna do processo foi para 195px');
   conf(/class="proc-sgpe"[^>]*white-space:nowrap/.test(html), 'e a celula nao quebra linha');
+}
+
+console.log('\n═══ 9. INICIO DA ANALISE — as duas formas de preencher ═══');
+{
+  const ini = (html.match(/function planInicioAnalise\(r\)[\s\S]*?\n\}/) || [''])[0];
+  conf(/definir início/.test(ini), 'sem data, mostra "definir início"');
+  conf(/análise desde \$\{planData\(menor\)\}/.test(ini), 'com data, mostra "análise desde dd/mm/aaaa"');
+  conf((ini.match(/planDefinirInicio/g) || []).length === 2, 'os DOIS estados sao clicaveis (definir e corrigir)');
+  conf(/datas\.sort\(\)\[0\]/.test(ini), 'usa a data mais antiga entre as PCs da TR');
+
+  const def = (html.match(/async function planDefinirInicio[\s\S]*?\n\}/) || [''])[0];
+  conf(/ev\.stopPropagation\(\)/.test(def), 'clicar na data NAO expande a TR junto');
+  conf(/\^\(\\d\{2\}\)\\\/\(\\d\{2\}\)\\\/\(\\d\{4\}\)\$/.test(def), 'exige dd/mm/aaaa');
+  conf(/d\.getDate\(\) !== \+m\[1\]/.test(def), 'recusa data inexistente (31/02)');
+  conf(/nao pode ser futura|não pode ser futura/.test(def), 'recusa data futura (armadilha 3 do CLAUDE.md)');
+  conf(/data: iso/.test(def), 'manda a data em ISO para a API');
+  conf(/resp\.trim\(\)/.test(def) && /data: iso/.test(def), 'em branco limpa (iso fica null)');
+
+  // O carimbo retroativo foi DESCARTADO por decisao — as 30 TRs da reserva ficam sem data.
+  conf(!/atualizado_em.*dt_inicio_analise|dt_inicio_analise.*= *p\.atualizado_em/.test(html), 'nenhum backfill retroativo no front');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
