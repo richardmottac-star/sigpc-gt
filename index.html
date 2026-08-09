@@ -4826,6 +4826,25 @@ function planRenderBarra(todas) {
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px;">${chips}</div>`
 }
 
+// Data de início da análise da TR — a mais antiga entre as PCs dela.
+//
+// ⚠️ O CAMPO AINDA NÃO EXISTE NO BANCO (conferido em 09/08/2026). Foram descartados:
+//   dt_situacao ......... 0 de 14.652 preenchidas, coluna vazia
+//   parcela_historico ... 6 linhas, todas de uma migração; 0 das 54 TRs do analista
+//   atualizado_em ....... última escrita de QUALQUER tipo (cargas, backfills, a reserva) —
+//                         diz quando a linha foi tocada, não quando a análise começou
+//   dt_recebimento_pc ... quando a FCEE recebeu da entidade; é o início do PRAZO, não da análise
+//
+// O código já lê `dt_inicio_analise`: no dia em que a coluna existir e o PATCH de assumir
+// passar a gravá-la, a data aparece sozinha. Enquanto não existe, não mostra nada — melhor
+// campo vazio do que data errada.
+function planInicioAnalise(r) {
+  const datas = (r.parciais||[]).flatMap(p => p.pcs||[]).map(p => p.dt_inicio_analise).filter(Boolean)
+  if(!datas.length) return ''
+  const menor = datas.sort()[0]
+  return ` · <span style="opacity:.9;">análise desde ${planData(menor)}</span>`
+}
+
 // O alfinete. SVG e não emoji: o 📌 é vermelho em qualquer estado, e o pedido é azul quando
 // fixado, cinza quando não — com emoji só dava para mudar opacidade, o que não distingue nada.
 //
@@ -4952,7 +4971,7 @@ function renderPlan(rows) {
       const linhasPC = pa.pcs.map(p => {
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
-          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;">${procHtml(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc)}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
           <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
@@ -4973,9 +4992,9 @@ function renderPlan(rows) {
             ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
-            <button class="btn-acao" style="background:#fff;color:var(--az);border:1.5px solid var(--az);" onclick="pAbrirSit(${chave})">Salvar situação</button>
-            <button class="btn-acao" style="background:var(--v);color:#fff;" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
-            <button class="btn-acao" style="background:${podeCI?'#1A4E8A':'#C8D2CB'};color:#fff;${podeCI?'':'cursor:not-allowed;'}"
+            <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})">Salvar situação</button>
+            <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
+            <button class="btn-acao" style="font-weight:800;background:${podeCI?'#1A4E8A':'#E4EAE6'};color:${podeCI?'#fff':'#9AA8A0'};${podeCI?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
               ${podeCI?`onclick="pEnviarCI(${chave})"`:'disabled'}
               title="${podeCI?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}">🏛 Encaminhar ao CI</button>`}
           </span>
@@ -4983,41 +5002,55 @@ function renderPlan(rows) {
         ${sub}
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr>
-            <th style="width:130px;">PC</th><th style="width:150px;">Processo SGPE</th>
-            <th style="width:110px;text-align:right;">Valor</th><th style="width:135px;">Prazo de análise</th><th>NL</th>
+            <!-- SGPe em 195px: "ADR08 00001582/2019" (19 caracteres, o pior caso — sigla com
+                 região + 8 dígitos) quebrava em duas linhas com 150px. O espaço sai da NL,
+                 que é a coluna elástica e tem folga. -->
+            <th style="width:120px;">PC</th><th style="width:195px;">Processo SGPE</th>
+            <th style="width:105px;text-align:right;">Valor</th><th style="width:130px;">Prazo de análise</th><th>NL</th>
           </tr></thead>
           <tbody>${linhasPC}</tbody>
         </table>
       </div>`
     }).join('')
 
-    // ── etiquetas de situação da TR: o que está em aberto, sem repetir
+    // ── etiquetas de SITUAÇÃO da TR: o que está em aberto, sem repetir.
+    // A etiqueta de "Nd vencida" saiu daqui em 09/08/2026: com 19 de 30 TRs mostrando a mesma
+    // tarja vermelha, ela não distinguia nada — virou ruído. Quem precisa dessa leitura tem o
+    // chip "Prazo vencido" e a ordenação "Prazo mais crítico", que respondem melhor.
     const etiquetas = r.situacoes.map(s => planBadgeSit(s)).join(' ')
-    const etqPrazo = prazoFaixa(r.piorDias) === 'vencida'
-      ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#FDE8EA;color:var(--r);">${r.piorDias}d vencida</span>` : ''
     const anot = r.anotacoes[0] || null
+
+    // TR com TUDO baixado recua: não é mais trabalho, é histórico. Cor da paleta — o verde
+    // claro de fundo (--vbg) com texto escuro, em vez do gradiente forte do cabeçalho.
+    const baixadaTr = r.total_pcs > 0 && r.baixadasQtd >= r.total_pcs
+    const fundoCab  = baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
+    const corCab    = baixadaTr ? 'var(--te)'  : '#fff'
+    const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
+    const pilula    = baixadaTr ? 'background:var(--cl);color:var(--ct);' : 'background:rgba(255,255,255,.18);'
 
     return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:${r.expandida?'13px':'7px'};${r.fixada?'border-left:4px solid var(--az);':''}">
       <div onclick="planToggle('${escHtml(r.tr)}')" title="${r.expandida?'Recolher':'Ver as parciais desta TR'}"
-        style="background:var(--header-grad);color:#fff;padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;">
+        style="background:${fundoCab};color:${corCab};padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;${baixadaTr?'border-bottom:1px solid var(--cb);':''}">
 
         ${planAlfinete(r)}
 
         <div style="min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
-            ${etqPrazo}${etiquetas}
+            ${baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
           </div>
-          <div style="font-size:11.5px;opacity:.88;margin-top:2px;">${escHtml(r.entidade||'—')}</div>
+          <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
+            ${escHtml(r.entidade||'—')}${planInicioAnalise(r)}
+          </div>
         </div>
 
         <div style="margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
-          <span style="font-size:11px;opacity:.92;text-align:right;line-height:1.5;">
-            <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
-            <span style="display:inline-block;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.baixadasQtd} de ${r.total_pcs} baixadas</span>
+          <span style="font-size:11px;color:${corSuave};text-align:right;line-height:1.5;">
+            <span style="display:inline-block;${pilula}border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
+            <span style="display:inline-block;${pilula}border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.baixadasQtd} de ${r.total_pcs} baixadas</span>
           </span>
-          <button class="btn-acao" style="background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);white-space:nowrap;"
+          <button class="btn-acao" style="background:#fff;color:${baixadaTr?'var(--ct)':'var(--v)'};border:none;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.18);white-space:nowrap;"
             onclick="planToggle('${escHtml(r.tr)}');event.stopPropagation();">${r.expandida?'▲ Recolher':'▼ Ver PCs'}</button>
         </div>
       </div>

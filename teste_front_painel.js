@@ -175,6 +175,41 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   planFixar('2022TR000777');
   conf(ctx.window._planDadosCache[0].fixada === false, 'clicar de novo desafixa');
 
-  console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
+  console.log('\n═══ 8. OS QUATRO AJUSTES DE 09/08 ═══');
+{
+  const cab = html.slice(html.indexOf('const baixadaTr ='), html.indexOf('${r.expandida ? planAnotacaoBloco(r)'));
+
+  // 1. botoes com contraste
+  conf(/background:#fff;color:\$\{baixadaTr\?'var\(--ct\)':'var\(--v\)'\}/.test(cab), 'Ver PCs virou solido, nao mais translucido');
+  // escopado ao cabecalho do painel: `rgba(255,255,255,.16)` tambem e usado pelo botao do
+  // menu superior (.btn-guia), que nao tem nada a ver com isto.
+  conf(!/rgba\(255,255,255,\.16\)/.test(cab), 'o fundo apagado do botao saiu do cabecalho da TR');
+  const acoes = html.slice(html.indexOf('pAbrirSit(${chave})') - 300, html.indexOf('Encaminhar ao CI') + 40);
+  conf((acoes.match(/font-weight:800/g) || []).length >= 3, 'os 3 botoes da area expandida ganharam peso');
+  conf(/border:2px solid var\(--az\)/.test(acoes), 'o contorno do "Salvar situação" engrossou');
+
+  // 2. TR baixada recua
+  conf(/const baixadaTr = r\.total_pcs > 0 && r\.baixadasQtd >= r\.total_pcs/.test(html), 'detecta TR toda baixada');
+  conf(/baixadaTr \? 'var\(--vbg\)'\s*:\s*'var\(--header-grad\)'/.test(html), 'usa --vbg da paleta, nao cor nova');
+  conf(/✓ concluída/.test(cab), 'e ganha etiqueta de concluida');
+
+  // 3. etiqueta de vencida fora, inicio da analise no lugar
+  // idem: a expressao sobrevive no comentario que explica a remocao, e proibir a mencao
+  // faria o teste brigar com a documentacao. O que nao pode e ela ser RENDERIZADA.
+  conf(!/\$\{r\.piorDias\}d vencida/.test(html), 'a etiqueta "Nd vencida" nao e mais renderizada');
+  conf(!/d vencida/.test(cab), 'e nao esta no cabecalho da TR');
+  conf(!/etqPrazo/.test(html), 'e a variavel que a montava tambem');
+  conf(/planBadgeSit\(s\)/.test(html), 'as etiquetas de SITUACAO continuam');
+  conf(/planInicioAnalise\(r\)/.test(cab), 'o cabecalho chama a data de inicio');
+  conf(/dt_inicio_analise/.test(html), 'le o campo `dt_inicio_analise`, que ainda nao existe no banco');
+  const ini = (html.match(/function planInicioAnalise\(r\)[\s\S]*?\n\}/) || [''])[0];
+  conf(/if\(!datas\.length\) return ''/.test(ini), 'sem o campo, nao mostra nada — melhor vazio que data errada');
+
+  // 4. coluna do SGPe
+  conf(/width:195px;">Processo SGPE/.test(html), 'coluna do processo foi para 195px');
+  conf(/class="proc-sgpe"[^>]*white-space:nowrap/.test(html), 'e a celula nao quebra linha');
+}
+
+console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
   process.exit(falhou ? 1 : 0);
 })();
