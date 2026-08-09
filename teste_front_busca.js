@@ -95,5 +95,44 @@ console.log('\n═══ 4. QUEM BUSCA NA API, QUEM BUSCA NO CLIENTE ═══')
   }
 }
 
-console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
-process.exit(falhou ? 1 : 0);
+console.log('\n═══ 5. DEBOUNCE do Estoque de PCs ═══');
+{
+  // Roda o `estBuscarInput` de verdade, com `estRender` dublado, e simula digitacao rapida.
+  const ini5 = html.indexOf('let _estBuscaTimer');
+  const fim5 = html.indexOf('function estPg(');
+  const espera = (ms) => new Promise(res => setTimeout(res, ms));
+
+  if (ini5 < 0 || fim5 < 0) {
+    conf(false, 'nao achei estBuscarInput no index.html');
+    encerrar();
+  } else {
+    let pinturas = 0;
+    const ctx5 = { setTimeout, clearTimeout, console, _estBusca: '', _estPag: 9, estRender: () => { pinturas++; } };
+    vm.createContext(ctx5);
+    vm.runInContext(html.slice(ini5, fim5), ctx5);
+
+    // digitando "apae": 4 teclas em rajada
+    for (const v of ['a', 'ap', 'apa', 'apae']) ctx5.estBuscarInput(v);
+
+    conf(pinturas === 0, 'nao pinta durante a rajada de digitacao', `pinturas=${pinturas}`);
+    conf(vm.runInContext('_estBusca', ctx5) === 'apae', 'o termo ja vale na hora, sem esperar');
+    conf(vm.runInContext('_estPag', ctx5) === 0, 'volta para a primeira pagina na hora');
+
+    espera(260)
+      .then(() => {
+        conf(pinturas === 1, '4 teclas -> 1 pintura so, depois da pausa', `pinturas=${pinturas}`);
+        ctx5.estBuscarInput('apae d');   // uma tecla isolada depois tem de pintar de novo
+        return espera(260);
+      })
+      .then(() => {
+        conf(pinturas === 2, 'nova digitacao depois da pausa pinta de novo', `pinturas=${pinturas}`);
+        encerrar();
+      })
+      .catch(e => { conf(false, 'erro no teste de debounce', e.message); encerrar(); });
+  }
+}
+
+function encerrar() {
+  console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
+  process.exit(falhou ? 1 : 0);
+}

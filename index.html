@@ -7371,10 +7371,22 @@ function estMontarPaginas(dados) {
   return paginas
 }
 
+// A busca dispara a cada tecla (`oninput`). O debounce faz UMA pintura por pausa de
+// digitação, em vez de uma por letra: digitar "apae" pintava 4 vezes, agora pinta 1.
+//
+// O estado (`_estBusca`, `_estPag`) muda na hora; só a pintura espera. Assim, se qualquer
+// outra coisa chamar `estRender()` nesse meio-tempo, ela já usa o termo atual.
+//
+// Medido sobre as 3.619 PCs baixadas: o ciclo filtrar + paginar + montar o HTML custa 2 a
+// 4,5 ms, e a repintura é de uma página só (~50 linhas, ~10 KB) — não das 3.619. Ou seja,
+// isto é polimento, não conserto: sem o debounce a tela não travava. 150 ms é imperceptível
+// para quem digita e recolhe a rajada inteira.
+let _estBuscaTimer = null
 function estBuscarInput(v) {
   _estBusca = v
   _estPag = 0
-  estRender()
+  clearTimeout(_estBuscaTimer)
+  _estBuscaTimer = setTimeout(estRender, 150)
 }
 
 function estPg(d) {
