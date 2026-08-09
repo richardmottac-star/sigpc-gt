@@ -1803,11 +1803,17 @@ async function buscar() {
     })
     if(st) TRS_EST = TRS_EST.filter(t => t.statusDerivado === st)
 
+    // Status continua sendo o agrupamento de cima — é ele que desenha os separadores
+    // ("Livre — N TRs") quando não há filtro. Dentro de cada status vem a ordem por ano
+    // (ver `compararAnoTR`), e só então o número da TR.
+    //
+    // Na prática o ano é a ordem que se vê: o filtro abre em "Livre", então o status é
+    // constante e a lista sai 2020 primeiro.
     TRS_EST.sort((a,b) => {
       const oa = EST_ORDEM_EXIBICAO.indexOf(a.statusDerivado)
       const ob = EST_ORDEM_EXIBICAO.indexOf(b.statusDerivado)
       if(oa !== ob) return oa - ob
-      return (a.tr||'').localeCompare(b.tr||'')
+      return compararAnoTR(a.tr, b.tr) || (a.tr||'').localeCompare(b.tr||'')
     })
     EST_GRUPOS_CONTAGEM = {}
     TRS_EST.forEach(t => { EST_GRUPOS_CONTAGEM[t.statusDerivado] = (EST_GRUPOS_CONTAGEM[t.statusDerivado]||0)+1 })
@@ -2130,6 +2136,43 @@ function chaveProcesso(s) {
     .map(t => t.replace(/\d+/g, d => d.replace(/^0+/, '') || '0'))
     .join('')
     .replace(/\//g, '')
+}
+
+// ══════════════════════════════════════
+//  ORDEM DE TRABALHO POR ANO DA TR
+// ══════════════════════════════════════
+// A fila não é cronológica: é por risco.
+//
+//   1º) 2020            — ainda permitem GLOSA E COBRANÇA. É onde o trabalho ainda muda o
+//                         resultado financeiro, então vem primeiro.
+//   2º) 2021 em diante  — crescente. Prazo folgado, ordem natural.
+//   3º) anteriores a 2020 — da mais NOVA para a mais ANTIGA (2019, 2018, 2017...).
+//                         Têm risco de prescrição, mas precisam ser analisadas do mesmo
+//                         jeito; entre elas, a mais recente é a que ainda tem mais chance.
+//
+// O ano são os 4 primeiros dígitos do código: "2020TR000617" -> 2020.
+// Todas as 1.559 TRs do acervo têm esse prefixo (conferido em 09/08/2026); mesmo assim, TR
+// sem ano legível vai para o fim em vez de quebrar a ordenação.
+function anoTR(tr) {
+  const m = String(tr ?? '').match(/^(\d{4})/)
+  return m ? Number(m[1]) : null
+}
+
+// Devolve [grupo, valor] — o par que o comparador ordena de forma crescente. O truque está no
+// grupo 2: guardar o ano NEGATIVO faz 2019 vir antes de 2018 sem precisar de caso especial.
+function ordemAnoTR(tr) {
+  const a = anoTR(tr)
+  if(a === null) return [3, 0]
+  if(a === 2020) return [0, 0]
+  if(a > 2020)   return [1, a]
+  return [2, -a]
+}
+
+// Use encadeado com `||`, antes do desempate por número da TR.
+function compararAnoTR(trA, trB) {
+  const [ga, va] = ordemAnoTR(trA)
+  const [gb, vb] = ordemAnoTR(trB)
+  return ga - gb || va - vb
 }
 
 // O botão Buscar, um só para todas as telas. Nasceu só no Estoque de TRs; as outras buscavam
@@ -4385,7 +4428,10 @@ async function buscarPlan() {
     }
 
     // TRs com trabalho pendente primeiro
-    trs.sort((a,b) => (b.pendentes>0) - (a.pendentes>0) || (a.tr||'').localeCompare(b.tr||''))
+    // Pendentes primeiro (o que ainda dá trabalho), depois a ordem por ano de risco — é a
+    // fila de trabalho do analista, exatamente onde a prioridade de glosa importa —, e só
+    // então o número da TR.
+    trs.sort((a,b) => (b.pendentes>0) - (a.pendentes>0) || compararAnoTR(a.tr, b.tr) || (a.tr||'').localeCompare(b.tr||''))
 
     window._planTot = trs.length
     window._planDadosCache = trs
@@ -7485,6 +7531,12 @@ function estDadosFiltrados() {
 
 // Agrupa por NL e distribui em páginas de até EST_PP registros,
 // nunca dividindo uma NL entre duas páginas
+//
+// ⚠️ AQUI NÃO SE APLICA a ordem por ano da TR (`compararAnoTR`), de propósito. Esta tela
+// lista PCs JÁ BAIXADAS, para estorno — o motivo daquela ordem é priorizar o que ainda
+// permite glosa e cobrança, e essas já foram analisadas. Além disso a chave de agrupamento
+// aqui é a NL, não a TR: uma NL pode reunir PCs de TRs de anos diferentes (até 19 PCs por
+// NL), então "o ano desta linha" não é uma pergunta com uma resposta só.
 function estMontarPaginas(dados) {
   const grupos = {}
   dados.forEach(p => {
