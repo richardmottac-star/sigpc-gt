@@ -4826,6 +4826,25 @@ function planRenderBarra(todas) {
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px;">${chips}</div>`
 }
 
+// O alfinete. SVG e não emoji: o 📌 é vermelho em qualquer estado, e o pedido é azul quando
+// fixado, cinza quando não — com emoji só dava para mudar opacidade, o que não distingue nada.
+//
+// ⚠️ O azul da paleta (`--az`, #1565C0) fica ilegível sobre o verde escuro do cabeçalho.
+// Aqui vai um azul claro, que é o mesmo `--azbg` puxado para o tom que aparece no fundo verde;
+// o não-fixado é branco translúcido, que lê como cinza. A borda azul à esquerda do card
+// continua sendo o sinal de longe.
+function planAlfinete(r) {
+  const cor = r.fixada ? '#7EC8FF' : 'rgba(255,255,255,.45)'
+  return `<span onclick="planFixar('${escHtml(r.tr)}',event)"
+    title="${r.fixada ? 'Desafixar' : 'Fixar no topo'}"
+    role="button" aria-pressed="${r.fixada}"
+    style="display:inline-flex;align-items:center;cursor:pointer;line-height:1;">
+    <svg viewBox="0 0 24 24" width="17" height="17" style="fill:${cor};${r.fixada?'':'transition:fill .15s;'}">
+      <path d="M16 3v2h-1v6l2 2v2h-5v6l-1 1-1-1v-6H5v-2l2-2V5H6V3h10z"/>
+    </svg>
+  </span>`
+}
+
 // Anotação da TR, só ao expandir. Quando não existe, mostra o convite para criar.
 // `anotacoes_tr` guarda uma LINHA POR GRAVAÇÃO — não há update. Então a primeira (a rota
 // ordena por criado_em DESC) é a atual, e as demais são o histórico, de graça.
@@ -4982,8 +5001,7 @@ function renderPlan(rows) {
       <div onclick="planToggle('${escHtml(r.tr)}')" title="${r.expandida?'Recolher':'Ver as parciais desta TR'}"
         style="background:var(--header-grad);color:#fff;padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;">
 
-        <span onclick="planFixar('${escHtml(r.tr)}',event)" title="${r.fixada?'Desafixar':'Fixar no topo'}"
-          style="font-size:15px;line-height:1;cursor:pointer;${r.fixada?'':'opacity:.45;filter:grayscale(1);'}">📌</span>
+        ${planAlfinete(r)}
 
         <div style="min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">

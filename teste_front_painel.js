@@ -139,6 +139,17 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   conf(!/renderPlan\(dados\.slice/.test(blocoPg), 'nao pagina mais direto do cache bruto');
   // os botoes de acao das parciais tem de continuar existindo
   for (const b of ['pAbrirSit', 'pAbrirPar', 'pEnviarCI']) conf(html.includes(b + '('), `botao ${b} preservado`);
+
+  // ── o alfinete: azul fixado, cinza nao. Emoji nao serve (o 📌 e vermelho nos dois estados).
+  const alf = (html.match(/function planAlfinete\(r\)[\s\S]*?\n\}/) || [''])[0];
+  conf(/<svg/.test(alf), 'alfinete e SVG, nao emoji');
+  // O emoji nao pode ser RENDERIZADO. Ele continua no arquivo, dentro do comentario que
+  // explica por que nao serve — proibir a mencao faria o teste brigar com a documentacao.
+  conf(!/>📌</.test(html), 'o emoji nao e mais renderizado como icone');
+  conf(/r\.fixada \? '#7EC8FF' : 'rgba\(255,255,255,\.45\)'/.test(alf), 'azul quando fixado, cinza quando nao');
+  conf(/aria-pressed="\$\{r\.fixada\}"/.test(alf), 'estado exposto para leitor de tela');
+  conf(/planFixar\('\$\{escHtml\(r\.tr\)\}',event\)/.test(alf), 'clique chama planFixar com o event');
+  conf(/border-left:4px solid var\(--az\)/.test(html), 'a borda azul do card marca a fixada de longe');
 }
 
 // A gravação é assíncrona: `planFixar` muda o estado na hora e dispara o fetch sem await,
