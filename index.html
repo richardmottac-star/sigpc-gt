@@ -4838,10 +4838,24 @@ function planRenderBarra(todas) {
 // O código já lê `dt_inicio_analise`: no dia em que a coluna existir e o PATCH de assumir
 // passar a gravá-la, a data aparece sozinha. Enquanto não existe, não mostra nada — melhor
 // campo vazio do que data errada.
+// TR com todas as PCs baixadas. Uma definição só: o cabeçalho recuado, o botão e o início da
+// análise dependem dela, e três comparações soltas divergiriam no primeiro ajuste.
+function planTrConcluida(r) {
+  return r.total_pcs > 0 && r.baixadasQtd >= r.total_pcs
+}
+
 function planInicioAnalise(r) {
   const datas = (r.parciais||[]).flatMap(p => p.pcs||[]).map(p => p.dt_inicio_analise).filter(Boolean)
   const menor = datas.length ? datas.sort()[0] : null
   const comum = 'cursor:pointer;text-decoration:underline;text-underline-offset:2px;'
+
+  // TR concluída não tem início de análise a definir — já acabou. Se houver data gravada,
+  // ela continua sendo informação histórica útil; se não houver, o convite seria um convite
+  // para registrar o começo de um trabalho que terminou.
+  if(planTrConcluida(r)) {
+    return menor ? ` · <span style="opacity:.9;">análise desde ${planData(menor)}</span>` : ''
+  }
+
   return menor
     ? ` · <span onclick="planDefinirInicio('${escHtml(r.tr)}',event)" title="Clique para corrigir a data de início"
           style="${comum}">análise desde ${planData(menor)}</span>`
@@ -5065,7 +5079,7 @@ function renderPlan(rows) {
 
     // TR com TUDO baixado recua: não é mais trabalho, é histórico. Cor da paleta — o verde
     // claro de fundo (--vbg) com texto escuro, em vez do gradiente forte do cabeçalho.
-    const baixadaTr = r.total_pcs > 0 && r.baixadasQtd >= r.total_pcs
+    const baixadaTr = planTrConcluida(r)
     const fundoCab  = baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
     const corCab    = baixadaTr ? 'var(--te)'  : '#fff'
     const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
@@ -5093,7 +5107,11 @@ function renderPlan(rows) {
             <span style="display:inline-block;${pilula}border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;">${r.parciais.length} parcia${r.parciais.length>1?'is':'l'}</span>
             <span style="display:inline-block;${pilula}border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:5px;">${r.baixadasQtd} de ${r.total_pcs} baixadas</span>
           </span>
-          <button class="btn-acao" style="background:#fff;color:${baixadaTr?'var(--ct)':'var(--v)'};border:none;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.18);white-space:nowrap;"
+          <!-- No cabeçalho verde escuro, branco sem borda já contrasta. No cabeçalho claro da
+               TR concluída (--vbg), branco sobre claro some: ali o botão precisa da borda em
+               --v para se delimitar. A sombra sozinha não dava conta. -->
+          <button class="btn-acao" style="background:#fff;color:var(--v);font-weight:800;white-space:nowrap;${
+            baixadaTr ? 'border:2px solid var(--v);box-shadow:none;' : 'border:none;box-shadow:0 1px 4px rgba(0,0,0,.18);'}"
             onclick="planToggle('${escHtml(r.tr)}');event.stopPropagation();">${r.expandida?'▲ Recolher':'▼ Ver PCs'}</button>
         </div>
       </div>

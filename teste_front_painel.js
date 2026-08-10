@@ -180,7 +180,9 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   const cab = html.slice(html.indexOf('const baixadaTr ='), html.indexOf('${r.expandida ? planAnotacaoBloco(r)'));
 
   // 1. botoes com contraste
-  conf(/background:#fff;color:\$\{baixadaTr\?'var\(--ct\)':'var\(--v\)'\}/.test(cab), 'Ver PCs virou solido, nao mais translucido');
+  // o texto do botao deixou de depender de `baixadaTr` em 10/08 — agora e sempre verde, e
+  // quem muda e a borda. Detalhe na secao 10.
+  conf(/background:#fff;color:var\(--v\)/.test(cab), 'Ver PCs virou solido, nao mais translucido');
   // escopado ao cabecalho do painel: `rgba(255,255,255,.16)` tambem e usado pelo botao do
   // menu superior (.btn-guia), que nao tem nada a ver com isto.
   conf(!/rgba\(255,255,255,\.16\)/.test(cab), 'o fundo apagado do botao saiu do cabecalho da TR');
@@ -189,7 +191,9 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   conf(/border:2px solid var\(--az\)/.test(acoes), 'o contorno do "Salvar situação" engrossou');
 
   // 2. TR baixada recua
-  conf(/const baixadaTr = r\.total_pcs > 0 && r\.baixadasQtd >= r\.total_pcs/.test(html), 'detecta TR toda baixada');
+  // a regra saiu do render e virou `planTrConcluida` em 10/08, para o botao e o inicio da
+  // analise lerem a MESMA definicao. Detalhe na secao 10.
+  conf(/const baixadaTr = planTrConcluida\(r\)/.test(html), 'detecta TR toda baixada');
   conf(/baixadaTr \? 'var\(--vbg\)'\s*:\s*'var\(--header-grad\)'/.test(html), 'usa --vbg da paleta, nao cor nova');
   conf(/✓ concluída/.test(cab), 'e ganha etiqueta de concluida');
 
@@ -230,6 +234,51 @@ console.log('\n═══ 9. INICIO DA ANALISE — as duas formas de preencher �
 
   // O carimbo retroativo foi DESCARTADO por decisao — as 30 TRs da reserva ficam sem data.
   conf(!/atualizado_em.*dt_inicio_analise|dt_inicio_analise.*= *p\.atualizado_em/.test(html), 'nenhum backfill retroativo no front');
+}
+
+console.log('\n═══ 10. TR CONCLUIDA — botao e inicio da analise ═══');
+{
+  const ctxC = { console, escHtml: (s) => String(s ?? ''),
+                 planData: (d) => d ? '15/03/2026' : '—' };
+  const iniC = html.indexOf('function planTrConcluida(r)');
+  const fimC = html.indexOf('// O alfinete.');
+  vm.createContext(ctxC);
+  vm.runInContext(html.slice(iniC, fimC), ctxC);
+  const { planTrConcluida, planInicioAnalise } = ctxC;
+
+  const comPcs = (pcs) => ({ parciais: [{ pcs }] });
+  const mkTr = (total, baixadas, dataInicio) => Object.assign(
+    comPcs([{ dt_inicio_analise: dataInicio || null }]),
+    { tr: '2020TR000001', total_pcs: total, baixadasQtd: baixadas });
+
+  conf(planTrConcluida(mkTr(10, 10)) === true, 'concluida: baixadas >= total');
+  conf(planTrConcluida(mkTr(10, 9)) === false, 'nao concluida: falta uma');
+  conf(planTrConcluida(mkTr(0, 0)) === false, 'TR sem PCs nao conta como concluida');
+
+  // ── o pedido: "definir início" nao aparece em TR concluida
+  const concSem = planInicioAnalise(mkTr(10, 10, null));
+  conf(concSem === '', 'concluida SEM data: nao mostra nada', JSON.stringify(concSem));
+  const concCom = planInicioAnalise(mkTr(10, 10, '2026-03-15'));
+  conf(/análise desde/.test(concCom), 'concluida COM data: mostra a data');
+  conf(!/planDefinirInicio/.test(concCom), 'e a data NAO e clicavel numa TR concluida');
+
+  // ── em aberto, continua como estava
+  const abertaSem = planInicioAnalise(mkTr(10, 3, null));
+  conf(/definir início/.test(abertaSem), 'em aberto SEM data: convida a definir');
+  conf(/planDefinirInicio/.test(abertaSem), 'e o convite e clicavel');
+  const abertaCom = planInicioAnalise(mkTr(10, 3, '2026-03-15'));
+  conf(/análise desde/.test(abertaCom) && /planDefinirInicio/.test(abertaCom), 'em aberto COM data: mostra e deixa corrigir');
+
+  // ── uma definicao so de "concluida"
+  conf((html.match(/r\.baixadasQtd >= r\.total_pcs/g) || []).length === 1, 'a regra de concluida existe em UM lugar so');
+  conf(/const baixadaTr = planTrConcluida\(r\)/.test(html), 'o cabecalho usa a mesma funcao');
+
+  // ── o botao na TR concluida
+  const bloco = html.slice(html.indexOf('<!-- No cabeçalho verde escuro'), html.indexOf('Ver PCs') + 20);
+  conf(/color:var\(--v\)/.test(bloco), 'texto do botao e sempre verde, nunca cinza claro');
+  conf(/baixadaTr \? 'border:2px solid var\(--v\)/.test(bloco), 'na concluida ganha borda para se delimitar');
+  conf(/: 'border:none/.test(bloco), 'na verde escura continua sem borda');
+  conf(!/color:\$\{baixadaTr\?'var\(--ct\)'/.test(html), 'o cinza que sumia no fundo claro saiu');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
