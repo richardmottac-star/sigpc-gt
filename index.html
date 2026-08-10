@@ -1893,6 +1893,23 @@ function estReservaBloqueia(tr) {
   return r
 }
 
+// Cancelar o próprio pedido. Fica aqui, na tag, porque é onde o analista vê a reserva dele —
+// a mesma ação aparece depois na tela "Meus pedidos".
+async function estCancelarReserva(tr, id) {
+  // Confirma porque cancelar SOLTA A TR na hora: outro analista pode assumi-la em seguida, e
+  // não há como desfazer um pedido cancelado.
+  if(!confirm(`Cancelar o seu pedido da TR ${tr}?\n\nA TR volta ao estoque e outro analista pode assumi-la.`)) return
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'cancelada', analista_id: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Pedido cancelado. A TR voltou ao estoque.','ok')
+    buscar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
 function renderEst(rows) {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
@@ -1942,9 +1959,13 @@ function renderEst(rows) {
     // A tag aparece para TODOS, inclusive para quem pediu — ele precisa ver que o pedido
     // está de pé. Só o texto muda: "você" em vez do próprio nome, que soaria estranho.
     const resTag = t.statusDerivado==='livre' ? EST_RESERVAS.get(t.tr) : null
+    const resMinha = resTag && Number(resTag.analista_id)===Number(U.id)
     const tagReserva = resTag
       ? `<div style="margin-top:3px;font-size:9.5px;color:#8A6100;background:#FFF4D6;border-radius:5px;padding:2px 6px;display:inline-block;white-space:nowrap;">
-           ⏳ Aguardando aprovação — ${Number(resTag.analista_id)===Number(U.id) ? 'você' : escHtml((resTag.nome||'—').split(' ')[0])}
+           ⏳ Aguardando aprovação — ${resMinha ? 'você' : escHtml((resTag.nome||'—').split(' ')[0])}
+           ${resMinha ? `<a href="javascript:void(0)" onclick="estCancelarReserva('${escHtml(t.tr)}',${resTag.id})"
+                style="margin-left:6px;color:var(--r);font-weight:700;text-decoration:none;"
+                title="Cancelar meu pedido e devolver a TR ao estoque">✕ cancelar</a>` : ''}
          </div>`
       : ''
 
