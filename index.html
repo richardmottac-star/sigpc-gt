@@ -1480,6 +1480,15 @@ function renderSB() {
       <div class="sb-item" id="mi-prior" onclick="irPrioridade()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-2v-4H8v-2h4V8h2v4h4v2z"/></svg>Painel Técnico
       </div>
+      <div class="sb-item" id="mi-config" onclick="irConfiguracoes()">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.4 7.4 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.86a.5.5 0 0 0 .12.62l2.03 1.58a7.4 7.4 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>Configurações
+      </div>
+    </div>` : ''}
+    ${(isCoordi || isAdmin) ? `<div class="sb-sec">
+      <div class="sb-item" id="mi-aprov" onclick="irAprovacoes()" style="position:relative;">
+        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>Aprovações
+        <span id="sbAprovBadge" style="display:none;margin-left:auto;background:var(--r);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 6px;"></span>
+      </div>
     </div>` : ''}
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
@@ -1949,13 +1958,21 @@ async function assumirTR(tr) {
     const totalPcs = PCS_ASSUMIR.length
     const totalNls = new Set(PCS_ASSUMIR.map(p=>p.codigo_nl).filter(Boolean)).size
 
+    // A trava é conferida ANTES de deixar confirmar — o servidor confere de novo, mas
+    // descobrir o bloqueio só depois de clicar "Confirmar" seria assumir metade da TR e
+    // parar no meio.
+    const lim = await limiteChecar(tr)
+
     document.getElementById('mAssI').innerHTML = `
       <strong>TR:</strong> ${tr}<br>
       <strong>Entidade:</strong> ${entidade}<br>
       <strong>PCs:</strong> ${totalPcs}<br>
       <strong>NLs distintas:</strong> ${totalNls}<br>
       <strong>Analista:</strong> ${U.nome}
+      ${limiteAviso(lim, tr)}
     `
+    const btn = document.getElementById('btnConfAss')
+    if(btn) { btn.disabled = !lim.pode; btn.style.opacity = lim.pode ? '' : '.5'; btn.style.cursor = lim.pode ? '' : 'not-allowed' }
   } catch(e) {
     document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${tr}<br><span style="color:var(--r);font-size:11px;">Erro: ${e.message}</span>`
     console.warn('assumirTR erro:', e.message)
@@ -2315,6 +2332,346 @@ function procHtml(bruto) {
   const url = _sgpeCache.get(bruto)
   if(!url) return txt
   return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+}
+
+// ══════════════════════════════════════
+//  TRAVA DE TRs — o lado do analista
+// ══════════════════════════════════════
+// A regra completa está em sigpc-api/lib/limite-tr.js. Aqui só se pergunta e se mostra.
+// ⚠️ Esta checagem é conveniência, NÃO é a trava: quem trava é o PATCH no servidor. Se o
+// front falhar em perguntar, o assumir continua sendo barrado lá.
+async function limiteChecar(tr) {
+  try {
+    const p = new URLSearchParams({ analista_id: U.id })
+    if(tr) p.set('tr', tr)
+    const j = await (await fetch(`${API_URL}/limite_tr/situacao?${p}`)).json()
+    return j.data || { pode: true, semLimite: true }
+  } catch(e) {
+    // Sem resposta, não bloqueia a tela — o servidor decide na hora de gravar.
+    return { pode: true, semLimite: true }
+  }
+}
+
+function limiteAviso(lim, tr) {
+  if(!lim || lim.pode !== false) {
+    // Autorização aprovada liberou esta TR: vale dizer, senão o analista não entende por que
+    // desta vez passou.
+    if(lim && lim.autorizacao) {
+      return `<div style="margin-top:9px;background:var(--vbg);border-radius:7px;padding:9px 11px;font-size:11.5px;color:var(--v);">
+        ✓ Vaga extra aprovada para esta TR. Ao confirmar, a autorização é consumida.</div>`
+    }
+    return ''
+  }
+  const podePedir = lim.pedidoAtivo !== false
+  return `<div style="margin-top:9px;background:#FDE8EA;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);">
+      <b>Limite atingido.</b> ${escHtml(lim.motivo||'')}<br>
+      <span style="color:var(--ct);">A vaga volta quando você baixar uma TR inteira.</span>
+      ${podePedir ? `<div style="margin-top:9px;">
+        <button class="btn-acao" style="background:var(--am);color:#fff;font-weight:800;"
+          onclick="limitePedir('${escHtml(tr||'')}')">Solicitar mais uma TR</button>
+      </div>` : ''}
+    </div>`
+}
+
+async function limitePedir(tr) {
+  const just = prompt(`Solicitar autorização para assumir a TR ${tr}.\n\nJustifique — quem aprova vai ler isto:`)
+  if(just === null) return
+  if(!just.trim()) { toast('A justificativa é obrigatória.','err'); return }
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_vaga`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ analista_id: U.id, tr: tr || null, justificativa: just.trim() }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Pedido enviado. Você será liberado se for aprovado.','ok')
+    fm('moAss')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════
+//  CONFIGURAÇÕES (Painel ADMIN) — abas
+// ══════════════════════════════════════
+// Por ora só a aba "Limite de TRs". As outras duas entram aqui sem mexer no resto: a barra
+// de abas é montada a partir de CFG_ABAS, e cada aba é uma função que devolve HTML.
+const CFG_ABAS = [
+  { id: 'limite', rotulo: 'Limite de TRs', render: () => cfgRenderLimite() },
+]
+let _cfgAba = 'limite'
+let _cfg = null          // config_limite_tr
+let _cfgExcecoes = []
+let _cfgUsuarios = []
+
+async function irConfiguracoes() {
+  if(U.perfil !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
+  ativarMenu('config')
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Configurações</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">Regras do sistema — valem para todos os analistas</div>
+    <div id="cfgAbas" style="display:flex;gap:4px;border-bottom:2px solid var(--cb);margin-bottom:16px;"></div>
+    <div id="cfgCorpo"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await cfgCarregar()
+}
+
+async function cfgCarregar() {
+  try {
+    const [c, e, u] = await Promise.all([
+      fetch(`${API_URL}/config_limite_tr`).then(r => r.json()),
+      fetch(`${API_URL}/limite_tr_excecao`).then(r => r.json()),
+      fetch(`${API_URL}/usuarios?ativo=true`).then(r => r.json()),
+    ])
+    _cfg = c.data || {}
+    _cfgExcecoes = e.data || []
+    _cfgUsuarios = (u.data || []).filter(x => x.perfil !== 'superadmin')
+    cfgRender()
+  } catch(err) {
+    document.getElementById('cfgCorpo').innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${err.message}</div>`
+  }
+}
+
+function cfgRender() {
+  const abas = document.getElementById('cfgAbas')
+  if(abas) abas.innerHTML = CFG_ABAS.map(a => `
+    <button onclick="cfgAba('${a.id}')" style="border:none;background:${_cfgAba===a.id?'var(--vbg)':'transparent'};
+      color:${_cfgAba===a.id?'var(--v)':'var(--ct)'};font-weight:${_cfgAba===a.id?'800':'600'};font-family:inherit;
+      font-size:13px;padding:9px 16px;cursor:pointer;border-bottom:3px solid ${_cfgAba===a.id?'var(--v)':'transparent'};
+      margin-bottom:-2px;border-radius:7px 7px 0 0;">${a.rotulo}</button>`).join('')
+  const corpo = document.getElementById('cfgCorpo')
+  const aba = CFG_ABAS.find(a => a.id === _cfgAba)
+  if(corpo && aba) corpo.innerHTML = aba.render()
+}
+
+function cfgAba(id) { _cfgAba = id; cfgRender() }
+
+function cfgRenderLimite() {
+  const semLimite = _cfg.limite_padrao === null || _cfg.limite_padrao === undefined
+  const cartao = (t) => `background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:16px 18px;margin-bottom:13px;${t||''}`
+  const rot = 'font-size:12px;font-weight:800;color:var(--te);margin-bottom:3px;'
+  const aju = 'font-size:11px;color:var(--ct);margin-bottom:9px;line-height:1.5;'
+
+  const linhasExc = _cfgExcecoes.length ? _cfgExcecoes.map(e => `
+    <tr>
+      <td style="padding:7px 9px;font-size:12px;">${escHtml(e.nome||('id '+e.analista_id))}</td>
+      <td style="padding:7px 9px;font-size:12px;">${e.grupo?('G'+escHtml(e.grupo)):'—'}</td>
+      <td style="padding:7px 9px;font-size:12px;font-weight:700;">${e.limite === null ? 'Sem limite' : e.limite}</td>
+      <td style="padding:7px 9px;font-size:11px;color:var(--ct);">${escHtml(e.observacao||'—')}</td>
+      <td style="padding:7px 9px;"><button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);"
+        onclick="cfgRemoverExcecao(${e.analista_id})">Remover</button></td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--ct);font-size:12px;">Nenhuma exceção — todos seguem o limite padrão.</td></tr>'
+
+  return `
+  <div style="${cartao()}">
+    <div style="${rot}">Limite padrão de TRs em análise</div>
+    <div style="${aju}">Quantas TRs um analista pode ter em análise ao mesmo tempo. A vaga volta quando ele baixa a TR.
+      <b>Superadmin nunca tem limite.</b></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" id="cfgSemLimite" ${semLimite?'checked':''} onchange="cfgToggleSemLimite()"> Sem limite
+      </label>
+      <input type="number" id="cfgLimite" min="0" max="999" value="${semLimite?'':_cfg.limite_padrao}" ${semLimite?'disabled':''}
+        style="width:90px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit;">
+      <span style="font-size:11px;color:var(--ct);">TRs por analista</span>
+    </div>
+  </div>
+
+  <div style="${cartao()}">
+    <div style="${rot}">Liberação de vaga</div>
+    <div style="${aju}">Quando a vaga volta a ficar livre para o analista.</div>
+    <label style="display:block;font-size:12px;margin-bottom:5px;cursor:pointer;">
+      <input type="radio" name="cfgLib" value="tr" ${_cfg.liberacao!=='parcial'?'checked':''}> Por TR inteira baixada <span style="color:var(--ct);">(padrão)</span>
+    </label>
+    <label style="display:block;font-size:12px;cursor:pointer;">
+      <input type="radio" name="cfgLib" value="parcial" ${_cfg.liberacao==='parcial'?'checked':''}> Por parcial baixada
+      <span style="color:var(--ct);">— a TR sai da conta assim que a primeira parcial fecha</span>
+    </label>
+  </div>
+
+  <div style="${cartao()}">
+    <div style="${rot}">Pedido de vaga extra</div>
+    <div style="${aju}">Permite ao analista no limite pedir autorização para uma TR a mais.</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:9px;cursor:pointer;">
+      <input type="checkbox" id="cfgPedido" ${_cfg.pedido_ativo!==false?'checked':''}> Permitir pedidos
+    </label>
+    <div style="font-size:11.5px;color:var(--ct);margin-bottom:4px;">Quem aprova:</div>
+    <select id="cfgAprovador" style="border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;">
+      <option value="coordenador"${_cfg.pedido_aprovador==='coordenador'?' selected':''}>Coordenador do grupo</option>
+      <option value="superadmin"${_cfg.pedido_aprovador==='superadmin'?' selected':''}>Superadmin</option>
+      <option value="qualquer"${_cfg.pedido_aprovador==='qualquer'?' selected':''}>Qualquer um dos dois</option>
+    </select>
+  </div>
+
+  <div style="${cartao()}">
+    <div style="${rot}">Exceções por analista</div>
+    <div style="${aju}">Limite próprio, que sobrepõe o padrão. <b>Sem limite</b> libera a pessoa; <b>0</b> bloqueia novas TRs.</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
+      <select id="cfgExcAnalista" style="border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;min-width:210px;">
+        <option value="">Escolha o analista...</option>
+        ${_cfgUsuarios.map(u => `<option value="${u.id}">${escHtml(u.nome)}${u.grupo?' · G'+escHtml(u.grupo):''}</option>`).join('')}
+      </select>
+      <input type="number" id="cfgExcLimite" min="0" max="999" placeholder="limite"
+        style="width:88px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;">
+      <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer;">
+        <input type="checkbox" id="cfgExcSem"> sem limite
+      </label>
+      <input type="text" id="cfgExcObs" placeholder="observação (opcional)"
+        style="flex:1;min-width:150px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;">
+      <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;" onclick="cfgSalvarExcecao()">+ Adicionar</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr><th style="text-align:left;">Analista</th><th style="text-align:left;">Grupo</th>
+        <th style="text-align:left;">Limite</th><th style="text-align:left;">Observação</th><th></th></tr></thead>
+      <tbody>${linhasExc}</tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <button class="btn-buscar" onclick="cfgSalvar()">Salvar configurações</button>
+    <span style="font-size:11px;color:var(--ct);">
+      ${_cfg.atualizado_em
+        ? `Última alteração por <b>${escHtml(_cfg.atualizado_por_nome||('id '+_cfg.atualizado_por))}</b> em ${planDataHora(_cfg.atualizado_em)}`
+        : 'Nunca alterado.'}
+    </span>
+  </div>`
+}
+
+function cfgToggleSemLimite() {
+  const sem = document.getElementById('cfgSemLimite')?.checked
+  const inp = document.getElementById('cfgLimite')
+  if(inp) { inp.disabled = !!sem; if(sem) inp.value = '' }
+}
+
+async function cfgSalvar() {
+  const sem = document.getElementById('cfgSemLimite')?.checked
+  const bruto = document.getElementById('cfgLimite')?.value
+  if(!sem && (bruto === '' || bruto === null || isNaN(parseInt(bruto)) || parseInt(bruto) < 0)) {
+    toast('Informe um limite (0 ou mais) ou marque "Sem limite".','err'); return
+  }
+  const corpo = {
+    limite_padrao: sem ? null : parseInt(bruto),
+    liberacao: document.querySelector('input[name="cfgLib"]:checked')?.value || 'tr',
+    pedido_ativo: !!document.getElementById('cfgPedido')?.checked,
+    pedido_aprovador: document.getElementById('cfgAprovador')?.value || 'coordenador',
+    atualizado_por: U.id, atualizado_por_nome: U.nome,
+  }
+  try {
+    const r = await fetch(`${API_URL}/config_limite_tr`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    _cfg = j.data
+    cfgRender()
+    toast('Configurações salvas!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function cfgSalvarExcecao() {
+  const id = document.getElementById('cfgExcAnalista')?.value
+  if(!id) { toast('Escolha o analista.','err'); return }
+  const sem = document.getElementById('cfgExcSem')?.checked
+  const bruto = document.getElementById('cfgExcLimite')?.value
+  if(!sem && (bruto === '' || isNaN(parseInt(bruto)) || parseInt(bruto) < 0)) {
+    toast('Informe o limite ou marque "sem limite".','err'); return
+  }
+  try {
+    const r = await fetch(`${API_URL}/limite_tr_excecao`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ analista_id: parseInt(id), limite: sem ? null : parseInt(bruto),
+                             observacao: document.getElementById('cfgExcObs')?.value || null, atualizado_por: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    await cfgCarregar()
+    toast('Exceção salva!','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function cfgRemoverExcecao(analistaId) {
+  if(!confirm('Remover esta exceção? O analista volta ao limite padrão.')) return
+  try {
+    await fetch(`${API_URL}/limite_tr_excecao/${analistaId}`, { method:'DELETE' })
+    await cfgCarregar()
+    toast('Exceção removida.','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════
+//  APROVAÇÕES DE VAGA EXTRA
+// ══════════════════════════════════════
+let _aprovPend = []
+
+async function irAprovacoes() {
+  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  ativarMenu('aprov')
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Aprovações</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">Pedidos de vaga extra — analistas que atingiram o limite de TRs</div>
+    <div id="aprovCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await aprovCarregar()
+}
+
+async function aprovCarregar() {
+  try {
+    // Coordenador vê só o próprio grupo; superadmin vê tudo.
+    const p = new URLSearchParams({ status: 'pendente' })
+    if(U.perfil === 'coordenador' && U.grupo) p.set('grupo', U.grupo)
+    const j = await (await fetch(`${API_URL}/solicitacao_vaga?${p}`)).json()
+    _aprovPend = j.data || []
+    aprovRender()
+    aprovAtualizarBadge()
+  } catch(e) {
+    const c = document.getElementById('aprovCont')
+    if(c) c.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
+}
+
+function aprovAtualizarBadge() {
+  const b = document.getElementById('sbAprovBadge')
+  if(!b) return
+  b.textContent = _aprovPend.length
+  b.style.display = _aprovPend.length ? '' : 'none'
+}
+
+function aprovRender() {
+  const c = document.getElementById('aprovCont')
+  if(!c) return
+  if(!_aprovPend.length) {
+    c.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum pedido pendente.</div>'
+    return
+  }
+  c.innerHTML = _aprovPend.map(s => `
+    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:14px 16px;margin-bottom:11px;border-left:4px solid var(--am);">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <b style="font-size:14px;">${escHtml(s.analista_nome_completo||('id '+s.analista_id))}</b>
+        ${s.grupo?`<span class="bdg">G${escHtml(s.grupo)}</span>`:''}
+        <span style="font-size:11px;color:var(--ct);">já tem <b style="color:var(--te);">${s.trs_abertas} TRs</b> em aberto</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--ct);">${planDataHora(s.criado_em)}</span>
+      </div>
+      <div style="font-size:12px;margin-top:7px;">
+        <b>TR pedida:</b> ${s.tr ? `<span class="proc-sgpe">${escHtml(s.tr)}</span>` : '<span style="color:var(--ct);">não especificada</span>'}
+      </div>
+      <div style="font-size:12px;margin-top:6px;background:var(--cl);border-radius:7px;padding:9px 11px;white-space:pre-wrap;">${escHtml(s.justificativa||'')}</div>
+      <div style="display:flex;gap:7px;margin-top:11px;justify-content:flex-end;">
+        <button class="btn-acao" style="background:#fff;color:var(--r);border:2px solid var(--r);font-weight:800;" onclick="aprovDecidir(${s.id},'negada')">Negar</button>
+        <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;" onclick="aprovDecidir(${s.id},'aprovada')">Aprovar</button>
+      </div>
+    </div>`).join('')
+}
+
+async function aprovDecidir(id, status) {
+  let motivo = null
+  if(status === 'negada') {
+    motivo = prompt('Motivo da negativa (obrigatório):')
+    if(motivo === null) return
+    if(!motivo.trim()) { toast('O motivo é obrigatório para negar.','err'); return }
+  }
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status, decidido_por: U.id, motivo }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    await aprovCarregar()
+    toast(status === 'aprovada' ? 'Aprovado — a TR foi liberada para o analista.' : 'Pedido negado.','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 async function carregarAnotacoes(tr) {
