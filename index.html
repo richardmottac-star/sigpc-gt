@@ -1815,7 +1815,13 @@ async function buscar() {
     else if(secF) p.set('setorial_id', secF)
     if(busca) p.set('busca', busca)
 
-    const r = await fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p.toString()}`)
+    // As reservas vêm em paralelo, numa rota própria e leve — de propósito NÃO no
+    // `resumo_tr`, que é a consulta mais pesada da tela. Se falhar, o Estoque carrega
+    // igual, só sem as tags: a trava de verdade está no PATCH.
+    const [r, _res] = await Promise.all([
+      fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p.toString()}`),
+      estCarregarReservas(),
+    ])
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
 
@@ -1859,6 +1865,34 @@ async function buscar() {
   }
 }
 
+// ── Reserva de TR ───────────────────────────────────────────────────────────
+// Enquanto existe pedido pendente para uma TR, ela é de quem pediu. Sem isso o pedido não
+// serviria para nada: o analista pede, espera a aprovação, e um colega abaixo do limite leva
+// a TR nesse meio-tempo.
+//
+// ⚠️ Isto aqui é só a tag e o botão cinza. Quem BARRA é o PATCH no servidor — por isso um
+// erro de rede aqui deixa o Estoque normal em vez de travar tudo por precaução.
+let EST_RESERVAS = new Map()   // tr -> { analista_id, nome, criado_em }
+
+async function estCarregarReservas() {
+  try {
+    const j = await (await fetch(`${API_URL}/limite_tr/reservas`)).json()
+    EST_RESERVAS = new Map((j.data||[]).map(r => [r.tr, r]))
+  } catch(e) {
+    EST_RESERVAS = new Map()
+  }
+}
+
+// A reserva que PESA para quem está olhando. Não pesa para o próprio solicitante (o pedido é
+// dele) nem para o superadmin — foi o que ficou combinado.
+function estReservaBloqueia(tr) {
+  const r = EST_RESERVAS.get(tr)
+  if(!r) return null
+  if(U.perfil === 'superadmin') return null
+  if(Number(r.analista_id) === Number(U.id)) return null
+  return r
+}
+
 function renderEst(rows) {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
@@ -1886,8 +1920,16 @@ function renderEst(rows) {
       html += `<tr class="grupo-sep"><td colspan="9"><span class="bdg ${infoSep.cls}">${infoSep.label}</span> — ${qtd} TR${qtd!==1?'s':''}</td></tr>`
     }
 
+    const reserva = t.statusDerivado==='livre' ? estReservaBloqueia(t.tr) : null
+
     let acoes
-    if(t.statusDerivado==='livre' && podeAssumir) {
+    if(t.statusDerivado==='livre' && podeAssumir && reserva) {
+      // Cinza e sem onclick — não basta `disabled`, que um clique rápido ainda dispararia
+      // se o atributo fosse removido pelo devtools. O motivo fica no title.
+      acoes = `<button class="btn-acao" disabled
+        style="background:var(--cl);color:var(--ct);cursor:not-allowed;border:1px solid var(--bd);"
+        title="Aguardando aprovação de um pedido de ${escHtml(reserva.nome||'outro analista')}. Se for negado ou expirar em 3 dias, a TR volta ao estoque.">Assumir</button>`
+    } else if(t.statusDerivado==='livre' && podeAssumir) {
       acoes = `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
     } else if(isMeuTR(t)) {
       acoes = `<button class="btn-acao btn-ver" onclick="abrirTR('${t.tr}')">Ver</button>`
@@ -1897,13 +1939,22 @@ function renderEst(rows) {
     } else {
       acoes = '<span style="color:var(--ct);font-size:10px;">—</span>'
     }
+    // A tag aparece para TODOS, inclusive para quem pediu — ele precisa ver que o pedido
+    // está de pé. Só o texto muda: "você" em vez do próprio nome, que soaria estranho.
+    const resTag = t.statusDerivado==='livre' ? EST_RESERVAS.get(t.tr) : null
+    const tagReserva = resTag
+      ? `<div style="margin-top:3px;font-size:9.5px;color:#8A6100;background:#FFF4D6;border-radius:5px;padding:2px 6px;display:inline-block;white-space:nowrap;">
+           ⏳ Aguardando aprovação — ${Number(resTag.analista_id)===Number(U.id) ? 'você' : escHtml((resTag.nome||'—').split(' ')[0])}
+         </div>`
+      : ''
+
     const analistaH = t.analista_nome
       ? `<span class="tec-chip">${t.analista_nome.split(' ')[0]}</span>`
       : '<span style="color:var(--ct)">—</span>'
     const infoSt = EST_STATUS_INFO[t.statusDerivado] || {label:t.statusDerivado||'—',cls:''}
 
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
-      <td><strong style="font-size:11px;">${t.tr||'—'}</strong></td>
+      <td><strong style="font-size:11px;">${t.tr||'—'}</strong>${tagReserva}</td>
       <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${procHtml(t.processo_mae)}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
@@ -2362,6 +2413,17 @@ function limiteAviso(lim, tr) {
     }
     return ''
   }
+  // Dois bloqueios diferentes, duas conversas diferentes. Chamar reserva de "limite
+  // atingido" mandaria o analista tentar baixar uma TR para se livrar de um problema que
+  // não é dele — e ainda ofereceria pedir uma TR que já é de outro.
+  if(lim.reserva) {
+    const quem = escHtml((lim.reserva.nome||'outro analista').split(' ')[0])
+    return `<div style="margin-top:9px;background:#FFF4D6;border-radius:7px;padding:10px 12px;font-size:11.5px;color:#8A6100;">
+      <b>⏳ TR reservada.</b> ${quem} pediu esta TR e aguarda aprovação.<br>
+      <span style="color:var(--ct);">Se o pedido for negado ou expirar em 3 dias, ela volta ao estoque.</span>
+    </div>`
+  }
+
   const podePedir = lim.pedidoAtivo !== false
   return `<div style="margin-top:9px;background:#FDE8EA;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);">
       <b>Limite atingido.</b> ${escHtml(lim.motivo||'')}<br>
@@ -2383,8 +2445,11 @@ async function limitePedir(tr) {
       body: JSON.stringify({ analista_id: U.id, tr: tr || null, justificativa: just.trim() }) })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
-    toast('Pedido enviado. Você será liberado se for aprovado.','ok')
+    toast('Pedido enviado. A TR fica reservada para você até a decisão.','ok')
     fm('moAss')
+    // Recarrega para a tag da reserva aparecer na hora. Sem isto o analista pede e a tela
+    // continua igual, dando a impressão de que nada aconteceu.
+    if(document.getElementById('estBody')) buscar()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
