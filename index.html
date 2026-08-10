@@ -2470,6 +2470,18 @@ async function limitePedir(tr) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ analista_id: U.id, tr: tr || null, justificativa: just.trim() }) })
     const j = await r.json()
+
+    // Perder a corrida NÃO é erro — nem do sistema, nem dele. É a regra funcionando, e sai
+    // sem o "Erro:" e sem vermelho. O que o analista precisa saber é quando pode tentar de
+    // novo; a data vem crua da API e é formatada aqui, no fuso de quem lê.
+    if(j.error && j.error.reserva) {
+      const q = escHtml((j.error.reserva.nome||'Outro analista').split(' ')[0])
+      toast(`⏳ ${q} pediu esta TR primeiro (${planDataHora(j.error.reserva.criado_em)}). `
+          + `Se for negado ou expirar em 3 dias, a TR volta ao estoque.`, 'ok')
+      fm('moAss')
+      if(document.getElementById('estBody')) buscar()   // a tag da reserva aparece na hora
+      return
+    }
     if(j.error) throw new Error(j.error.message || j.error)
     toast('Pedido enviado. A TR fica reservada para você até a decisão.','ok')
     fm('moAss')
