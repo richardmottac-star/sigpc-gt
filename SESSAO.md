@@ -1,5 +1,46 @@
-# SIGPC-GT — ESTADO EM 08/08/2026
-Cole no início do chat novo. Os estados de 06/08 e 04/08 estão preservados mais abaixo.
+# SIGPC-GT — ESTADO EM 10/08/2026
+Cole no início do chat novo. Os estados de 08/08, 06/08 e 04/08 estão preservados mais abaixo.
+
+---
+
+## CONCLUÍDO EM 10/08 — Configurações, Aprovações e a trava no assumir (`a095272`, no ar)
+
+Publicado no GitHub Pages (confirmado: `irConfiguracoes` está no HTML servido).
+
+### As decisões (o resto do detalhe está no SESSAO.md do sigpc-api)
+
+Limite padrão **5**, mas **NULL no banco** — nada trava até você digitar o número na tela.
+Confere **só no ato de assumir** · vaga livre quando a **TR inteira** baixa · aprova o
+**coordenador** · **superadmin nunca trava**.
+
+### Telas
+
+- **Configurações** (menu ADMIN, só superadmin) — abas montadas a partir de `CFG_ABAS`; por
+  ora só "Limite de TRs". Limite padrão com caixa **"Sem limite"** que desabilita o número,
+  para não existir estado ambíguo entre vazio e zero. Mais: liberação (TR/parcial), pedido
+  liga-desliga + quem aprova, exceções por analista, rodapé com quem alterou e quando.
+- **Aprovações** (coordenador e superadmin) — mostra **quantas TRs a pessoa já tem**, que é o
+  número em que a decisão se apoia. Negar exige motivo (a tela e a API recusam vazio).
+  Contador de pendentes no menu.
+
+### ⚠️ A checagem no front NÃO é a trava
+
+Quem trava é o `PATCH /prestacoes_contas/:codigo_pc`. Aqui é conveniência — e por isso
+`limiteChecar` devolve **"pode" quando a rede falha**: a tela não bloqueia por conta própria.
+
+Confere ao **ABRIR** o modal, não ao confirmar: descobrir o bloqueio depois do clique
+significaria assumir metade da TR e parar no meio (o front manda um PATCH por PC).
+Bloqueado → botão Confirmar desabilitado + aviso + botão "Solicitar mais uma TR".
+Liberado por autorização aprovada → o modal diz isso, senão o analista não entenderia por
+que desta vez passou.
+
+### O que falta
+
+- [ ] **Definir o limite na tela.** Nada trava até lá.
+- [ ] Abas 2 e 3 de Configurações.
+- [ ] Avisar o analista quando o pedido for decidido — hoje ele só descobre tentando de novo.
+
+Suítes do front: 94+70+110+26+32.
 
 ---
 
