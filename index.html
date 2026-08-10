@@ -1491,6 +1491,11 @@ function renderSB() {
       </div>
     </div>` : ''}
     <div class="sb-sec">
+      <div class="sb-item" id="mi-meuspedidos" onclick="irMeusPedidos()">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 16H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V9h10v2z"/></svg>Meus pedidos
+      </div>
+    </div>
+    <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
       <div class="sb-grupo">${U.setorialAcesso === 'ADMIN' ? 'ADMIN ●' : U.setorialAcesso + ' ●'}</div>
     </div>
@@ -2684,23 +2689,143 @@ async function cfgRemoverExcecao(analistaId) {
 // ══════════════════════════════════════
 let _aprovPend = []
 
+// ══════════════════════════════════════
+//  PEDIDOS DE VAGA — como cada status se apresenta
+// ══════════════════════════════════════
+// Um lugar só para os cinco status. Espalhar isso pelas duas telas faria "expirada" aparecer
+// de um jeito em "Meus pedidos" e de outro em "Aprovações".
+const PED_STATUS = {
+  pendente:  { rot:'PENDENTE',  ico:'⏳', cor:'#8A6100', bg:'#FFF4D6' },
+  aprovada:  { rot:'APROVADA',  ico:'✓',  cor:'#1B7A3E', bg:'#E4F5EA' },
+  usada:     { rot:'USADA',     ico:'✓',  cor:'#1B7A3E', bg:'#E4F5EA' },
+  negada:    { rot:'NEGADA',    ico:'✗',  cor:'#B02A37', bg:'#FDE8EA' },
+  // Expirada e cancelada ficam cinzas de propósito: não são derrota nem vitória, e não
+  // devem competir por atenção com o que ainda espera decisão.
+  expirada:  { rot:'EXPIRADA',  ico:'⌛', cor:'#6B7280', bg:'#F1F2F4' },
+  cancelada: { rot:'CANCELADA', ico:'⊘',  cor:'#6B7280', bg:'#F1F2F4' },
+}
+// Declarações, e não `const` de seta: só declarações viram propriedades do contexto do `vm`,
+// que é como os testes extraem função do index.html sem copiar código.
+function pedEtiqueta(st) {
+  const i = PED_STATUS[st] || { rot:String(st||'—').toUpperCase(), ico:'•', cor:'#6B7280', bg:'#F1F2F4' }
+  return `<span style="font-size:9.5px;font-weight:800;color:${i.cor};background:${i.bg};border-radius:5px;padding:2px 7px;white-space:nowrap;">${i.ico} ${i.rot}</span>`
+}
+
+// O pedido virou letra morta: o analista assumiu a TR sem precisar da aprovação. Não some
+// sozinho (decisão do Richard) — fica visível e marcado, para quem aprova não gastar tempo.
+function pedDispensado(s) {
+  return !!s && s.status === 'pendente' && !!s.ja_assumida
+}
+
+// ══════════════════════════════════════
+//  MEUS PEDIDOS (todo analista)
+// ══════════════════════════════════════
+let _meusPedidos = []
+
+async function irMeusPedidos() {
+  ativarMenu('meuspedidos')
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Meus pedidos de vaga</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">
+      Pedidos para assumir TR acima do limite. Sem resposta em 3 dias, o pedido expira e a TR volta ao estoque.
+    </div>
+    <div id="meusCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await meusCarregar()
+}
+
+async function meusCarregar() {
+  try {
+    const j = await (await fetch(`${API_URL}/solicitacao_vaga?analista_id=${U.id}`)).json()
+    _meusPedidos = j.data || []
+    meusRender()
+  } catch(e) {
+    const c = document.getElementById('meusCont')
+    if(c) c.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
+}
+
+function meusRender() {
+  const c = document.getElementById('meusCont')
+  if(!c) return
+  if(!_meusPedidos.length) {
+    c.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);font-size:12px;">
+      Você não fez nenhum pedido.<br>
+      <span style="font-size:11px;">O botão aparece no Estoque quando você tenta assumir uma TR acima do limite.</span>
+    </div>`
+    return
+  }
+  c.innerHTML = _meusPedidos.map(s => {
+    const dispensado = pedDispensado(s)
+    return `
+    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:10px;
+                border-left:4px solid ${(PED_STATUS[s.status]||{}).cor||'#6B7280'};">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        ${pedEtiqueta(s.status)}
+        ${s.tr ? `<b class="proc-sgpe" style="font-size:12.5px;">${escHtml(s.tr)}</b>`
+               : '<span style="font-size:12px;color:var(--ct);">sem TR específica</span>'}
+        <span style="margin-left:auto;font-size:10.5px;color:var(--ct);">enviado ${planDataHora(s.criado_em)}</span>
+      </div>
+
+      ${dispensado ? `<div style="margin-top:7px;font-size:11px;color:#6B7280;background:#F1F2F4;border-radius:6px;padding:7px 9px;">
+        Você já assumiu esta TR — o pedido ficou sem efeito.</div>` : ''}
+
+      <div style="font-size:11.5px;margin-top:7px;background:var(--cl);border-radius:7px;padding:8px 10px;white-space:pre-wrap;">${escHtml(s.justificativa||'')}</div>
+
+      ${s.status==='negada' && s.motivo ? `<div style="margin-top:7px;font-size:11.5px;color:#B02A37;">
+        <b>Motivo:</b> ${escHtml(s.motivo)}</div>` : ''}
+
+      ${s.status==='expirada' ? `<div style="margin-top:7px;font-size:11px;color:#6B7280;">
+        Ficou 3 dias sem decisão. A TR voltou ao estoque — você pode pedir de novo.</div>` : ''}
+
+      ${s.decidido_em ? `<div style="margin-top:6px;font-size:10.5px;color:var(--ct);">
+        ${s.status==='cancelada' ? 'cancelado por você' : `decidido por ${escHtml(s.decidido_por_nome||'—')}`} em ${planDataHora(s.decidido_em)}</div>` : ''}
+
+      ${s.status==='pendente' ? `<div style="display:flex;justify-content:flex-end;margin-top:10px;">
+        <button class="btn-acao" style="background:#fff;color:var(--r);border:2px solid var(--r);font-weight:800;"
+          onclick="meusCancelar('${escHtml(s.tr||'')}',${s.id})">Cancelar pedido</button>
+      </div>` : ''}
+    </div>`
+  }).join('')
+}
+
+async function meusCancelar(tr, id) {
+  if(!confirm(`Cancelar o seu pedido${tr?` da TR ${tr}`:''}?\n\nA TR volta ao estoque e outro analista pode assumi-la.`)) return
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'cancelada', analista_id: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast('Pedido cancelado. A TR voltou ao estoque.','ok')
+    meusCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
 async function irAprovacoes() {
   if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
   ativarMenu('aprov')
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Aprovações</div>
-    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">Pedidos de vaga extra — analistas que atingiram o limite de TRs</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Pedidos de vaga extra — analistas que atingiram o limite de TRs</div>
+    <div id="aprovAbas" style="display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--bd);"></div>
     <div id="aprovCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
   await aprovCarregar()
 }
 
+// Duas abas sobre a MESMA busca: uma requisição só, dividida no cliente. Buscar duas vezes
+// deixaria as contagens fora de sincronia entre os dois cliques.
+let _aprovAba = 'pendentes'
+let _aprovTodos = []
+
 async function aprovCarregar() {
   try {
     // Coordenador vê só o próprio grupo; superadmin vê tudo.
-    const p = new URLSearchParams({ status: 'pendente' })
+    const p = new URLSearchParams()
     if(U.perfil === 'coordenador' && U.grupo) p.set('grupo', U.grupo)
     const j = await (await fetch(`${API_URL}/solicitacao_vaga?${p}`)).json()
-    _aprovPend = j.data || []
+    _aprovTodos = j.data || []
+    _aprovPend = _aprovTodos.filter(s => s.status === 'pendente')
+    aprovAbasRender()
     aprovRender()
     aprovAtualizarBadge()
   } catch(e) {
@@ -2709,37 +2834,80 @@ async function aprovCarregar() {
   }
 }
 
+function aprovAbasRender() {
+  const b = document.getElementById('aprovAbas')
+  if(!b) return
+  // O contador de pendentes exclui os dispensados: são pendentes que não pedem decisão
+  // nenhuma, e inflar o número faria a fila parecer maior do que é.
+  const nPend = _aprovPend.filter(s => !pedDispensado(s)).length
+  const nHist = _aprovTodos.length - _aprovPend.length
+  const abas = [
+    { id:'pendentes', rot:`Pendentes${nPend?` (${nPend})`:''}` },
+    { id:'historico', rot:`Histórico${nHist?` (${nHist})`:''}` },
+  ]
+  b.innerHTML = abas.map(a => `
+    <button onclick="aprovAba('${a.id}')" style="border:0;background:none;cursor:pointer;padding:8px 14px;font-size:12px;
+      font-weight:${_aprovAba===a.id?'800':'600'};color:${_aprovAba===a.id?'var(--v)':'var(--ct)'};
+      border-bottom:3px solid ${_aprovAba===a.id?'var(--v)':'transparent'};margin-bottom:-2px;">${a.rot}</button>`).join('')
+}
+
+function aprovAba(id) { _aprovAba = id; aprovAbasRender(); aprovRender() }
+
 function aprovAtualizarBadge() {
   const b = document.getElementById('sbAprovBadge')
   if(!b) return
-  b.textContent = _aprovPend.length
-  b.style.display = _aprovPend.length ? '' : 'none'
+  // Mesmo critério da aba: dispensado não pede decisão, então não vira número vermelho no
+  // menu. Um badge que não some depois de resolvido deixa de ser lido.
+  const n = _aprovPend.filter(s => !pedDispensado(s)).length
+  b.textContent = n
+  b.style.display = n ? '' : 'none'
 }
 
 function aprovRender() {
   const c = document.getElementById('aprovCont')
   if(!c) return
-  if(!_aprovPend.length) {
-    c.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ct);">Nenhum pedido pendente.</div>'
+  const pend = _aprovAba === 'pendentes'
+  const lista = pend ? _aprovPend : _aprovTodos.filter(s => s.status !== 'pendente')
+
+  if(!lista.length) {
+    c.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);">${
+      pend ? 'Nenhum pedido pendente.' : 'Nenhum pedido decidido ainda.'}</div>`
     return
   }
-  c.innerHTML = _aprovPend.map(s => `
-    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:14px 16px;margin-bottom:11px;border-left:4px solid var(--am);">
+  c.innerHTML = lista.map(s => {
+    const dispensado = pedDispensado(s)
+    const cor = dispensado ? '#6B7280' : (PED_STATUS[s.status]||{}).cor || 'var(--am)'
+    return `
+    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:14px 16px;margin-bottom:11px;border-left:4px solid ${cor};">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <b style="font-size:14px;">${escHtml(s.analista_nome_completo||('id '+s.analista_id))}</b>
         ${s.grupo?`<span class="bdg">G${escHtml(s.grupo)}</span>`:''}
+        ${pend ? '' : pedEtiqueta(s.status)}
         <span style="font-size:11px;color:var(--ct);">já tem <b style="color:var(--te);">${s.trs_abertas} TRs</b> em aberto</span>
         <span style="margin-left:auto;font-size:11px;color:var(--ct);">${planDataHora(s.criado_em)}</span>
       </div>
       <div style="font-size:12px;margin-top:7px;">
         <b>TR pedida:</b> ${s.tr ? `<span class="proc-sgpe">${escHtml(s.tr)}</span>` : '<span style="color:var(--ct);">não especificada</span>'}
       </div>
+
+      ${dispensado ? `<div style="margin-top:7px;font-size:11.5px;color:#6B7280;background:#F1F2F4;border-radius:6px;padding:8px 10px;">
+        <b>Já assumida — pedido dispensado.</b> O analista caiu abaixo do limite e assumiu a TR
+        sem precisar da aprovação. Decidir isto não muda nada.</div>` : ''}
+
       <div style="font-size:12px;margin-top:6px;background:var(--cl);border-radius:7px;padding:9px 11px;white-space:pre-wrap;">${escHtml(s.justificativa||'')}</div>
-      <div style="display:flex;gap:7px;margin-top:11px;justify-content:flex-end;">
+
+      ${s.motivo ? `<div style="margin-top:7px;font-size:11.5px;color:#B02A37;"><b>Motivo:</b> ${escHtml(s.motivo)}</div>` : ''}
+      ${s.decidido_em ? `<div style="margin-top:6px;font-size:10.5px;color:var(--ct);">
+        ${s.status==='cancelada' ? 'cancelado pelo analista' : `por ${escHtml(s.decidido_por_nome||'—')}`} em ${planDataHora(s.decidido_em)}</div>` : ''}
+      ${s.status==='expirada' ? `<div style="margin-top:6px;font-size:10.5px;color:#6B7280;">
+        Expirou sem decisão — a TR voltou ao estoque.</div>` : ''}
+
+      ${pend ? `<div style="display:flex;gap:7px;margin-top:11px;justify-content:flex-end;">
         <button class="btn-acao" style="background:#fff;color:var(--r);border:2px solid var(--r);font-weight:800;" onclick="aprovDecidir(${s.id},'negada')">Negar</button>
         <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;" onclick="aprovDecidir(${s.id},'aprovada')">Aprovar</button>
-      </div>
-    </div>`).join('')
+      </div>` : ''}
+    </div>`
+  }).join('')
 }
 
 async function aprovDecidir(id, status) {
