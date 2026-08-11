@@ -161,9 +161,13 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 ## Pendências
 
+> Conferida contra o banco em **11/08/2026**. O que está `[x]` foi verificado, não presumido.
+> A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
+
 ### Verificar (última rodada não conferida)
 - [ ] Quadro 2 do relatório CGE lista os 45 servidores (estava truncando em 5)
-- [ ] Estoque no Quadro 1 mostra 11.552 (estava 14.622)
+- [ ] Estoque no Quadro 1 mostra 11.552 — o banco tem **11.033 abertas**; os números não
+      batem, conferir de onde sai o 11.552
 - [x] Tela Produtividade com linhas neutras — corrigido 19/07/2026 (zebra branco/cinza,
       cor só no % e na barra: verde #15803D / âmbar #B45309 / vermelho #991B1B)
 
@@ -177,24 +181,26 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
       "Todas as regiões" mostrando os 295 municípios)
 
 ### Cadastro
-- [ ] Gustavo — falta nome completo e portaria; assinatura comentada no PDF
-- [ ] Caroline — meta gravada, sem usuário em `usuarios`
-- [ ] Claudia — aparece com meta "—" no relatório
+- [ ] **Gustavo: nome completo e portaria.** O cadastro existe (id 56, coordenador, grupo 3);
+      falta a assinatura no PDF do relatório CGE, ainda comentada.
+- [ ] **Caroline** — meta 27 vigente, sem usuário em `usuarios`. É a única nessa situação.
+- [x] Claudia — id 36, meta 120 vigente. Dado completo; reabrir só se voltar a aparecer "—".
 
 ### Dados
-- [ ] 16 TRs com 2+ analistas (`conflito = true`, 138 PCs)
-- [ ] 6 TRs que não casaram: `2020 TR000777` e `2022TR 002065` (espaço no meio);
-      `2019TR000319`, `2021TR000719`, `2021TR000804`, `2024TR000204` (inexistentes)
+- [x] 16 TRs com 2+ analistas — `conflito = true` devolve **0 TRs, 0 PCs**.
+- [x] 6 TRs que não casaram — **nenhuma existe** em `prestacoes_contas`; lista obsoleta.
 - [ ] Definir meta vigente: CGE (Ago/25) ou Monitoramento (Nov/25)
 
 ### Funcionalidades
-- [ ] Notificações internas — sininho no cabeçalho, não implementado
+- [x] **Notificações internas — o sino está no ar** desde 10–11/08/2026. Quatro canais:
+      aprovação, prazo, diligência e recado. Ver `SESSAO.md`.
 - [x] E-mails dos analistas — campo `email` existe desde 19/07/2026 (Primeiro Acesso
-      e Meu Perfil); ainda não há envio de e-mail de fato, só o cadastro do dado
-- [ ] Código morto: `confDev` e modal `moDev`
+      e Meu Perfil). Falta **envio**, que é funcionalidade nova, não item em aberto.
+- [ ] Código morto: `confDev` e modal `moDev` — **14 ocorrências** no `index.html`.
 
 ### Arquivos não versionados (intencional, conferir antes de apagar)
-- [ ] `sigpc-gt`: `identidade_sigpc.css`, `logo_sc_base64.js` — presentes desde antes
-      da sessão 19/07, propósito não confirmado com o Richard
+- [ ] `sigpc-gt`: `identidade_sigpc.css`, `logo_sc_base64.js` — **nenhum `<script>` ou
+      `<link>` os carrega** (conferido em 11/08). Mesmo caso do `sgpe-link-standalone.js`,
+      que foi removido; candidatos a exclusão, mas confirmar com o Richard antes de apagar.
 - [ ] `sigpc-api`: scripts de carga (`carga_*.js`, `*_carga.csv`, `backfill_*.js`,
       `desfazer_assuncoes.js`, `importar_nls.js`) — nunca commitar (regra do projeto)
