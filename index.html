@@ -2917,10 +2917,16 @@ function notifQuando(iso) {
   return planDataHora(iso)
 }
 
+// Dias que a lida ainda fica antes de ser apagada. O dono do número é
+// `job_notificacoes.js` (DIAS_GUARDA_LIDA); aqui só se explica ao usuário.
+const NOTIF_GUARDA_DIAS = 15
+
 async function sinoCarregar() {
   if(!U || !U.id) return
   try {
-    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=15`)).json()
+    // Só as NÃO LIDAS. A lida sai da vista na hora em que é marcada — antes ela apenas
+    // mudava de cor e continuava ocupando o sino para sempre, que era a reclamação.
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=15&apenas_nao_lidas=1`)).json()
     _notifs = j.data || []
     _notifNaoLidas = j.nao_lidas || 0
   } catch(e) {
@@ -2974,9 +2980,16 @@ function sinoRender() {
         style="margin-left:auto;font-size:10.5px;color:var(--v);font-weight:700;text-decoration:none;">marcar todas como lidas</a>` : ''}
     </div>`
 
+  // "ver todas" aparece SEMPRE, inclusive com o sino vazio — é o único caminho para o que já
+  // foi lido, e é justamente com a lista vazia que a pessoa vai procurar o que sumiu.
+  const rodape = `<div style="padding:10px 13px;text-align:center;border-top:1px solid var(--bd);">
+      <a href="javascript:void(0)" onclick="irNotificacoes()"
+         style="font-size:11px;color:var(--v);font-weight:700;text-decoration:none;">ver todas →</a>
+    </div>`
+
   if(!_notifs.length) {
-    p.innerHTML = cab + `<div style="padding:26px 14px;text-align:center;color:var(--ct);font-size:11.5px;">
-      Nada por aqui.<br><span style="font-size:10.5px;">Avisos de aprovação, prazo, diligência e recados aparecem neste sino.</span></div>`
+    p.innerHTML = cab + `<div style="padding:24px 14px;text-align:center;color:var(--ct);font-size:11.5px;">
+      Nada novo por aqui.<br><span style="font-size:10.5px;">Avisos de aprovação, prazo, diligência e recados aparecem neste sino.</span></div>` + rodape
     return
   }
 
@@ -2995,7 +3008,7 @@ function sinoRender() {
       </div>
       ${naoLida ? '<div style="width:7px;height:7px;border-radius:50%;background:var(--v);margin-top:5px;flex:0 0 auto;"></div>' : ''}
     </div>`
-  }).join('')
+  }).join('') + rodape
 }
 
 // Um clique só faz as duas coisas que a pessoa quer: tira o aviso da frente e leva ao lugar.
@@ -3003,7 +3016,10 @@ function sinoRender() {
 async function sinoClicar(id, link) {
   const n = _notifs.find(x => x.id === id)
   if(n && !n.lida_em) {
-    n.lida_em = new Date().toISOString()
+    // Sai da lista NA HORA, não só muda de cor. A marcação é otimista: o contador cai no
+    // clique e o servidor é avisado depois. Se a rede falhar, a carga de 60s traz de volta —
+    // esperar o servidor para tirar da vista daria sensação de travado.
+    _notifs = _notifs.filter(x => x.id !== id)
     _notifNaoLidas = Math.max(0, _notifNaoLidas - 1)
     sinoPintar(); sinoRender()
     try {
@@ -3025,6 +3041,85 @@ async function sinoMarcarTodas() {
       body: JSON.stringify({ destinatario_id: U.id }) })
   } catch(e) { toast('Erro ao marcar como lidas.','err'); return }
   await sinoCarregar()
+  // Se a pessoa estiver na tela "ver todas", ela precisa repintar junto: senão as linhas
+  // continuam com a bolinha azul de não lida enquanto o sino já zerou.
+  if(document.getElementById('notifTudo')) notifCarregarTudo()
+}
+
+// ══════════════════════════════════════
+//  VER TODAS — a tela das lidas
+// ══════════════════════════════════════
+// Some da VISTA do sino, não do registro. Esta tela é o caminho para o que já foi lido, e
+// diz quando cada uma vai ser apagada — sem essa data, a exclusão automática vira surpresa e
+// a pessoa procura o que não existe mais.
+let _notifTudo = []
+
+async function irNotificacoes() {
+  const p = document.getElementById('sinoPainel'); if(p) p.remove()
+  ativarMenu('')
+  document.getElementById('BODY').innerHTML = `
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Notificações</div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">
+      Tudo o que você recebeu. Lidas há mais de ${NOTIF_GUARDA_DIAS} dias são apagadas automaticamente —
+      as não lidas ficam.
+    </div>
+    <div id="notifTudo"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await notifCarregarTudo()
+}
+
+async function notifCarregarTudo() {
+  try {
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=200`)).json()
+    _notifTudo = j.data || []
+    notifRenderTudo()
+  } catch(e) {
+    const c = document.getElementById('notifTudo')
+    if(c) c.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
+}
+
+// Quando esta some. Data absoluta, e não "em 12 dias": a pessoa que abre a tela quer saber
+// até quando pode contar com aquilo ali.
+function notifApagadaEm(lidaEmIso) {
+  if(!lidaEmIso) return ''
+  const d = new Date(lidaEmIso)
+  d.setDate(d.getDate() + NOTIF_GUARDA_DIAS)
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' })
+}
+
+function notifRenderTudo() {
+  const c = document.getElementById('notifTudo')
+  if(!c) return
+  if(!_notifTudo.length) {
+    c.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);font-size:12px;">
+      Você ainda não recebeu nenhuma notificação.</div>`
+    return
+  }
+  const naoLidas = _notifTudo.filter(n => !n.lida_em).length
+  c.innerHTML = `
+    ${naoLidas ? `<div style="display:flex;margin-bottom:10px;">
+      <a href="javascript:void(0)" onclick="sinoMarcarTodas()"
+         style="margin-left:auto;font-size:11px;color:var(--v);font-weight:700;text-decoration:none;">marcar todas como lidas</a>
+    </div>` : ''}
+    ` + _notifTudo.map(n => {
+    const lida = !!n.lida_em
+    return `<div style="display:flex;gap:10px;background:#fff;border-radius:9px;box-shadow:var(--sombra);
+                        padding:12px 14px;margin-bottom:8px;opacity:${lida?'.72':'1'};
+                        ${n.urgente && !lida ? 'border-left:3px solid var(--r);' : ''}">
+      <div style="font-size:15px;line-height:1.2;">${NOTIF_ICO[n.tipo]||'•'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
+          ${!lida ? '<span style="width:7px;height:7px;border-radius:50%;background:var(--v);display:inline-block;"></span>' : ''}
+          <b style="font-size:12px;color:${lida?'var(--ct)':'var(--te)'};">${escHtml(n.titulo||'')}</b>
+          <span style="margin-left:auto;font-size:10px;color:var(--ct);white-space:nowrap;">
+            ${lida ? `lida · ${planDataHora(n.lida_em)}` : notifQuando(n.criado_em)}
+          </span>
+        </div>
+        <div style="font-size:11.5px;color:${lida?'var(--ct)':'#333'};margin-top:4px;white-space:pre-wrap;">${escHtml(n.mensagem||'')}</div>
+        ${lida ? `<div style="font-size:9.5px;color:var(--ct);margin-top:5px;">apagada em ${notifApagadaEm(n.lida_em)}</div>` : ''}
+      </div>
+    </div>`
+  }).join('')
 }
 
 // ── Recado (coordenador e superadmin) ───────────────────────────────────────
