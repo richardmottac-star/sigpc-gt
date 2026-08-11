@@ -122,8 +122,17 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
   const semHelper = html.replace(corpoHelper, '');
 
   const direto = (semHelper.match(/^\s*const j = sgpeAbsorver\(await r\.json\(\)\)/gm) || []).length;
-  const viaHelper = (semHelper.match(/^\s*const j = await fetchListaCompleta\(/gm) || []).length;
-  conf(direto + viaHelper === 12, `${direto} diretos + ${viaHelper} pelo helper = 12 telas absorvendo j.links`);
+  // Duas formas de chamar o helper, e as duas absorvem igual:
+  //   const j = await fetchListaCompleta(url)
+  //   const [j] = await Promise.all([ fetchListaCompleta(url), ... ])   <- Minha Planilha
+  // A segunda apareceu em 11/08, quando a planilha passou a buscar em paralelo as respostas
+  // de diligencia. A ancora antiga so via a primeira e acusou 11 de 12: o mecanismo estava
+  // intacto, era o teste que enxergava uma sintaxe so. Contar `await fetchListaCompleta`
+  // resolveria por acaso — a contagem e por CHAMADA, que e o que de fato absorve.
+  const viaHelper   = (semHelper.match(/^\s*const j = await fetchListaCompleta\(/gm) || []).length;
+  const viaParalelo = (semHelper.match(/^\s*fetchListaCompleta\(/gm) || []).length;
+  conf(direto + viaHelper + viaParalelo === 12,
+       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 12 telas absorvendo j.links`);
 
   // O helper PRECISA absorver — se alguem tirar o sgpeAbsorver de dentro dele, quatro telas
   // perdem o link de uma vez, em silencio.
