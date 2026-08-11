@@ -263,6 +263,28 @@ tr:last-child td{border-bottom:none;}
 /* RODAPÉ */
 .rod{background:var(--vdk);padding:8px 18px;text-align:center;font-size:10px;color:rgba(255,255,255,.4);border-top:2px solid var(--v);}
 .rod strong{color:rgba(255,255,255,.75);}
+
+/* ══ FAIXA DE AVISOS (rodapé) ══ */
+/* Fica ACIMA do rodapé fixo e só existe quando há aviso — sem mensagem, nem o espaço é
+   ocupado, e a tela continua exatamente como era. */
+.faixa{background:#0F3D2E;border-top:2px solid var(--v);overflow:hidden;position:relative;
+       height:30px;display:flex;align-items:center;}
+.faixa.urg{background:#7A1620;border-top-color:#E5484D;}
+.faixa-mv{display:inline-block;white-space:nowrap;padding-left:100%;
+          animation:faixaRolar var(--faixa-seg,40s) linear infinite;
+          font-size:12px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.2px;}
+/* Pausa ao passar o mouse: sem isso, texto longo obriga a esperar a volta inteira para
+   terminar de ler — e o aviso vira ruído em vez de recado. */
+.faixa:hover .faixa-mv{animation-play-state:paused;}
+.faixa-sep{opacity:.45;margin:0 22px;}
+.faixa-urg-tag{background:#E5484D;color:#fff;font-size:9.5px;font-weight:800;
+               border-radius:4px;padding:1px 7px;margin-right:9px;}
+@keyframes faixaRolar{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+/* Quem pediu para reduzir movimento não recebe a rolagem: o texto fica parado e legível. */
+@media (prefers-reduced-motion: reduce){
+  .faixa-mv{animation:none;padding-left:18px;white-space:normal;}
+  .faixa{height:auto;padding:6px 0;}
+}
 </style>
 <style>
 /* ═══ IDENTIDADE VISUAL INSTITUCIONAL (identidade_sigpc.css) ═══ */
@@ -782,6 +804,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
     <nav class="sb" id="SB"></nav>
     <main class="body" id="BODY"></main>
   </div>
+  <div id="faixaAviso"></div>
   <div class="rod">Sistema desenvolvido pelo Técnico/Analista <strong>Richard Motta Coelho</strong> &nbsp;|&nbsp; copyright © 2026 SIGPC-GT &nbsp;|&nbsp; v2.1</div>
 </div>
 
@@ -1499,6 +1522,9 @@ function renderSB() {
       </div>
     </div>` : ''}
     ${(isCoordi || isAdmin) ? `<div class="sb-sec">
+      <div class="sb-item" id="mi-faixa" onclick="irFaixa()">
+        <svg viewBox="0 0 24 24"><path d="M3 5h18v4H3V5zm0 6h18v2H3v-2zm0 4h12v4H3v-4z"/></svg>Faixa de avisos
+      </div>
       <div class="sb-item" id="mi-recado" onclick="sinoRecado()">
         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z"/></svg>Enviar recado
       </div>
@@ -1519,6 +1545,7 @@ function renderSB() {
   `
   carregarOnline()
   sinoIniciar()
+  faixaIniciar()
 }
 
 async function carregarOnline() {
@@ -1555,6 +1582,9 @@ function ativarMenu(id) {
   const el = document.getElementById('mi-'+id)
   if(el) el.classList.add('on')
   salvarSessao()
+  // A faixa de escopo 'inicial' só aparece no Dashboard. Fica aqui, e não espalhado em cada
+  // `irX()`, porque TODA tela passa por `ativarMenu` — uma tela nova entra na regra sozinha.
+  if(typeof faixaTela === 'function') faixaTela(id === 'dash' ? 'inicial' : 'outra')
 }
 
 // ══════════════════════════════════════
@@ -2725,6 +2755,272 @@ async function cfgRemoverExcecao(analistaId) {
 //  APROVAÇÕES DE VAGA EXTRA
 // ══════════════════════════════════════
 let _aprovPend = []
+
+// ══════════════════════════════════════
+//  FAIXA DE AVISOS (rodapé)
+// ══════════════════════════════════════
+// Três escopos por mensagem: 'inicial' (só a tela inicial), 'todas', e 'urgente' (todas, com
+// destaque). O servidor devolve TUDO que está no ar para este usuário; quem filtra por tela é
+// `faixaPintar`, chamado a cada troca de tela.
+//
+// ⚠️ Sem aviso, o elemento fica VAZIO — nem o espaço é ocupado. Uma barra reservada e vazia
+// no rodapé de todo dia seria pior que não ter faixa.
+const FAIXA_SEG_MIN = 18          // duração mínima de uma volta
+let _faixas = []
+let _faixaTela = 'inicial'
+let _faixaTimer = null
+
+async function faixaCarregar() {
+  if(!U || !U.id) return
+  try {
+    const p = new URLSearchParams()
+    if(U.grupo) p.set('grupo', U.grupo)
+    const j = await (await fetch(`${API_URL}/faixa_aviso/ativas?${p}`)).json()
+    _faixas = j.data || []
+  } catch(e) {
+    // Faixa é adorno: erro de rede não pode mexer no que já está na tela.
+    return
+  }
+  faixaPintar()
+}
+
+// Chamada a cada troca de tela. `tela` é 'inicial' em irDash e 'outra' no resto.
+function faixaTela(tela) { _faixaTela = tela; faixaPintar() }
+
+function faixaVisiveis() {
+  return _faixas.filter(f => f.escopo !== 'inicial' || _faixaTela === 'inicial')
+}
+
+function faixaPintar() {
+  const el = document.getElementById('faixaAviso')
+  if(!el) return
+  const vis = faixaVisiveis()
+  if(!vis.length) { el.innerHTML = ''; return }
+
+  const urgente = vis.some(f => f.escopo === 'urgente')
+  // Uma volta proporcional ao texto: fixar a duração faria aviso curto rastejar e aviso longo
+  // passar rápido demais para ser lido.
+  const chars = vis.reduce((n,f) => n + (f.texto||'').length, 0)
+  const seg = Math.max(FAIXA_SEG_MIN, Math.round(chars / 4))
+
+  const conteudo = vis.map(f =>
+    `${f.escopo === 'urgente' ? '<span class="faixa-urg-tag">URGENTE</span>' : ''}${escHtml(f.texto||'')}`
+  ).join('<span class="faixa-sep">•</span>')
+
+  // O conteúdo vai DUPLICADO: com uma cópia só, o fim do texto deixa um vão em branco
+  // atravessando a tela antes de recomeçar.
+  el.innerHTML = `<div class="faixa ${urgente?'urg':''}" style="--faixa-seg:${seg}s"
+      title="Passe o mouse para pausar e ler">
+      <div class="faixa-mv">${conteudo}<span class="faixa-sep">•</span>${conteudo}</div>
+    </div>`
+}
+
+function faixaIniciar() {
+  if(_faixaTimer) clearInterval(_faixaTimer)
+  faixaCarregar()
+  // 5 min: a faixa não tem urgência de segundo, e quem escreve avisa antes do horário.
+  _faixaTimer = setInterval(faixaCarregar, 300000)
+}
+
+// ── Tela de gestão da faixa (coordenador e superadmin) ──────────────────────
+const FAIXA_ESCOPOS = [
+  { id:'inicial', rot:'Só na tela inicial',  desc:'Aparece apenas no Dashboard.' },
+  { id:'todas',   rot:'Em todas as telas',   desc:'Acompanha o analista em qualquer tela.' },
+  { id:'urgente', rot:'Urgente — todas',     desc:'Todas as telas, com a faixa vermelha e a etiqueta URGENTE.' },
+]
+let _faixaLista = []
+
+async function irFaixa() {
+  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  ativarMenu('faixa')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap;">
+      <div style="font-size:16px;font-weight:700;">Faixa de avisos</div>
+      <button class="btn-acao" style="margin-left:auto;background:var(--v);color:#fff;font-weight:800;"
+        onclick="faixaEditar(null)">+ Novo aviso</button>
+    </div>
+    <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">
+      Mensagens que passam no rodapé do sistema. Sem aviso ativo, a faixa não aparece.
+      ${U.perfil==='coordenador' ? 'Os seus alcançam apenas o seu grupo.' : ''}
+    </div>
+    <div id="faixaCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await faixaGestaoCarregar()
+}
+
+async function faixaGestaoCarregar() {
+  try {
+    const j = await (await fetch(`${API_URL}/faixa_aviso`)).json()
+    _faixaLista = j.data || []
+    faixaGestaoRender()
+  } catch(e) {
+    const c = document.getElementById('faixaCont')
+    if(c) c.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
+  }
+}
+
+// Por que uma faixa ativa pode não estar aparecendo. Sem isto, o coordenador cadastra, não vê
+// nada no rodapé e conclui que o sistema está quebrado.
+function faixaPorQueNaoAparece(f) {
+  if(!f.ativo) return 'desativada'
+  const hoje = new Date().toLocaleDateString('en-CA')
+  if(f.inicio && String(f.inicio).slice(0,10) > hoje) return `começa em ${planData(f.inicio)}`
+  if(f.fim && String(f.fim).slice(0,10) < hoje)       return `terminou em ${planData(f.fim)}`
+  if(f.escopo === 'inicial') return 'no ar — só na tela inicial'
+  return 'no ar'
+}
+
+function faixaGestaoRender() {
+  const c = document.getElementById('faixaCont')
+  if(!c) return
+  if(!_faixaLista.length) {
+    c.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);font-size:12px;">
+      Nenhum aviso cadastrado.<br><span style="font-size:11px;">Enquanto não houver, o rodapé fica como sempre foi.</span></div>`
+    return
+  }
+  c.innerHTML = _faixaLista.map(f => {
+    const est = faixaPorQueNaoAparece(f)
+    const noAr = est.startsWith('no ar')
+    const esc = FAIXA_ESCOPOS.find(e => e.id === f.escopo) || FAIXA_ESCOPOS[0]
+    return `
+    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:9px;
+                border-left:4px solid ${f.escopo==='urgente'?'var(--r)':(noAr?'var(--v)':'#C9D2CC')};opacity:${noAr?'1':'.7'};">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:5px;
+              background:${f.escopo==='urgente'?'#FDE8EA':'var(--cl)'};color:${f.escopo==='urgente'?'var(--r)':'var(--ct)'};">
+          ${escHtml(esc.rot.toUpperCase())}</span>
+        <span style="font-size:10.5px;color:${noAr?'var(--v)':'var(--ct)'};font-weight:700;">${escHtml(est)}</span>
+        ${f.grupo?`<span class="bdg">G${escHtml(f.grupo)}</span>`:'<span style="font-size:10px;color:var(--ct);">todos os grupos</span>'}
+        <span style="margin-left:auto;font-size:10px;color:var(--ct);">${escHtml(f.autor_nome||'')}</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--te);line-height:1.5;">${escHtml(f.texto||'')}</div>
+      ${(f.inicio||f.fim)?`<div style="font-size:10.5px;color:var(--ct);margin-top:5px;">
+        ${f.inicio?`de ${planData(f.inicio)}`:'sem início'} ${f.fim?`até ${planData(f.fim)}`:'sem fim'}</div>`:''}
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:10px;">
+        <button class="btn-acao" style="background:#fff;color:var(--ct);border:1.5px solid var(--cb);"
+          onclick="faixaAlternar(${f.id}, ${f.ativo})">${f.ativo?'Desativar':'Ativar'}</button>
+        <button class="btn-acao" style="background:#fff;color:var(--az);border:1.5px solid var(--az);font-weight:700;"
+          onclick="faixaEditar(${f.id})">Editar</button>
+        <button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);font-weight:700;"
+          onclick="faixaExcluir(${f.id})">Excluir</button>
+      </div>
+    </div>`
+  }).join('')
+}
+
+async function faixaAlternar(id, ativo) {
+  try {
+    const r = await fetch(`${API_URL}/faixa_aviso/${id}`, { method:'PATCH',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ativo: !ativo }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message)
+    toast(ativo ? 'Aviso desativado.' : 'Aviso ativado.','ok')
+    faixaGestaoCarregar(); faixaCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+async function faixaExcluir(id) {
+  if(!await moConfirm('Excluir este aviso da faixa?', {
+    titulo:'Excluir aviso', perigo:true, okTexto:'Excluir', cancelarTexto:'Voltar',
+    detalhe:'Ele sai do rodapé imediatamente e não pode ser recuperado. Para tirar do ar sem perder o texto, use Desativar.',
+  })) return
+  try {
+    await fetch(`${API_URL}/faixa_aviso/${id}`, { method:'DELETE' })
+    toast('Aviso excluído.','ok')
+    faixaGestaoCarregar(); faixaCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+/** Modal de criar/editar. `id` null = novo. */
+function faixaEditar(id) {
+  const f = id ? (_faixaLista.find(x => x.id === id) || {}) : {}
+  const k = 'fx' + (++_moSeq)
+  const el = document.createElement('div')
+  el.className = 'mo open'
+  const soGrupo = U.perfil === 'coordenador'
+  el.innerHTML = `
+    <div class="mc">
+      <div class="mch v"><h3>${id?'Editar aviso':'Novo aviso'}</h3><button class="mcx" data-f="x">✕</button></div>
+      <div class="mcb">
+        <div class="mc-campo">
+          <label>Texto do aviso</label>
+          <textarea id="${k}T" rows="3" placeholder="Ex.: Sistema liberado para a equipe a partir das 14h.">${escHtml(f.texto||'')}</textarea>
+          <div id="${k}N" style="font-size:10.5px;color:var(--ct);margin-top:3px;"></div>
+        </div>
+        <div class="mc-campo">
+          <label>Onde aparece</label>
+          ${FAIXA_ESCOPOS.map(e => `
+            <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;text-transform:none;
+                          letter-spacing:0;font-weight:400;color:var(--te);margin-bottom:6px;">
+              <input type="radio" name="${k}E" value="${e.id}" style="width:auto;margin-top:3px;"
+                ${(f.escopo||'inicial')===e.id?'checked':''}>
+              <span><b>${e.rot}</b><br><span style="font-size:10.5px;color:var(--ct);">${e.desc}</span></span>
+            </label>`).join('')}
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="mc-campo" style="flex:1;"><label>Início (opcional)</label>
+            <input id="${k}I" type="date" value="${f.inicio?String(f.inicio).slice(0,10):''}"></div>
+          <div class="mc-campo" style="flex:1;"><label>Fim (opcional)</label>
+            <input id="${k}F" type="date" value="${f.fim?String(f.fim).slice(0,10):''}"></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--ct);margin-top:-6px;margin-bottom:10px;">
+          Sem datas, o aviso vale enquanto estiver ativo.
+        </div>
+        ${soGrupo ? '' : `<div class="mc-campo"><label>Alcance</label>
+          <select id="${k}G">
+            <option value="">Todos os analistas</option>
+            <option value="1" ${f.grupo==='1'?'selected':''}>Só o Grupo 1</option>
+            <option value="2" ${f.grupo==='2'?'selected':''}>Só o Grupo 2</option>
+            <option value="3" ${f.grupo==='3'?'selected':''}>Só o Grupo 3</option>
+          </select></div>`}
+        <div class="mcbt">
+          <button class="mccn" data-f="x">Cancelar</button>
+          <button class="mcok" id="${k}OK" data-f="ok">${id?'Salvar':'Criar aviso'}</button>
+        </div>
+      </div>
+    </div>`
+  document.body.appendChild(el)
+
+  const cT = document.getElementById(k+'T'), ok = document.getElementById(k+'OK'), nota = document.getElementById(k+'N')
+  const fechar = () => { document.removeEventListener('keydown', tecla); el.remove() }
+  const validar = () => {
+    const v = (cT.value||'').trim()
+    const vale = v.length > 0 && v.length <= 300
+    nota.textContent = v.length > 300 ? `${v.length} de 300 — passou do limite` : moNota(cT.value, { obrigatorio:true })
+    nota.style.color = vale ? 'var(--ct)' : 'var(--r)'
+    ok.disabled = !vale; ok.style.opacity = vale?'':'.45'; ok.style.cursor = vale?'':'not-allowed'
+    return vale
+  }
+  const salvar = async () => {
+    if(!validar()) return
+    const corpo = {
+      texto: cT.value.trim(),
+      escopo: (el.querySelector(`input[name="${k}E"]:checked`)||{}).value || 'inicial',
+      inicio: document.getElementById(k+'I').value || null,
+      fim:    document.getElementById(k+'F').value || null,
+    }
+    if(!soGrupo) corpo.grupo = (document.getElementById(k+'G')||{}).value || null
+    try {
+      const r = id
+        ? await fetch(`${API_URL}/faixa_aviso/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) })
+        : await fetch(`${API_URL}/faixa_aviso`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...corpo, autor_id: U.id }) })
+      const j = await r.json()
+      if(j.error) throw new Error(j.error.message || j.error)
+      fechar()
+      toast(id?'Aviso salvo.':'Aviso criado.','ok')
+      faixaGestaoCarregar()
+      faixaCarregar()   // o rodapé muda na hora, sem esperar os 5 min
+    } catch(e) { toast('Erro: '+e.message,'err') }
+  }
+  el.addEventListener('click', e => {
+    const a = e.target.getAttribute && e.target.getAttribute('data-f')
+    if(a === 'ok') return salvar()
+    if(a === 'x' || e.target === el) return fechar()
+  })
+  const tecla = e => { if(e.key === 'Escape') { e.preventDefault(); fechar() } }
+  document.addEventListener('keydown', tecla)
+  cT.addEventListener('input', validar); validar()
+  setTimeout(() => cT.focus(), 30)
+}
 
 // ══════════════════════════════════════
 //  MODAIS DO SISTEMA — no lugar de prompt() e confirm()
