@@ -764,6 +764,14 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <div class="sub">Sistema de Gestão de Prestações de Contas — Grupo de Trabalho</div>
     </div>
     <div class="top-user">
+      <!-- SINO — o contador só existe quando há não lidas. Um badge permanente vira parte do
+           cenário e para de ser lido; é justamente o que se quer evitar. -->
+      <div id="sinoBox" style="position:relative;display:none;margin-right:6px;">
+        <button id="sinoBtn" onclick="sinoAbrir(event)" title="Notificações"
+          style="background:none;border:0;cursor:pointer;padding:6px 8px;font-size:19px;line-height:1;color:#fff;">🔔</button>
+        <span id="sinoBadge" style="display:none;position:absolute;top:1px;right:1px;background:var(--r);color:#fff;
+          font-size:9px;font-weight:800;border-radius:9px;padding:1px 5px;pointer-events:none;"></span>
+      </div>
       <div><div class="uname" id="tNome">—</div><div class="urole" id="tPerfil">—</div></div>
       <div class="avatar" id="tAv">—</div>
       <button class="btn-sair" onclick="sair()">Sair</button>
@@ -1490,6 +1498,11 @@ function renderSB() {
         <span id="sbAprovBadge" style="display:none;margin-left:auto;background:var(--r);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 6px;"></span>
       </div>
     </div>` : ''}
+    ${(isCoordi || isAdmin) ? `<div class="sb-sec">
+      <div class="sb-item" id="mi-recado" onclick="sinoRecado()">
+        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z"/></svg>Enviar recado
+      </div>
+    </div>` : ''}
     <div class="sb-sec">
       <div class="sb-item" id="mi-meuspedidos" onclick="irMeusPedidos()">
         <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 16H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V9h10v2z"/></svg>Meus pedidos
@@ -1505,6 +1518,7 @@ function renderSB() {
     </div>
   `
   carregarOnline()
+  sinoIniciar()
 }
 
 async function carregarOnline() {
@@ -2700,6 +2714,166 @@ async function cfgRemoverExcecao(analistaId) {
 //  APROVAÇÕES DE VAGA EXTRA
 // ══════════════════════════════════════
 let _aprovPend = []
+
+// ══════════════════════════════════════
+//  SINO DE NOTIFICAÇÕES
+// ══════════════════════════════════════
+// As notificações são GRAVADAS pelo servidor no momento do evento — aqui só se lê, mostra e
+// marca como lida. A tela nunca deduz notificação nenhuma: se deduzisse, o analista deixaria
+// de saber o que aconteceu enquanto ele estava fora.
+const SINO_SEG = 60          // combinado com o Richard: 60s, e só com a aba aberta
+let _notifs = []
+let _notifNaoLidas = 0
+let _sinoTimer = null
+
+const NOTIF_ICO = { aprovacao:'✅', prazo:'🔴', diligencia:'📋', recado:'📢' }
+
+// "há 5 min" diz mais que "10/08 23:31" para o que acabou de acontecer, que é o caso da
+// maioria das notificações. Acima de uma semana a data absoluta volta a ser mais útil.
+function notifQuando(iso) {
+  if(!iso) return ''
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if(min < 1)    return 'agora'
+  if(min < 60)   return `há ${min} min`
+  const h = Math.floor(min/60)
+  if(h < 24)     return `há ${h} h`
+  const d = Math.floor(h/24)
+  if(d === 1)    return 'ontem'
+  if(d < 7)      return `há ${d} dias`
+  return planDataHora(iso)
+}
+
+async function sinoCarregar() {
+  if(!U || !U.id) return
+  try {
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=15`)).json()
+    _notifs = j.data || []
+    _notifNaoLidas = j.nao_lidas || 0
+  } catch(e) {
+    // Rede oscilando não pode apagar o que já estava na tela nem mostrar zero falso.
+    return
+  }
+  sinoPintar()
+  if(document.getElementById('sinoPainel')) sinoRender()
+}
+
+function sinoPintar() {
+  const box = document.getElementById('sinoBox')
+  const bad = document.getElementById('sinoBadge')
+  if(!box || !bad) return
+  box.style.display = ''
+  bad.textContent = _notifNaoLidas > 99 ? '99+' : _notifNaoLidas
+  bad.style.display = _notifNaoLidas ? '' : 'none'
+}
+
+function sinoIniciar() {
+  if(_sinoTimer) clearInterval(_sinoTimer)
+  sinoCarregar()
+  _sinoTimer = setInterval(sinoCarregar, SINO_SEG * 1000)
+}
+
+function sinoAbrir(ev) {
+  if(ev) ev.stopPropagation()
+  const aberto = document.getElementById('sinoPainel')
+  if(aberto) { aberto.remove(); return }
+
+  const p = document.createElement('div')
+  p.id = 'sinoPainel'
+  p.style.cssText = `position:absolute;top:38px;right:0;width:370px;max-height:70vh;overflow-y:auto;
+    background:#fff;border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.22);z-index:900;text-align:left;`
+  p.onclick = (e) => e.stopPropagation()
+  document.getElementById('sinoBox').appendChild(p)
+  sinoRender()
+  sinoCarregar()
+  // Fecha ao clicar fora. `once` evita empilhar um ouvinte a cada abertura.
+  setTimeout(() => document.addEventListener('click', () => {
+    const el = document.getElementById('sinoPainel'); if(el) el.remove()
+  }, { once:true }), 0)
+}
+
+function sinoRender() {
+  const p = document.getElementById('sinoPainel')
+  if(!p) return
+  const cab = `<div style="display:flex;align-items:center;padding:11px 13px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:#fff;">
+      <b style="font-size:12.5px;">Notificações</b>
+      ${_notifNaoLidas ? `<a href="javascript:void(0)" onclick="sinoMarcarTodas()"
+        style="margin-left:auto;font-size:10.5px;color:var(--v);font-weight:700;text-decoration:none;">marcar todas como lidas</a>` : ''}
+    </div>`
+
+  if(!_notifs.length) {
+    p.innerHTML = cab + `<div style="padding:26px 14px;text-align:center;color:var(--ct);font-size:11.5px;">
+      Nada por aqui.<br><span style="font-size:10.5px;">Avisos de aprovação, prazo, diligência e recados aparecem neste sino.</span></div>`
+    return
+  }
+
+  p.innerHTML = cab + _notifs.map(n => {
+    const naoLida = !n.lida_em
+    return `<div onclick="sinoClicar(${n.id}, ${JSON.stringify(n.link||'').replace(/"/g,'&quot;')})"
+      style="display:flex;gap:9px;padding:11px 13px;border-bottom:1px solid var(--bd);cursor:pointer;
+             background:${naoLida?'#F7FBF8':'#fff'};${n.urgente&&naoLida?'border-left:3px solid var(--r);':''}">
+      <div style="font-size:15px;line-height:1.2;">${NOTIF_ICO[n.tipo]||'•'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;gap:7px;align-items:baseline;">
+          <b style="font-size:11.5px;color:${naoLida?'var(--te)':'var(--ct)'};">${escHtml(n.titulo||'')}</b>
+          <span style="margin-left:auto;font-size:9.5px;color:var(--ct);white-space:nowrap;">${notifQuando(n.criado_em)}</span>
+        </div>
+        <div style="font-size:11px;color:${naoLida?'#333':'var(--ct)'};margin-top:3px;white-space:pre-wrap;">${escHtml(n.mensagem||'')}</div>
+      </div>
+      ${naoLida ? '<div style="width:7px;height:7px;border-radius:50%;background:var(--v);margin-top:5px;flex:0 0 auto;"></div>' : ''}
+    </div>`
+  }).join('')
+}
+
+// Um clique só faz as duas coisas que a pessoa quer: tira o aviso da frente e leva ao lugar.
+// Separar em dois cliques deixaria o sino cheio de coisa já resolvida.
+async function sinoClicar(id, link) {
+  const n = _notifs.find(x => x.id === id)
+  if(n && !n.lida_em) {
+    n.lida_em = new Date().toISOString()
+    _notifNaoLidas = Math.max(0, _notifNaoLidas - 1)
+    sinoPintar(); sinoRender()
+    try {
+      await fetch(`${API_URL}/notificacao/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ destinatario_id: U.id }) })
+    } catch(e) { /* a próxima carga corrige */ }
+  }
+  const el = document.getElementById('sinoPainel'); if(el) el.remove()
+  if(link === '#estoque')         irEst()
+  else if(link === '#planilha')   irPlanilha()
+  else if(link === '#aprovacoes') irAprovacoes()
+}
+
+async function sinoMarcarTodas() {
+  try {
+    await fetch(`${API_URL}/notificacao/marcar_todas`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ destinatario_id: U.id }) })
+  } catch(e) { toast('Erro ao marcar como lidas.','err'); return }
+  await sinoCarregar()
+}
+
+// ── Recado (coordenador e superadmin) ───────────────────────────────────────
+async function sinoRecado() {
+  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  const titulo = prompt('Título do recado:')
+  if(titulo === null) return
+  if(!titulo.trim()) { toast('O título é obrigatório.','err'); return }
+  const msg = prompt('Mensagem:') || ''
+
+  const soGrupo = U.perfil === 'coordenador'
+  const alvo = soGrupo ? 'grupo'
+    : (confirm('Enviar para TODOS os analistas?\n\nOK = todos · Cancelar = só o meu grupo') ? 'todos' : 'grupo')
+
+  try {
+    const r = await fetch(`${API_URL}/notificacao`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ autor_id: U.id, alvo, grupo: U.grupo, titulo: titulo.trim(), mensagem: msg.trim() }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast(`Recado enviado para ${j.data.destinatarios} pessoa(s).`,'ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
 
 // ══════════════════════════════════════
 //  PEDIDOS DE VAGA — como cada status se apresenta
