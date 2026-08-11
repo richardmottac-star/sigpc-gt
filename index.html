@@ -1915,9 +1915,7 @@ function estReservaBloqueia(tr) {
 // Cancelar o próprio pedido. Fica aqui, na tag, porque é onde o analista vê a reserva dele —
 // a mesma ação aparece depois na tela "Meus pedidos".
 async function estCancelarReserva(tr, id) {
-  // Confirma porque cancelar SOLTA A TR na hora: outro analista pode assumi-la em seguida, e
-  // não há como desfazer um pedido cancelado.
-  if(!confirm(`Cancelar o seu pedido da TR ${tr}?\n\nA TR volta ao estoque e outro analista pode assumi-la.`)) return
+  if(!await confirmarCancelarPedido(tr)) return
   try {
     const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -2711,7 +2709,11 @@ async function cfgSalvarExcecao() {
 }
 
 async function cfgRemoverExcecao(analistaId) {
-  if(!confirm('Remover esta exceção? O analista volta ao limite padrão.')) return
+  if(!await moConfirm('Remover esta exceção?', {
+    titulo: 'Remover exceção de limite',
+    detalhe: 'O analista volta ao limite padrão. As TRs que ele já tem não são afetadas — a trava só vale no ato de assumir.',
+    okTexto: 'Remover', cancelarTexto: 'Voltar',
+  })) return
   try {
     await fetch(`${API_URL}/limite_tr_excecao/${analistaId}`, { method:'DELETE' })
     await cfgCarregar()
@@ -2869,6 +2871,22 @@ async function moConfirm(pergunta, o) {
 /** Substitui `prompt()`. Devolve o texto, ou null se cancelou — igual ao original. */
 async function moPrompt(pergunta, o) {
   return await moDialogo({ ...(o||{}), tipo:'prompt', pergunta })
+}
+
+/**
+ * Cancelar o próprio pedido de vaga. Existe em DOIS lugares — a tag do Estoque e a tela Meus
+ * pedidos — e a pergunta é a mesma. Antes eram dois textos parecidos, escritos à mão: bastava
+ * alguém ajustar um para os dois passarem a dizer coisas diferentes sobre a mesma ação.
+ *
+ * Confirma porque cancelar SOLTA A TR na hora: outro analista pode assumi-la em seguida, e
+ * não há como desfazer um pedido cancelado.
+ */
+async function confirmarCancelarPedido(tr) {
+  return await moConfirm(`Cancelar o seu pedido${tr ? ` da TR ${tr}` : ''}?`, {
+    titulo: 'Cancelar pedido',
+    detalhe: 'A TR volta ao estoque na hora e outro analista pode assumi-la. Não dá para desfazer — mas você pode pedir de novo.',
+    okTexto: 'Cancelar pedido', cancelarTexto: 'Voltar',
+  })
 }
 
 // ══════════════════════════════════════
@@ -3228,7 +3246,7 @@ function meusRender() {
 }
 
 async function meusCancelar(tr, id) {
-  if(!confirm(`Cancelar o seu pedido${tr?` da TR ${tr}`:''}?\n\nA TR volta ao estoque e outro analista pode assumi-la.`)) return
+  if(!await confirmarCancelarPedido(tr)) return
   try {
     const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -3429,7 +3447,12 @@ async function salvarAnotacao(tr) {
 }
 
 async function excluirAnotacao(id, tr) {
-  if(!confirm('Excluir esta anotação?')) return
+  // A anotação é histórico: quem escreveu o quê e quando. Excluir apaga o registro — daí a
+  // marca vermelha aqui, e não no encaminhamento ao Controle Interno, que é ato previsto.
+  if(!await moConfirm('Excluir esta anotação?', {
+    titulo: 'Excluir anotação', perigo: true, okTexto: 'Excluir', cancelarTexto: 'Voltar',
+    detalhe: 'A anotação sai do histórico da TR e não pode ser recuperada.',
+  })) return
   try {
     const r = await fetch(`${API_URL}/anotacoes_tr/${id}`, {
       method: 'DELETE',
@@ -4092,7 +4115,10 @@ async function salvarRepo() {
 }
 
 async function repoExcluir(id, nome) {
-  if(!confirm(`Excluir "${nome}" do repositório?`)) return
+  if(!await moConfirm(`Excluir "${nome}" do repositório?`, {
+    titulo: 'Excluir do repositório', perigo: true, okTexto: 'Excluir', cancelarTexto: 'Voltar',
+    detalhe: 'O arquivo deixa de estar disponível para toda a equipe. Não pode ser desfeito.',
+  })) return
   try {
     const r = await fetch(`${API_URL}/repositorio/${id}`, {
       method: 'DELETE',
@@ -6344,7 +6370,11 @@ async function pEnviarCI(tr, num) {
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada.','err'); return }
   if(!pa.parecer_tipo) { toast('Registre o parecer antes de encaminhar ao Controle Interno.','err'); return }
-  if(!confirm(`Encaminhar a Parcial ${num} da ${tr} ao Controle Interno?\n\nO parecer registrado é mantido.`)) return
+  if(!await moConfirm(`Encaminhar a Parcial ${num} da ${tr} ao Controle Interno?`, {
+    titulo: 'Encaminhar ao Controle Interno',
+    detalhe: 'O parecer registrado é mantido. A parcial passa a constar como encaminhada.',
+    okTexto: 'Encaminhar', cancelarTexto: 'Voltar',
+  })) return
   try {
     const r = await fetch(`${API_URL}/parcela/ci`, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -7063,7 +7093,13 @@ async function admToggleAtivo(id, atual) {
   const u = _admUsers.find(u=>String(u.id)===String(id))
   if(u && !admPodeGerenciar(u)) { toast('Você não pode alterar o status deste usuário.','err'); return }
   const acao = atual ? 'desativar' : 'ativar'
-  if(!confirm(`Deseja ${acao} este usuário?`)) return
+  if(!await moConfirm(`Deseja ${acao} ${u ? u.nome : 'este usuário'}?`, {
+    titulo: atual ? 'Desativar usuário' : 'Ativar usuário',
+    detalhe: atual
+      ? 'Ele perde o acesso ao sistema, mas o cadastro e o histórico ficam. Dá para reativar depois.'
+      : 'Ele volta a poder entrar no sistema.',
+    okTexto: atual ? 'Desativar' : 'Ativar', cancelarTexto: 'Voltar',
+  })) return
   try {
     const { error } = await db.from('usuarios').update({
       ativo: !atual
@@ -7089,7 +7125,12 @@ async function admExcluirUsuario(id, nome) {
     toast('Erro ao verificar vínculo: '+e.message,'err')
     return
   }
-  if(!confirm(`Excluir permanentemente o usuário ${nome}? Esta ação não pode ser desfeita.`)) return
+  if(!await moConfirm(`Excluir permanentemente o usuário ${nome}?`, {
+    titulo: 'Excluir usuário', perigo: true, okTexto: 'Excluir usuário', cancelarTexto: 'Voltar',
+    // A saída menos drástica vai escrita aqui: quem quer só tirar o acesso costuma excluir
+    // por não saber que Desativar existe.
+    detalhe: 'Não pode ser desfeito. Para apenas tirar o acesso sem perder o cadastro, use Desativar.',
+  })) return
   try {
     const r = await fetch(`${API_URL}/usuarios/${id}`, {
       method: 'DELETE',
@@ -7185,7 +7226,10 @@ async function admConfirmarAprovar() {
 async function admRejeitar(id) {
   const u = _admPendentes.find(x=>String(x.id)===String(id))
   if(!u) return
-  if(!confirm(`Rejeitar o cadastro de ${u.nome}? Esta ação remove a solicitação e não pode ser desfeita.`)) return
+  if(!await moConfirm(`Rejeitar o cadastro de ${u.nome}?`, {
+    titulo: 'Rejeitar cadastro', perigo: true, okTexto: 'Rejeitar', cancelarTexto: 'Voltar',
+    detalhe: 'A solicitação é removida e não pode ser recuperada. A pessoa precisará se cadastrar de novo.',
+  })) return
   try {
     const r = await fetch(`${API_URL}/usuarios/${id}/rejeitar`, { method:'PATCH' })
     const j = await r.json()
@@ -7380,7 +7424,13 @@ async function ciConfirmarDevolucao() {
 
 // Chamado pelo botão "Enviar ao Controle Interno" no modal abrirTR
 async function enviarAoCI(codigoPc, jaBaixada) {
-  if(!confirm('Enviar esta PC ao Controle Interno?\n\nO encaminhamento registra a baixa da PC.')) return
+  if(!await moConfirm('Enviar esta PC ao Controle Interno?', {
+    titulo: 'Enviar ao Controle Interno',
+    // Vale dizer que registra a baixa: é o que faz a PC contar na produtividade, e quem
+    // clica sem saber disso acha que só encaminhou.
+    detalhe: 'O encaminhamento registra a baixa da PC — é ela que conta na sua produtividade.',
+    okTexto: 'Enviar', cancelarTexto: 'Voltar',
+  })) return
   try {
     const corpo = { enviado_ci: true, dt_envio_ci: new Date().toISOString() }
     if(jaBaixada !== true) {
@@ -7995,7 +8045,10 @@ async function afastSalvar() {
 }
 
 async function afastExcluir(id) {
-  if(!confirm('Excluir este registro de afastamento?')) return
+  if(!await moConfirm('Excluir este registro de afastamento?', {
+    titulo: 'Excluir afastamento', perigo: true, okTexto: 'Excluir', cancelarTexto: 'Voltar',
+    detalhe: 'O período deixa de constar e volta a contar como dia útil no cálculo da meta.',
+  })) return
   try {
     const r = await fetch(`${API_URL}/afastamentos/${id}`, { method:'DELETE' })
     const j = await r.json()
@@ -8341,7 +8394,14 @@ async function cgeCarregarAnterior() {
 
 async function cgeFecharVersao() {
   if(!_cgeTexto || !_cgeTexto.id) { toast('Salve os textos antes de fechar a versão.','err'); return }
-  if(!confirm('Fechar esta versão do relatório?\n\nO conteúdo atual será arquivado como versão entregue e um novo rascunho será criado a partir dele. A versão fechada passa a aparecer em Ver versão anterior.')) return
+  // Sem vermelho: nada se perde. O conteúdo é arquivado, não apagado — e o rascunho novo
+  // nasce a partir dele. Marcar de vermelho faria parecer destrutivo o que é rotina.
+  if(!await moConfirm('Fechar esta versão do relatório?', {
+    titulo: 'Fechar versão',
+    detalhe: 'O conteúdo atual é arquivado como versão entregue e um rascunho novo nasce a partir dele. '
+           + 'A versão fechada passa a aparecer em "Ver versão anterior".',
+    okTexto: 'Fechar versão', cancelarTexto: 'Voltar',
+  })) return
   try {
     cgeSalvarSecaoAtual()
     const sid = document.getElementById('cgeSetorial')?.value || 'FCEE'
