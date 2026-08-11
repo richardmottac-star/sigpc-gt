@@ -2476,9 +2476,18 @@ function limiteAviso(lim, tr) {
 }
 
 async function limitePedir(tr) {
-  const just = prompt(`Solicitar autorização para assumir a TR ${tr}.\n\nJustifique — quem aprova vai ler isto:`)
+  // Primeira troca de prompt() por modal do sistema. O `obrigatorio` faz a conferência
+  // ANTES de fechar: no prompt() a justificativa vazia só era recusada depois, com um toast,
+  // e quem tivesse escrito e apagado perdia a viagem.
+  const just = await moPrompt('Justifique — quem aprova vai ler isto:', {
+    titulo: 'Solicitar mais uma TR',
+    detalhe: `TR ${tr}. O pedido reserva a TR para você até a decisão, e expira em 3 dias sem resposta.`,
+    linhas: 4,
+    obrigatorio: true,
+    exemplo: 'Ex.: já terminei a análise de 3 TRs, só falta o parecer.',
+    okTexto: 'Enviar pedido',
+  })
   if(just === null) return
-  if(!just.trim()) { toast('A justificativa é obrigatória.','err'); return }
   try {
     const r = await fetch(`${API_URL}/solicitacao_vaga`, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -2714,6 +2723,153 @@ async function cfgRemoverExcecao(analistaId) {
 //  APROVAÇÕES DE VAGA EXTRA
 // ══════════════════════════════════════
 let _aprovPend = []
+
+// ══════════════════════════════════════
+//  MODAIS DO SISTEMA — no lugar de prompt() e confirm()
+// ══════════════════════════════════════
+// `prompt()` e `confirm()` do navegador são SÍNCRONOS; estes são Promise. Por isso todo lugar
+// que trocar precisa de `await` — e o `node --check` reprova se faltar o `async`.
+//
+// Reaproveitam as classes que já existem (.mo, .mc, .mch, .mccn, .mcok): o objetivo é a
+// pessoa não perceber diferença entre este e os modais que o sistema já tinha.
+//
+// O QUE ESTES FAZEM E OS DO NAVEGADOR NÃO:
+//   · validam ANTES de fechar — hoje o motivo do estorno é recusado depois, e o texto some;
+//   · aceitam texto de mais de uma linha (justificativa, anotação, recado);
+//   · não congelam a aba — o `prompt()` para até o relógio de 60s do sino.
+
+let _moSeq = 0
+
+// A regra que decide se dá para confirmar. Vive fora do modal, e é declaração de função, por
+// dois motivos: é o comportamento que muda em relação ao prompt() (validar ANTES de fechar,
+// em vez de recusar depois e perder o texto), e sem DOM ela pode ser testada.
+function moValido(texto, o) {
+  const v = String(texto == null ? '' : texto).trim()
+  if(o && o.min) return v.length >= o.min
+  if(o && o.obrigatorio) return v.length > 0
+  return true
+}
+
+// O rodapé do campo. Com mínimo mostra o quanto falta — o número é o que evita a pessoa
+// escrever no escuro e descobrir só no clique.
+function moNota(texto, o) {
+  const v = String(texto == null ? '' : texto).trim()
+  if(o && o.min) return v.length >= o.min ? `${v.length} caracteres` : `${v.length} de ${o.min} caracteres`
+  if(v.length) return `${v.length} caracteres`
+  return (o && o.obrigatorio) ? 'obrigatório' : ''
+}
+
+/**
+ * Base dos dois. Resolve com `null` no cancelamento e com o texto (ou `true`) no OK.
+ *
+ * @param o.tipo      'confirm' | 'prompt'
+ * @param o.titulo    cabeçalho
+ * @param o.pergunta  a pergunta, em destaque
+ * @param o.detalhe   a consequência, menor e em cinza — separada da pergunta de propósito:
+ *                    no confirm() do navegador as duas vão no mesmo texto, com o mesmo peso
+ * @param o.perigo    cabeçalho e botão vermelhos — só para o que não dá para desfazer
+ * @param o.okTexto   rótulo do botão de confirmar
+ * @param o.valor     valor inicial do campo
+ * @param o.linhas    >1 vira textarea
+ * @param o.min       mínimo de caracteres; o botão fica desabilitado até chegar lá
+ * @param o.obrigatorio
+ */
+function moDialogo(o) {
+  return new Promise(resolve => {
+    const id = 'moDlg' + (++_moSeq)
+    const ehPrompt = o.tipo === 'prompt'
+    const multi = (o.linhas || 1) > 1
+    const el = document.createElement('div')
+    el.className = 'mo open'
+    el.id = id
+    el.innerHTML = `
+      <div class="mc" role="dialog" aria-modal="true">
+        <div class="mch ${o.perigo ? 'rv' : 'v'}">
+          <h3>${o.perigo ? '⚠ ' : ''}${escHtml(o.titulo || 'Confirmar')}</h3>
+          <button class="mcx" data-mo="cancelar" aria-label="Fechar">✕</button>
+        </div>
+        <div class="mcb">
+          ${o.pergunta ? `<div style="font-size:13px;color:var(--te);line-height:1.5;">${escHtml(o.pergunta)}</div>` : ''}
+          ${o.detalhe ? `<div style="font-size:11.5px;color:var(--ct);line-height:1.5;margin-top:7px;">${escHtml(o.detalhe)}</div>` : ''}
+          ${ehPrompt ? `<div class="mc-campo" style="margin-top:12px;margin-bottom:5px;">
+            ${multi
+              ? `<textarea id="${id}C" rows="${o.linhas}" placeholder="${escHtml(o.exemplo||'')}">${escHtml(o.valor||'')}</textarea>`
+              : `<input id="${id}C" type="text" value="${escHtml(o.valor||'')}" placeholder="${escHtml(o.exemplo||'')}">`}
+          </div>
+          <div id="${id}N" style="font-size:10.5px;color:var(--ct);min-height:14px;"></div>` : ''}
+          <div class="mcbt">
+            <button class="mccn" data-mo="cancelar">${escHtml(o.cancelarTexto || 'Cancelar')}</button>
+            <button class="mcok ${o.perigo ? 'rv' : ''}" id="${id}OK" data-mo="ok">${escHtml(o.okTexto || 'Confirmar')}</button>
+          </div>
+        </div>
+      </div>`
+    document.body.appendChild(el)
+
+    const campo = document.getElementById(id + 'C')
+    const btnOk = document.getElementById(id + 'OK')
+    const nota  = document.getElementById(id + 'N')
+
+    // Resolve UMA vez só. Sem esta trava, Esc durante a animação de fechar resolveria de
+    // novo — e quem espera a Promise agiria duas vezes.
+    let pronto = false
+    const fechar = (valor) => {
+      if(pronto) return
+      pronto = true
+      document.removeEventListener('keydown', tecla)
+      el.remove()
+      resolve(valor)
+    }
+
+    const validar = () => {
+      if(!ehPrompt) return true
+      const vale = moValido(campo.value, o)
+      if(nota) {
+        nota.textContent = moNota(campo.value, o)
+        nota.style.color = vale ? 'var(--ct)' : 'var(--r)'
+      }
+      // Desabilitar em vez de recusar depois: é isto que impede a pessoa de escrever, clicar
+      // e perder o texto — que é o que o prompt() faz hoje em 4 dos 7 usos.
+      btnOk.disabled = !vale
+      btnOk.style.opacity = vale ? '' : '.45'
+      btnOk.style.cursor  = vale ? '' : 'not-allowed'
+      return vale
+    }
+
+    const confirmar = () => {
+      if(!validar()) return
+      fechar(ehPrompt ? (campo.value || '').trim() : true)
+    }
+
+    el.addEventListener('click', (e) => {
+      const acao = e.target.getAttribute && e.target.getAttribute('data-mo')
+      if(acao === 'ok') return confirmar()
+      if(acao === 'cancelar') return fechar(null)
+      if(e.target === el) return fechar(null)   // clique fora
+    })
+
+    const tecla = (e) => {
+      if(e.key === 'Escape') { e.preventDefault(); fechar(null) }
+      // Enter confirma — menos no texto longo, onde quebrar linha é o que se espera.
+      else if(e.key === 'Enter' && !(multi && e.target === campo)) { e.preventDefault(); confirmar() }
+    }
+    document.addEventListener('keydown', tecla)
+
+    if(campo) { campo.addEventListener('input', validar); validar() }
+    // Foco no campo já com o cursor pronto. Sem isto a troca seria PIOR que o prompt(), que
+    // hoje abre pronto para digitar. `select()` deixa substituir o valor sugerido de uma vez.
+    setTimeout(() => { if(campo) { campo.focus(); if(o.valor) campo.select() } else btnOk.focus() }, 30)
+  })
+}
+
+/** Substitui `confirm()`. Devolve true/false. */
+async function moConfirm(pergunta, o) {
+  return (await moDialogo({ ...(o||{}), tipo:'confirm', pergunta })) === true
+}
+
+/** Substitui `prompt()`. Devolve o texto, ou null se cancelou — igual ao original. */
+async function moPrompt(pergunta, o) {
+  return await moDialogo({ ...(o||{}), tipo:'prompt', pergunta })
+}
 
 // ══════════════════════════════════════
 //  SINO DE NOTIFICAÇÕES
