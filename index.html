@@ -775,6 +775,35 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ══════════ TROCA OBRIGATÓRIA DE SENHA ══════════
+     Aparece entre o login e o painel quando `senha_provisoria` é true. Não é modal: modal
+     tem como fechar, e esta tela não pode ter. Ver `trocaSenhaAbrir` no script. -->
+<div class="screen" id="sTroca">
+  <div class="login-box">
+    <div class="login-logo" style="padding-top:8px;">
+      <h1>Troque sua senha</h1>
+      <p>Olá, <strong id="trocaNome">—</strong>.<br>
+         Sua senha atual é provisória e é compartilhada com outras pessoas.<br>
+         Escolha uma senha só sua para entrar no sistema.</p>
+    </div>
+    <div class="errmsg" id="trocaErr">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+      <span id="trocaErrTxt"></span>
+    </div>
+    <div class="campo">
+      <label>Senha nova *</label>
+      <input type="password" id="trocaNova" placeholder="Ao menos 6 caracteres" onkeydown="if(event.key==='Enter')document.getElementById('trocaNova2').focus()">
+    </div>
+    <div class="campo">
+      <label>Repita a senha nova *</label>
+      <input type="password" id="trocaNova2" placeholder="A mesma senha, de novo" onkeydown="if(event.key==='Enter')trocaSenhaConfirmar()">
+    </div>
+    <button class="btn-e" id="trocaBtn" onclick="trocaSenhaConfirmar()">Trocar senha e entrar</button>
+    <hr class="hrD">
+    <button class="btn-e" style="background:#fff;color:var(--ct);border:1.5px solid var(--cb);margin-top:0;" onclick="trocaSenhaSair()">Voltar ao login</button>
+  </div>
+</div>
+
 <!-- ══════════ PAINEL ══════════ -->
 <div class="screen" id="sPainel" style="flex-direction:column;min-height:100vh;">
   <div class="top">
@@ -1345,6 +1374,21 @@ function toggleSenha() {
 // ══════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════
+// ⚠️ A SENHA NÃO É MAIS CONFERIDA AQUI — E NÃO PODE VOLTAR A SER.
+//
+// Até 11/08/2026 esta função pedia `GET /usuarios?cpf=X`, recebia a linha inteira COM A
+// SENHA e comparava em JavaScript. Consequência medida em produção, na véspera da abertura
+// aos 47 analistas:
+//
+//     GET /usuarios  →  HTTP 200 · 50 usuários · 49 senhas · sem nenhuma credencial
+//     49 das 50 senhas em TEXTO PURO · 44 pessoas com a MESMA senha
+//
+// Qualquer pessoa com o endereço da API — que está escrito neste arquivo, que é público —
+// lia a senha do superadmin numa linha de comando.
+//
+// Agora quem confere é `POST /usuarios/login`, e `senha_hash` não sai mais do servidor.
+// A regra de quem pode entrar (inativo, aguardando aprovação, setorial, modo ADMIN) mora em
+// `sigpc-api/lib/auth.js`, com teste. Aqui não se decide mais nada sobre acesso.
 async function login() {
   const sec = document.getElementById('lSec').value
   const cpf = document.getElementById('lCPF').value.trim()
@@ -1354,35 +1398,19 @@ async function login() {
 
   if(!sec||!cpf||!sen) { mostrarErro('Preencha todos os campos.'); return }
 
+  const bt = document.querySelector('#sLogin .btn-e')
+  if(bt) { bt.disabled = true; bt.textContent = 'Entrando...' }
   try {
-    const { data, error } = await db.from('usuarios')
-      .select('*').eq('cpf', cpf).limit(1)
-    if(error) throw error
-    if(!data||!data.length) { mostrarErro('CPF não encontrado.'); return }
+    const r = await fetch(`${API_URL}/usuarios/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cpf, senha: sen, setorial: sec })
+    })
+    const j = await r.json()
+    // A mensagem vem pronta do servidor: ele sabe se foi senha, aprovação ou setorial, e é
+    // ele quem decide o quanto contar.
+    if(j.error) { mostrarErro(j.error.message || 'Não foi possível entrar.'); return }
 
-    const u = data[0]
-
-    if(u.aguardando_aprovacao) { mostrarErro('Seu cadastro está aguardando aprovação. Aguarde o contato do seu coordenador.'); return }
-    if(!u.ativo) { mostrarErro('Usuário inativo. Entre em contato com o administrador.'); return }
-
-    // Verificar senha — suporta senha simples ou dupla (admin|analista)
-    const partes = (u.senha_hash||'').split('|')
-    const senhaAdmin = partes[0]
-    const senhaAnalista = partes[1] || partes[0]
-
-    if(u.perfil === 'superadmin') {
-      if(sec === 'ADMIN') {
-        if(sen !== senhaAdmin) { mostrarErro('Senha de administrador incorreta.'); return }
-      } else {
-        // entrando como analista de uma setorial
-        if(sen !== senhaAnalista && sen !== senhaAdmin) { mostrarErro('Senha incorreta.'); return }
-      }
-    } else {
-      // analista normal — aceita qualquer parte da senha
-      if(sen !== senhaAdmin && sen !== senhaAnalista) { mostrarErro('Senha incorreta.'); return }
-      if(u.setorial_id !== sec) { mostrarErro('Você não tem acesso a esta setorial.'); return }
-    }
-
+    const u = j.data
     U = {
       ...u,
       setorialAcesso: sec,
@@ -1390,10 +1418,85 @@ async function login() {
       setorialFiltro: sec === 'ADMIN' ? null : sec,
       modoAnalista: sec !== 'ADMIN'
     }
+
+    // Senha provisória: não entra no sistema antes de trocar. A tela de troca vem no lugar
+    // do painel, e não depois dele — ver `trocaSenhaAbrir`.
+    if(u.senha_provisoria) { trocaSenhaAbrir(sen); return }
+
     iniciarApp()
   } catch(e) {
-    mostrarErro('Erro: ' + e.message)
+    mostrarErro('Erro de conexão: ' + e.message)
+  } finally {
+    if(bt) { bt.disabled = false; bt.textContent = 'Entrar no Sistema' }
   }
+}
+
+// ══════════════════════════════════════
+//  TROCA OBRIGATÓRIA DE SENHA
+// ══════════════════════════════════════
+// ⚠️ POR QUE ISTO EXISTE: em 11/08/2026, 44 dos 50 usuários compartilhavam UMA senha, e os
+// CPFs circulam internamente. Sem a troca, qualquer analista entrava como qualquer colega
+// só digitando o CPF do outro — sem precisar de nenhuma falha técnica. E `registrado_por`
+// deixaria de provar autoria de baixa nenhuma.
+//
+// A troca acontece ANTES de `iniciarApp()`: com o painel aberto a pessoa fecharia o aviso e
+// seguiria usando o sistema, e o dia da abertura passaria com as 44 senhas iguais.
+let _trocaSenhaAtual = null
+
+function trocaSenhaAbrir(senhaAtual) {
+  _trocaSenhaAtual = senhaAtual
+  document.getElementById('sLogin').classList.remove('ativa')
+  document.getElementById('sTroca').classList.add('ativa')
+  document.getElementById('trocaNome').textContent = U.nome
+  document.getElementById('trocaNova').value = ''
+  document.getElementById('trocaNova2').value = ''
+  document.getElementById('trocaErr').classList.remove('vis')
+  document.getElementById('trocaNova').focus()
+}
+
+async function trocaSenhaConfirmar() {
+  const nova = document.getElementById('trocaNova').value
+  const nova2 = document.getElementById('trocaNova2').value
+  const err = (m) => {
+    document.getElementById('trocaErrTxt').textContent = m
+    document.getElementById('trocaErr').classList.add('vis')
+  }
+  document.getElementById('trocaErr').classList.remove('vis')
+
+  // As duas conferências que dão para fazer sem ir ao servidor. O resto — tamanho, senha
+  // óbvia, igual à atual — é o servidor que decide, e é ele que manda a frase.
+  if(!nova) { err('Digite a senha nova.'); return }
+  if(nova !== nova2) { err('As duas senhas não são iguais.'); return }
+
+  const bt = document.getElementById('trocaBtn')
+  bt.disabled = true; bt.textContent = 'Salvando...'
+  try {
+    const r = await fetch(`${API_URL}/usuarios/trocar_senha`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: U.id, senha_atual: _trocaSenhaAtual, senha_nova: nova })
+    })
+    const j = await r.json()
+    if(j.error) { err(j.error.message || 'Não foi possível trocar a senha.'); return }
+
+    _trocaSenhaAtual = null
+    U = { ...U, ...j.data, senha_provisoria: false,
+          setorialAcesso: U.setorialAcesso, setorialFiltro: U.setorialFiltro, modoAnalista: U.modoAnalista }
+    document.getElementById('sTroca').classList.remove('ativa')
+    iniciarApp()
+    toast('Senha trocada. Bem-vindo ao SIGPC-GT!','ok')
+  } catch(e) {
+    err('Erro de conexão: ' + e.message)
+  } finally {
+    bt.disabled = false; bt.textContent = 'Trocar senha e entrar'
+  }
+}
+
+function trocaSenhaSair() {
+  _trocaSenhaAtual = null
+  U = null
+  document.getElementById('sTroca').classList.remove('ativa')
+  document.getElementById('sLogin').classList.add('ativa')
+  document.getElementById('lSen').value = ''
 }
 
 function mostrarErro(msg) {
@@ -7518,7 +7621,9 @@ async function admRedefinirSenha() {
     }).eq('id', _admSenhaId)
     if(error) throw error
     fm('moAdmSenha')
-    toast('Senha redefinida com sucesso!','ok')
+    // A API marca como provisória toda senha definida por outra pessoa — quem escolheu não
+    // foi o dono. Dizer isso aqui evita a pergunta "por que ele caiu na tela de troca?".
+    toast('Senha redefinida. Ela é provisória: a pessoa vai trocá-la no próximo acesso.','ok')
     await adminCarregar()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
@@ -7970,6 +8075,17 @@ function irMeuPerfil() {
 
     <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:20px;">
       <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Segurança</div>
+      <!-- A senha atual passou a ser exigida em 11/08/2026: sem ela, bastava conhecer o id
+           de alguem para trocar a senha dessa pessoa por uma rota publica. -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px;margin-bottom:10px;">
+        <div class="mc-campo"><label>Senha Atual *</label>
+          <div class="swrap"><input type="password" id="perfilSenhaAtual" placeholder="Sua senha de hoje" autocomplete="off">
+            <button class="olho" type="button" onclick="toggleSenhaCampo(this)" title="Mostrar/ocultar senha">
+              <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px;">
         <div class="mc-campo"><label>Nova Senha *</label>
           <div class="swrap"><input type="password" id="perfilSenha" placeholder="Nova senha" autocomplete="off">
@@ -8046,18 +8162,31 @@ async function perfilSalvarDados() {
   finally { btn.disabled = false; btn.textContent = '✓ Salvar' }
 }
 
+// Passa por `POST /usuarios/trocar_senha`, e não pelo PATCH genérico: o PATCH é o caminho do
+// ADMIN redefindo a senha de outra pessoa, e por isso marca a senha como provisória. Aqui é
+// o dono trocando a própria — provou a atual, então a nova é definitiva.
 async function perfilRedefinirSenha() {
+  const atual = document.getElementById('perfilSenhaAtual').value
   const sen = document.getElementById('perfilSenha').value
   const sen2 = document.getElementById('perfilSenha2').value
-  if(sen.length < 6) { toast('Senha deve ter no mínimo 6 caracteres.','err'); return }
+  if(!atual) { toast('Digite sua senha atual.','err'); return }
   if(sen !== sen2) { toast('As senhas não coincidem.','err'); return }
   const btn = document.getElementById('perfilSenhaBtn')
   btn.disabled = true; btn.textContent = 'Salvando...'
   try {
-    const { error } = await db.from('usuarios').update({ senha_hash: sen }).eq('id', U.id)
-    if(error) throw error
+    const r = await fetch(`${API_URL}/usuarios/trocar_senha`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: U.id, senha_atual: atual, senha_nova: sen })
+    })
+    const j = await r.json()
+    // A frase de recusa vem do servidor — tamanho, senha óbvia e "igual à atual" são regra
+    // dele, e duplicá-las aqui criaria duas versões da mesma regra.
+    if(j.error) { toast(j.error.message || 'Não foi possível trocar a senha.','err'); return }
+    document.getElementById('perfilSenhaAtual').value = ''
     document.getElementById('perfilSenha').value = ''
     document.getElementById('perfilSenha2').value = ''
+    U.senha_provisoria = false
+    salvarSessao()
     toast('Senha redefinida com sucesso!','ok')
   } catch(e) { toast('Erro: '+e.message,'err') }
   finally { btn.disabled = false; btn.textContent = '🔑 Redefinir senha' }

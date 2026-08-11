@@ -128,6 +128,17 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
 7. **Chave de agrupamento é `codigo_pc`**, nunca `processo_sgp` — 2.704 processos
    têm mais de uma PC.
 
+8. **A senha não se confere mais neste arquivo — e não pode voltar a se conferir.**
+   Até 11/08/2026 o `login()` pedia a linha do usuário COM A SENHA e comparava em
+   JavaScript. Consequência medida em produção: `GET /usuarios` devolvia as 49 senhas em
+   texto puro a quem soubesse o endereço da API, que está escrito neste arquivo público.
+   Agora quem confere é `POST /usuarios/login` e `senha_hash` não sai do servidor.
+   A regra de acesso mora em `sigpc-api/lib/auth.js`, com teste.
+
+9. **Crase dentro de template literal quebra o arquivo.** Boa parte da marcação do
+   `index.html` é gerada por JS dentro de `` `...` ``. Um comentário com crase no meio
+   fecha a string. Aconteceu em 11/08, no bloco do Meu Perfil.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
