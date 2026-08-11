@@ -1,5 +1,74 @@
-# SIGPC-GT — ESTADO EM 10/08/2026
-Cole no início do chat novo. Os estados de 08/08, 06/08 e 04/08 estão preservados mais abaixo.
+# SIGPC-GT — ESTADO EM 11/08/2026
+Cole no início do chat novo. Os estados de 10/08, 08/08, 06/08 e 04/08 estão preservados mais
+abaixo.
+
+---
+
+## ⚠️ NÃO EXISTE MAIS `prompt()` NEM `confirm()` NESTE ARQUIVO
+
+Os 20 viraram **17 chamadas** de `moConfirm` / `moPrompt` / `moFormRecado`. **Não reintroduzir
+diálogo do navegador** — os três motivos, na ordem em que doem:
+
+1. **O `prompt()` valida DEPOIS de fechar e o texto some.** No estorno, 14 caracteres eram
+   recusados por um toast e a pessoa reescrevia tudo. Agora o botão fica cinza com contador.
+2. **É de uma linha.** Justificativa, anotação e recado são texto de parágrafo.
+3. **Congela a aba inteira**, inclusive o relógio de 60 s do sino.
+
+**O defeito que a troca corrigiu:** o envio de recado usava
+`confirm('Enviar para TODOS?\n\nOK = todos · Cancelar = só o meu grupo')`. `confirm()` só tem
+OK e Cancelar, então **quem clicava em Cancelar querendo desistir mandava para o grupo** — não
+havia como sair sem enviar. Virou formulário com radio.
+
+`moValido` e `moNota` ficam FORA do motor, como declarações: é a regra que muda de
+comportamento, e sem DOM ela é testável (`teste_front_modal.js`).
+
+---
+
+## CONCLUÍDO EM 11/08
+
+### Sino de notificações
+Contador **só aparece quando há não lidas** — badge permanente vira cenário e para de ser
+lido. A lista mostra **só as não lidas**; ao marcar, a notificação **sai da vista na hora**.
+Um clique **marca como lida e navega** — separar em dois deixaria o sino cheio de resolvido.
+Marcação **otimista**: o contador cai no clique, o servidor é avisado depois; a carga de 60 s
+corrige se a rede falhar.
+**"Ver todas" aparece sempre**, inclusive com o sino vazio — é justamente aí que a pessoa vai
+procurar o que sumiu. Lá as lidas mostram **a data em que serão apagadas** (15 dias após a
+leitura), em data absoluta: sem ela, a exclusão vira surpresa.
+Erro de rede **não apaga o que está na tela nem mostra zero falso**.
+
+### Reserva de TR no Estoque
+Tag âmbar na segunda linha da célula da TR (nenhuma coluna mexida), Assumir cinza com o motivo
+no `title`. A tag aparece **para todos**, inclusive para quem pediu (que vê "você"); só o
+botão não fica cinza para ele nem para o superadmin.
+⚠️ Se a busca de reservas falhar, o Estoque carrega igual, **só sem as tags** — deliberado:
+quem barra é o PATCH no servidor, então a tela não trava por precaução.
+Perder a corrida pela TR **não sai como "Erro:"** — é a regra funcionando.
+
+### Botão "Entidade respondeu"
+No bloco da diligência, **fora do modal de Situação**: registrar a resposta e mudar a situação
+são coisas diferentes, e juntá-las empurraria o analista a mudar o status antes da hora.
+Depois de registrado vira `✉ Entidade respondeu em dd/mm`, senão ele não sabe se já clicou.
+
+---
+
+## PADRÃO: BUSCA LEVE EM PARALELO, NUNCA DENTRO DA CONSULTA PESADA
+
+Reservas de TR e respostas de diligência vêm de rotas próprias, em `Promise.all` com a
+consulta principal. Se falharem, a tela carrega igual — só sem o adorno.
+
+⚠️ `teste_front_links` conta as telas que absorvem `j.links` e **enxerga as duas formas** de
+chamar `fetchListaCompleta` (direta e dentro de `Promise.all`). Em 11/08 ele acusou 11 de 12
+porque só via a primeira — o mecanismo estava intacto, era a âncora do teste.
+
+---
+
+## SUÍTES
+
+`teste_front_busca` 110 · `painel` 94 · `prazo` 70 · `ordem` 32 · `links` 26 · `pedidos` 26 ·
+**`modal` 20**. Extraem funções do `index.html` via `vm` — **nunca copiar código**, uma cópia
+diverge em silêncio. Só declarações de função viram propriedades do contexto do `vm`;
+`const` de seta, não.
 
 ---
 
