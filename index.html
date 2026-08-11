@@ -3010,25 +3010,122 @@ async function sinoMarcarTodas() {
 }
 
 // ── Recado (coordenador e superadmin) ───────────────────────────────────────
+// ⚠️ ERA UM DEFEITO, NÃO SÓ FEIURA.
+// Isto aqui era três diálogos em fila — título, mensagem e um confirm() assim:
+//     'Enviar para TODOS?\n\nOK = todos · Cancelar = só o meu grupo'
+// `confirm()` só tem OK e Cancelar, então duas escolhas POSITIVAS foram espremidas nele: quem
+// clicasse em Cancelar querendo desistir mandava o recado para o grupo. Não havia como sair
+// sem enviar. Agora é um formulário só, e Cancelar cancela.
 async function sinoRecado() {
   if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
-  const titulo = prompt('Título do recado:')
-  if(titulo === null) return
-  if(!titulo.trim()) { toast('O título é obrigatório.','err'); return }
-  const msg = prompt('Mensagem:') || ''
-
   const soGrupo = U.perfil === 'coordenador'
-  const alvo = soGrupo ? 'grupo'
-    : (confirm('Enviar para TODOS os analistas?\n\nOK = todos · Cancelar = só o meu grupo') ? 'todos' : 'grupo')
+  const dados = await moFormRecado(soGrupo)
+  if(!dados) return
+  const { titulo, mensagem: msg, alvo, urgente } = dados
 
   try {
     const r = await fetch(`${API_URL}/notificacao`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ autor_id: U.id, alvo, grupo: U.grupo, titulo: titulo.trim(), mensagem: msg.trim() }) })
+      body: JSON.stringify({ autor_id: U.id, alvo, grupo: U.grupo, urgente,
+                             titulo: titulo.trim(), mensagem: msg.trim() }) })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
     toast(`Recado enviado para ${j.data.destinatarios} pessoa(s).`,'ok')
   } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+/**
+ * Formulário do recado. Resolve com {titulo, mensagem, alvo, urgente} ou null.
+ *
+ * Modal próprio, e não `moPrompt`: são quatro campos, e um deles é a escolha de destinatário
+ * — que é justamente o que estava quebrado quando cabia num confirm().
+ */
+function moFormRecado(soGrupo) {
+  return new Promise(resolve => {
+    const id = 'moRec' + (++_moSeq)
+    const el = document.createElement('div')
+    el.className = 'mo open'
+    el.innerHTML = `
+      <div class="mc">
+        <div class="mch v"><h3>📢 Novo recado</h3><button class="mcx" data-r="x">✕</button></div>
+        <div class="mcb">
+          <div class="mc-campo">
+            <label>Para</label>
+            <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--te);margin-bottom:5px;">
+              <input type="radio" name="${id}A" value="grupo" checked style="width:auto;"> meu grupo
+            </label>
+            ${soGrupo ? '' : `<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--te);">
+              <input type="radio" name="${id}A" value="todos" style="width:auto;"> todos os analistas
+            </label>`}
+          </div>
+          <div class="mc-campo">
+            <label>Título</label>
+            <input id="${id}T" type="text" placeholder="Ex.: Reunião de quinta">
+          </div>
+          <div class="mc-campo">
+            <label>Mensagem</label>
+            <textarea id="${id}M" rows="4" placeholder="Opcional."></textarea>
+          </div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ct);">
+            <input type="checkbox" id="${id}U" style="width:auto;"> marcar como urgente
+          </label>
+          <div class="mcbt">
+            <button class="mccn" data-r="x">Cancelar</button>
+            <button class="mcok" id="${id}OK" data-r="ok">Enviar</button>
+          </div>
+        </div>
+      </div>`
+    document.body.appendChild(el)
+
+    const cT = document.getElementById(id+'T')
+    const cM = document.getElementById(id+'M')
+    const cU = document.getElementById(id+'U')
+    const ok = document.getElementById(id+'OK')
+
+    let pronto = false
+    const fechar = (v) => {
+      if(pronto) return
+      pronto = true
+      document.removeEventListener('keydown', tecla)
+      el.remove(); resolve(v)
+    }
+
+    // O título manda: sem ele a notificação chega sem nada legível no sino.
+    const validar = () => {
+      const vale = moValido(cT.value, { obrigatorio: true })
+      ok.disabled = !vale
+      ok.style.opacity = vale ? '' : '.45'
+      ok.style.cursor  = vale ? '' : 'not-allowed'
+      return vale
+    }
+
+    const enviar = async () => {
+      if(!validar()) return
+      const alvo = (el.querySelector(`input[name="${id}A"]:checked`) || {}).value || 'grupo'
+      // Recado para 46 pessoas não sai de um clique torto — e agora dá para desistir de
+      // verdade, o que antes era impossível.
+      if(alvo === 'todos' && !await moConfirm('Enviar este recado para TODOS os analistas?', {
+        titulo: 'Confirmar envio', detalhe: 'São 46 pessoas. Cada uma recebe uma notificação.',
+        okTexto: 'Enviar para todos',
+      })) return
+      fechar({ titulo: cT.value.trim(), mensagem: cM.value.trim(), alvo, urgente: cU.checked })
+    }
+
+    el.addEventListener('click', (e) => {
+      const a = e.target.getAttribute && e.target.getAttribute('data-r')
+      if(a === 'ok') return enviar()
+      if(a === 'x') return fechar(null)
+      if(e.target === el) return fechar(null)
+    })
+    const tecla = (e) => {
+      // Enter só confirma fora da mensagem, onde quebrar linha é o esperado.
+      if(e.key === 'Escape') { e.preventDefault(); fechar(null) }
+      else if(e.key === 'Enter' && e.target !== cM) { e.preventDefault(); enviar() }
+    }
+    document.addEventListener('keydown', tecla)
+    cT.addEventListener('input', validar); validar()
+    setTimeout(() => cT.focus(), 30)
+  })
 }
 
 // ══════════════════════════════════════
@@ -3255,9 +3352,14 @@ function aprovRender() {
 async function aprovDecidir(id, status) {
   let motivo = null
   if(status === 'negada') {
-    motivo = prompt('Motivo da negativa (obrigatório):')
+    // O motivo vai direto para o analista, na notificação — daí o texto dizer isso. Quem
+    // escreve "não" achando que ninguém lê acaba mandando "não" para a pessoa.
+    motivo = await moPrompt('Por que o pedido está sendo negado?', {
+      titulo: 'Negar pedido de vaga',
+      detalhe: 'O analista recebe este motivo na notificação. Escreva o que ele precisa fazer para conseguir a vaga.',
+      linhas: 3, obrigatorio: true, okTexto: 'Negar pedido', perigo: true,
+    })
     if(motivo === null) return
-    if(!motivo.trim()) { toast('O motivo é obrigatório para negar.','err'); return }
   }
   try {
     const r = await fetch(`${API_URL}/solicitacao_vaga/${id}`, {
@@ -5827,7 +5929,11 @@ async function planDefinirInicio(tr, ev) {
       .map(p => p.dt_inicio_analise).filter(Boolean).sort()[0] || null) : null
   const atualBr = atualIso ? planData(atualIso) : ''
 
-  const resp = prompt(`Início da análise da TR ${tr}\n\nDigite no formato dd/mm/aaaa.\nDeixe em branco para limpar.`, atualBr)
+  const resp = await moPrompt('Digite no formato dd/mm/aaaa.', {
+    titulo: 'Início da análise',
+    detalhe: `TR ${tr}. Deixe em branco para limpar a data.`,
+    valor: atualBr, exemplo: 'dd/mm/aaaa', okTexto: 'Salvar',
+  })
   if(resp === null) return
 
   let iso = null
@@ -5923,9 +6029,16 @@ const planDataHora = (d) => d
 // quem escreveu o quê e quando, e sobrescrever apagaria isso.
 async function planNovaAnotacao(tr) {
   const atual = (_planAnots[tr]||[])[0]
-  const texto = prompt(`Anotação da TR ${tr}:`, atual ? atual.texto : '')
+  const texto = await moPrompt('Anotação:', {
+    titulo: `Anotação da TR ${tr}`,
+    // A anotação nunca sobrescreve a anterior — o histórico é o registro de quem escreveu o
+    // quê. O texto atual vem preenchido para editar, mas o que sai é uma anotação NOVA, e
+    // isso precisa estar dito, senão parece edição.
+    detalhe: atual ? 'O texto atual vem preenchido. Ao salvar, entra como anotação nova — a anterior fica no histórico.' : null,
+    valor: atual ? atual.texto : '',
+    linhas: 4, obrigatorio: true, okTexto: 'Salvar anotação',
+  })
   if(texto === null) return
-  if(!texto.trim()) { toast('Anotação vazia — nada gravado.','err'); return }
   try {
     const r = await fetch(`${API_URL}/anotacoes_tr`, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -6246,9 +6359,14 @@ async function pEnviarCI(tr, num) {
 
 async function pEstornar(tr, num) {
   if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
-  const motivo = prompt(`Estornar a Parcial ${num} da ${tr}?\n\nMotivo (mínimo 15 caracteres):`)
+  // O caso que mais doía: 14 caracteres eram recusados DEPOIS de fechar, e o texto sumia.
+  // Agora o contador mostra o quanto falta e o botão só libera no 15.
+  const motivo = await moPrompt('Por que esta parcial está sendo estornada?', {
+    titulo: `Estornar a Parcial ${num}`,
+    detalhe: `TR ${tr}. O estorno desfaz a baixa e fica registrado no Log de Estornos com o seu nome.`,
+    linhas: 3, min: 15, okTexto: 'Estornar', perigo: true,
+  })
   if(motivo === null) return
-  if(motivo.trim().length < 15) { toast('O motivo precisa ter no mínimo 15 caracteres.','err'); return }
   try {
     const r = await fetch(`${API_URL}/parcela/estornar`, {
       method:'POST', headers:{'Content-Type':'application/json'},
