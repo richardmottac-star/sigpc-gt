@@ -4,6 +4,23 @@ abaixo.
 
 ---
 
+## ⚠️ RITMO: EM BLOCO, NÃO PASSO A PASSO (a partir de 12/08/2026)
+
+**Em 10/08 o passo a passo — mockup, parar, implementar uma tela, parar, reportar — consumiu
+o dia inteiro e cansou o Richard sem necessidade.** A partir de 12/08:
+
+- agrupar frentes relacionadas num **único ciclo**;
+- **parar só** quando a decisão for realmente dele: regra de negócio, prioridade, dado de
+  analista real;
+- **não parar** por detalhe de implementação, texto de mensagem ou escolha técnica — decidir,
+  seguir, reportar depois;
+- **reportar em bloco no fim**, não a cada etapa.
+
+Rodar contra o banco antes de publicar **continua valendo** — e escrita no banco continua
+exigindo autorização expressa. Muda o ritmo, não a permissão.
+
+---
+
 ## ⚠️ NÃO EXISTE MAIS `prompt()` NEM `confirm()` NESTE ARQUIVO
 
 Os 20 viraram **17 chamadas** de `moConfirm` / `moPrompt` / `moFormRecado`. **Não reintroduzir
