@@ -4,7 +4,11 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 20/07/2026
+**Última sessão:** 12/08/2026 — ver `SESSAO.md` para o estado do dia.
+
+> ⚠️ **O MODO PREPARAÇÃO ESTÁ LIGADO.** Nenhum analista trabalha enquanto estiver, e os três
+> técnicos do Controle Interno **também estão barrados** (só superadmin e coordenador são
+> isentos). Desliga-se em Configurações → Modo preparação.
 
 ---
 
@@ -74,9 +78,15 @@ Campos: `codigo_pc`, `codigo_nl`, `tipo`, `tr`, `processo_pc`, `processo_mae`,
 |---|---|---|
 | 1 | Nayara Limas Ferreira | 15 |
 | 2 | Zadir T. Machado Ferreira | 14 |
-| 3 | Gustavo (**sem cadastro em `usuarios`**) | 17 |
+| 3 | Gustavo Hallack Porto (id 56) | 17 |
 
-Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatório CGE.
+**Controle Interno** — 3 técnicos, perfil `controle_interno`, sem grupo, `meta_mensal = 0`:
+ids **62 Marcia Terezinha Miranda · 63 Atemilson Bispo dos Santos · 64 Sirene Wolf dos Santos**.
+
+⚠️ **Coordenadores E técnicos do C.I. não entram em relatório de produtividade.** Não é meta
+zero — é não aparecer. A regra é `contaProdutividade(u)` no `index.html`, usada pela
+Produtividade, pela Gestão Grupo e pelo Board. O Quadro 2 do CGE resolve por outro caminho:
+lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil novo sozinha.
 
 ---
 
@@ -183,6 +193,16 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 > Conferida contra o banco em **11/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
+
+### Telas de 12/08/2026 — no ar, não testadas em navegador
+- [ ] **Controle Interno** — três abas, fila agrupada por encaminhamento, decisão em bloco
+      com o número no botão. `ciGrupos` / `ciPainel` / `ciDecidir`.
+- [ ] **Bloco do C.I. na PC do analista** — faixa verde nos três estados, bate-papo com
+      avatar. `pCiBloco` / `pCiResponder`.
+- [ ] **Fila de aprovação** — aviso de duplicidade, "Mesclar no cadastro existente" e
+      seleção em bloco. Quem tem aviso **não tem caixa**, só é aprovado individualmente.
+- [ ] **Primeiro Acesso com CPF repetido** — tela "Você já tem cadastro" com "Voltar ao
+      login", que leva o CPF já digitado para o campo.
 
 ### Verificar (última rodada não conferida)
 - [ ] Quadro 2 do relatório CGE lista os 45 servidores (estava truncando em 5)
