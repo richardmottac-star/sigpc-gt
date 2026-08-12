@@ -73,8 +73,15 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
   // Lida do index.html em 12/08, funcao por funcao. Se alguma tela mudar de regra, este
   // teste falha e obriga a mexer nas duas.
   const GUARDA_REAL = {
-    dash:'todos', est:'todos', plan:'todos', repo:'todos', perfil:'todos', meuspedidos:'todos',
-    prod:'todos',            // irProd nao tem guarda de entrada
+    dash:'todos', perfil:'todos',
+    // ⚠️ Estas cinco ganharam guarda em 12/08 contra `controle_interno`: o tecnico do C.I.
+    // nao trabalha o acervo, e de Estoque se assume TR. Tirar do menu sem por a guarda
+    // repetiria o defeito do Relatorios.
+    est:['analista','coordenador','superadmin'],
+    plan:['analista','coordenador','superadmin'],
+    prod:['analista','coordenador','superadmin'],
+    repo:['analista','coordenador','superadmin'],
+    meuspedidos:['analista','coordenador','superadmin'],
     // irRel GANHOU guarda em 12/08: a tela e de coordenacao, e antes abria para qualquer um.
     rel:['coordenador','superadmin'],
     estornar:['analista','coordenador','superadmin'],
@@ -157,6 +164,15 @@ console.log('\n═══ 6. CONTROLE INTERNO ═══');
   // irCI aceita superadmin, coordenador e controle_interno.
   conf(idsDe(ci).includes('ci'), 'quem E do controle interno ve o item');
   conf(blocosDe(ci)[0] === 'analista', 'e no primeiro bloco — para ele e a tela de trabalho');
+  // O menu do tecnico do C.I. e curto de proposito: ele nao assume TR nem baixa PC.
+  conf(JSON.stringify(idsDe(ci)) === '["dash","perfil","ci"]',
+       'e ve SO Dashboard, Meu Perfil e Controle Interno', JSON.stringify(idsDe(ci)));
+  // E as cinco telas do acervo recusam o perfil, nao so somem do menu.
+  ['irEst','irPlanilha','irProd','irRepo','irMeusPedidos'].forEach(fn => {
+    const i = html.indexOf(`function ${fn}(`);
+    const bloco = html.slice(i, i + 700);
+    conf(/U\.perfil === 'controle_interno'/.test(bloco), `${fn} recusa o controle_interno`);
+  });
   conf(idsDe(coord).includes('ci'), 'coordenador tambem ve');
   conf(!idsDe(analista).includes('ci'), 'analista comum NAO ve');
   // Dois itens com o mesmo id, mas em blocos que nunca coexistem: o perfil e um so.
@@ -209,6 +225,26 @@ console.log('\n═══ 9. ONLINE AGORA SAIU DO MENU E FOI PARA O CABECALHO ═
        'erro de rede nao zera a lista');
   // Um relógio só, mesmo com o menu redesenhado várias vezes.
   conf(/if\(_onlineTimer\) return/.test(html), 'nao empilha um relogio a cada renderSB');
+}
+
+console.log('\n═══ 10. TODO onclick APONTA PARA FUNCAO QUE EXISTE ═══');
+{
+  // ⚠️ ESTE TESTE NASCEU DE UM ESTRAGO. Em 12/08, ao trocar a tela do Controle Interno, eu
+  // extrai um trecho do arquivo "do irCI ate a proxima secao" — e o trecho engolia
+  // `enviarAoCI` e `verProdDetalhe`, que moravam ali no fim. As duas sumiram do arquivo e
+  // continuaram sendo chamadas por `onclick` em quatro lugares. Nenhuma suite acusou:
+  // `node --check` valida sintaxe, nao referencia.
+  //
+  // O botao so quebraria nas maos de quem clicasse.
+  const chamadas = new Set([...html.matchAll(/onclick="([a-zA-Z_][a-zA-Z0-9_]*)\(/g)].map(m => m[1]));
+  const definidas = new Set([...html.matchAll(/^\s*(?:async\s+)?function ([a-zA-Z_][a-zA-Z0-9_]*)/gm)].map(m => m[1]));
+  const faltando = [...chamadas].filter(f => !definidas.has(f));
+  conf(faltando.length === 0,
+       `as ${chamadas.size} funcoes chamadas por onclick existem`, faltando.join(', '));
+
+  // As duas que sumiram, nomeadas — para o caso de o teste acima ser afrouxado um dia.
+  ['verProdDetalhe', 'enviarAoCI'].forEach(f =>
+    conf(definidas.has(f), `'${f}' esta definida`));
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

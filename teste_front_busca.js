@@ -237,10 +237,13 @@ console.log('\n═══ 4d. fetchListaCompleta — teto de limit nao trunca em 
 
 console.log('\n═══ 4e. CONTROLE INTERNO — busca nova ═══');
 {
-  const iniC = html.indexOf('function ciDadosFiltrados()');
-  const fimC = html.indexOf('function ciRender(', iniC);
+  // Em 12/08 `ciDadosFiltrados` virou `ciGrupos`: a fila passou a agrupar por encaminhamento
+  // (TR + parcela), porque `POST /parcela/ci` manda a parcela inteira e uma delas tem 7 PCs.
+  // A busca continua sendo a mesma — o que mudou e a unidade devolvida.
+  const iniC = html.indexOf('function ciGrupos()');
+  const fimC = html.indexOf('function ciDias(', iniC);
   if (iniC < 0 || fimC < 0) {
-    conf(false, 'nao achei ciDadosFiltrados no index.html');
+    conf(false, 'nao achei ciGrupos no index.html');
   } else {
     const dados = [
       { tr: '2020TR000657', processo_pc: 'SCC9692/2020', processo_mae: 'SCC2070/2020',
@@ -259,7 +262,7 @@ console.log('\n═══ 4e. CONTROLE INTERNO — busca nova ═══');
     vm.createContext(ctxC);
     vm.runInContext(html.slice(iniC, fimC), ctxC);
 
-    const filtrar = (t) => { vm.runInContext(`_ciBusca = ${JSON.stringify(t)}`, ctxC); return ctxC.ciDadosFiltrados().length; };
+    const filtrar = (t) => { vm.runInContext(`_ciBusca = ${JSON.stringify(t)}`, ctxC); return ctxC.ciGrupos().length; };
     conf(filtrar('') === 2, 'sem termo devolve tudo');
     conf(filtrar('000657') === 1, 'acha por pedaco da TR');
     conf(filtrar('9692') === 1, 'acha por SGPe da PC');

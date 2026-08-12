@@ -139,6 +139,15 @@ Coordenadores não contam produtividade e não aparecem no Quadro 2 do relatóri
    `index.html` é gerada por JS dentro de `` `...` ``. Um comentário com crase no meio
    fecha a string. Aconteceu em 11/08, no bloco do Meu Perfil.
 
+10. **NUNCA testar contra o banco real uma função que gerencia a própria transação.**
+    O `COMMIT` interno dela **confirma a transação externa**, e o `ROLLBACK` do teste não
+    desfaz nada. Em 12/08/2026 isto gravou 7 PCs e 14 mensagens em produção, num teste que
+    parecia isolado. Ou dublê de banco, ou SQL cru em `BEGIN/ROLLBACK` — nunca os dois.
+
+11. **`WHERE` de reversão SEMPRE por lista explícita de chaves**, nunca por condição
+    derivada. No mesmo dia, reverter com `ci_rodada <> 1` pegou as 14.639 PCs que tinham o
+    padrão `0`: de 7 linhas para 14.639. Capturar a lista **antes** e usar `= ANY($1)`.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
