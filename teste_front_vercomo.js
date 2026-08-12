@@ -190,7 +190,12 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
     ['pRespondeu',     'registrar a resposta'],
     ['pEnviarCI',      'encaminhar ao C.I.'],
     ['pCiResponder',   'responder ao C.I.'],
-    ['salvarAnotacao', 'salvar anotação'],
+    ['salvarAnotacao',   'salvar anotação'],
+    // ⚠️ Havia DOIS caminhos de anotacao, e eu so tinha guardado um. O da Minha Planilha
+    // (`planNovaAnotacao`, botao "+ Adicionar anotação" / "Editar") abria o modal
+    // normalmente — foi o que o Richard achou testando na tela.
+    ['planNovaAnotacao',  'escrever anotação pela Minha Planilha'],
+    ['excluirAnotacao',   'excluir anotação'],
     ['ciDecidir',      'decidir no C.I.'],
     ['assumirTR',      'assumir TR'],
   ];
@@ -209,6 +214,18 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
        'o formulario de anotacao NAO e desenhado no modo leitura');
   conf(bAnot.indexOf('Modo leitura') < bAnot.indexOf('<textarea id="anotTexto"'),
        'o aviso vem no lugar do textarea, nao ao lado dele');
+
+  // ⚠️ E o SEGUNDO caminho, o da Minha Planilha: os botoes nem sao desenhados no modo.
+  // Guardar so a funcao deixava o botao a vista, e ele abria o modal.
+  const iBloco = html.indexOf('function planAnotacaoBloco(r)');
+  const bBloco = html.slice(iBloco, iBloco + 2200);
+  conf(/\$\{verComoAtivo\(\)[\s\S]{0,120}?nenhuma anotação/.test(bBloco),
+       '"+ Adicionar anotação" vira texto no modo leitura');
+  conf(/\$\{verComoAtivo\(\) \? ''[\s\S]{0,200}?Editar<\/button>/.test(bBloco),
+       'e o "Editar" simplesmente nao aparece');
+  // As anotacoes ja escritas continuam legiveis — ler e o proposito do modo.
+  conf(/white-space:pre-wrap;">\$\{escHtml\(atual\.texto\|\|''\)\}/.test(bBloco),
+       'o texto da anotacao continua a vista');
   conf(/As anotações já[\s\S]{0,40}?gravadas aparecem abaixo/.test(html),
        'e diz que as anotacoes existentes continuam a vista');
 

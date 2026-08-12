@@ -6,9 +6,11 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
 **Última sessão:** 12/08/2026 — ver `SESSAO.md` para o estado do dia.
 
-> ⚠️ **O MODO PREPARAÇÃO ESTÁ LIGADO.** Nenhum analista trabalha enquanto estiver, e os três
-> técnicos do Controle Interno **também estão barrados** (só superadmin e coordenador são
-> isentos). Desliga-se em Configurações → Modo preparação.
+> **O sistema está ABERTO** — o modo preparação foi desligado em 12/08 e a equipe trabalha.
+> O interruptor segue em Configurações → Modo preparação.
+>
+> ⚠️ Se religar, saiba que ele **barra também os três técnicos do Controle Interno**: só
+> superadmin e coordenador são isentos.
 
 ---
 
@@ -158,6 +160,16 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     derivada. No mesmo dia, reverter com `ci_rodada <> 1` pegou as 14.639 PCs que tinham o
     padrão `0`: de 7 linhas para 14.639. Capturar a lista **antes** e usar `= ANY($1)`.
 
+12. **Botão que aceita clique e não responde é pior que botão cinza.** O Confirmar do
+    modal Assumir só era ajustado no caminho de sucesso; no erro continuava aceso, e
+    clicar não fazia nada. Todo botão de ação nasce desabilitado e é habilitado no
+    caminho que o autoriza — com o motivo no `title` quando não estiver.
+
+13. **No modo "ver como", esconder o caminho, não só travar o fim.** Guardar a função e
+    deixar o botão à vista faz o modal abrir, a pessoa preencher e só então descobrir.
+    Havia DOIS caminhos de anotação e eu só tinha guardado um — o outro abria normalmente.
+    Onze funções recusam na origem, e os botões nem são desenhados.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
@@ -194,9 +206,9 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 > Conferida contra o banco em **12/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
 >
-> **Estado em 12/08:** 54 usuários · **1 aguardando aprovação** (id 67 ALINE GREFF BUAES,
-> com aviso FORTE contra a id 7 Aline, de 413 PCs) · **6 sem CPF** e por isso sem conseguir
-> entrar (ids 5 Nayara, 7 Aline, 17 Marisa, 30 Miriam, 49 Scheila, 52 Eduardo).
+> **Estado em 12/08, ao fim do dia:** 53 usuários · **51 conseguem entrar** · fila de
+> aprovação **vazia** · **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo**
+> (este também inativo).
 
 ### Telas de 12/08/2026 — no ar, não testadas em navegador
 - [ ] **Controle Interno** — três abas, fila agrupada por encaminhamento, decisão em bloco
