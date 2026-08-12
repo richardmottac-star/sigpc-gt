@@ -1581,17 +1581,25 @@ window.fetch = function(url, opts) {
   return _fetchOriginal(url, opts)
 }
 
-/** Quem pode usar, e sobre quem. Coordenador só alcança o próprio grupo. */
+/**
+ * Quem pode usar, e sobre quem.
+ *
+ * ⚠️ SÓ O SUPERADMIN USA (decisão do Richard, 12/08). O coordenador tinha acesso no primeiro
+ * desenho e foi retirado: é ferramenta de suporte do dono do sistema.
+ *
+ * E ninguém se vê a si mesmo — seria o modo leitura sobre a própria conta, que só serve
+ * para confundir.
+ */
 function verComoPodeVer(u) {
+  if(U.perfil !== 'superadmin') return false
   if(!u || u.id === U.id) return false
-  if(!['analista','coordenador'].includes(u.perfil)) return false
-  if(U.perfil === 'superadmin') return true
-  if(U.perfil === 'coordenador') return u.perfil === 'analista' && String(u.grupo||'') === String(U.grupo||'')
-  return false
+  return ['analista','coordenador'].includes(u.perfil)
 }
 
 async function irVerComo() {
-  if(!['superadmin','coordenador'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  // ⚠️ SÓ SUPERADMIN (decisão do Richard, 12/08). Ver o sistema pelos olhos de outra pessoa
+  // é ferramenta de suporte do dono do sistema, não de coordenação.
+  if(U.perfil !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
   ativarMenu('vercomo')
   document.getElementById('BODY').innerHTML = `
     <div style="max-width:720px;">
@@ -1854,7 +1862,7 @@ const SB_ITENS = [
   // ── Bloco do analista: o que todo mundo usa ─────────────────────────────────
   { id:'dash',  bloco:'analista', rotulo:'Dashboard',      acao:'irDash()',      pode:()=>true,
     icone:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
-  { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:naoEhCI,
+  { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:naoEhCI, soAcao:true,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
   { id:'plan',  bloco:'analista', rotulo:'Minha Planilha', acao:'irPlanilha()',  pode:naoEhCI,
     icone:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z' },
@@ -1875,7 +1883,7 @@ const SB_ITENS = [
   { id:'repo',  bloco:'analista', rotulo:'Repositório',    acao:'irRepo()',      pode:naoEhCI,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
   // A tela recusa quem não for analista, coordenador ou superadmin — a mesma regra, aqui.
-  { id:'estornar', bloco:'analista', rotulo:'Estornar Baixa', acao:'irEstornar()',
+  { id:'estornar', bloco:'analista', rotulo:'Estornar Baixa', acao:'irEstornar()', soAcao:true,
     pode:(u)=>['analista','coordenador','superadmin'].includes(u.perfil),
     icone:'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z' },
   { id:'meuspedidos', bloco:'analista', rotulo:'Meus pedidos', acao:'irMeusPedidos()', pode:naoEhCI,
@@ -1894,7 +1902,8 @@ const SB_ITENS = [
     icone:'M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2.5 2.1h-15V5h15v14.1zm0-16.1h-15c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z' },
   { id:'rel',   bloco:'coordenacao', rotulo:'Relatórios', acao:'irRel()', pode:eCoord,
     icone:'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
-  { id:'vercomo', bloco:'coordenacao', rotulo:'Ver como analista', acao:'irVerComo()', pode:eCoord,
+  { id:'vercomo', bloco:'superadmin', rotulo:'Ver como analista', acao:'irVerComo()',
+    pode:(u)=>u.perfil === 'superadmin',
     icone:'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z' },
   { id:'coord', bloco:'coordenacao', rotulo:'Gestão Grupo', acao:'irGestaoGrupo()', pode:eCoord,
     icone:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z' },
@@ -1927,10 +1936,24 @@ const SB_ITENS = [
     icone:'M19.14 12.94a7.4 7.4 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.86a.5.5 0 0 0 .12.62l2.03 1.58a7.4 7.4 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z' },
 ]
 
-/** Os itens que ESTE usuário vê, já agrupados. Bloco sem item não é desenhado. */
-function sbMontar(u) {
+/**
+ * Os itens que ESTE usuário vê, já agrupados. Bloco sem item não é desenhado.
+ *
+ * ⚠️ NO MODO "VER COMO" O MENU ENCOLHE DUAS VEZES:
+ *
+ * 1. Só o bloco do analista. Você está vendo como ela — mostrar Coordenação e Superadmin
+ *    ao lado disso é dizer "isto é a tela dela" e mostrar o que ela nunca viu.
+ *
+ * 2. Fora as telas que só servem para AGIR. O Estoque existe para assumir TR; a tela de
+ *    Estornar, para estornar. Nenhuma das duas mostra dado da pessoa — mostram o acervo,
+ *    igual para todo mundo. Deixá-las no menu seria oferecer um caminho que termina em
+ *    botão cinza, e é justamente essa impressão de "posso agir por ela" que se quer evitar.
+ */
+function sbMontar(u, verComo) {
   return SB_BLOCOS
-    .map(b => ({ ...b, itens: SB_ITENS.filter(i => i.bloco === b.id && i.pode(u)) }))
+    .filter(b => !verComo || b.id === 'analista')
+    .map(b => ({ ...b, itens: SB_ITENS.filter(i =>
+      i.bloco === b.id && i.pode(u) && !(verComo && i.soAcao)) }))
     .filter(b => b.itens.length > 0)
 }
 
@@ -1948,7 +1971,7 @@ function renderSB() {
   }
   nav.style.display = ''
 
-  nav.innerHTML = sbMontar(U).map(b => `
+  nav.innerHTML = sbMontar(U, verComoAtivo()).map(b => `
     <div class="sb-sec">
       <div class="sb-lbl">${b.rotulo}</div>
       ${b.itens.map(i => `
@@ -2559,9 +2582,26 @@ function limparF() {
 let TR_ASSUMIR = null
 let PCS_ASSUMIR = []
 
+/** Liga/desliga o Confirmar do modal Assumir, com o motivo no title. */
+function assBotao(pode, motivo) {
+  const b = document.getElementById('btnConfAss')
+  if(!b) return
+  b.disabled = !pode
+  b.style.opacity = pode ? '' : '.45'
+  b.style.cursor = pode ? '' : 'not-allowed'
+  b.title = pode ? '' : (motivo || '')
+}
+
 async function assumirTR(tr) {
+  if(verComoAtivo()) { toast('Modo leitura: assumir TR é ação, e está desabilitado.','err'); return }
   TR_ASSUMIR = tr
   PCS_ASSUMIR = []
+  // ⚠️ NASCE DESABILITADO. Antes o botão só era ajustado no caminho de sucesso: se a busca
+  // falhasse — "Nenhuma PC livre encontrada para esta TR" —, ele continuava clicável, com
+  // a aparência de que dava para confirmar. Clicar não fazia nada (o `confirmarAssumirTR`
+  // sai cedo se `PCS_ASSUMIR` estiver vazio), e é justamente isso que confunde: botão que
+  // aceita o clique e não responde.
+  assBotao(false, 'Carregando as PCs livres desta TR...')
   document.getElementById('moAss').classList.add('open')
   document.getElementById('mAssI').innerHTML = `
     <strong>TR:</strong> ${tr}<br>
@@ -2593,10 +2633,12 @@ async function assumirTR(tr) {
       <strong>Analista:</strong> ${U.nome}
       ${limiteAviso(lim, tr)}
     `
-    const btn = document.getElementById('btnConfAss')
-    if(btn) { btn.disabled = !lim.pode; btn.style.opacity = lim.pode ? '' : '.5'; btn.style.cursor = lim.pode ? '' : 'not-allowed' }
+    assBotao(lim.pode, lim.pode ? '' : (lim.motivo || 'Você não pode assumir esta TR agora.'))
   } catch(e) {
     document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${tr}<br><span style="color:var(--r);font-size:11px;">Erro: ${e.message}</span>`
+    // ⚠️ O botão TEM de ser desabilitado aqui também. Era este o caminho que o deixava
+    // clicável: a mensagem de erro aparecia e o Confirmar continuava aceso.
+    assBotao(false, e.message)
     console.warn('assumirTR erro:', e.message)
   }
 }
@@ -2716,11 +2758,20 @@ async function abrirTR(tr) {
 
       <div class="mc-campo" style="margin-top:16px;">
         <label>Anotações</label>
+        ${verComoAtivo() ? `
+        <!-- ⚠️ No modo leitura o formulário NÃO é desenhado. Um textarea que aceita texto e
+             um botão cinza ao lado dizem "dá para agir aqui, só falta alguma coisa" — que é
+             exatamente a impressão que este modo não pode dar. As anotações existentes
+             continuam à vista, porque ler é o propósito. -->
+        <div style="font-size:11px;color:#8A6100;background:#FFF3D6;border:1px solid #F0DDB0;border-radius:6px;padding:7px 10px;">
+          👁 Modo leitura — escrever anotação é ação e está indisponível. As anotações já
+          gravadas aparecem abaixo.
+        </div>` : `
         <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Seu coordenador pode ver estas anotações</div>
         <textarea id="anotTexto" rows="2" placeholder="Escreva uma anotação sobre esta TR..." style="resize:vertical;"></textarea>
         <div style="text-align:right;margin-top:6px;">
           <button class="mcok" id="btnSalvarAnot" onclick="salvarAnotacao('${tr}')" style="padding:6px 14px;font-size:11px;">Salvar anotação</button>
-        </div>
+        </div>`}
       </div>
       <div id="anotList"></div>
     `
@@ -4416,6 +4467,7 @@ async function carregarAnotacoes(tr) {
 }
 
 async function salvarAnotacao(tr) {
+  if(verComoAtivo()) { toast('Modo leitura: salvar anotação é ação, e está desabilitado.','err'); return }
   const ta = document.getElementById('anotTexto')
   const texto = ta.value.trim()
   if(!texto) { toast('Digite o texto da anotação', 'err'); return }
@@ -6522,6 +6574,7 @@ async function planCarregarRespostas() {
 }
 
 async function pRespondeu(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: registrar a resposta da entidade é ação, e está desabilitado.','err'); return }
   if(!await moConfirm('Registrar que a entidade respondeu a esta diligência?', {
     titulo: 'Entidade respondeu',
     detalhe: 'A parcial continua em Diligência — você ainda vai avaliar a resposta. O sistema deixa de cobrar o prazo desta rodada.',
@@ -7391,6 +7444,7 @@ function pSitToggle() {
 }
 
 function pAbrirSit(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: mudar a situação é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
   _pAtual = { tr, num, parcial: pa }
@@ -7431,6 +7485,7 @@ async function pSitSalvar() {
 }
 
 function pAbrirPar(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: registrar parecer é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
   _pAtual = { tr, num, parcial: pa }
@@ -7569,6 +7624,7 @@ async function pCiCarregarConversas(rows) {
 }
 
 async function pCiResponder(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: responder ao Controle Interno é ação, e está desabilitado.','err'); return }
   const chave = `${tr}|${num}`
   const txt = (document.getElementById(`pciTxt-${chave}`)?.value || '').trim()
   if(!txt) { toast('Escreva a sua resposta ao Controle Interno.','err'); return }
@@ -7602,6 +7658,7 @@ async function pCiResponder(tr, num) {
 }
 
 async function pEnviarCI(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: encaminhar ao Controle Interno é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada.','err'); return }
   if(!pa.parecer_tipo) { toast('Registre o parecer antes de encaminhar ao Controle Interno.','err'); return }
@@ -7623,6 +7680,7 @@ async function pEnviarCI(tr, num) {
 }
 
 async function pEstornar(tr, num) {
+  if(verComoAtivo()) { toast('Modo leitura: estornar é ação, e está desabilitado.','err'); return }
   if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
   // O caso que mais doía: 14 caracteres eram recusados DEPOIS de fechar, e o texto sumia.
   // Agora o contador mostra o quanto falta e o botão só libera no 15.
@@ -9161,6 +9219,7 @@ function ciAtualizarBotoes(chave) {
 }
 
 async function ciDecidir(decisao, chave) {
+  if(verComoAtivo()) { toast('Modo leitura: decidir no Controle Interno é ação, e está desabilitado.','err'); return }
   const g = ciGrupos().find(x => x.chave === chave)
   if(!g) return
   const codigos = g.pcs.filter(p => _ciSel.has(p.codigo_pc)).map(p => p.codigo_pc)

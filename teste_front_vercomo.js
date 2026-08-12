@@ -127,11 +127,13 @@ console.log('\n═══ 6. QUEM PODE VER QUEM ═══');
   conf(verComoPodeVer({ id:62, perfil:'controle_interno' }) === false, 'C.I. nao entra na lista');
   conf(verComoPodeVer(null) === false, 'nulo nao quebra');
 
+  // ⚠️ SO SUPERADMIN (correcao do Richard, 12/08). O coordenador tinha acesso no primeiro
+  // desenho e foi RETIRADO: ver o sistema pelos olhos de outra pessoa e ferramenta de
+  // suporte do dono do sistema, nao de coordenacao.
   vm.runInContext('U = { id: 5, nome:"Nayara", perfil:"coordenador", grupo:"1" }', ctx);
-  conf(verComoPodeVer({ id:7, perfil:'analista', grupo:'1' }) === true, 'coordenador ve analista DO SEU grupo');
-  // ⚠️ A regra que importa: coordenador nao alcanca outro grupo.
-  conf(verComoPodeVer(ANA) === false, 'coordenador NAO ve analista de outro grupo (Ana e G2)');
-  conf(verComoPodeVer({ id:6, perfil:'coordenador', grupo:'2' }) === false, 'coordenador nao ve outro coordenador');
+  conf(verComoPodeVer({ id:7, perfil:'analista', grupo:'1' }) === false,
+       'COORDENADOR NAO VE NINGUEM, nem do proprio grupo');
+  conf(verComoPodeVer(ANA) === false, 'nem de outro grupo');
 
   vm.runInContext('U = { id: 22, nome:"Ana", perfil:"analista", grupo:"2" }', ctx);
   conf(verComoPodeVer({ id:7, perfil:'analista', grupo:'2' }) === false, 'ANALISTA NAO VE NINGUEM');
@@ -174,6 +176,84 @@ console.log('\n═══ 8. TRAVAS NO index.html ═══');
   // Sair do sistema tambem sai do modo.
   const bSair = html.slice(html.indexOf('function sair()'), html.indexOf('function sair()') + 1200);
   conf(/verComoSair\(true\)/.test(bSair), 'sair() desliga o modo');
+}
+
+console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══');
+{
+  // ⚠️ A trava do fetch segura a GRAVACAO. Isto aqui e outra coisa: a tela nao pode dar a
+  // impressao de que da para agir. Modal que abre, campo que aceita texto e botao que
+  // aceita o clique dizem "voce pode" — e so na hora de salvar e que nao.
+  const acoes = [
+    ['pAbrirSit',      'mudar a situação'],
+    ['pAbrirPar',      'registrar parecer'],
+    ['pEstornar',      'estornar'],
+    ['pRespondeu',     'registrar a resposta'],
+    ['pEnviarCI',      'encaminhar ao C.I.'],
+    ['pCiResponder',   'responder ao C.I.'],
+    ['salvarAnotacao', 'salvar anotação'],
+    ['ciDecidir',      'decidir no C.I.'],
+    ['assumirTR',      'assumir TR'],
+  ];
+  acoes.forEach(([fn, rot]) => {
+    const i = html.indexOf(`function ${fn}(`);
+    const bloco = html.slice(i, i + 500);
+    conf(i > 0 && /if\(verComoAtivo\(\)\)/.test(bloco),
+         `${fn} recusa na ORIGEM (${rot})`);
+  });
+
+  // O formulario de anotacao nem e desenhado no modo — so a lista do que ja existe.
+  // O ramo do modo vem ANTES do formulario: `${verComoAtivo() ? <aviso> : <textarea>}`.
+  const iAnot = html.indexOf('<label>Anotações</label>');
+  const bAnot = html.slice(iAnot, iAnot + 1600);
+  conf(/\$\{verComoAtivo\(\) \?/.test(bAnot) && /Modo leitura — escrever anotação/.test(bAnot),
+       'o formulario de anotacao NAO e desenhado no modo leitura');
+  conf(bAnot.indexOf('Modo leitura') < bAnot.indexOf('<textarea id="anotTexto"'),
+       'o aviso vem no lugar do textarea, nao ao lado dele');
+  conf(/As anotações já[\s\S]{0,40}?gravadas aparecem abaixo/.test(html),
+       'e diz que as anotacoes existentes continuam a vista');
+
+  // O botao Assumir nasce desabilitado e e desabilitado tambem no erro.
+  conf(/function assBotao\(pode, motivo\)/.test(html), 'ha uma funcao unica para o botao Assumir');
+  conf(/assBotao\(false, 'Carregando as PCs livres desta TR\.\.\.'\)/.test(html),
+       'ele NASCE desabilitado, antes da busca');
+  const iAss = html.indexOf('async function assumirTR(');
+  const bAss = html.slice(iAss, iAss + 3000);
+  conf(/catch\(e\) \{[\s\S]{0,400}?assBotao\(false, e\.message\)/.test(bAss),
+       'e e desabilitado NO ERRO — era este o caminho que o deixava clicavel');
+  conf(/b\.title = pode \? '' : \(motivo \|\| ''\)/.test(html), 'com o motivo no title');
+}
+
+console.log('\n═══ 8c. O MENU ENCOLHE NO MODO ═══');
+{
+  const ctxM = { console };
+  vm.createContext(ctxM);
+  const iM = html.indexOf('const SB_BLOCOS = ['), fM = html.indexOf('function renderSB()');
+  vm.runInContext(html.slice(iM, fM) + `
+function _m(u, vc){ return sbMontar(u, vc) }`, ctxM);
+
+  const sup = { id:4, perfil:'superadmin', grupo:'3' };
+  const normal = ctxM._m(sup, false).map(b => b.id);
+  const modo   = ctxM._m(sup, true);
+  conf(normal.length === 3, 'fora do modo, o superadmin ve os tres blocos');
+  conf(modo.length === 1 && modo[0].id === 'analista',
+       'no modo, so o bloco do analista', JSON.stringify(modo.map(b=>b.id)));
+
+  const ids = modo[0].itens.map(i => i.id);
+  // ⚠️ Estoque e Estornar existem para AGIR, e nao mostram dado da pessoa. Deixa-los no
+  // menu seria oferecer um caminho que termina em botao cinza.
+  conf(!ids.includes('est'), 'ESTOQUE fica de fora — assumir TR e acao, nao leitura');
+  conf(!ids.includes('estornar'), 'ESTORNAR fica de fora pelo mesmo motivo');
+  conf(ids.includes('plan'), 'Minha Planilha fica');
+  conf(ids.includes('meuspedidos'), 'Meus pedidos fica');
+  conf(ids.includes('prod'), 'Produtividade fica');
+  conf(ids.includes('dash'), 'Dashboard fica');
+
+  // E o item "Ver como" mora no bloco do superadmin.
+  const vc = ctxM._m(sup, false).find(b => b.id === 'superadmin').itens.find(i => i.id === 'vercomo');
+  conf(!!vc, 'o item "Ver como" esta no bloco SUPERADMIN');
+  conf(!ctxM._m({ id:5, perfil:'coordenador', grupo:'1' }, false)
+        .some(b => b.itens.some(i => i.id === 'vercomo')),
+       'e o coordenador NAO ve o item');
 }
 
 console.log('\n═══ 9. LISTA DE ONLINE ═══');
