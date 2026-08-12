@@ -170,6 +170,17 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     Havia DOIS caminhos de anotação e eu só tinha guardado um — o outro abria normalmente.
     Onze funções recusam na origem, e os botões nem são desenhados.
 
+14. **⚠️ Não use `parcial_num` para conversar com o analista.** Ele **não** é o número da
+    parcial no SIGEF: tem lacunas e vai acima do total, em **60 TRs**. Conferido com o SIGEF
+    em 13/08 — a 2020TR000704 mostra "parcial 51" numa PC que no SIGEF é a **parcial 1**.
+    A referência é o **processo SGPe**: uma parcial = (tr, processo_pc). Detalhe no
+    `SESSAO.md`.
+
+15. **A PC final não é uma parcial.** O agrupamento é por `parcial_num`, e a final tem
+    `parcial_num = 'FINAL'` — ela virava um grupo e era contada. O teste é por **`tipo`**
+    (`planEhFinal`), nunca pelo texto: no acervo há `FINAL` (981), `Final` (39) e `final`
+    (1), e cinco finais gravadas com `parcial_num = '1'`, que se misturam à parcial 1.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
