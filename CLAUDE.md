@@ -191,8 +191,12 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 ## Pendências
 
-> Conferida contra o banco em **11/08/2026**. O que está `[x]` foi verificado, não presumido.
+> Conferida contra o banco em **12/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
+>
+> **Estado em 12/08:** 54 usuários · **1 aguardando aprovação** (id 67 ALINE GREFF BUAES,
+> com aviso FORTE contra a id 7 Aline, de 413 PCs) · **6 sem CPF** e por isso sem conseguir
+> entrar (ids 5 Nayara, 7 Aline, 17 Marisa, 30 Miriam, 49 Scheila, 52 Eduardo).
 
 ### Telas de 12/08/2026 — no ar, não testadas em navegador
 - [ ] **Controle Interno** — três abas, fila agrupada por encaminhamento, decisão em bloco
