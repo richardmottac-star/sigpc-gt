@@ -1520,6 +1520,77 @@ function atualizarAvatarHeader() {
     : ini
 }
 
+// ══════════════════════════════════════
+//  MODO PREPARAÇÃO
+// ══════════════════════════════════════
+// A manhã da abertura: a equipe entra, troca a senha e completa o cadastro, mas não usa o
+// sistema antes da apresentação. Superadmin e coordenador não são afetados.
+//
+// ⚠️ Esconder o menu é METADE. A outra metade está no servidor: as rotas de trabalho
+// recusam o analista enquanto o modo está ligado (`barrouPreparacao`, em server.js). Sem
+// isso, esconder seria só esconder — a URL antiga continuaria trabalhando.
+//
+// ⚠️ NA DÚVIDA, O SISTEMA ABRE. Se a busca falhar, o modo fica DESLIGADO: trancar 47
+// pessoas fora por causa de uma oscilação de rede custa mais do que alguém entrar cedo.
+let _prep = { modo_preparacao: false, mensagem: '' }
+let _prepTimer = null
+
+async function prepCarregar() {
+  try {
+    const j = await (await fetch(`${API_URL}/config_sistema`)).json()
+    if(j.data) _prep = j.data
+  } catch(e) { /* falha aberta — ver o aviso acima */ }
+}
+
+function prepRestrito() {
+  return !!(_prep.modo_preparacao && U && !['superadmin','coordenador'].includes(U.perfil))
+}
+
+/**
+ * De 60 em 60 s. É o que faz "à tarde eu desligo e o sistema abre para todos de uma vez"
+ * acontecer sem ninguém precisar recarregar a página — e o contrário também: ligar o modo
+ * cobre quem já estava dentro.
+ */
+function prepIniciar() {
+  if(_prepTimer) clearInterval(_prepTimer)
+  _prepTimer = setInterval(async () => {
+    const antes = prepRestrito()
+    await prepCarregar()
+    if(prepRestrito() !== antes) {
+      renderSB()
+      prepRestrito() ? irPreparacao() : irDash()
+      toast(prepRestrito()
+        ? 'O sistema entrou em modo preparação.'
+        : 'O sistema foi liberado. Bom trabalho!', 'ok')
+    }
+  }, 60000)
+}
+
+function irPreparacao() {
+  ativarMenu('')
+  document.getElementById('BODY').innerHTML = `
+    <div style="max-width:640px;margin:40px auto;text-align:center;">
+      <div style="font-size:44px;line-height:1;margin-bottom:14px;">🔧</div>
+      <div style="font-size:20px;font-weight:800;margin-bottom:10px;">Sistema em preparação</div>
+      <div style="font-size:13px;color:var(--ct);line-height:1.6;margin-bottom:22px;">
+        ${escHtml(_prep.mensagem||'')}
+      </div>
+      <div style="background:#FCFDFC;border:1.5px solid var(--cb);border-radius:10px;padding:20px;box-shadow:var(--sombra);">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px;">O que dá para fazer agora</div>
+        <div style="font-size:12px;color:var(--ct);line-height:1.6;margin-bottom:14px;">
+          Confira e complete os seus dados: e-mail, telefone, região, município, núcleo e foto.
+          Leva dois minutos e evita retrabalho depois.
+        </div>
+        <button onclick="irMeuPerfil()" style="background:var(--v);color:#fff;border:none;border-radius:7px;padding:10px 22px;font-size:13px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">
+          Completar meus dados
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--ct);margin-top:16px;">
+        Esta tela sai sozinha quando o sistema for liberado — não precisa recarregar.
+      </div>
+    </div>`
+}
+
 function iniciarApp() {
   salvarSessao()
   document.getElementById('sLogin').classList.remove('ativa')
@@ -1531,9 +1602,15 @@ function iniciarApp() {
     (U.setorialAcesso==='ADMIN'?'GERAL':U.setorialAcesso)
   atualizarAvatarHeader()
 
-  renderSB()
-  irDash()
-  carregarContadores()
+  // A busca vem ANTES do primeiro render: se viesse depois, o analista veria o menu inteiro
+  // por um instante e a tela restrita entraria por cima. Piscar o que não pode ser usado é
+  // pior do que demorar meio segundo.
+  prepCarregar().finally(() => {
+    renderSB()
+    prepRestrito() ? irPreparacao() : irDash()
+    if(!prepRestrito()) carregarContadores()
+    prepIniciar()
+  })
 }
 
 function sair() {
@@ -1549,6 +1626,18 @@ function sair() {
 //  SIDEBAR
 // ══════════════════════════════════════
 function renderSB() {
+  // ⚠️ MODO PREPARAÇÃO: a barra some inteira, não fica "com menos itens". Item cinza é
+  // convite a clicar e a perguntar por quê; barra ausente diz sozinha que agora não é hora.
+  // O "Sair" continua no alto da tela, então ninguém fica preso.
+  const nav = document.getElementById('SB')
+  if(prepRestrito()) {
+    nav.innerHTML = ''
+    nav.style.display = 'none'
+    faixaIniciar()   // a faixa de avisos continua: é por ela que você fala com quem está esperando
+    return
+  }
+  nav.style.display = ''
+
   const isAdmin = U.perfil === 'superadmin'
   const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   const podeEstornar = U.perfil === 'analista' || U.perfil === 'coordenador' || U.perfil === 'superadmin'
@@ -2652,6 +2741,7 @@ async function limitePedir(tr) {
 // de abas é montada a partir de CFG_ABAS, e cada aba é uma função que devolve HTML.
 const CFG_ABAS = [
   { id: 'limite', rotulo: 'Limite de TRs', render: () => cfgRenderLimite() },
+  { id: 'prep',   rotulo: 'Modo preparação', render: () => cfgRenderPreparacao() },
 ]
 let _cfgAba = 'limite'
 let _cfg = null          // config_limite_tr
@@ -2679,6 +2769,9 @@ async function cfgCarregar() {
     _cfg = c.data || {}
     _cfgExcecoes = e.data || []
     _cfgUsuarios = (u.data || []).filter(x => x.perfil !== 'superadmin')
+    // O estado do interruptor tem de estar fresco ANTES de desenhar a aba — senão o botão
+    // mostraria "Ligar" com o modo já ligado, e o clique desligaria achando que ligava.
+    await prepCarregar()
     cfgRender()
   } catch(err) {
     document.getElementById('cfgCorpo').innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${err.message}</div>`
@@ -2698,6 +2791,98 @@ function cfgRender() {
 }
 
 function cfgAba(id) { _cfgAba = id; cfgRender() }
+
+// ── Aba: Modo preparação ────────────────────────────────────────────────────
+function cfgRenderPreparacao() {
+  const on = !!_prep.modo_preparacao
+  const quando = _prep.atualizado_em
+    ? new Date(_prep.atualizado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    : null
+  return `
+    <div style="max-width:660px;">
+      <div style="background:${on?'#FFF8E1':'#F1F8E9'};border:1.5px solid ${on?'#FFE0B2':'#C5E1A5'};border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="font-size:15px;font-weight:800;">
+            ${on ? '🔧 Modo preparação LIGADO' : '✅ Sistema ABERTO'}
+          </div>
+          <div style="flex:1;"></div>
+          <button id="cfgPrepBtn" onclick="cfgPrepAlternar(${on ? 'false' : 'true'})"
+            style="background:${on?'var(--v)':'var(--am)'};color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">
+            ${on ? 'Abrir o sistema para todos' : 'Ligar o modo preparação'}
+          </button>
+        </div>
+        <div style="font-size:12px;color:var(--ct);line-height:1.6;margin-top:8px;">
+          ${on
+            ? 'Os analistas entram, trocam a senha e chegam numa tela restrita, com o Meu Perfil e nada mais. Você e os coordenadores não são afetados.'
+            : 'Todos os analistas usam o sistema normalmente.'}
+        </div>
+        ${quando ? `<div style="font-size:10.5px;color:var(--ct);margin-top:8px;">Última alteração: ${quando}${_prep.atualizado_por_nome?` por ${_prep.atualizado_por_nome}`:''}</div>` : ''}
+      </div>
+
+      <div style="background:#FCFDFC;border:1.5px solid var(--cb);border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:4px;">Mensagem que a equipe vê</div>
+        <div style="font-size:11px;color:var(--ct);margin-bottom:8px;">Aparece na tela restrita. Máximo de 400 caracteres.</div>
+        <textarea id="cfgPrepMsg" rows="3" maxlength="400"
+          style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px;font-size:12.5px;font-family:Barlow,sans-serif;resize:vertical;">${escHtml(_prep.mensagem||'')}</textarea>
+        <div style="text-align:right;margin-top:8px;">
+          <button onclick="cfgPrepSalvarMsg()" class="mcok" style="padding:7px 18px;">✓ Salvar mensagem</button>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--ct);line-height:1.7;background:var(--fundo-app);border-radius:8px;padding:12px 14px;">
+        <strong>O que o modo faz, exatamente:</strong><br>
+        · a barra lateral <strong>some inteira</strong> para o analista — nada de Estoque, Minha Planilha, Repositório ou relatórios;<br>
+        · as rotas de assumir TR, baixar, registrar parecer, mudar situação e enviar ao CI <strong>recusam o analista</strong>, então a tela escondida não é só escondida;<br>
+        · <strong>quem já está dentro é alcançado em até 1 minuto</strong>, sem precisar recarregar — e ao abrir, o sistema volta sozinho para todos;<br>
+        · <strong>superadmin e coordenador nunca são afetados.</strong><br>
+        <br>
+        <strong>O que ele não é:</strong> uma tranca. O sistema ainda não tem camada de autorização —
+        quem souber montar um pedido HTTP e se declarar coordenador passa, como passa hoje em qualquer
+        outra tela. Serve para a equipe não mexer no acervo antes da hora, não como controle de acesso.
+      </div>
+    </div>`
+}
+
+async function cfgPrepAlternar(ligar) {
+  const detalhe = ligar
+    ? 'Os analistas passam a ver só o Meu Perfil. Quem estiver com o sistema aberto agora é alcançado em até 1 minuto.\n\nVocê e os coordenadores continuam com tudo.'
+    : 'Todos os analistas voltam a usar o sistema. Quem estiver na tela restrita entra sozinho em até 1 minuto, sem recarregar.'
+  if(!await moConfirm(ligar ? 'Ligar o modo preparação?' : 'Abrir o sistema para todos?', {
+    titulo: ligar ? 'Modo preparação' : 'Abrir o sistema',
+    detalhe, okTexto: ligar ? 'Ligar' : 'Abrir agora', cancelarTexto: 'Voltar',
+  })) return
+
+  const bt = document.getElementById('cfgPrepBtn')
+  if(bt) { bt.disabled = true; bt.textContent = 'Salvando...' }
+  try {
+    const r = await fetch(`${API_URL}/config_sistema`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ modo_preparacao: ligar, atualizado_por: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _prep = j.data || _prep
+    cfgRender()
+    toast(ligar ? 'Modo preparação ligado.' : 'Sistema aberto para todos.','ok')
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    cfgRender()
+  }
+}
+
+async function cfgPrepSalvarMsg() {
+  const msg = document.getElementById('cfgPrepMsg')?.value ?? ''
+  try {
+    const r = await fetch(`${API_URL}/config_sistema`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mensagem: msg, atualizado_por: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _prep = j.data || _prep
+    toast('Mensagem salva.','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
 
 function cfgRenderLimite() {
   const semLimite = _cfg.limite_padrao === null || _cfg.limite_padrao === undefined
@@ -8283,6 +8468,11 @@ function irMeuPerfil() {
     : iniciais
   const roLabel = 'background:var(--fundo-app);color:var(--ct);cursor:not-allowed;'
   document.getElementById('BODY').innerHTML = `
+    ${prepRestrito() ? `
+    <!-- Sem a barra lateral, esta e a unica porta de volta. Sem ela a pessoa ficaria presa
+         no Meu Perfil e so sairia recarregando a pagina. -->
+    <button onclick="irPreparacao()" style="background:none;border:0;color:var(--v);font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;padding:0;margin-bottom:10px;">← Voltar</button>
+    ` : ''}
     <div style="font-size:16px;font-weight:700;margin-bottom:14px;">Meu Perfil</div>
 
     <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);padding:20px;margin-bottom:16px;">
