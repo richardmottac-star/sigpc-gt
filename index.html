@@ -1657,6 +1657,18 @@ const SB_BLOCOS = [
 
 const eCoord = (u) => u.perfil === 'coordenador' || u.perfil === 'superadmin'
 
+// ⚠️ QUEM NÃO ENTRA EM RELATÓRIO DE PRODUTIVIDADE (regra do Richard, 12/08/2026).
+//
+// Coordenadores não contam produtividade — isso já valia. Os técnicos do Controle Interno
+// **também não**: são efetivos, não analisam PC, apreciam parecer. Não é meta zero — é não
+// aparecer. Meta zero ainda os poria na lista, com "0%" ao lado do nome.
+//
+// Uma função só, usada pela Produtividade e pelo Board. O Quadro 2 do relatório CGE já
+// resolve por outro caminho — lá a regra é lista de INCLUSÃO (`perfil === 'analista'`), que
+// exclui o C.I. sozinha e continua excluindo qualquer perfil novo que apareça.
+const FORA_DA_PRODUTIVIDADE = ['coordenador', 'controle_interno']
+const contaProdutividade = (u) => !!u && !FORA_DA_PRODUTIVIDADE.includes(u.perfil)
+
 // ⚠️ O técnico do Controle Interno NÃO trabalha o acervo: não assume TR, não baixa PC, não
 // pede vaga. Sem esta regra ele veria Estoque, Minha Planilha, Produtividade, Repositório e
 // Meus pedidos — telas que, para ele, só oferecem ações que não são dele.
@@ -4449,7 +4461,7 @@ async function prodCarregar() {
     if(sid) prodUsersQ = prodUsersQ.eq('setorial_id', sid)
     const { data: todosUsers } = await prodUsersQ
     const usuariosPorId = {}
-    ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
+    ;(todosUsers||[]).forEach(u => { if(contaProdutividade(u)) usuariosPorId[u.id] = u })
 
     const [pcs, metaPorId] = await Promise.all([fetchTodasPCs(sid), fetchMetasVigentes()])
 
@@ -4689,12 +4701,22 @@ async function boardCarregar() {
     })
 
     // Stats por analista (top analistas para o gráfico) — agrupado por analista_id, nome completo via usuarios
-    const { data: todosUsers } = await db.from('usuarios').select('id,nome').eq('setorial_id', sid)
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome,perfil').eq('setorial_id', sid)
     const nomePorId = {}
-    ;(todosUsers||[]).forEach(u => { nomePorId[u.id] = u.nome })
+    // ⚠️ `perfil` entrou no SELECT em 12/08 só para esta exclusão. O Board agrega por
+    // `analista_id`, então um técnico do C.I. só apareceria se tivesse PC — o que não
+    // acontece, porque ele não assume TR. Mas a exclusão aqui é EXPLÍCITA de propósito:
+    // depender de "ele nunca vai ter PC" é depender de acidente, e uma atribuição errada
+    // colocaria um efetivo no gráfico de produtividade sem ninguém entender por quê.
+    const foraDaProd = new Set()
+    ;(todosUsers||[]).forEach(u => {
+      nomePorId[u.id] = u.nome
+      if(!contaProdutividade(u)) foraDaProd.add(String(u.id))
+    })
     const mapaAn = {}
     data.forEach(r => {
       if(!r.analista_id) return
+      if(foraDaProd.has(String(r.analista_id))) return
       if(!mapaAn[r.analista_id]) mapaAn[r.analista_id] = {total:0,bx:0}
       mapaAn[r.analista_id].total++
       if(r.status==='baixada') mapaAn[r.analista_id].bx++
@@ -7461,7 +7483,7 @@ async function gestCarregar() {
   try {
     const { data: todosUsers } = await db.from('usuarios').select('*').eq('setorial_id', sid)
     const usuariosPorId = {}
-    ;(todosUsers||[]).forEach(u => { if(u.perfil !== 'coordenador') usuariosPorId[u.id] = u })
+    ;(todosUsers||[]).forEach(u => { if(contaProdutividade(u)) usuariosPorId[u.id] = u })
 
     const pcs = await fetchTodasPCs(sid)
 

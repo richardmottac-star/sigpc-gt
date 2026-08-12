@@ -227,6 +227,41 @@ console.log('\n═══ 9. ONLINE AGORA SAIU DO MENU E FOI PARA O CABECALHO ═
   conf(/if\(_onlineTimer\) return/.test(html), 'nao empilha um relogio a cada renderSB');
 }
 
+console.log('\n═══ 9b. O CONTROLE INTERNO FICA FORA DOS RELATORIOS DE PRODUTIVIDADE ═══');
+{
+  // Regra do Richard (12/08): os tecnicos do C.I. sao efetivos, nao analisam PC. Nao e meta
+  // zero — e nao aparecer. Meta zero ainda os poria na lista, com "0%" ao lado do nome.
+  const ctxP = { console };
+  vm.createContext(ctxP);
+  const iniP = html.indexOf('const FORA_DA_PRODUTIVIDADE');
+  const fimP = html.indexOf('const SB_ITENS');
+  vm.runInContext(html.slice(iniP, fimP) + `
+function _fora(){ return FORA_DA_PRODUTIVIDADE }
+function _conta(u){ return contaProdutividade(u) }`, ctxP);
+
+  conf(ctxP._conta({ perfil:'analista' }) === true, 'analista conta');
+  conf(ctxP._conta({ perfil:'superadmin' }) === true, 'superadmin conta (ele analisa)');
+  conf(ctxP._conta({ perfil:'coordenador' }) === false, 'coordenador NAO conta');
+  conf(ctxP._conta({ perfil:'controle_interno' }) === false, 'CONTROLE INTERNO NAO CONTA');
+  conf(ctxP._conta(null) === false, 'usuario nulo nao quebra');
+
+  // As tres listas usam a mesma regra — uma copia divergiria em silencio.
+  const usos = (html.match(/contaProdutividade\(u\)/g) || []).length;
+  conf(usos >= 3, 'Produtividade, Gestao Grupo e Board usam a MESMA funcao', `${usos} usos`);
+  conf(!/if\(u\.perfil !== 'coordenador'\) usuariosPorId/.test(html),
+       'nao sobrou a regra antiga, que so excluia coordenador');
+  // O Board agrega por PC: sem exclusao explicita, dependeria de "o C.I. nunca ter PC".
+  conf(/foraDaProd\.has\(String\(r\.analista_id\)\)/.test(html),
+       'o Board exclui EXPLICITAMENTE, nao por acidente');
+
+  // ⚠️ O Quadro 2 do CGE resolve por outro caminho: lista de INCLUSAO. Se um dia virar
+  // lista de exclusao, o C.I. entra no relatorio oficial sem ninguem perceber.
+  const iCge = html.indexOf('function cgeAgregar(');
+  const blocoCge = html.slice(iCge, iCge + 900);
+  conf(/if\(u\.perfil === 'analista'\) usuariosPorId\[u\.id\] = u/.test(blocoCge),
+       'o Quadro 2 do CGE e lista de INCLUSAO — so analista entra');
+}
+
 console.log('\n═══ 10. TODO onclick APONTA PARA FUNCAO QUE EXISTE ═══');
 {
   // ⚠️ ESTE TESTE NASCEU DE UM ESTRAGO. Em 12/08, ao trocar a tela do Controle Interno, eu
