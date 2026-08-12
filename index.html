@@ -6079,6 +6079,11 @@ async function primAcesso() {
       body: JSON.stringify({ nome, cpf, email, telefone, regiao, municipio, nucleo, senha_hash: sen, setorial_id: setorial })
     })
     const j = await r.json()
+
+    // ⚠️ CPF QUE JÁ EXISTE não é "Erro:" — é uma pessoa que já tem conta e não sabe.
+    // A recusa vem do servidor com `ja_cadastrado`, e aqui ela vira uma explicação com o
+    // caminho de volta, em vez de uma mensagem vermelha que não diz o que fazer.
+    if(j.error && j.error.ja_cadastrado) { paJaCadastrado(j.error.message); return }
     if(j.error) throw new Error(j.error.message || j.error)
 
     fm('moPrimAcesso')
@@ -6093,6 +6098,40 @@ async function primAcesso() {
   } finally {
     btn.disabled = false; btn.textContent = '✓ Enviar Cadastro'
   }
+}
+
+/**
+ * "Você já tem cadastro" — a tela que substitui o cadastro duplicado.
+ *
+ * ⚠️ Não é toast nem faixa vermelha. A pessoa chegou aqui porque não sabia que já tinha
+ * conta; ela precisa de instrução, não de recusa. Por isso ocupa o modal inteiro, com o
+ * botão que leva de volta ao login.
+ */
+function paJaCadastrado(msg) {
+  const corpo = document.querySelector('#moPrimAcesso .mcb')
+  if(!corpo) { showErr(msg); return }
+  corpo.innerHTML = `
+    <div style="text-align:center;padding:10px 4px 4px;">
+      <div style="font-size:38px;line-height:1;margin-bottom:12px;">✓</div>
+      <div style="font-size:16px;font-weight:800;margin-bottom:10px;">Você já tem cadastro</div>
+      <div style="font-size:13px;color:var(--ct);line-height:1.65;max-width:430px;margin:0 auto 20px;">
+        ${escHtml(msg)}
+      </div>
+      <button class="mcok" style="padding:10px 24px;" onclick="paVoltarAoLogin()">Voltar ao login</button>
+    </div>`
+}
+
+function paVoltarAoLogin() {
+  fm('moPrimAcesso')
+  const cpf = document.getElementById('paCPF')?.value || ''
+  ;['paNome','paCPF','paEmail','paTelefone','paRegiao','paNucleo','paSenha','paSenha2'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = ''
+  })
+  // Devolve o CPF já digitado para o campo do login: a pessoa acabou de escrevê-lo, e
+  // pedir de novo é o tipo de atrito que faz desistir.
+  const lc = document.getElementById('lCPF')
+  if(lc && cpf) lc.value = cpf
+  const ls = document.getElementById('lSen'); if(ls) ls.focus()
 }
 
 // ══════════════════════════════════════
@@ -8361,72 +8400,205 @@ async function admExcluirUsuario(id, nome) {
 let _admPendentes = []
 let _admAprovarId = null
 
+// ⚠️ A FILA CARREGA DE `/usuarios/pendentes`, e não mais de `/usuarios?aguardando=true`.
+//
+// A rota nova traz, junto de cada pendente, os CANDIDATOS A DUPLICATA e a contagem de PCs
+// dos dois lados. A regra mora em `sigpc-api/lib/duplicata.js` — no servidor, com teste,
+// porque é ela que decide se um botão de aprovar aparece ou não.
+let _admSelPend = new Set()
+
 async function admCarregarPendentes() {
   const cont = document.getElementById('admPendentesArea')
   if(!cont) return
   try {
-    const pendParams = new URLSearchParams({ aguardando_aprovacao: 'true' })
-    if(U.setorialFiltro) pendParams.set('setorial_id', U.setorialFiltro)
-    const r = await fetch(`${API_URL}/usuarios?${pendParams}`)
+    const p = new URLSearchParams()
+    if(U.setorialFiltro) p.set('setorial_id', U.setorialFiltro)
+    const r = await fetch(`${API_URL}/usuarios/pendentes?${p}`)
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || j.error)
-    _admPendentes = (j.data||[]).sort((a,b) => new Date(a.criado_em||0) - new Date(b.criado_em||0))
+    _admPendentes = j.data || []
+    // Marcação some entre cargas: aprovar um muda a lista, e manter marcado o que já saiu
+    // é como a barra prometeria agir sobre quem não está mais lá.
+    _admSelPend.clear()
     admRenderPendentes()
   } catch(e) {
-    cont.innerHTML = `<div style="color:var(--r);padding:12px;font-size:12px;">Erro ao carregar cadastros pendentes: ${e.message}</div>`
+    cont.innerHTML = `<div style="color:var(--r);padding:12px;font-size:12px;">Erro ao carregar cadastros pendentes: ${escHtml(e.message)}</div>`
   }
 }
 
-// Acima disto, a lista deixa de ser cartão e vira um resumo com atalho para a tabela.
-// Com os 47 da abertura, 47 cartões empilhados empurram a tabela para fora da tela — e é
-// justamente na tabela que a aprovação em bloco acontece.
-const PEND_CARTOES_MAX = 8
+/** Só os que NÃO têm aviso de duplicidade entram no bloco. */
+function admPendLimpos() {
+  return _admPendentes.filter(u => !u.candidatos || !u.candidatos.length)
+}
+
+function admPendSelToggle(id) {
+  const s = String(id)
+  _admSelPend.has(s) ? _admSelPend.delete(s) : _admSelPend.add(s)
+  admPendBarra()
+}
+
+function admPendSelTodos(marcar) {
+  _admSelPend.clear()
+  if(marcar) admPendLimpos().forEach(u => _admSelPend.add(String(u.id)))
+  admRenderPendentes()
+}
+
+function admPendBarra() {
+  const b = document.getElementById('admPendBarra')
+  const t = document.getElementById('admPendBtn')
+  if(!b || !t) return
+  const n = _admSelPend.size
+  b.style.display = n ? 'flex' : 'none'
+  t.textContent = `✓ Aprovar ${n} selecionado${n!==1?'s':''}`
+  const topo = document.getElementById('admPendTodos')
+  if(topo) {
+    const limpos = admPendLimpos().length
+    topo.checked = limpos > 0 && n === limpos
+    topo.indeterminate = n > 0 && n < limpos
+  }
+}
 
 function admRenderPendentes() {
   const cont = document.getElementById('admPendentesArea')
   if(!cont) return
   if(!_admPendentes.length) { cont.innerHTML = ''; return }
 
-  if(_admPendentes.length > PEND_CARTOES_MAX) {
-    cont.innerHTML = `
-      <div style="background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div style="font-size:13px;font-weight:800;">⏳ ${_admPendentes.length} cadastros aguardando aprovação</div>
-        <div style="font-size:11px;color:var(--ct);flex:1;min-width:200px;">
-          São muitos para aprovar um a um. Use a lista abaixo: marque as caixas e libere em bloco.
-        </div>
-        <button class="btn-acao btn-ass" onclick="admVerPendentesNaLista()">Ver na lista e aprovar em bloco</button>
-      </div>`
-    return
-  }
+  const comAviso = _admPendentes.filter(u => u.candidatos && u.candidatos.length).length
+  const limpos = admPendLimpos().length
 
   const cards = _admPendentes.map(u => {
     const dt = u.criado_em ? new Date(u.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'
-    return `<div style="background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-      <div style="flex:1;min-width:220px;">
-        <div style="font-weight:700;font-size:13px;">${u.nome||'—'}</div>
-        <div style="font-size:11px;color:var(--ct);">CPF: ${u.cpf||'—'} &nbsp;|&nbsp; ${u.email||'—'} &nbsp;|&nbsp; ${u.telefone||'—'}</div>
-        <div style="font-size:11px;color:var(--ct);">Setorial: <strong>${u.setorial_id||'—'}</strong> &nbsp;|&nbsp; Cadastrado em: ${dt}</div>
-      </div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn-acao btn-ass" onclick="admAbrirAprovar('${u.id}')">✓ Aprovar</button>
-        <button class="btn-acao btn-dev" onclick="admRejeitar('${u.id}')">✕ Rejeitar</button>
+    const dupl = (u.candidatos && u.candidatos.length) ? u.candidatos[0] : null
+
+    // ⚠️ O AVISO VEM ANTES DOS BOTÕES, de propósito. Depois deles seria lido tarde demais:
+    // a mão já estaria no "Aprovar".
+    const aviso = dupl ? `
+      <div style="background:#FDECEA;border:1.5px solid #F5C6C0;border-radius:7px;padding:9px 12px;margin-bottom:9px;">
+        <div style="font-size:12px;font-weight:800;color:#991B1B;">
+          ⚠ Já existe cadastro de ${escHtml(dupl.usuario.nome)} (id ${dupl.usuario.id}) com ${dupl.usuario.pcs} PC${dupl.usuario.pcs!==1?'s':''}. Aprovar cria conta duplicada.
+        </div>
+        <div style="font-size:11px;color:#991B1B;margin-top:4px;">
+          ${escHtml(dupl.motivo)} · a conta antiga tem ${dupl.usuario.baixas} baixa${dupl.usuario.baixas!==1?'s':''}
+          · grupo ${dupl.usuario.grupo || '—'} · ${escHtml(dupl.usuario.email || 'sem e-mail')}
+          ${dupl.nivel === 'FRACO' ? ' · <strong>indício fraco — confira antes</strong>' : ''}
+        </div>
+      </div>` : ''
+
+    return `<div style="background:${dupl?'#FFF9F9':'#FFF8E1'};border:1.5px solid ${dupl?'#F5C6C0':'#FFE0B2'};border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+      ${aviso}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:230px;">
+          ${dupl
+            ? `<span title="Cadastro com aviso de duplicidade não entra na aprovação em bloco" style="color:#C08080;font-size:13px;line-height:1.4;">⚠</span>`
+            : `<input type="checkbox" ${_admSelPend.has(String(u.id))?'checked':''} onclick="admPendSelToggle('${u.id}')" style="cursor:pointer;margin-top:3px;">`}
+          <div>
+            <div style="font-weight:700;font-size:13px;">${escHtml(u.nome||'—')}</div>
+            <div style="font-size:11px;color:var(--ct);">CPF: ${escHtml(u.cpf||'—')} &nbsp;|&nbsp; ${escHtml(u.email||'—')} &nbsp;|&nbsp; ${escHtml(u.telefone||'—')}</div>
+            <div style="font-size:11px;color:var(--ct);">Setorial: <strong>${escHtml(u.setorial_id||'—')}</strong> &nbsp;|&nbsp; Cadastrado em: ${dt}
+              ${u.pcs ? ` &nbsp;|&nbsp; <strong style="color:var(--v);">já tem ${u.pcs} PC${u.pcs!==1?'s':''} e ${u.baixas} baixa${u.baixas!==1?'s':''}</strong>` : ''}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${dupl ? `<button class="btn-acao" style="background:#991B1B;color:#fff;font-weight:700;" onclick="admMesclar('${u.id}','${dupl.usuario.id}')">⇄ Mesclar no cadastro existente</button>` : ''}
+          <button class="btn-acao btn-ass" onclick="admAbrirAprovar('${u.id}')">✓ Aprovar</button>
+          <button class="btn-acao btn-dev" onclick="admRejeitar('${u.id}')">✕ Rejeitar</button>
+        </div>
       </div>
     </div>`
   }).join('')
 
   cont.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
       <div style="font-size:13px;font-weight:800;">⏳ Aguardando Aprovação</div>
       <span style="background:var(--r);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:800;">${_admPendentes.length}</span>
+      ${comAviso?`<span style="font-size:11px;color:#991B1B;font-weight:700;">· ${comAviso} com aviso de duplicidade</span>`:''}
+      ${limpos?`<label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ct);cursor:pointer;">
+        <input type="checkbox" id="admPendTodos" onclick="admPendSelTodos(this.checked)" style="cursor:pointer;">
+        marcar os ${limpos} sem aviso</label>`:''}
     </div>
+
+    <div id="admPendBarra" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#F1F8E9;border:1.5px solid #C5E1A5;border-radius:8px;padding:9px 13px;margin-bottom:9px;">
+      <span style="font-size:12px;color:var(--ct);">Só entram no bloco os cadastros <strong>sem aviso de duplicidade</strong>.</span>
+      <div style="flex:1;"></div>
+      <button class="btn-acao btn-ass" id="admPendBtn" onclick="admAprovarPendBloco()">✓ Aprovar selecionados</button>
+      <button class="btn-acao" style="background:#fff;color:var(--ct);border:1.5px solid var(--cb);" onclick="admPendSelTodos(false)">Limpar</button>
+    </div>
+
     ${cards}`
+  admPendBarra()
 }
 
-/** Põe a tabela no filtro dos pendentes e leva a vista até ela. */
-function admVerPendentesNaLista() {
-  const sel = document.getElementById('admAtivo')
-  if(sel) { sel.value = 'pend'; adminFiltrar() }
-  document.getElementById('admBusca')?.scrollIntoView({ behavior:'smooth', block:'start' })
+async function admAprovarPendBloco() {
+  const ids = [...(_admSelPend)]
+  const alvo = _admPendentes.filter(u => ids.includes(String(u.id)) && (!u.candidatos || !u.candidatos.length))
+  if(!alvo.length) { toast('Nada selecionado.','err'); return }
+
+  if(!await moConfirm(`Liberar o acesso de ${alvo.length} pessoa${alvo.length!==1?'s':''}?`, {
+    titulo: 'Aprovar em bloco',
+    detalhe: `${alvo.map(u=>u.nome).slice(0,8).join(', ')}${alvo.length>8?` e mais ${alvo.length-8}`:''}.\n\n` +
+             'Cada uma passa a entrar no sistema imediatamente. O grupo de cada uma é mantido ' +
+             'como está.\n\nCadastros com aviso de duplicidade não entram — esses ficam para decidir um a um.',
+    okTexto: `Liberar ${alvo.length}`, cancelarTexto: 'Voltar',
+  })) return
+
+  const bt = document.getElementById('admPendBtn')
+  if(bt) { bt.disabled = true; bt.textContent = 'Aprovando...' }
+  const { ok, falhou } = await admEmLotes(alvo.map(u => String(u.id)), async id => {
+    const r = await fetch(`${API_URL}/usuarios/${id}/aprovar`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  })
+  toast(falhou.length
+    ? `${ok.length} liberado(s), ${falhou.length} falhou/falharam: ${falhou[0].erro}`
+    : `${ok.length} pessoa${ok.length!==1?'s':''} liberada${ok.length!==1?'s':''}.`,
+    falhou.length ? 'err' : 'ok')
+  await admCarregarPendentes()
+  await adminCarregar()
+}
+
+/**
+ * Mescla o cadastro novo no antigo. O ANTIGO é o que fica — é ele que tem as PCs.
+ * A confirmação diz, campo a campo, o que vai ser copiado e o que vai ser apagado.
+ */
+async function admMesclar(idNovo, idExistente) {
+  const novo = _admPendentes.find(u => String(u.id) === String(idNovo))
+  const c = novo?.candidatos?.find(x => String(x.usuario.id) === String(idExistente))
+  if(!novo || !c) return
+  const velho = c.usuario
+
+  // O que será copiado: só o que falta no antigo. Dito antes, não depois.
+  const copiar = []
+  if(!velho.cpf && novo.cpf)           copiar.push(`CPF ${novo.cpf}`)
+  if(!velho.email && novo.email)       copiar.push(`e-mail ${novo.email}`)
+  if(!velho.telefone && novo.telefone) copiar.push(`telefone ${novo.telefone}`)
+
+  if(!await moConfirm(`Mesclar em ${velho.nome} (id ${velho.id})?`, {
+    titulo: 'Mesclar cadastros', perigo: true,
+    detalhe:
+      `FICA: id ${velho.id} — ${velho.nome}, grupo ${velho.grupo||'—'}, ` +
+      `com ${velho.pcs} PC${velho.pcs!==1?'s':''} e ${velho.baixas} baixa${velho.baixas!==1?'s':''}.\n\n` +
+      (copiar.length
+        ? `COPIA para ele: ${copiar.join(' · ')}.\n\n`
+        : 'NADA a copiar — o cadastro antigo já tem CPF, e-mail e telefone.\n\n') +
+      `EXCLUI: id ${novo.id} — ${novo.nome}, com ${novo.pcs||0} PC.\n\n` +
+      'A exclusão não tem volta. O histórico de trabalho fica todo no cadastro que fica.',
+    okTexto: 'Mesclar e excluir', cancelarTexto: 'Voltar',
+  })) return
+
+  try {
+    const r = await fetch(`${API_URL}/usuarios/mesclar`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id_novo: novo.id, id_existente: velho.id, autor_id: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const n = Object.keys(j.data.copiado||{}).length
+    toast(`Mesclado em ${velho.nome}${n?` — ${n} campo${n>1?'s':''} copiado${n>1?'s':''}`:''}.`,'ok')
+    await admCarregarPendentes()
+    await adminCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 function admAbrirAprovar(id) {
