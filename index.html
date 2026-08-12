@@ -3191,7 +3191,7 @@ function moDialogo(o) {
         </div>
         <div class="mcb">
           ${o.pergunta ? `<div style="font-size:13px;color:var(--te);line-height:1.5;">${escHtml(o.pergunta)}</div>` : ''}
-          ${o.detalhe ? `<div style="font-size:11.5px;color:var(--ct);line-height:1.5;margin-top:7px;">${escHtml(o.detalhe)}</div>` : ''}
+          ${o.detalhe ? `<div style="font-size:11.5px;color:var(--ct);line-height:1.5;margin-top:7px;white-space:pre-line;">${escHtml(o.detalhe)}</div>` : ''}
           ${ehPrompt ? `<div class="mc-campo" style="margin-top:12px;margin-bottom:5px;">
             ${multi
               ? `<textarea id="${id}C" rows="${o.linhas}" placeholder="${escHtml(o.exemplo||'')}">${escHtml(o.valor||'')}</textarea>`
@@ -7200,8 +7200,23 @@ function irAdmin() {
           <option value="">Todos</option>
           <option value="true">Ativo</option>
           <option value="false">Inativo</option>
+          <!-- Sem esta opcao a aprovacao em bloco nao serve para nada: nao haveria como
+               deixar na tela so quem esta esperando. -->
+          <option value="pend">⏳ Aguardando aprovação</option>
         </select>
       </div>
+    </div>
+
+    <!-- Barra de acao em bloco. Nasce escondida e so aparece com algo marcado — barra
+         permanente com "0 selecionados" vira paisagem e para de ser lida. -->
+    <div id="admBarraBloco" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;" id="admBlocoTxt"></div>
+      <div id="admBlocoFora" style="font-size:11px;color:var(--ct);"></div>
+      <div style="flex:1;"></div>
+      <button class="btn-acao btn-ass" id="admBtnAprovar" onclick="admAprovarBloco()">✓ Aprovar selecionados</button>
+      <button class="btn-acao btn-ass" id="admBtnAtivar" onclick="admAtivarBloco(true)">✅ Ativar</button>
+      <button class="btn-acao btn-dev" id="admBtnDesativar" onclick="admAtivarBloco(false)">🚫 Desativar</button>
+      <button class="btn-acao" style="background:#fff;color:var(--ct);border:1.5px solid var(--cb);" onclick="admSelLimpar()">Limpar seleção</button>
     </div>
 
     <!-- Contadores rápidos -->
@@ -7216,6 +7231,10 @@ function irAdmin() {
       <div style="overflow-x:auto;">
         <table>
           <thead><tr>
+            <th style="width:34px;text-align:center;">
+              <input type="checkbox" id="admSelTodos" onclick="admSelTodos(this.checked)"
+                     title="Marcar/desmarcar todos os visíveis" style="cursor:pointer;">
+            </th>
             <th>#</th>
             <th>Nome</th>
             <th>CPF</th>
@@ -7226,7 +7245,7 @@ function irAdmin() {
             <th>Último Acesso</th>
             <th>Ações</th>
           </tr></thead>
-          <tbody id="admBody"><tr><td colspan="9"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
+          <tbody id="admBody"><tr><td colspan="10"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -7368,6 +7387,180 @@ function irAdmin() {
 let _admUsers = []
 let _admEditId = null
 
+// ══════════════════════════════════════
+//  SELEÇÃO E AÇÃO EM BLOCO (12/08/2026)
+// ══════════════════════════════════════
+// ⚠️ A REGRA QUE SEGURA TUDO: A AÇÃO SÓ ALCANÇA QUEM ESTÁ NA TELA.
+//
+// A marcação sobrevive à troca de filtro — sem isso, buscar um nome no meio da reunião
+// apagaria tudo o que já foi marcado. Mas quem sai do filtro **para de ser afetado**, e a
+// barra diz quantos ficaram de fora.
+//
+// A alternativa (agir sobre tudo o que está marcado, visível ou não) libera acesso a gente
+// que não está na tela na hora do clique. Numa reunião, isso é irreparável: a pessoa entra
+// e ninguém percebeu.
+let _admSel = new Set()     // ids marcados, sobrevivem ao filtro
+let _admVisiveis = []       // ids que o filtro corrente deixou na tela
+
+/** Os que serão realmente afetados: marcados E na tela. */
+function admSelVisiveis() {
+  return _admVisiveis.filter(id => _admSel.has(id))
+}
+
+function admSelToggle(id, marcado) {
+  const s = String(id)
+  if(marcado) _admSel.add(s); else _admSel.delete(s)
+  admBarraAtualizar()
+  // Repinta só a linha, não a tabela: repintar perderia o foco e o scroll a cada clique.
+  const tr = document.querySelector(`.admChk[data-id="${s}"]`)?.closest('tr')
+  if(tr) tr.style.background = marcado ? '#F1F8E9' : ''
+}
+
+function admSelTodos(marcar) {
+  // Só os visíveis, e só os que este usuário pode gerenciar — as linhas sem caixa nem
+  // entram na conta.
+  document.querySelectorAll('.admChk').forEach(chk => {
+    const id = String(chk.dataset.id)
+    chk.checked = marcar
+    if(marcar) _admSel.add(id); else _admSel.delete(id)
+    const tr = chk.closest('tr')
+    if(tr) tr.style.background = marcar ? '#F1F8E9' : ''
+  })
+  admBarraAtualizar()
+}
+
+function admSelLimpar() {
+  _admSel.clear()
+  adminFiltrar()
+}
+
+function admBarraAtualizar() {
+  const barra = document.getElementById('admBarraBloco')
+  if(!barra) return
+  const vis = admSelVisiveis()
+  const fora = _admSel.size - vis.length
+
+  if(!vis.length && !fora) { barra.style.display = 'none'; admSelTodosEstado(); return }
+  barra.style.display = 'flex'
+
+  document.getElementById('admBlocoTxt').textContent =
+    `${vis.length} selecionado${vis.length!==1?'s':''}`
+
+  // Quem está marcado mas saiu do filtro. Dito em voz alta: o silêncio aqui é que faria a
+  // pessoa achar que aprovou 30 quando aprovou 12.
+  document.getElementById('admBlocoFora').textContent = fora
+    ? `· ${fora} marcado${fora!==1?'s':''} fora do filtro — não ${fora!==1?'serão':'será'} afetado${fora!==1?'s':''}`
+    : ''
+
+  // O número vai NO BOTÃO, não só na barra: é onde a pessoa olha antes de clicar.
+  const aguardando = _admUsers.filter(u => _admSel.has(String(u.id)) &&
+                                           _admVisiveis.includes(String(u.id)) &&
+                                           u.aguardando_aprovacao).length
+  const btnAp = document.getElementById('admBtnAprovar')
+  btnAp.textContent = aguardando ? `✓ Aprovar ${aguardando} selecionado${aguardando!==1?'s':''}`
+                                 : '✓ Aprovar selecionados'
+  btnAp.disabled = !aguardando
+  btnAp.style.opacity = aguardando ? '1' : '.45'
+  btnAp.title = aguardando ? '' : 'Nenhum dos selecionados está aguardando aprovação'
+
+  document.getElementById('admBtnAtivar').textContent = `✅ Ativar ${vis.length}`
+  document.getElementById('admBtnDesativar').textContent = `🚫 Desativar ${vis.length}`
+  admSelTodosEstado()
+}
+
+/** A caixa do cabeçalho reflete os três estados: nenhum, alguns, todos. */
+function admSelTodosEstado() {
+  const topo = document.getElementById('admSelTodos')
+  if(!topo) return
+  const caixas = document.querySelectorAll('.admChk')
+  const marcadas = [...caixas].filter(c => c.checked).length
+  topo.checked = caixas.length > 0 && marcadas === caixas.length
+  topo.indeterminate = marcadas > 0 && marcadas < caixas.length
+}
+
+/** Roda em blocos de 5: 47 pedidos de uma vez derrubam a conexão, e um a um demora. */
+async function admEmLotes(ids, fn) {
+  const ok = [], falhou = []
+  for(let i = 0; i < ids.length; i += 5) {
+    const fatia = ids.slice(i, i + 5)
+    const rs = await Promise.all(fatia.map(async id => {
+      try { await fn(id); return { id, ok: true } }
+      catch(e) { return { id, ok: false, erro: e.message } }
+    }))
+    rs.forEach(r => (r.ok ? ok : falhou).push(r))
+  }
+  return { ok, falhou }
+}
+
+async function admAprovarBloco() {
+  const ids = admSelVisiveis()
+  const alvo = _admUsers.filter(u => ids.includes(String(u.id)) && u.aguardando_aprovacao)
+  if(!alvo.length) { toast('Nenhum dos selecionados está aguardando aprovação.','err'); return }
+
+  const nomes = alvo.slice(0,8).map(u => u.nome).join(', ')
+  if(!await moConfirm(`Liberar o acesso de ${alvo.length} pessoa${alvo.length!==1?'s':''}?`, {
+    titulo: 'Aprovar em bloco',
+    detalhe: `${nomes}${alvo.length>8?` e mais ${alvo.length-8}`:''}.\n\n` +
+             `Cada uma passa a entrar no sistema imediatamente. O grupo de cada uma é ` +
+             `mantido como está — a aprovação em bloco não mexe em grupo.`,
+    okTexto: `Liberar ${alvo.length}`, cancelarTexto: 'Voltar',
+  })) return
+
+  const bt = document.getElementById('admBtnAprovar')
+  bt.disabled = true; bt.textContent = 'Aprovando...'
+  const { ok, falhou } = await admEmLotes(alvo.map(u => String(u.id)), async id => {
+    const r = await fetch(`${API_URL}/usuarios/${id}/aprovar`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  })
+
+  ok.forEach(r => _admSel.delete(String(r.id)))
+  toast(falhou.length
+    ? `${ok.length} liberado${ok.length!==1?'s':''}, ${falhou.length} falhou/falharam: ${falhou[0].erro}`
+    : `${ok.length} pessoa${ok.length!==1?'s':''} liberada${ok.length!==1?'s':''}.`,
+    falhou.length ? 'err' : 'ok')
+  await admCarregarPendentes()
+  await adminCarregar()
+}
+
+async function admAtivarBloco(ativar) {
+  const ids = admSelVisiveis()
+  if(!ids.length) { toast('Nada selecionado.','err'); return }
+
+  // ⚠️ Você não se desativa. Sem isto, um "desativar todos" com o próprio nome na lista
+  // tira o superadmin do ar e não há quem religue pela tela.
+  const eu = ids.includes(String(U.id))
+  const alvoIds = ids.filter(id => id !== String(U.id))
+  if(!alvoIds.length) { toast('Só a sua própria conta estava selecionada — ela não é alterada.','err'); return }
+
+  const alvo = _admUsers.filter(u => alvoIds.includes(String(u.id)))
+  const verbo = ativar ? 'Ativar' : 'Desativar'
+  if(!await moConfirm(`${verbo} ${alvo.length} usuário${alvo.length!==1?'s':''}?`, {
+    titulo: `${verbo} em bloco`,
+    perigo: !ativar,
+    detalhe: ativar
+      ? 'Quem estiver aguardando aprovação continua aguardando — ativar não é aprovar.'
+      : `Quem for desativado deixa de entrar no sistema até ser reativado.` +
+        (eu ? '\n\nA sua própria conta está selecionada e será IGNORADA.' : ''),
+    okTexto: `${verbo} ${alvo.length}`, cancelarTexto: 'Voltar',
+  })) return
+
+  const bt = document.getElementById(ativar ? 'admBtnAtivar' : 'admBtnDesativar')
+  bt.disabled = true; bt.textContent = ativar ? 'Ativando...' : 'Desativando...'
+  const { ok, falhou } = await admEmLotes(alvoIds, async id => {
+    const { error } = await db.from('usuarios').update({ ativo: ativar }).eq('id', id)
+    if(error) throw new Error(error.message || JSON.stringify(error))
+  })
+
+  toast(falhou.length
+    ? `${ok.length} alterado${ok.length!==1?'s':''}, ${falhou.length} falhou/falharam: ${falhou[0].erro}`
+    : `${ok.length} usuário${ok.length!==1?'s':''} ${ativar?'ativado':'desativado'}${ok.length!==1?'s':''}.`,
+    falhou.length ? 'err' : 'ok')
+  await adminCarregar()
+}
+
 async function adminCarregar() {
   try {
     let q = db.from('usuarios').select('*').order('nome')
@@ -7424,10 +7617,17 @@ function adminFiltrar() {
     }
     if(perfil && u.perfil !== perfil) return false
     if(set && u.setorial_id !== set) return false
+    // 'pend' vem antes dos outros dois: quem aguarda aprovação costuma estar inativo, e
+    // sem esta saída ele apareceria também no filtro "Inativo", que é outra conversa.
+    if(ativo === 'pend') return !!u.aguardando_aprovacao
     if(ativo === 'true' && !u.ativo) return false
     if(ativo === 'false' && u.ativo) return false
     return true
   })
+
+  // Guarda o que está na tela AGORA: é sobre isto — e só sobre isto — que a ação em bloco
+  // age. Ver o comentário de `admSelVisiveis`.
+  _admVisiveis = lista.map(u => String(u.id))
 
   const tit = document.getElementById('admTblTit')
   const sub = document.getElementById('admTblSub')
@@ -7442,7 +7642,8 @@ function adminFiltrar() {
   const tbody = document.getElementById('admBody')
   if(!tbody) return
   if(!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--ct);">Nenhum usuário encontrado.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--ct);">Nenhum usuário encontrado.</td></tr>'
+    admBarraAtualizar()
     return
   }
 
@@ -7452,7 +7653,14 @@ function adminFiltrar() {
     const ult = u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
     const grupo = u.grupo ? `G${u.grupo}` : '—'
     const podeGerir = admPodeGerenciar(u)
-    return `<tr>
+    const marcado = _admSel.has(String(u.id))
+    return `<tr${marcado?' style="background:#F1F8E9;"':''}>
+      <td style="text-align:center;">
+        ${podeGerir
+          ? `<input type="checkbox" class="admChk" data-id="${u.id}" ${marcado?'checked':''}
+                    onclick="admSelToggle('${u.id}', this.checked)" style="cursor:pointer;">`
+          : `<span title="Você não gerencia este usuário" style="color:var(--cb);">—</span>`}
+      </td>
       <td style="font-size:10px;color:var(--ct);text-align:center;">${i+1}</td>
       <td>
         <div style="font-weight:700;font-size:12px;">${u.nome||'—'}</div>
@@ -7462,7 +7670,9 @@ function adminFiltrar() {
       <td><span style="display:inline-block;background:${cor}20;color:${cor};border:1px solid ${cor}50;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;">${lbl}</span></td>
       <td style="font-size:11px;font-weight:600;">${u.setorial_id||'—'}</td>
       <td style="text-align:center;font-size:11px;">${grupo}</td>
-      <td><span class="bdg ${u.ativo?'bdg-livre':'bdg-devolvido'}">${u.ativo?'● Ativo':'○ Inativo'}</span></td>
+      <td>${u.aguardando_aprovacao
+        ? '<span class="bdg" style="background:#FFF8E1;color:#B45309;border:1px solid #FFE0B2;">⏳ Aguardando</span>'
+        : `<span class="bdg ${u.ativo?'bdg-livre':'bdg-devolvido'}">${u.ativo?'● Ativo':'○ Inativo'}</span>`}</td>
       <td style="font-size:10px;color:var(--ct);">${ult}</td>
       <td style="white-space:nowrap;">
         ${podeGerir ? `
@@ -7474,6 +7684,9 @@ function adminFiltrar() {
       </td>
     </tr>`
   }).join('')
+
+  // Depois de repintar: a barra tem de refletir o filtro novo, não o anterior.
+  admBarraAtualizar()
 }
 
 function abrirNovoUsuario() {
@@ -7705,10 +7918,27 @@ async function admCarregarPendentes() {
   }
 }
 
+// Acima disto, a lista deixa de ser cartão e vira um resumo com atalho para a tabela.
+// Com os 47 da abertura, 47 cartões empilhados empurram a tabela para fora da tela — e é
+// justamente na tabela que a aprovação em bloco acontece.
+const PEND_CARTOES_MAX = 8
+
 function admRenderPendentes() {
   const cont = document.getElementById('admPendentesArea')
   if(!cont) return
   if(!_admPendentes.length) { cont.innerHTML = ''; return }
+
+  if(_admPendentes.length > PEND_CARTOES_MAX) {
+    cont.innerHTML = `
+      <div style="background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:800;">⏳ ${_admPendentes.length} cadastros aguardando aprovação</div>
+        <div style="font-size:11px;color:var(--ct);flex:1;min-width:200px;">
+          São muitos para aprovar um a um. Use a lista abaixo: marque as caixas e libere em bloco.
+        </div>
+        <button class="btn-acao btn-ass" onclick="admVerPendentesNaLista()">Ver na lista e aprovar em bloco</button>
+      </div>`
+    return
+  }
 
   const cards = _admPendentes.map(u => {
     const dt = u.criado_em ? new Date(u.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'
@@ -7731,6 +7961,13 @@ function admRenderPendentes() {
       <span style="background:var(--r);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:800;">${_admPendentes.length}</span>
     </div>
     ${cards}`
+}
+
+/** Põe a tabela no filtro dos pendentes e leva a vista até ela. */
+function admVerPendentesNaLista() {
+  const sel = document.getElementById('admAtivo')
+  if(sel) { sel.value = 'pend'; adminFiltrar() }
+  document.getElementById('admBusca')?.scrollIntoView({ behavior:'smooth', block:'start' })
 }
 
 function admAbrirAprovar(id) {

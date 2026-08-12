@@ -170,6 +170,11 @@ console.log('\n═══ 4c. ADMIN — CPF com e sem mascara, e nome nulo ══
       console, document: doc, _admUsers: users, U: { perfil: 'superadmin' },
       termoBusca: ctx.termoBusca, soDigitos: ctx.soDigitos,
       perfilLabel: () => 'x', admPodeGerenciar: () => true,
+      // Desde 12/08 o `adminFiltrar` também alimenta a seleção em bloco: guarda os ids
+      // visíveis e manda a barra se atualizar. Quem testa a BUSCA não testa isso — mas
+      // precisa fornecer as peças, senão a função nem roda.
+      // A regra da seleção tem suíte própria: teste_front_bloco.js.
+      _admSel: new Set(), _admVisiveis: [], admBarraAtualizar: () => {},
     };
     vm.createContext(ctxA);
     vm.runInContext(trecho, ctxA);
