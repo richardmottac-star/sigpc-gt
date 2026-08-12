@@ -75,7 +75,8 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
   const GUARDA_REAL = {
     dash:'todos', est:'todos', plan:'todos', repo:'todos', perfil:'todos', meuspedidos:'todos',
     prod:'todos',            // irProd nao tem guarda de entrada
-    rel:'todos',             // irRel nao tem guarda de entrada; so a aba CGE e restrita
+    // irRel GANHOU guarda em 12/08: a tela e de coordenacao, e antes abria para qualquer um.
+    rel:['coordenador','superadmin'],
     estornar:['analista','coordenador','superadmin'],
     board:['coordenador','superadmin'],
     coord:['coordenador','superadmin'],
@@ -104,17 +105,31 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
   });
 }
 
-console.log('\n═══ 3. AS DUAS QUE ESTAVAM NO BLOCO ERRADO ═══');
+console.log('\n═══ 3. PRODUTIVIDADE: DESCEU E FICOU ═══');
 {
-  // Estavam em "Coordenação" e o analista abre as duas. O menu escondia o que a pessoa
-  // alcançava por outro caminho — a Produtividade tem botão no proprio Dashboard.
+  // Estava em "Coordenação" e o analista abre. O menu escondia o que a pessoa alcançava
+  // por outro caminho — a Produtividade tem botão no proprio Dashboard.
   conf(idsDe(analista).includes('prod'), 'PRODUTIVIDADE aparece para o analista');
-  conf(idsDe(analista).includes('rel'), 'RELATORIOS aparece para o analista');
   conf(SB_ITENS.find(i=>i.id==='prod').bloco === 'analista', 'e mora no bloco do analista');
-  conf(SB_ITENS.find(i=>i.id==='rel').bloco === 'analista', 'idem');
-  // O botao do Dashboard continua existindo — agora o menu concorda com ele.
   conf(/onclick="irProd\(\)"[\s\S]{0,300}?Produtividade \(NL\)/.test(html),
-       'o botao rapido do Dashboard continua la');
+       'o botao rapido do Dashboard continua la, e o menu concorda com ele');
+}
+
+console.log('\n═══ 3b. RELATORIOS: VOLTOU PARA A COORDENACAO, COM GUARDA ═══');
+{
+  conf(SB_ITENS.find(i=>i.id==='rel').bloco === 'coordenacao', 'mora no bloco da coordenacao');
+  conf(!idsDe(analista).includes('rel'), 'NAO aparece para o analista');
+  conf(idsDe(coord).includes('rel'), 'aparece para o coordenador');
+  conf(idsDe(superad).includes('rel'), 'e para o superadmin');
+  // ⚠️ O que importa: tirar do menu SEM por a guarda deixaria a tela alcancavel por quem
+  // soubesse o caminho — a mesma incoerencia que a reorganizacao veio corrigir.
+  conf(/function irRel\(\)\s*\{[\s\S]{0,400}?if\(!\['coordenador','superadmin'\]\.includes\(U\.perfil\)\)[\s\S]{0,120}?return \}/.test(html),
+       'IR REL TEM GUARDA DE ENTRADA — nao basta sumir do menu');
+  // E a guarda vem antes de qualquer coisa que a tela desenhe.
+  const i = html.indexOf('function irRel()');
+  const bloco = html.slice(i, i + 700);
+  conf(bloco.indexOf('U.perfil') < bloco.indexOf('ativarMenu'),
+       'e a guarda vem ANTES de a tela comecar a montar');
 }
 
 console.log('\n═══ 4. PAINEL ADMIN — NAO E ITEM DE SUPERADMIN ═══');
