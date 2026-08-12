@@ -8494,7 +8494,7 @@ function admRenderPendentes() {
           <div>
             <div style="font-weight:700;font-size:13px;">${escHtml(u.nome||'—')}</div>
             <div style="font-size:11px;color:var(--ct);">CPF: ${escHtml(u.cpf||'—')} &nbsp;|&nbsp; ${escHtml(u.email||'—')} &nbsp;|&nbsp; ${escHtml(u.telefone||'—')}</div>
-            <div style="font-size:11px;color:var(--ct);">Setorial: <strong>${escHtml(u.setorial_id||'—')}</strong> &nbsp;|&nbsp; Cadastrado em: ${dt}
+            <div style="font-size:11px;color:var(--ct);">Setorial: <strong style="${u.outra_setorial?'color:#991B1B;':''}">${escHtml(u.setorial_id||'—')}</strong>${u.outra_setorial?' <span style="color:#991B1B;font-weight:700;">⚠ diferente da sua — provável erro no cadastro</span>':''} &nbsp;|&nbsp; Cadastrado em: ${dt}
               ${u.pcs ? ` &nbsp;|&nbsp; <strong style="color:var(--v);">já tem ${u.pcs} PC${u.pcs!==1?'s':''} e ${u.baixas} baixa${u.baixas!==1?'s':''}</strong>` : ''}</div>
           </div>
         </div>
