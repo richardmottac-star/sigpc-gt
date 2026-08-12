@@ -823,6 +823,17 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         <span id="sinoBadge" style="display:none;position:absolute;top:1px;right:1px;background:var(--r);color:#fff;
           font-size:9px;font-weight:800;border-radius:9px;padding:1px 5px;pointer-events:none;"></span>
       </div>
+      <!-- ONLINE AGORA — saiu do rodapé do menu (12/08/2026). Lá embaixo era uma lista
+           sempre aberta que empurrava o menu e crescia com a equipe: com 47 pessoas viraria
+           uma coluna de nomes maior que o próprio menu. Aqui é um número, e a lista só
+           aparece quando alguém quer ver. -->
+      <div id="onlineBox" style="position:relative;display:none;margin-right:6px;">
+        <button id="onlineBtn" onclick="onlineAbrir(event)" title="Quem está online agora"
+          style="background:none;border:0;cursor:pointer;padding:6px 8px;line-height:1;color:#fff;display:flex;align-items:center;gap:5px;font-family:Barlow,sans-serif;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#7BE38B;display:inline-block;"></span>
+          <span id="onlineNum" style="font-size:13px;font-weight:800;">—</span>
+        </button>
+      </div>
       <div><div class="uname" id="tNome">—</div><div class="urole" id="tPerfil">—</div></div>
       <div class="avatar" id="tAv">—</div>
       <button class="btn-sair" onclick="sair()">Sair</button>
@@ -1625,6 +1636,106 @@ function sair() {
 // ══════════════════════════════════════
 //  SIDEBAR
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+//  MENU LATERAL — três blocos por perfil (12/08/2026)
+// ══════════════════════════════════════
+// ⚠️ FONTE ÚNICA. Antes o menu era HTML escrito à mão dentro de `renderSB`, com quatro
+// seções, três delas sem rótulo, e itens soltos no fim. Cresceu por acumulação e perdeu a
+// hierarquia.
+//
+// Agora cada item declara o BLOCO em que vive e a REGRA de quem o vê. E a regra aqui é a
+// mesma que a tela aplica ao abrir — conferida uma a uma no código em 12/08, não deduzida
+// pelo nome. As duas surpresas dessa conferência estão marcadas com ⚠️ abaixo.
+//
+// A regra dos blocos: o item mora no bloco do PERFIL MAIS BAIXO QUE O USA, e quem tem
+// perfil maior enxerga os blocos de baixo também.
+const SB_BLOCOS = [
+  { id: 'analista',    rotulo: 'Principal' },
+  { id: 'coordenacao', rotulo: 'Coordenação' },
+  { id: 'superadmin',  rotulo: 'Superadmin' },
+]
+
+const eCoord = (u) => u.perfil === 'coordenador' || u.perfil === 'superadmin'
+
+const SB_ITENS = [
+  // ── Bloco do analista: o que todo mundo usa ─────────────────────────────────
+  { id:'dash',  bloco:'analista', rotulo:'Dashboard',      acao:'irDash()',      pode:()=>true,
+    icone:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
+  { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:()=>true,
+    icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
+  { id:'plan',  bloco:'analista', rotulo:'Minha Planilha', acao:'irPlanilha()',  pode:()=>true,
+    icone:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z' },
+
+  // ⚠️ PRODUTIVIDADE E RELATÓRIOS ESTAVAM NA SEÇÃO "COORDENAÇÃO" — e nenhuma das duas tem
+  // guarda de entrada: qualquer analista abre. Pior, o Dashboard sempre teve um botão
+  // rápido para a Produtividade, então o analista já chegava lá por fora do menu. O menu
+  // escondia o que a pessoa alcançava por outro caminho. Descem para cá.
+  //
+  // Cada tela já se recorta sozinha: a Produtividade mostra ao analista só o cartão dele
+  // (`d.u.id === U.id`), e nos Relatórios a aba CGE só existe para coordenador e superadmin.
+  { id:'prod',  bloco:'analista', rotulo:'Produtividade',  acao:'irProd()',      pode:()=>true,
+    icone:'M3.5 18.5l6-6 4 4L22 6.9l-1.4-1.4-7.1 8.1-4-4L2 17l1.5 1.5z' },
+  { id:'rel',   bloco:'analista', rotulo:'Relatórios',     acao:'irRel()',       pode:()=>true,
+    icone:'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
+
+  { id:'repo',  bloco:'analista', rotulo:'Repositório',    acao:'irRepo()',      pode:()=>true,
+    icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
+  // A tela recusa quem não for analista, coordenador ou superadmin — a mesma regra, aqui.
+  { id:'estornar', bloco:'analista', rotulo:'Estornar Baixa', acao:'irEstornar()',
+    pode:(u)=>['analista','coordenador','superadmin'].includes(u.perfil),
+    icone:'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z' },
+  { id:'meuspedidos', bloco:'analista', rotulo:'Meus pedidos', acao:'irMeusPedidos()', pode:()=>true,
+    icone:'M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 16H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V9h10v2z' },
+  { id:'perfil', bloco:'analista', rotulo:'Meu Perfil',    acao:'irMeuPerfil()', pode:()=>true,
+    icone:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z' },
+  // Para quem É do Controle Interno, esta é a tela de trabalho — fica no primeiro bloco.
+  // Coordenador e superadmin também entram, e para eles o item aparece em Coordenação.
+  // Os dois nunca coexistem (o perfil é um só), então o id `mi-ci` não duplica.
+  { id:'ci',    bloco:'analista', rotulo:'Controle Interno', acao:'irCI()',
+    pode:(u)=>u.perfil === 'controle_interno',
+    icone:'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z' },
+
+  // ── Bloco da coordenação ────────────────────────────────────────────────────
+  { id:'board', bloco:'coordenacao', rotulo:'Board / Gráficos', acao:'irBoard()', pode:eCoord,
+    icone:'M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2.5 2.1h-15V5h15v14.1zm0-16.1h-15c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z' },
+  { id:'coord', bloco:'coordenacao', rotulo:'Gestão Grupo', acao:'irGestaoGrupo()', pode:eCoord,
+    icone:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z' },
+  { id:'aprov', bloco:'coordenacao', rotulo:'Aprovações', acao:'irAprovacoes()', pode:eCoord,
+    badge:'sbAprovBadge',
+    icone:'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z' },
+  { id:'afast', bloco:'coordenacao', rotulo:'Férias e Afastamentos', acao:'irAfastamentos()', pode:eCoord,
+    icone:'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z' },
+  { id:'estlog', bloco:'coordenacao', rotulo:'Estornos Realizados', acao:'irEstornosRealizados()', pode:eCoord,
+    icone:'M12 8v4l3 3 .75-.75-2.5-2.5V8H12zm0-6a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z' },
+  { id:'ci',    bloco:'coordenacao', rotulo:'Controle Interno', acao:'irCI()', pode:eCoord,
+    icone:'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z' },
+  { id:'faixa', bloco:'coordenacao', rotulo:'Faixa de avisos', acao:'irFaixa()', pode:eCoord,
+    icone:'M3 5h18v4H3V5zm0 6h18v2H3v-2zm0 4h12v4H3v-4z' },
+  { id:'recado', bloco:'coordenacao', rotulo:'Enviar recado', acao:'sinoRecado()', pode:eCoord,
+    icone:'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z' },
+  // ⚠️ NÃO É ITEM DE SUPERADMIN, embora o rótulo faça parecer. `irAdmin` aceita coordenador
+  // e superadmin, e o coordenador enxerga só o próprio grupo. Quem confunde é o nome: para
+  // o coordenador a tela já se chama "Gestão de Usuários". Fica no bloco de quem a usa.
+  { id:'admin', bloco:'coordenacao', acao:'irAdmin()', pode:eCoord, destaque:true,
+    rotulo:(u)=> u.perfil === 'superadmin' ? 'Painel ADMIN' : 'Gestão de Usuários',
+    icone:'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 14c-2.67 0-5.03-1.33-6.47-3.36.35-1.63 2.95-2.64 6.47-2.64s6.12 1.01 6.47 2.64C17.03 17.67 14.67 19 12 19z' },
+
+  // ── Bloco do superadmin ─────────────────────────────────────────────────────
+  { id:'prior', bloco:'superadmin', rotulo:'Painel Técnico', acao:'irPrioridade()',
+    pode:(u)=>u.perfil === 'superadmin',
+    icone:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-2v-4H8v-2h4V8h2v4h4v2z' },
+  { id:'config', bloco:'superadmin', rotulo:'Configurações', acao:'irConfiguracoes()',
+    pode:(u)=>u.perfil === 'superadmin',
+    icone:'M19.14 12.94a7.4 7.4 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.86a.5.5 0 0 0 .12.62l2.03 1.58a7.4 7.4 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z' },
+]
+
+/** Os itens que ESTE usuário vê, já agrupados. Bloco sem item não é desenhado. */
+function sbMontar(u) {
+  return SB_BLOCOS
+    .map(b => ({ ...b, itens: SB_ITENS.filter(i => i.bloco === b.id && i.pode(u)) }))
+    .filter(b => b.itens.length > 0)
+}
+
 function renderSB() {
   // ⚠️ MODO PREPARAÇÃO: a barra some inteira, não fica "com menos itens". Item cinza é
   // convite a clicar e a perguntar por quê; barra ausente diz sozinha que agora não é hora.
@@ -1633,141 +1744,118 @@ function renderSB() {
   if(prepRestrito()) {
     nav.innerHTML = ''
     nav.style.display = 'none'
-    faixaIniciar()   // a faixa de avisos continua: é por ela que você fala com quem está esperando
+    onlineIniciar()
+    faixaIniciar()   // a faixa continua: é por ela que você fala com quem está esperando
     return
   }
   nav.style.display = ''
 
-  const isAdmin = U.perfil === 'superadmin'
-  const isCoordi = U.perfil === 'coordenador' || U.perfil === 'superadmin'
-  const podeEstornar = U.perfil === 'analista' || U.perfil === 'coordenador' || U.perfil === 'superadmin'
-  const souControleInterno = U.perfil === 'controle_interno'
-  document.getElementById('SB').innerHTML = `
+  nav.innerHTML = sbMontar(U).map(b => `
     <div class="sb-sec">
-      <div class="sb-lbl">Principal</div>
-      <div class="sb-item on" id="mi-dash" onclick="irDash()">
-        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>Dashboard
-      </div>
-      <div class="sb-item" id="mi-est" onclick="irEst()">
-        <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Estoque TRs
-      </div>
-      <div class="sb-item" id="mi-plan" onclick="irPlanilha()" style="position:relative;">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Minha Planilha
-      </div>
-      <div class="sb-item" id="mi-repo" onclick="irRepo()">
-        <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>Repositório
-      </div>
-      ${podeEstornar?`<div class="sb-item" id="mi-estornar" onclick="irEstornar()">
-        <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>Estornar Baixa
-      </div>`:''}
-      <div class="sb-item" id="mi-perfil" onclick="irMeuPerfil()">
-        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Meu Perfil
-      </div>
-      ${souControleInterno?`<div class="sb-item" id="mi-ci" onclick="irCI()">
-        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z"/></svg>
-        Controle Interno
-      </div>`:''}
-    </div>
-    ${isCoordi ? `<div class="sb-sec">
-      <div class="sb-lbl">Coordenação</div>
-      <div class="sb-item" id="mi-board" onclick="irBoard()">
-        <svg viewBox="0 0 24 24"><path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2.5 2.1h-15V5h15v14.1zm0-16.1h-15c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>Board / Gráficos
-      </div>
-      <div class="sb-item" id="mi-prod" onclick="irProd()">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Produtividade (NL)
-      </div>
-      <div class="sb-item" id="mi-rel" onclick="irRel()">
-        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>Relatórios
-      </div>
-      <div class="sb-item" id="mi-coord" onclick="irGestaoGrupo()">
-        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-        Gestão Grupo
-      </div>
-      <div class="sb-item" id="mi-afast" onclick="irAfastamentos()">
-        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>Férias e Afastamentos
-      </div>
-      <div class="sb-item" id="mi-estlog" onclick="irEstornosRealizados()">
-        <svg viewBox="0 0 24 24"><path d="M12 8v4l3 3 .75-.75-2.5-2.5V8H12zm0-6a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>Estornos Realizados
-      </div>
-      <div class="sb-item" id="mi-ci" onclick="irCI()">
-        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z"/></svg>
-        Controle Interno
-      </div>
-      <div class="sb-item" id="mi-admin" onclick="irAdmin()" style="color:var(--am);">
-        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 14c-2.67 0-5.03-1.33-6.47-3.36.35-1.63 2.95-2.64 6.47-2.64s6.12 1.01 6.47 2.64C17.03 17.67 14.67 19 12 19z"/></svg>
-        <span style="font-weight:800;">${isAdmin ? 'Painel ADMIN' : 'Gestão de Usuários'}</span>
-        ${isAdmin?'<span style="font-size:8px;background:var(--r);color:#fff;border-radius:4px;padding:1px 4px;margin-left:auto;">SA</span>':''}
-      </div>
-    </div>` : ''}
-    ${isAdmin ? `<div class="sb-sec">
-      <div class="sb-item" id="mi-prior" onclick="irPrioridade()">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-2v-4H8v-2h4V8h2v4h4v2z"/></svg>Painel Técnico
-      </div>
-      <div class="sb-item" id="mi-config" onclick="irConfiguracoes()">
-        <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.4 7.4 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.86a.5.5 0 0 0 .12.62l2.03 1.58a7.4 7.4 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>Configurações
-      </div>
-    </div>` : ''}
-    ${(isCoordi || isAdmin) ? `<div class="sb-sec">
-      <div class="sb-item" id="mi-aprov" onclick="irAprovacoes()" style="position:relative;">
-        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>Aprovações
-        <span id="sbAprovBadge" style="display:none;margin-left:auto;background:var(--r);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 6px;"></span>
-      </div>
-    </div>` : ''}
-    ${(isCoordi || isAdmin) ? `<div class="sb-sec">
-      <div class="sb-item" id="mi-faixa" onclick="irFaixa()">
-        <svg viewBox="0 0 24 24"><path d="M3 5h18v4H3V5zm0 6h18v2H3v-2zm0 4h12v4H3v-4z"/></svg>Faixa de avisos
-      </div>
-      <div class="sb-item" id="mi-recado" onclick="sinoRecado()">
-        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z"/></svg>Enviar recado
-      </div>
-    </div>` : ''}
-    <div class="sb-sec">
-      <div class="sb-item" id="mi-meuspedidos" onclick="irMeusPedidos()">
-        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 16H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V9h10v2z"/></svg>Meus pedidos
-      </div>
-    </div>
+      <div class="sb-lbl">${b.rotulo}</div>
+      ${b.itens.map(i => `
+      <div class="sb-item" id="mi-${i.id}" onclick="${i.acao}" style="position:relative;">
+        <svg viewBox="0 0 24 24"><path d="${i.icone}"/></svg>
+        <span${i.destaque?' style="font-weight:800;color:var(--am);"':''}>${typeof i.rotulo==='function'?i.rotulo(U):i.rotulo}</span>
+        ${i.badge?`<span id="${i.badge}" style="display:none;margin-left:auto;background:var(--r);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 6px;"></span>`:''}
+      </div>`).join('')}
+    </div>`).join('') + `
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
       <div class="sb-grupo">${U.setorialAcesso === 'ADMIN' ? 'ADMIN ●' : U.setorialAcesso + ' ●'}</div>
-    </div>
-    <div class="sb-sec" id="sbOnline">
-      <div class="sb-lbl">Online agora</div>
-      <div id="sbOnlineLista" style="padding:4px 14px;font-size:10px;color:var(--ct);">Carregando...</div>
-    </div>
-  `
-  carregarOnline()
+    </div>`
+
+  onlineIniciar()
   sinoIniciar()
   faixaIniciar()
 }
 
-async function carregarOnline() {
+// ══════════════════════════════════════
+//  ONLINE AGORA — no cabeçalho, ao lado do sino (12/08/2026)
+// ══════════════════════════════════════
+// ⚠️ SAIU DO RODAPÉ DO MENU. Lá era uma lista sempre aberta, que empurrava o menu para
+// baixo e crescia junto com a equipe: com 47 pessoas viraria uma coluna de nomes maior que
+// o próprio menu, e ninguém rolaria até o fim para ler.
+//
+// No cabeçalho é um NÚMERO, que é o que se quer saber de relance, e a lista só aparece
+// quando alguém clica. Mesmo padrão do sino, inclusive o fechar-ao-clicar-fora.
+let _online = []
+
+async function onlineCarregar() {
+  if(!U) return
   try {
-    // Registrar acesso do usuário atual
+    // Registra o próprio acesso e busca quem apareceu nos últimos 30 min. As duas coisas
+    // na mesma função porque a segunda só faz sentido depois da primeira: sem registrar,
+    // você não apareceria na sua própria lista.
     await db.from('usuarios').update({ultimo_acesso: new Date().toISOString()}).eq('id', U.id)
-    // Buscar quem acessou nos últimos 30 min
     const limite = new Date(Date.now() - 30*60*1000).toISOString()
-    const onlineParams = new URLSearchParams({ ativo: 'true', _gte_ultimo_acesso: limite })
-    if(U.setorialFiltro) onlineParams.set('setorial_id', U.setorialFiltro)
-    const r = await fetch(`${API_URL}/usuarios?${onlineParams}`)
-    const j = await r.json()
-    const data = j.data || []
-    const lista = document.getElementById('sbOnlineLista')
-    if(!lista) return
-    if(!data.length) { lista.innerHTML='<span style="color:var(--ct);">Apenas você online</span>'; return }
-    lista.innerHTML = data.map(u =>
-      `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
-        <span style="width:6px;height:6px;border-radius:50%;background:#4CAF50;flex-shrink:0;"></span>
-        <span style="font-size:10px;${u.nome===U.nome?'font-weight:700;color:var(--v);':''}">${u.nome.split(' ')[0]}${u.nome===U.nome?' (você)':''}</span>
-      </div>`
-    ).join('')
+    const p = new URLSearchParams({ ativo: 'true', _gte_ultimo_acesso: limite })
+    if(U.setorialFiltro) p.set('setorial_id', U.setorialFiltro)
+    const j = await (await fetch(`${API_URL}/usuarios?${p}`)).json()
+    _online = j.data || []
   } catch(e) {
-    const lista = document.getElementById('sbOnlineLista')
-    if(lista) lista.innerHTML='<span style="font-size:10px;color:var(--ct);">—</span>'
+    // Erro de rede não zera o que já está na tela: um "0 online" falso é pior que um
+    // número velho de cinco minutos.
+    return
   }
+  onlinePintar()
 }
 
-// Atualizar online a cada 5 minutos
-setInterval(() => { if(U) carregarOnline() }, 5*60*1000)
+function onlinePintar() {
+  const box = document.getElementById('onlineBox')
+  const num = document.getElementById('onlineNum')
+  if(!box || !num) return
+  box.style.display = _online.length ? '' : 'none'
+  num.textContent = _online.length
+  const painel = document.getElementById('onlinePainel')
+  if(painel) painel.innerHTML = onlineHtml()
+}
+
+function onlineHtml() {
+  if(!_online.length) return '<div style="padding:14px;font-size:12px;color:var(--ct);">Ninguém online agora.</div>'
+  // Você primeiro; o resto em ordem alfabética. Procurar o próprio nome numa lista de 47
+  // é a primeira coisa que a pessoa faz.
+  const lista = [..._online].sort((a,b) =>
+    (a.id===U.id?-1:0) - (b.id===U.id?-1:0) || (a.nome||'').localeCompare(b.nome||''))
+  return `
+    <div style="padding:11px 13px;border-bottom:1px solid var(--cb);font-size:12px;font-weight:800;">
+      Online agora <span style="color:var(--ct);font-weight:600;">· ${_online.length}</span>
+      <div style="font-size:10px;color:var(--ct);font-weight:600;margin-top:2px;">Quem acessou nos últimos 30 minutos</div>
+    </div>
+    ${lista.map(u => `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 13px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:#4CAF50;flex-shrink:0;"></span>
+        <span style="font-size:12px;${u.id===U.id?'font-weight:800;color:var(--v);':''}">${escHtml(u.nome||'—')}${u.id===U.id?' (você)':''}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--ct);">${escHtml(perfilLabel(u.perfil) || '')}</span>
+      </div>`).join('')}`
+}
+
+function onlineAbrir(ev) {
+  if(ev) ev.stopPropagation()
+  const aberto = document.getElementById('onlinePainel')
+  if(aberto) { aberto.remove(); return }
+
+  const p = document.createElement('div')
+  p.id = 'onlinePainel'
+  p.style.cssText = `position:absolute;top:38px;right:0;width:250px;max-height:60vh;overflow-y:auto;
+    background:#fff;border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.22);z-index:900;text-align:left;`
+  p.onclick = (e) => e.stopPropagation()
+  p.innerHTML = onlineHtml()
+  document.getElementById('onlineBox').appendChild(p)
+  onlineCarregar()
+  // Fecha ao clicar fora. `once` evita empilhar um ouvinte a cada abertura — mesma regra
+  // do sino.
+  setTimeout(() => document.addEventListener('click', () => {
+    const el = document.getElementById('onlinePainel'); if(el) el.remove()
+  }, { once:true }), 0)
+}
+
+let _onlineTimer = null
+function onlineIniciar() {
+  onlineCarregar()
+  if(_onlineTimer) return          // um relógio só, mesmo com o menu redesenhado
+  _onlineTimer = setInterval(() => { if(U) onlineCarregar() }, 5*60*1000)
+}
 
 function ativarMenu(id) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('on'))
