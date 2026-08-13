@@ -136,13 +136,13 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
   // resolveria por acaso — a contagem e por CHAMADA, que e o que de fato absorve.
   const viaHelper   = (semHelper.match(/^\s*const j = await fetchListaCompleta\(/gm) || []).length;
   const viaParalelo = (semHelper.match(/^\s*fetchListaCompleta\(/gm) || []).length;
-  // ⚠️ Era 12 ate 12/08/2026. Caiu para 11 quando a devolucao de TR deixou de baixar a
-  // lista de PCs: a previa passou a vir de `GET /tr/:tr/devolucao`, que devolve CONTAGENS
-  // (quantas voltam, quantas baixadas, quantas no C.I.) e nenhum processo SGPe. Tela que
-  // nao desenha processo nao tem link a absorver — tirar o `sgpeAbsorver` de la e' certo,
-  // nao regressao. Se este numero cair de novo, confira se a tela que saiu desenha SGPe.
-  conf(direto + viaHelper + viaParalelo === 11,
-       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 11 telas absorvendo j.links`);
+  // ⚠️ O numero acompanha quantas TELAS DESENHAM PROCESSO, e por isso muda de propósito:
+  //   12 ate 12/08 · 11 quando a previa da devolucao passou a devolver so CONTAGENS
+  //   (tela que nao desenha processo nao tem link a absorver) · 12 de novo em 13/08, com a
+  //   BUSCA GLOBAL, que desenha o SGPe de cada parcial e do processo mae.
+  // Se este numero mudar, a pergunta e sempre a mesma: a tela que entrou/saiu desenha SGPe?
+  conf(direto + viaHelper + viaParalelo === 12,
+       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 12 telas absorvendo j.links`);
 
   // O helper PRECISA absorver — se alguem tirar o sgpeAbsorver de dentro dele, quatro telas
   // perdem o link de uma vez, em silencio.
