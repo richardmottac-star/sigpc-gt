@@ -80,7 +80,12 @@ console.log('\n═══ 4. O QUE A API NAO MANDOU FICA TEXTO PURO ═══');
   // legível e o cron resolve na próxima hora. Nada de <span> nem de pergunta à API.
   const h = procHtml('SCC9999/2021');
   conf(!h.includes('<a '), 'sem link', h);
-  conf(!h.includes('<span'), 'sem marcacao residual', h);
+  // ⚠️ Era "sem marcacao residual" ate 13/08/2026, quando o processo passou a ser CORRIGIVEL.
+  // O <span> de hoje nao e residuo: e' o ambar que diz "este processo esta sem link", ao lado
+  // do lapis. A marcacao proibida continua proibida — <a> (link que nao existe) e data-proc
+  // (a pergunta por celula que foi apagada em 09/08).
+  conf(!h.includes('data-proc'), 'sem a marcacao antiga de pergunta por celula', h);
+  conf(!/onclick=/.test(h), 'e sem lapis quando nao ha PC de referencia', h);
   conf(h === 'SCC 00009999/2021' || h.length > 0, 'o numero continua na tela', h);
 }
 

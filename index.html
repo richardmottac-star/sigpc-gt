@@ -292,6 +292,10 @@ tr:last-child td{border-bottom:none;}
    dizendo que aquilo abre. O cabeçalho já leva sino, nome, perfil, avatar e Sair; com o
    texto fixo, é ele que espremeria os outros. */
 @media(max-width:900px){ .online-rot{display:none;} }
+/* O lapis de corrigir processo: invisivel ate o mouse passar na linha. Quando NAO ha link
+   ele ja nasce visivel em ambar — ali o convite a corrigir e a informacao mais util. */
+.proc-lapis{transition:opacity 120ms;}
+tr:hover .proc-lapis, td:hover .proc-lapis, .proc-sgpe:hover .proc-lapis{opacity:1 !important;}
 </style>
 <style>
 /* ═══ IDENTIDADE VISUAL INSTITUCIONAL (identidade_sigpc.css) ═══ */
@@ -890,6 +894,46 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
   <div id="faixaAviso"></div>
   <div class="rod">Sistema desenvolvido pelo Técnico/Analista <strong>Richard Motta Coelho</strong> &nbsp;|&nbsp; copyright © 2026 SIGPC-GT &nbsp;|&nbsp; v2.1</div>
+</div>
+
+<!-- ══ MODAL CORRIGIR PROCESSO SGPe ══
+     Três campos, e não um texto livre: sigla, número e ano são o que o SGPe pede, e separá-los
+     deixa a conferência acontecer ENQUANTO se digita, em vez de recusar depois de salvar.
+     O bloco do link manual nasce ESCONDIDO — só aparece quando o automático não resolveu. -->
+<div class="mo" id="moProcEd">
+  <div class="mc">
+    <div class="mch v"><h3 id="procEdTit">✎ Corrigir o processo SGPe</h3><button class="mcx" onclick="fm('moProcEd')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="procEdInfo"></div>
+      <div style="display:grid;grid-template-columns:110px 1fr 90px;gap:9px;margin-top:12px;">
+        <div class="mc-campo"><label>Sigla *</label>
+          <input id="procEdSigla" maxlength="13" oninput="this.value=this.value.toUpperCase();procEdMudou()" placeholder="SCC"></div>
+        <div class="mc-campo"><label>Número *</label>
+          <input id="procEdNumero" maxlength="9" oninput="procEdSoDigitos(this);procEdMudou()" placeholder="8855"></div>
+        <div class="mc-campo"><label>Ano *</label>
+          <input id="procEdAno" maxlength="4" oninput="procEdSoDigitos(this);procEdMudou()" placeholder="2025"></div>
+      </div>
+      <div id="procEdPrev" style="font-size:12px;color:var(--ct);margin:4px 0 10px;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moProcEd')">Cancelar</button>
+        <button class="mcok" id="procEdBt" onclick="procEdSalvar()">Salvar e buscar o link</button>
+      </div>
+
+      <div id="procEdManual" style="display:none;border-top:1px solid var(--cb);margin-top:14px;padding-top:13px;">
+        <div style="background:#FFF8E1;border:1.5px solid #FFE0B2;border-radius:8px;padding:11px 13px;margin-bottom:11px;">
+          <div style="font-size:12.5px;font-weight:800;margin-bottom:3px;">Não consegui gerar o link</div>
+          <div style="font-size:11.5px;color:var(--ct);line-height:1.5;" id="procEdManualMot"></div>
+        </div>
+        <div class="mc-campo"><label>Abra o processo no SGPe e cole aqui o endereço da barra do navegador</label>
+          <input id="procEdUrl" oninput="procEdUrlMudou()" placeholder="https://sgpe.sea.sc.gov.br/cpav/visualizarDocumentosProcesso.do?processoPK=..."></div>
+        <div id="procEdUrlNota" style="font-size:11px;min-height:15px;"></div>
+        <div class="mcbt">
+          <button class="mccn" onclick="fm('moProcEd')">Agora não</button>
+          <button class="mcok" id="procEdUrlBt" onclick="procEdSalvarLink()" disabled style="opacity:.5;cursor:not-allowed;">🔗 Salvar o link</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ MODAL ASSUMIR ══ -->
@@ -2751,6 +2795,8 @@ function renderEst(rows) {
 
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
       <td><strong style="font-size:11px;">${t.tr||'—'}</strong>${tagReserva}</td>
+      <!-- Sem lapis aqui, de proposito: a linha do Estoque e agregada por TR e nao tem uma PC de
+           referencia para o servidor corrigir. Quem corrige o processo mae usa o detalhe da TR. -->
       <td class="proc-sgpe" style="white-space:nowrap;font-size:11px;">${procHtml(t.processo_mae)}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
@@ -2937,7 +2983,7 @@ async function abrirTR(tr) {
       const valorFmt = planMoedaPC(p)   // PC final nao tem valor proprio — ver planEhFinal
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
-        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${procHtml(p.processo_pc)}</td>
+        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}</td>
         <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
         <td style="${tdS}">${p.codigo_nl||'—'}</td>
         <td style="${tdS}text-align:right;">${valorFmt}</td>
@@ -2950,7 +2996,7 @@ async function abrirTR(tr) {
     const thS = 'position:sticky;top:0;background:var(--fundo-app);padding:6px 8px;font-size:13px;z-index:1;'
     document.getElementById('moTRB').innerHTML = `
       <div class="mci" style="margin-bottom:12px;">
-        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span class="proc-sgpe">${procHtml(pcs[0].processo_mae)}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
+        <strong>TR:</strong> ${tr} &nbsp;|&nbsp; <strong>SGPe MÃE:</strong> <span class="proc-sgpe">${procHtml(pcs[0].processo_mae, pcs[0].codigo_pc, 'processo_mae')}</span> &nbsp;|&nbsp; <strong>Entidade:</strong> ${entidade}<br>
         <strong>${totalPcs}</strong> PCs &nbsp;|&nbsp; <strong>${totalNls}</strong> NLs distintas &nbsp;|&nbsp; <strong>${totalBaixadas}</strong> baixadas
       </div>
       <div style="max-height:60vh;overflow-y:auto;"><table><thead><tr>
@@ -3202,12 +3248,220 @@ function sgpeAbsorver(j) {
   return j
 }
 
-function procHtml(bruto) {
+// ⚠️ PONTO ÚNICO DE DESENHO DO PROCESSO — e por isso ponto único de EDIÇÃO.
+//
+// `procHtml` é usado em 11 lugares (Estoque, detalhe da TR, Minha Planilha, Repositório,
+// Controle Interno, Board, Meus pedidos). O lápis entra aqui e aparece nas onze de uma vez;
+// nenhuma tela precisa saber que a correção existe. Foi o que permitiu atender "em qualquer
+// tela onde o SGPe apareça" sem tocar em onze trechos de HTML.
+//
+// `codigo_pc` é o que diz ao servidor QUAL PC corrigir. Sem ele o lápis não é desenhado —
+// há telas que mostram o processo mãe agregado, sem uma PC de referência.
+function procHtml(bruto, codigo_pc, campo) {
   const txt = escHtml(normalizarProcesso(bruto))
   const url = _sgpeCache.get(bruto)
-  if(!url) return txt
-  return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+  const semLink = !url
+  const corpo = url
+    ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+    : `<span title="Sem link do SGPe" style="${semLink ? 'color:#B8860B;' : ''}">${txt}</span>`
+  if(!codigo_pc || !podeEditarProcesso()) return corpo
+  // Discreto: só aparece ao passar o mouse na linha. Âmbar quando não há link — ali o
+  // convite a corrigir é a informação mais útil da célula.
+  return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
+    title="Corrigir o processo SGPe" style="cursor:pointer;margin-left:5px;font-size:11px;${semLink ? 'color:#B8860B;opacity:.85;' : 'opacity:0;'}">✎</span>`
 }
+
+/** Analista, coordenador e superadmin corrigem. No modo "ver como", ninguém. */
+function procEdSoDigitos(el) { el.value = el.value.replace(/[^0-9]/g, '') }
+
+function podeEditarProcesso() {
+  return !!U && !verComoAtivo() && ['analista','coordenador','superadmin'].includes(U.perfil)
+}
+
+// ══════════════════════════════════════
+//  CORRIGIR O PROCESSO SGPe (13/08/2026)
+// ══════════════════════════════════════
+// Existe porque havia erro de digitação no acervo e nenhum caminho para consertar: 506 PCs
+// com texto que não formava processo e 40 com sigla fora do mapa. A correção em lote resolveu
+// 347; o resto depende de olho humano, e é para isso que este modal serve.
+//
+// ⚠️ A ORDEM É AUTOMÁTICO PRIMEIRO, MANUAL DEPOIS (decisão do Richard). Ao salvar, o servidor
+// tenta mapa → cache → SGPe ao vivo. Só se NADA disso resolver é que aparece o campo de colar
+// o link. Oferecer o manual antes faria o analista colar link que o sistema acharia sozinho.
+//
+// ⚠️ A GARANTIA NÃO É ESTE ARQUIVO. Quem confere perfil, valida sigla/número/ano e decide
+// sobre fusão de parcela é o servidor. Aqui só se pergunta e se mostra.
+let _procEd = null
+
+async function procEditar(codigo_pc, campo, atual) {
+  if(!podeEditarProcesso()) { toast('Você não pode corrigir o processo.','err'); return }
+  const partes = procPartes(atual)
+  _procEd = { codigo_pc, campo, atual, juntar: false }
+
+  document.getElementById('moProcEd').classList.add('open')
+  document.getElementById('procEdTit').textContent =
+    campo === 'processo_mae' ? '✎ Corrigir o processo SGPe da TR' : '✎ Corrigir o processo SGPe da PC'
+  document.getElementById('procEdInfo').innerHTML =
+    `<strong>${campo === 'processo_mae' ? 'Processo mãe' : 'PC'}:</strong> ${escHtml(codigo_pc)}<br>` +
+    `<strong>Hoje:</strong> ${escHtml(atual || '—')}`
+  document.getElementById('procEdSigla').value  = partes.sigla
+  document.getElementById('procEdNumero').value = partes.numero
+  document.getElementById('procEdAno').value    = partes.ano
+  document.getElementById('procEdManual').style.display = 'none'
+  document.getElementById('procEdUrl').value = ''
+  procEdMudou()
+  setTimeout(() => document.getElementById('procEdSigla').focus(), 60)
+}
+
+/** Quebra o texto atual nos três campos — o melhor palpite, para não digitar do zero. */
+function procPartes(bruto) {
+  const t = String(bruto ?? '').trim()
+  const m = /^([A-Za-z]+\d{0,3})\s*[/:. -]*\s*(\d+)\s*[/. -]\s*(\d{4})$/.exec(t)
+  if(m) return { sigla: m[1].toUpperCase(), numero: String(parseInt(m[2],10)), ano: m[3] }
+  const letras = (/^[A-Za-z]+/.exec(t)||[''])[0].toUpperCase()
+  const digitos = (t.match(/\d+/g)||[]).join('')
+  if(digitos.length > 4) return { sigla: letras, numero: '', ano: digitos.slice(-4) }
+  return { sigla: letras, numero: '', ano: '' }
+}
+
+/** Prévia e estado do botão. O botão nasce cinza e só acende com os três campos (armadilha 15). */
+function procEdMudou() {
+  const sigla  = (document.getElementById('procEdSigla').value||'').trim().toUpperCase()
+  const numero = (document.getElementById('procEdNumero').value||'').replace(/\D/g,'')
+  const ano    = (document.getElementById('procEdAno').value||'').replace(/\D/g,'')
+  const prev = document.getElementById('procEdPrev')
+  const bt = document.getElementById('procEdBt')
+
+  let erro = null
+  if(!sigla) erro = 'Informe a sigla do órgão.'
+  else if(!/^[A-Z]{2,10}\d{0,3}$/.test(sigla)) erro = 'Sigla inválida.'
+  else if(!numero || parseInt(numero,10) <= 0) erro = 'Informe o número do processo.'
+  else if(ano.length !== 4) erro = 'Informe o ano com 4 dígitos.'
+  else if(parseInt(ano,10) < 2000 || parseInt(ano,10) > 2030) erro = 'Ano fora do intervalo esperado.'
+
+  prev.innerHTML = erro
+    ? `<span style="color:var(--r);">${escHtml(erro)}</span>`
+    : `Vai ficar: <strong>${escHtml(sigla)} ${parseInt(numero,10)}/${ano}</strong>`
+  bt.disabled = !!erro
+  bt.style.opacity = erro ? '.5' : ''
+  bt.style.cursor = erro ? 'not-allowed' : ''
+  bt.title = erro || ''
+}
+
+async function procEdSalvar() {
+  if(!_procEd) return
+  const bt = document.getElementById('procEdBt')
+  bt.disabled = true; bt.textContent = 'Salvando...'
+  try {
+    const corpo = {
+      campo: _procEd.campo, usuario_id: U.id, juntar: _procEd.juntar,
+      sigla:  document.getElementById('procEdSigla').value,
+      numero: document.getElementById('procEdNumero').value,
+      ano:    document.getElementById('procEdAno').value,
+    }
+    const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(_procEd.codigo_pc)}/processo`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo)
+    })
+    const j = await r.json()
+
+    // 409 = fusão de parcela. O servidor recusou de propósito e mandou o aviso; a pessoa
+    // decide, e a segunda tentativa vai com `juntar: true`.
+    if(r.status === 409 && j.error && j.error.fusao) {
+      const f = j.error.fusao
+      const ok = await moConfirm(j.error.message, {
+        titulo: '⚠ Isto junta duas parciais', perigo: true,
+        detalhe: `A parcial ${f.parcial_atual} deixa de existir e as ${f.pcs} PCs passam a fazer parte da parcial ${f.parcial_destino}.\n\nNão dá para desfazer pela tela.`,
+        okTexto: 'Entendi, juntar', cancelarTexto: 'Voltar',
+      })
+      if(!ok) { procEdMudou(); bt.textContent = 'Salvar e buscar o link'; return }
+      _procEd.juntar = true
+      bt.textContent = 'Salvando...'
+      return procEdSalvar()
+    }
+    if(j.error) throw new Error(j.error.message || 'Não foi possível salvar.')
+
+    const d = j.data
+    _procEd.texto = d.texto
+    if(d.link) {
+      // Resolveu sozinho: guarda no cache da tela e fecha. O manual nem chega a aparecer.
+      _sgpeCache.set(d.texto, d.link)
+      toast(`Processo corrigido para ${d.texto}${d.pcs > 1 ? ` (${d.pcs} PCs)` : ''} — link gerado.`,'ok')
+      fm('moProcEd'); _procEd = null
+      procRecarregar()
+      return
+    }
+    // Não resolveu: AGORA sim o manual.
+    toast(`Processo salvo como ${d.texto}, mas sem link.`,'ok')
+    document.getElementById('procEdManual').style.display = ''
+    document.getElementById('procEdManualMot').textContent = d.motivo || 'O SGPe não devolveu este processo.'
+    document.getElementById('procEdUrl').focus()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+  } finally {
+    // ⚠️ Repinta sempre: sem isto o botão ficaria "Salvando..." aceso e sem responder.
+    if(document.getElementById('procEdBt')) {
+      document.getElementById('procEdBt').textContent = 'Salvar e buscar o link'
+      procEdMudou()
+    }
+  }
+}
+
+/** Confere o link colado enquanto se digita — sem ir ao servidor. */
+function procEdUrlMudou() {
+  const v = (document.getElementById('procEdUrl').value||'').trim()
+  const nota = document.getElementById('procEdUrlNota')
+  const bt = document.getElementById('procEdUrlBt')
+  let ok = false, msg = ''
+  if(!v) msg = ''
+  else {
+    try {
+      const u = new URL(v)
+      if(u.hostname.toLowerCase() !== 'sgpe.sea.sc.gov.br') msg = 'O endereço precisa ser do SGPe.'
+      else {
+        const pk = (u.searchParams.get('processoPK')||'').split(',').map(x=>parseInt(x,10))
+        if(pk.length !== 3 || pk.some(x=>!Number.isInteger(x)||x<=0)) msg = 'Falta o "processoPK" com os três números.'
+        else { ok = true; msg = `✓ link reconhecido — processo ${pk[0]}, órgão ${pk[1]}, ${pk[2]}` }
+      }
+    } catch(e) { msg = 'Isso não é um endereço válido.' }
+  }
+  nota.textContent = msg
+  nota.style.color = ok ? 'var(--v)' : 'var(--r)'
+  bt.disabled = !ok
+  bt.style.opacity = ok ? '' : '.5'
+  bt.style.cursor = ok ? '' : 'not-allowed'
+}
+
+async function procEdSalvarLink() {
+  if(!_procEd || !_procEd.texto) return
+  const bt = document.getElementById('procEdUrlBt')
+  bt.disabled = true; bt.textContent = 'Salvando...'
+  try {
+    const r = await fetch(`${API_URL}/sgpe/link_manual`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ processo: _procEd.texto, url: document.getElementById('procEdUrl').value,
+                             usuario_id: U.id, codigo_pc: _procEd.codigo_pc })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível salvar o link.')
+    _sgpeCache.set(j.data.processo, j.data.link)
+    toast('Link salvo. Vale para todas as PCs deste processo.','ok')
+    fm('moProcEd'); _procEd = null
+    procRecarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    bt.textContent = '🔗 Salvar o link'
+    procEdUrlMudou()
+  }
+}
+
+/** Repinta a tela em que a pessoa está — o lápis vive em onze. */
+function procRecarregar() {
+  if(typeof buscarPlan === 'function' && document.getElementById('planConteudo')) return buscarPlan()
+  if(typeof buscar === 'function' && document.getElementById('tbl')) { PAG = 0; return buscar() }
+  if(typeof estCarregar === 'function' && document.getElementById('estTbl')) return estCarregar()
+  if(typeof ciCarregar === 'function' && document.getElementById('ciPainel')) return ciCarregar()
+}
+
 
 // ══════════════════════════════════════
 //  TRAVA DE TRs — o lado do analista
@@ -6512,9 +6766,9 @@ function relRenderTabela() {
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
       <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
-      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_mae)}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_mae, r.codigo_pc, 'processo_mae')}</td>
       <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
-      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_pc)}</td>
+      <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_pc, r.codigo_pc)}</td>
       <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
       <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
@@ -6860,7 +7114,7 @@ function renderAlertasPrazo(alertas) {
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
         <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
-        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${procHtml(r.processo_pc)}</span></div>
+        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${procHtml(r.processo_pc, r.codigo_pc)}</span></div>
       </div>
       <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}${prazoIcone(r.dt_limite_pc)}</span>
     </div>`
@@ -7656,7 +7910,7 @@ function renderPlan(rows) {
       const linhasPC = pa.pcs.map(p => {
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
-          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
           <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
@@ -9738,7 +9992,7 @@ async function verProdDetalhe(analistaId, nome) {
         ${baixadas.slice(0,50).map(p=>`<div class="nl-row">
           <div style="min-width:0;">
             <div style="font-size:10px;font-weight:600;white-space:nowrap;">${p.tr||'—'} — ${p.codigo_pc||'—'}</div>
-            <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe mãe <span class="proc-sgpe">${procHtml(p.processo_mae)}</span> · SGPe PC <span class="proc-sgpe">${procHtml(p.processo_pc)}</span></div>
+            <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe mãe <span class="proc-sgpe">${procHtml(p.processo_mae, p.codigo_pc, 'processo_mae')}</span> · SGPe PC <span class="proc-sgpe">${procHtml(p.processo_pc, p.codigo_pc)}</span></div>
           </div>
           <span style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.entidade||'—'}</span>
           <span class="bdg bdg-livre" style="font-size:9px;">${p.parecer_tipo||'Baixada'}</span>
@@ -11610,7 +11864,7 @@ function estRender() {
           <td style="text-align:center;"><input type="checkbox" ${marcado?'checked':''} onchange="estToggleLinha('${p.codigo_pc}', this.checked)"></td>
           ${!souAnalista?`<td style="font-size:11px;font-weight:600;white-space:nowrap;">${_estNomePorId[p.analista_id]||p.analista_nome||'—'}</td>`:''}
           <td style="font-size:11px;white-space:nowrap;">${p.codigo_pc||'—'}</td>
-          <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${procHtml(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="font-size:11px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}</td>
           <td style="font-size:11px;color:var(--az);font-weight:600;white-space:nowrap;">${p.tr||'—'}</td>
           <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.entidade||''}">${p.entidade||'—'}</td>
           <td style="font-size:11px;">${p.parecer_tipo||'—'}</td>
