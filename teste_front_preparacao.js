@@ -101,8 +101,16 @@ console.log('\n═══ 3. TRAVAS NO index.html ═══');
 
   // Sem a releitura periódica, "à tarde eu desligo e abre para todos" exigiria que 47
   // pessoas recarregassem a página.
-  conf(/_prepTimer = setInterval\([\s\S]{0,400}?\}, 60000\)/.test(html),
-       'reconfere de 60 em 60 s');
+  //
+  // ⚠️ Era 60 s cravado; passou a 20 s em 12/08, com o modo manutenção (decisão do Richard).
+  // O teste agora confere a PROPRIEDADE — existe releitura, e ela não passa de um minuto —
+  // e não o número: cravar 60000 fazia o teste falhar por uma decisão, não por um defeito.
+  const mIntervalo = /_prepTimer = setInterval\([\s\S]{0,1600}?\}, ([A-Z_]+ \* 1000|\d+)\)/.exec(html);
+  conf(!!mIntervalo, 'reconfere periodicamente');
+  const seg = mIntervalo && (/^\d+$/.test(mIntervalo[1])
+    ? Number(mIntervalo[1]) / 1000
+    : Number((new RegExp('const ' + mIntervalo[1].split(' ')[0] + ' = (\\d+)').exec(html) || [])[1]));
+  conf(seg > 0 && seg <= 60, `e o intervalo e de ${seg}s — no maximo 60`);
   conf(/if\(prepRestrito\(\) !== antes\)/.test(html),
        'e so repinta quando o estado MUDA — repintar sempre roubaria o que a pessoa digita');
 

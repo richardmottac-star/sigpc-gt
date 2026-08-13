@@ -742,6 +742,30 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
       <span id="sTXT"></span>
     </div>
+    <!-- ══════════ MANUTENÇÃO ══════════
+         Escondido por padrão e revelado por `manutTelaLogin()`, que roda na carga da página
+         a partir do GET /config_sistema — ANTES de qualquer pessoa digitar.
+
+         ⚠️ VERMELHO, e não âmbar: decisão do Richard em 12/08. Âmbar lê-se como aviso, e o
+         que se quer aqui é que ninguém perca tempo tentando entrar.
+
+         ⚠️ O FORMULÁRIO FICA ESCONDIDO. Deixá-lo à vista fazia a pessoa digitar CPF e senha
+         para só então ser recusada — e a recusa parecia senha errada. O superadmin chega ao
+         formulário pelo link discreto de baixo. -->
+    <div id="loginManut" style="display:none;">
+      <div style="background:linear-gradient(180deg,#DC2626,#991B1B);color:#fff;border-radius:10px;padding:22px 20px;text-align:center;box-shadow:0 6px 18px -6px rgba(153,27,27,.5);">
+        <div style="font-size:38px;line-height:1;margin-bottom:10px;">🔒</div>
+        <div style="font-size:17px;font-weight:800;letter-spacing:.3px;margin-bottom:10px;">Sistema em manutenção</div>
+        <div id="manutTXT" style="font-size:13px;line-height:1.6;opacity:.95;"></div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--ct);margin-top:14px;line-height:1.6;">
+        Esta tela sai sozinha quando o sistema voltar.<br>
+        <a href="#" onclick="manutRevelarLogin();return false;"
+           style="color:var(--ct);text-decoration:underline;font-size:10.5px;opacity:.75;">Acesso do administrador</a>
+      </div>
+    </div>
+
+    <div id="loginForm">
     <div class="campo">
       <label>Selecione a Setorial *</label>
       <select id="lSec">
@@ -772,6 +796,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
     <button class="btn-e" onclick="login()">Entrar no Sistema</button>
     <hr class="hrD">
     <button class="btn-e" style="background:#fff;color:var(--v);border:1.5px solid var(--v);margin-top:0;" onclick="document.getElementById('moPrimAcesso').classList.add('open')">🔐 Primeiro Acesso — Solicitar Cadastro</button>
+    </div>
   </div>
 </div>
 
@@ -1337,7 +1362,11 @@ function restaurarSessao() {
 //  INIT
 // ══════════════════════════════════════
 window.addEventListener('load', () => {
-  if(restaurarSessao()) iniciarApp()
+  const entrou = restaurarSessao()
+  if(entrou) iniciarApp()
+  // ⚠️ A tela de login precisa saber da manutenção ANTES de alguém digitar. Só quando não
+  // se entrou por sessão salva: com o painel aberto, quem vigia é o `prepIniciar()`.
+  if(!entrou) manutVigiarLogin()
   verificarConexao()
   document.querySelectorAll('.mo').forEach(m => {
     m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open') })
@@ -1419,7 +1448,13 @@ async function login() {
     const j = await r.json()
     // A mensagem vem pronta do servidor: ele sabe se foi senha, aprovação ou setorial, e é
     // ele quem decide o quanto contar.
-    if(j.error) { mostrarErro(j.error.message || 'Não foi possível entrar.'); return }
+    if(j.error) {
+      // Manutenção não é erro DA PESSOA — é recado do sistema. Uma faixa vermelha de erro
+      // faria o analista achar que errou a senha e tentar de novo. Cadeado, texto do
+      // Richard, e o formulário continua ali (é por ele que o superadmin entra).
+      if(j.error.manutencao) { manutTelaLogin(j.error.message); return }
+      mostrarErro(j.error.message || 'Não foi possível entrar.'); return
+    }
 
     const u = j.data
     U = {
@@ -1716,6 +1751,13 @@ function vcOff() {
 let _prep = { modo_preparacao: false, mensagem: '' }
 let _prepTimer = null
 
+// 20 s, e não os 60 s de antes (decisão do Richard, 12/08). O que mudou foi a manutenção:
+// com a preparação, atrasar um minuto só atrasava a troca de tela. Com a manutenção, é o
+// tempo em que alguém segue clicando num sistema que já deveria estar fechado — e a janela
+// de escrita só é confiável depois que a última tela caiu. Custa três vezes mais uma
+// chamada que devolve UMA linha.
+const PREP_SEG = 20
+
 async function prepCarregar() {
   try {
     const j = await (await fetch(`${API_URL}/config_sistema`)).json()
@@ -1725,6 +1767,96 @@ async function prepCarregar() {
 
 function prepRestrito() {
   return !!(_prep.modo_preparacao && U && !['superadmin','coordenador'].includes(U.perfil))
+}
+
+// ══════════════════════════════════════
+//  MODO MANUTENÇÃO (12/08/2026)
+// ══════════════════════════════════════
+// A janela segura de escrita. Diferente da preparação em três coisas:
+//   · preparação DEIXA ENTRAR e limita; manutenção NÃO DEIXA ENTRAR;
+//   · isento da preparação: superadmin e coordenador. Da manutenção: SÓ superadmin;
+//   · a manutenção DERRUBA quem já está dentro, para zerar a lista de online na hora.
+//
+// ⚠️ A queda da sessão aqui é METADE. A outra metade está no servidor: `PATCH /usuarios/:id`
+// recusa quem não é superadmin, e é isso que impede o heartbeat de `onlineCarregar()` —
+// que roda de 5 em 5 min — de levantar `ultimo_acesso` e ressuscitar a pessoa na lista.
+
+function manutBarra() {
+  return !!(_prep.modo_manutencao && U && U.perfil !== 'superadmin')
+}
+
+/**
+ * Põe a tela de login em manutenção: painel vermelho, formulário escondido.
+ *
+ * ⚠️ Chamada na CARGA DA PÁGINA, e não só depois de um login recusado. Se esperasse a
+ * recusa, a pessoa digitaria CPF e senha para só então descobrir — e a recusa se pareceria
+ * com senha errada. Ninguém deve tentar em vão.
+ */
+function manutTelaLogin(msg) {
+  const cx = document.getElementById('loginManut')
+  const fm = document.getElementById('loginForm')
+  const tx = document.getElementById('manutTXT')
+  if(!cx || !fm || !tx) return
+  tx.textContent = (msg || '').trim() || 'O sistema volta em instantes. Nenhum trabalho seu foi perdido.'
+  cx.style.display = ''
+  fm.style.display = 'none'
+  document.getElementById('eMSG')?.classList.remove('vis')
+  document.getElementById('sMSG')?.classList.remove('vis')
+}
+
+/** Tira a tela de manutenção do login. Usada ao reabrir o sistema. */
+function manutTelaLoginSair() {
+  const cx = document.getElementById('loginManut')
+  const fm = document.getElementById('loginForm')
+  if(cx) cx.style.display = 'none'
+  if(fm) fm.style.display = ''
+}
+
+/**
+ * O link discreto. Revela o formulário sem tirar o aviso vermelho — quem chegou aqui por
+ * engano continua vendo que o sistema está fechado, e o superadmin entra.
+ *
+ * Não é segurança: quem não é superadmin que clicar aqui e digitar ainda é recusado pelo
+ * servidor, que é onde a regra mora. É só para ninguém tentar sem saber.
+ */
+function manutRevelarLogin() {
+  const fm = document.getElementById('loginForm')
+  if(fm) fm.style.display = ''
+  document.getElementById('lCPF')?.focus()
+}
+
+/**
+ * De 20 em 20 s, COM A TELA DE LOGIN ABERTA. É o que faz "esta tela sai sozinha quando o
+ * sistema voltar" ser verdade — sem ninguém recarregar, e sem depender de o analista estar
+ * logado (ele não está: é justamente disso que se trata).
+ */
+let _manutLoginTimer = null
+function manutVigiarLogin() {
+  if(_manutLoginTimer) clearInterval(_manutLoginTimer)
+  const olhar = async () => {
+    await prepCarregar()
+    if(_prep.modo_manutencao) manutTelaLogin(_prep.mensagem_manutencao)
+    else manutTelaLoginSair()
+  }
+  olhar()
+  _manutLoginTimer = setInterval(olhar, PREP_SEG * 1000)
+}
+
+/** A sessão caiu por manutenção. Avisa e põe para fora — sem tela branca e sem susto. */
+async function manutDerrubar() {
+  const msg = (_prep.mensagem_manutencao || '').trim() ||
+              'O sistema está em manutenção e volta em instantes.'
+  sair()
+  // Cai no login JÁ com o painel vermelho e o formulário escondido, e passa a vigiar dali:
+  // é o que faz a tela voltar sozinha quando o sistema reabrir.
+  manutTelaLogin(msg)
+  manutVigiarLogin()
+  await moConfirm(msg, {
+    titulo: '🔒 O sistema entrou em manutenção',
+    detalhe: 'A sua sessão foi encerrada. Nada do que você gravou foi perdido.\n\n' +
+             'Esta tela sai sozinha quando o sistema voltar.',
+    okTexto: 'Entendi', semCancelar: true,
+  })
 }
 
 /**
@@ -1737,6 +1869,12 @@ function prepIniciar() {
   _prepTimer = setInterval(async () => {
     const antes = prepRestrito()
     await prepCarregar()
+
+    // ⚠️ A MANUTENÇÃO É CONFERIDA PRIMEIRO, e não é reversível pela tela: ela põe para fora.
+    // Se viesse depois, um analista em manutenção passaria pela tela restrita da preparação
+    // e continuaria dentro, com a sessão contando como online.
+    if(manutBarra()) { clearInterval(_prepTimer); _prepTimer = null; await manutDerrubar(); return }
+
     if(prepRestrito() !== antes) {
       renderSB()
       prepRestrito() ? irPreparacao() : irDash()
@@ -1744,7 +1882,7 @@ function prepIniciar() {
         ? 'O sistema entrou em modo preparação.'
         : 'O sistema foi liberado. Bom trabalho!', 'ok')
     }
-  }, 60000)
+  }, PREP_SEG * 1000)
 }
 
 function irPreparacao() {
@@ -1774,6 +1912,10 @@ function irPreparacao() {
 
 function iniciarApp() {
   salvarSessao()
+  // Entrou: quem vigia a manutenção daqui em diante é o `prepIniciar()`. Dois vigias na
+  // mesma config seriam duas chamadas por ciclo dizendo a mesma coisa.
+  if(_manutLoginTimer) { clearInterval(_manutLoginTimer); _manutLoginTimer = null }
+  manutTelaLoginSair()
   document.getElementById('sLogin').classList.remove('ativa')
   document.getElementById('sPainel').classList.add('ativa')
 
@@ -1814,6 +1956,9 @@ function sair() {
   document.getElementById('sLogin').classList.add('ativa')
   document.getElementById('lSen').value = ''
   document.getElementById('eMSG').classList.remove('vis')
+  // Quem sai volta para uma tela de login que precisa dizer a verdade sobre o sistema —
+  // inclusive o superadmin, que pode ter acabado de ligar a manutenção e sair.
+  manutVigiarLogin()
 }
 
 // ══════════════════════════════════════
@@ -3104,6 +3249,7 @@ async function limitePedir(tr) {
 const CFG_ABAS = [
   { id: 'limite', rotulo: 'Limite de TRs', render: () => cfgRenderLimite() },
   { id: 'prep',   rotulo: 'Modo preparação', render: () => cfgRenderPreparacao() },
+  { id: 'manut',  rotulo: 'Modo manutenção', render: () => cfgRenderManutencao() },
 ]
 let _cfgAba = 'limite'
 let _cfg = null          // config_limite_tr
@@ -3152,7 +3298,13 @@ function cfgRender() {
   if(corpo && aba) corpo.innerHTML = aba.render()
 }
 
-function cfgAba(id) { _cfgAba = id; cfgRender() }
+function cfgAba(id) {
+  _cfgAba = id
+  cfgRender()
+  // O número de online é lido ao ABRIR a aba, e não no boot da tela: fora dela ninguém o vê,
+  // e ele envelhece em segundos.
+  if(id === 'manut') cfgManutContarOnline()
+}
 
 // ── Aba: Modo preparação ────────────────────────────────────────────────────
 function cfgRenderPreparacao() {
@@ -3238,6 +3390,128 @@ async function cfgPrepSalvarMsg() {
     const r = await fetch(`${API_URL}/config_sistema`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ mensagem: msg, atualizado_por: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _prep = j.data || _prep
+    toast('Mensagem salva.','ok')
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ── Aba: Modo manutenção ────────────────────────────────────────────────────
+// A janela segura de escrita. Diferente da preparação: NÃO deixa entrar, derruba quem já
+// está dentro, e só o superadmin é isento.
+//
+// ⚠️ O NÚMERO DE ONLINE É LIDO DE VERDADE, do GET /usuarios/online. É a confirmação de que
+// a janela abriu, na mesma tela em que se liga — em vez de descobrir pelo janela_livre.js.
+let _manutOnline = null
+
+function cfgRenderManutencao() {
+  const on = !!_prep.modo_manutencao
+  const quando = _prep.atualizado_em
+    ? new Date(_prep.atualizado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+    : null
+  const nOn = _manutOnline === null ? '…' : _manutOnline
+  return `
+    <div style="max-width:660px;">
+      <div style="background:${on?'#FEF2F2':'#F1F8E9'};border:1.5px solid ${on?'#FCA5A5':'#C5E1A5'};border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="font-size:15px;font-weight:800;color:${on?'#991B1B':'inherit'};">
+            ${on ? '🔒 EM MANUTENÇÃO' : '✅ Sistema ABERTO'}${on && quando ? ` — desde ${quando}` : ''}
+          </div>
+          <div style="flex:1;"></div>
+          <button id="cfgManutBtn" onclick="cfgManutAlternar(${on ? 'false' : 'true'})"
+            style="background:${on?'var(--v)':'#DC2626'};color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">
+            ${on ? 'Reabrir agora' : 'Entrar em manutenção'}
+          </button>
+        </div>
+        <div style="font-size:12px;color:var(--ct);line-height:1.6;margin-top:8px;">
+          ${on
+            ? `Ninguém além de você entra. <strong>${nOn} ${nOn === 1 ? 'pessoa online' : 'pessoas online'}</strong>${nOn === 0 ? ' — a janela está aberta.' : ' — se não for zero, algo não funcionou.'}`
+            : `Todos usam o sistema normalmente. <strong>${nOn} ${nOn === 1 ? 'pessoa online' : 'pessoas online'}</strong> agora.`}
+        </div>
+        ${quando ? `<div style="font-size:10.5px;color:var(--ct);margin-top:8px;">Última alteração: ${quando}${_prep.atualizado_por_nome?` por ${_prep.atualizado_por_nome}`:''}</div>` : ''}
+      </div>
+
+      <div style="background:#FCFDFC;border:1.5px solid var(--cb);border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:4px;">Mensagem que aparece no login</div>
+        <div style="font-size:11px;color:var(--ct);margin-bottom:8px;">Em branco, o sistema usa um texto genérico. Máximo de 400 caracteres.</div>
+        <textarea id="cfgManutMsg" rows="3" maxlength="400"
+          style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px;font-size:12.5px;font-family:Barlow,sans-serif;resize:vertical;">${escHtml(_prep.mensagem_manutencao||'')}</textarea>
+        <div style="text-align:right;margin-top:8px;">
+          <button onclick="cfgManutSalvarMsg()" class="mcok" style="padding:7px 18px;">✓ Salvar mensagem</button>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--ct);line-height:1.7;background:var(--fundo-app);border-radius:8px;padding:12px 14px;">
+        <strong>O que acontece quando você liga:</strong><br>
+        · <strong>todo mundo é deslogado na hora</strong> — analistas, coordenadores e o Controle Interno. A lista de online zera na mesma transação;<br>
+        · quem tentar entrar vê a sua mensagem <strong>em vermelho</strong>, e o formulário de login nem aparece — ninguém tenta em vão;<br>
+        · <strong>você continua entrando</strong>, pelo link "Acesso do administrador" embaixo do aviso;<br>
+        · a tela de quem estava dentro cai em até ${PREP_SEG} segundos;<br>
+        · ao reabrir, <strong>todos voltam a entrar sem você fazer mais nada</strong> — nenhum carimbo precisa ser desfeito.<br>
+        <br>
+        <strong>Diferença para o modo preparação:</strong> a preparação <em>deixa entrar</em> e limita a tela;
+        a manutenção <em>não deixa entrar</em>. E o coordenador, que é isento da preparação, <strong>é barrado
+        aqui</strong> — quem fica com a tela aberta escreve, seja qual for o perfil.<br>
+        <br>
+        <strong>O que ele não é:</strong> uma tranca. O sistema ainda não tem camada de autorização — quem
+        souber montar um pedido HTTP à mão passa. Serve para garantir que ninguém está trabalhando
+        <em>pela tela</em>; antes de gravar, o <code>janela_livre.js</code> continua sendo a conferência final.
+      </div>
+    </div>`
+}
+
+/** Lê o online de verdade e repinta. Sem isto, o número do cartão seria uma promessa. */
+async function cfgManutContarOnline() {
+  try {
+    const j = await (await fetch(`${API_URL}/usuarios/online`)).json()
+    _manutOnline = (j.data || []).length
+  } catch(e) { _manutOnline = null }
+  if(_cfgAba === 'manut') cfgRender()
+}
+
+async function cfgManutAlternar(ligar) {
+  const detalhe = ligar
+    ? 'Todos os analistas, coordenadores e o Controle Interno são DESLOGADOS na hora. Quem estiver com a tela aberta é avisado e cai em até ' + PREP_SEG + ' segundos.\n\nVocê continua entrando pelo link "Acesso do administrador".'
+    : 'Todos voltam a entrar normalmente. Quem estiver na tela de manutenção vê o login voltar sozinho, sem recarregar.'
+  if(!await moConfirm(ligar ? 'Entrar em manutenção?' : 'Reabrir o sistema?', {
+    titulo: ligar ? '🔒 Modo manutenção' : 'Reabrir o sistema',
+    perigo: !!ligar,
+    detalhe, okTexto: ligar ? 'Entrar em manutenção' : 'Reabrir agora', cancelarTexto: 'Voltar',
+  })) return
+
+  const bt = document.getElementById('cfgManutBtn')
+  if(bt) { bt.disabled = true; bt.textContent = 'Salvando...' }
+  try {
+    const r = await fetch(`${API_URL}/config_sistema`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ modo_manutencao: ligar, atualizado_por: U.id })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _prep = j.data || _prep
+    cfgRender()
+    // Relê o online DEPOIS de ligar: é a prova de que a janela abriu.
+    cfgManutContarOnline()
+    toast(ligar
+      ? `Manutenção ligada. ${j.derrubados||0} ${j.derrubados===1?'sessão encerrada':'sessões encerradas'}.`
+      : 'Sistema reaberto para todos.','ok')
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    // ⚠️ Repinta mesmo no erro: o botão nasce desabilitado e só volta pelo render. Sem
+    // isto ele ficaria "Salvando..." para sempre — botão aceso que não responde é pior
+    // que botão cinza (armadilha 12).
+    cfgRender()
+  }
+}
+
+async function cfgManutSalvarMsg() {
+  const msg = document.getElementById('cfgManutMsg')?.value ?? ''
+  try {
+    const r = await fetch(`${API_URL}/config_sistema`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mensagem_manutencao: msg, atualizado_por: U.id })
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
@@ -3746,7 +4020,7 @@ function moDialogo(o) {
           </div>
           <div id="${id}N" style="font-size:10.5px;color:var(--ct);min-height:14px;"></div>` : ''}
           <div class="mcbt">
-            <button class="mccn" data-mo="cancelar">${escHtml(o.cancelarTexto || 'Cancelar')}</button>
+            ${o.semCancelar ? '' : `<button class="mccn" data-mo="cancelar">${escHtml(o.cancelarTexto || 'Cancelar')}</button>`}
             <button class="mcok ${o.perigo ? 'rv' : ''}" id="${id}OK" data-mo="ok">${escHtml(o.okTexto || 'Confirmar')}</button>
           </div>
         </div>
