@@ -218,13 +218,47 @@ console.log('\n═══ 9. ONLINE AGORA SAIU DO MENU E FOI PARA O CABECALHO ═
   conf(/id="onlineBox"/.test(html), 'o botao esta no cabecalho');
   conf(/onclick="onlineAbrir\(event\)"/.test(html), 'abre por clique, como o sino');
   // Fechar ao clicar fora, com `once` — senão empilha um ouvinte por abertura.
-  conf(/onlineAbrir[\s\S]{0,900}?addEventListener\('click'[\s\S]{0,120}?\{ once:true \}/.test(html),
+  conf(/function onlineAbrir[\s\S]{0,1600}?addEventListener\('click'[\s\S]{0,120}?\{ once:true \}/.test(html),
        'fecha ao clicar fora, com once');
   // Erro de rede não pode zerar o contador: número velho é melhor que "0 online" falso.
   conf(/catch\(e\) \{[\s\S]{0,220}?return\s*\}\s*onlinePintar\(\)/.test(html),
        'erro de rede nao zera a lista');
   // Um relógio só, mesmo com o menu redesenhado várias vezes.
   conf(/if\(_onlineTimer\) return/.test(html), 'nao empilha um relogio a cada renderSB');
+
+  // ── O botao precisa PARECER botao (12/08/2026) ──────────────────────────
+  // Antes eram so a bolinha e o numero, e ninguem descobria que abria uma lista.
+  const btn = html.slice(html.indexOf('id="onlineBox"'), html.indexOf('id="onlineBox"') + 1600);
+  conf(/Usuários online/.test(btn), 'o rotulo "Usuários online" esta no botao');
+  conf(/id="onlineSeta"/.test(btn), 'e ha uma seta indicando que abre');
+  conf(/class="online-rot"/.test(btn) && /@media\(max-width:900px\)\{ \.online-rot\{display:none;\} \}/.test(html),
+       'o rotulo sai em tela estreita — o cabecalho ja leva sino, nome, perfil, avatar e Sair');
+  conf(/aria-expanded="false"/.test(btn), 'nasce com aria-expanded=false');
+
+  // ⚠️ A ARMADILHA DESTA TELA: o painel fecha por TRES caminhos — o proprio botao, o clique
+  // fora e o Esc. Girar a seta dentro do onclick cobriria um e deixaria a seta apontando
+  // para cima com a lista fechada nos outros dois. Tem de haver UM lugar so.
+  conf(/function onlineSeta\(aberto\)/.test(html), 'ha uma funcao unica de estado da seta');
+  conf(/function onlineFechar[\s\S]{0,400}?onlineSeta\(false\)/.test(html),
+       'onlineFechar devolve a seta');
+  const abrir = html.slice(html.indexOf('function onlineAbrir'), html.indexOf('function onlineAbrir') + 1600);
+  conf(/if\(document\.getElementById\('onlinePainel'\)\) \{ onlineFechar\(\); return \}/.test(abrir),
+       'clicar no botao de novo fecha PELA funcao, nao por remove() solto');
+  conf(/addEventListener\('click', onlineFechar/.test(abrir), 'clicar fora fecha pela mesma funcao');
+  conf(/onlineSeta\(true\)/.test(abrir), 'e abrir gira a seta');
+  conf(!/onlinePainel'\)[\s\S]{0,40}?\.remove\(\)[\s\S]{0,30}?\}, \{ once:true \}/.test(html),
+       'nenhum caminho de fechar remove o painel sem passar por onlineFechar');
+
+  // Esc fecha, como em qualquer menu suspenso — e o ouvinte sai no fechar, senao cada
+  // abertura deixaria um vivo.
+  conf(/_onlineEsc = \(e\) =>/.test(html), 'Esc fecha o painel');
+  conf(/function onlineFechar[\s\S]{0,400}?removeEventListener\('keydown', _onlineEsc\)/.test(html),
+       'e o ouvinte de Esc e removido ao fechar, por qualquer caminho');
+
+  // se o botao vai sumir com o painel aberto, fecha antes: o painel e filho do box e sumiria
+  // junto, mas o estado ficaria "aberto" e a seta voltaria virada na proxima vez
+  conf(/if\(some && document\.getElementById\('onlinePainel'\)\) onlineFechar\(\)/.test(html),
+       'esvaziar a lista com o painel aberto fecha antes de esconder o botao');
 }
 
 console.log('\n═══ 9b. O CONTROLE INTERNO FICA FORA DOS RELATORIOS DE PRODUTIVIDADE ═══');

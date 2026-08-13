@@ -284,7 +284,14 @@ tr:last-child td{border-bottom:none;}
 @media (prefers-reduced-motion: reduce){
   .faixa-mv{animation:none;padding-left:18px;white-space:normal;}
   .faixa{height:auto;padding:6px 0;}
+  /* A seta do "Usuários online" também para de animar — ela ainda gira, só que sem
+     transição. Quem pediu menos movimento continua sabendo se a lista está aberta. */
+  #onlineSeta{transition:none;}
 }
+/* O rótulo sai em tela estreita, e sobram a bolinha, o número e a seta — que continuam
+   dizendo que aquilo abre. O cabeçalho já leva sino, nome, perfil, avatar e Sair; com o
+   texto fixo, é ele que espremeria os outros. */
+@media(max-width:900px){ .online-rot{display:none;} }
 </style>
 <style>
 /* ═══ IDENTIDADE VISUAL INSTITUCIONAL (identidade_sigpc.css) ═══ */
@@ -854,9 +861,21 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
            aparece quando alguém quer ver. -->
       <div id="onlineBox" style="position:relative;display:none;margin-right:6px;">
         <button id="onlineBtn" onclick="onlineAbrir(event)" title="Quem está online agora"
-          style="background:none;border:0;cursor:pointer;padding:6px 8px;line-height:1;color:#fff;display:flex;align-items:center;gap:5px;font-family:Barlow,sans-serif;">
-          <span style="width:7px;height:7px;border-radius:50%;background:#7BE38B;display:inline-block;"></span>
+          aria-expanded="false" aria-haspopup="true"
+          style="background:none;border:0;cursor:pointer;padding:6px 9px;line-height:1;color:#fff;display:flex;align-items:center;gap:6px;font-family:Barlow,sans-serif;border-radius:7px;transition:background 150ms;"
+          onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='none'">
+          <span style="width:7px;height:7px;border-radius:50%;background:#7BE38B;display:inline-block;flex-shrink:0;"></span>
           <span id="onlineNum" style="font-size:13px;font-weight:800;">—</span>
+          <!-- O rótulo é o que faz o botão parecer botão. Discreto de propósito (12,5px,
+               peso 600, opacidade .8): o sino ao lado é ação, isto é informação. -->
+          <span class="online-rot" style="font-size:12.5px;font-weight:600;opacity:.8;white-space:nowrap;">Usuários online</span>
+          <!-- ⚠️ A seta gira por `onlineSeta()`, NUNCA aqui nem só no onclick: há TRÊS
+               caminhos de fechar o painel (o próprio botão, o clique fora e o Esc), e girar
+               em um só deixaria a seta mentindo sobre o estado da lista. -->
+          <svg id="onlineSeta" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"
+            style="opacity:.75;flex-shrink:0;transition:transform 180ms ease;">
+            <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
+          </svg>
         </button>
       </div>
       <div><div class="uname" id="tNome">—</div><div class="urole" id="tPerfil">—</div></div>
@@ -2173,7 +2192,11 @@ function onlinePintar() {
   const box = document.getElementById('onlineBox')
   const num = document.getElementById('onlineNum')
   if(!box || !num) return
-  box.style.display = _online.length ? '' : 'none'
+  const some = !_online.length
+  // ⚠️ Se o botão vai sumir com o painel aberto, FECHA antes. O painel é filho do box: some
+  // junto, mas o estado ficaria "aberto" e a seta voltaria virada na próxima abertura.
+  if(some && document.getElementById('onlinePainel')) onlineFechar()
+  box.style.display = some ? 'none' : ''
   num.textContent = _online.length
   const painel = document.getElementById('onlinePainel')
   if(painel) painel.innerHTML = onlineHtml()
@@ -2215,10 +2238,35 @@ function onlineHtml() {
     </div>`).join('')
 }
 
+/**
+ * A seta e o estado do botão, num lugar só.
+ *
+ * ⚠️ FONTE ÚNICA DE PROPÓSITO. O painel fecha por TRÊS caminhos — clicar no botão de novo,
+ * clicar fora e apertar Esc. Girar a seta dentro do `onclick` cobriria o primeiro e deixaria
+ * a seta apontando para cima com a lista fechada nos outros dois. Toda mudança de estado do
+ * painel passa por aqui.
+ */
+function onlineSeta(aberto) {
+  const s = document.getElementById('onlineSeta')
+  const b = document.getElementById('onlineBtn')
+  if(s) s.style.transform = aberto ? 'rotate(180deg)' : ''
+  if(b) b.setAttribute('aria-expanded', aberto ? 'true' : 'false')
+}
+
+/** Fecha o painel, se estiver aberto, e devolve a seta. O único jeito de fechar. */
+let _onlineEsc = null
+function onlineFechar() {
+  const el = document.getElementById('onlinePainel')
+  if(el) el.remove()
+  // ⚠️ O ouvinte de Esc tem de sair AQUI, e não só quando o Esc é apertado: fechar clicando
+  // fora deixaria um ouvinte vivo por abertura, e dez aberturas dariam dez ouvintes.
+  if(_onlineEsc) { document.removeEventListener('keydown', _onlineEsc); _onlineEsc = null }
+  onlineSeta(false)
+}
+
 function onlineAbrir(ev) {
   if(ev) ev.stopPropagation()
-  const aberto = document.getElementById('onlinePainel')
-  if(aberto) { aberto.remove(); return }
+  if(document.getElementById('onlinePainel')) { onlineFechar(); return }
 
   const p = document.createElement('div')
   p.id = 'onlinePainel'
@@ -2227,12 +2275,15 @@ function onlineAbrir(ev) {
   p.onclick = (e) => e.stopPropagation()
   p.innerHTML = onlineHtml()
   document.getElementById('onlineBox').appendChild(p)
+  onlineSeta(true)
   onlineCarregar()
+
+  // Esc fecha, como em qualquer menu suspenso. Quem remove o ouvinte é `onlineFechar`.
+  _onlineEsc = (e) => { if(e.key === 'Escape') onlineFechar() }
+  document.addEventListener('keydown', _onlineEsc)
   // Fecha ao clicar fora. `once` evita empilhar um ouvinte a cada abertura — mesma regra
   // do sino.
-  setTimeout(() => document.addEventListener('click', () => {
-    const el = document.getElementById('onlinePainel'); if(el) el.remove()
-  }, { once:true }), 0)
+  setTimeout(() => document.addEventListener('click', onlineFechar, { once:true }), 0)
 }
 
 let _onlineTimer = null
