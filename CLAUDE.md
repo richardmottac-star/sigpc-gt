@@ -4,13 +4,21 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 12/08/2026 — ver `SESSAO.md` para o estado do dia.
+**Última sessão:** 13/08/2026 — ver `SESSAO.md` para o estado do dia.
 
-> **O sistema está ABERTO** — o modo preparação foi desligado em 12/08 e a equipe trabalha.
-> O interruptor segue em Configurações → Modo preparação.
+> **O sistema está ABERTO.** Os dois interruptores estão **desligados** e a equipe trabalha.
 >
-> ⚠️ Se religar, saiba que ele **barra também os três técnicos do Controle Interno**: só
-> superadmin e coordenador são isentos.
+> **Configurações tem TRÊS abas:** Limite de TRs · Modo preparação · Modo manutenção.
+>
+> | | preparação | **manutenção** |
+> |---|---|---|
+> | o analista **entra**? | sim, e a tela limita | **não** |
+> | isentos | superadmin **e** coordenador | **só superadmin** |
+> | quem já está dentro | vira tela restrita | **cai a sessão em até 20 s** |
+>
+> ⚠️ **A manutenção derruba TODO MUNDO** — coordenadores e o Controle Interno inclusive.
+> No login ela mostra um painel **vermelho sem formulário**; o superadmin entra pelo link
+> discreto *"Acesso do administrador"*. A regra mora em `sigpc-api/lib/manutencao.js`.
 
 ---
 
@@ -61,7 +69,13 @@ Campos: `codigo_pc`, `codigo_nl`, `tipo`, `tr`, `processo_pc`, `processo_mae`,
 `analista_nome`, `analista_id`, `grupo`, `conflito`, `parecer_tipo`, `baixada`,
 `data_baixa`, `origem_baixa`, `registrado_por`, `setorial_id`, `dt_limite_pc`,
 `dt_recebimento_pc`, `prazo_analise_dias`, `dias_atraso`, `prazo_diligencia`,
-`num_diligencia`, `enviado_ci`, `dt_envio_ci`
+`num_diligencia`, `enviado_ci`, `dt_envio_ci`, `parecer_ci`, `situacao_atual`,
+`ci_situacao`, `ci_rodada`, `dt_inicio_analise`, `dt_assumida`
+
+⚠️ **`dt_inicio_analise` e `dt_assumida` respondem perguntas DIFERENTES.** A primeira é o
+relógio da **análise** e não reinicia; a segunda é **quando este analista pegou a TR**, e
+reinicia a cada assunção (volta a `NULL` na devolução). Usar uma no lugar da outra faz o
+cartão mostrar a data do analista **anterior**. Detalhe no `CLAUDE.md` do `sigpc-api`.
 
 ### Outras
 - `metas_analistas` — 46 analistas, `vigente = true`, período Nov/2025 a Abr/2026
@@ -238,12 +252,30 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 ## Pendências
 
-> Conferida contra o banco em **12/08/2026**. O que está `[x]` foi verificado, não presumido.
+> Conferida contra o banco em **13/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
 >
-> **Estado em 12/08, ao fim do dia:** 53 usuários · **51 conseguem entrar** · fila de
-> aprovação **vazia** · **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo**
-> (este também inativo).
+> **Estado em 13/08:** 53 usuários · **51 conseguem entrar** · fila de aprovação **vazia** ·
+> **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo** (este também inativo).
+
+### ⚠️ Telas de 13/08/2026 — no ar, NÃO testadas em navegador
+Nada disto foi clicado por uma pessoa. Em 12/08 o Richard achou três defeitos abrindo as
+telas que os 14 conjuntos de teste não pegaram.
+
+- [ ] **Assumir uma TR** — reescrito: uma chamada, não 83. A TR **inteira** tem de aparecer
+      na Minha Planilha. No erro o modal **fica aberto** com o motivo. `assumirTR` /
+      `confirmarAssumirTR`.
+- [ ] **Devolver a TR ao estoque** — botão no cabeçalho do cartão, **só superadmin**.
+      Contagens, motivo obrigatório, "Outro" exigindo descrição, e **baixada não volta**.
+      `abrirDevM` / `confDevM`.
+- [ ] **Lápis do processo SGPe** — em 11 telas, via `procHtml`. Sem link o número sai em
+      **âmbar**. Corrigir e ver o link nascer. `procEditar` / `procEdSalvar`.
+- [ ] **Cabeçalho do cartão** — "assumida em" e a etiqueta **✨ NOVA** (7 dias). Nas TRs
+      antigas não aparece nada, e é proposital. `planAssumidaEm` / `planTrNova`.
+- [ ] **Indicador de online** — rótulo e seta. Fechar pelo botão, clicando fora e com **Esc**:
+      a seta tem de voltar nos três. `onlineSeta` / `onlineFechar`.
+- [ ] **Modo manutenção** — ⚠️ ligar **derruba a equipe na hora**. Testar fora do expediente.
+      `cfgRenderManutencao` / `manutTelaLogin` / `manutDerrubar`.
 
 ### Telas de 12/08/2026 — no ar, não testadas em navegador
 - [ ] **Controle Interno** — três abas, fila agrupada por encaminhamento, decisão em bloco
