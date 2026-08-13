@@ -219,6 +219,18 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     ⚠️ Sem lápis na linha do Estoque, de propósito: ela é agregada por TR e não tem uma PC de
     referência para o servidor corrigir.
 
+18. **A busca global é SÓ SUPERADMIN, e a guarda é do servidor.** `GET /busca_global`
+    devolve o acervo de **qualquer** analista — o oposto do recorte por `analista_id` das
+    outras telas. O `pode:` do menu e o `if` de `irBuscaGlobal` só evitam desenhar o caminho.
+
+    ⚠️ **O documento sai sem biblioteca:** PDF por `window.print()` (igual ao relatório CGE)
+    e `.doc` pelo MESMO HTML num `Blob application/msword`. **Não trazer `jspdf`, `pdfmake`
+    nem `docx`** para um `index.html` de 11 MB — há teste que falha se aparecerem.
+
+    ⚠️ **A coluna "Código da PC" é dimensionada pela FINAL**, não pela parcial:
+    `2018TR000093-PFINAL` tem 19 caracteres contra 12 de `2018PC000015`. `nowrap` na tela e
+    no papel. A final entra na tabela como as outras, com `—` na NL.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
@@ -260,12 +272,14 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 ### ⚠️ Telas de 13/08/2026 — no ar, NÃO testadas em navegador
 Nada disto foi clicado por uma pessoa. Em 12/08 o Richard achou três defeitos abrindo as
-telas que os 14 conjuntos de teste não pegaram.
+telas que os 15 conjuntos de teste não pegaram.
 
 - [ ] **Assumir uma TR** — reescrito: uma chamada, não 83. A TR **inteira** tem de aparecer
       na Minha Planilha. No erro o modal **fica aberto** com o motivo. `assumirTR` /
       `confirmarAssumirTR`.
-- [ ] **Devolver a TR ao estoque** — botão no cabeçalho do cartão, **só superadmin**.
+- [x] **Devolver a TR ao estoque** — ✅ TESTADO NA TELA em 13/08 e funcionou: duas devoluções
+      reais no histórico (2020TR001601 e 2020TR001599, motivo "TESTE DO SISTEMA").
+- [ ] **Devolver — o resto do fluxo:** botão no cabeçalho do cartão, **só superadmin**.
       Contagens, motivo obrigatório, "Outro" exigindo descrição, e **baixada não volta**.
       `abrirDevM` / `confDevM`.
 - [ ] **Lápis do processo SGPe** — em 11 telas, via `procHtml`. Sem link o número sai em
@@ -274,6 +288,7 @@ telas que os 14 conjuntos de teste não pegaram.
       antigas não aparece nada, e é proposital. `planAssumidaEm` / `planTrNova`.
 - [ ] **Indicador de online** — rótulo e seta. Fechar pelo botão, clicando fora e com **Esc**:
       a seta tem de voltar nos três. `onlineSeta` / `onlineFechar`.
+- [ ] **Busca global** — a tela mais nova, nunca aberta. `irBuscaGlobal` / `bgCard` / `bgMontarDoc`.
 - [ ] **Modo manutenção** — ⚠️ ligar **derruba a equipe na hora**. Testar fora do expediente.
       `cfgRenderManutencao` / `manutTelaLogin` / `manutDerrubar`.
 
