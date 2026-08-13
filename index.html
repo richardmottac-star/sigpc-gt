@@ -2828,7 +2828,9 @@ function limparF() {
 //  ASSUMIR TR (via prestacoes_contas)
 // ══════════════════════════════════════
 let TR_ASSUMIR = null
-let PCS_ASSUMIR = []
+// A previa vem do SERVIDOR (GET /tr/:tr/assumir): quantas PCs livres, e se pode assumir.
+// Antes a tela baixava a lista inteira e contava sozinha — duas fontes para a mesma resposta.
+let ASS_PREVIA = null
 
 /** Liga/desliga o Confirmar do modal Assumir, com o motivo no title. */
 function assBotao(pode, motivo) {
@@ -2843,47 +2845,41 @@ function assBotao(pode, motivo) {
 async function assumirTR(tr) {
   if(verComoAtivo()) { toast('Modo leitura: assumir TR é ação, e está desabilitado.','err'); return }
   TR_ASSUMIR = tr
-  PCS_ASSUMIR = []
+  ASS_PREVIA = null
   // ⚠️ NASCE DESABILITADO. Antes o botão só era ajustado no caminho de sucesso: se a busca
   // falhasse — "Nenhuma PC livre encontrada para esta TR" —, ele continuava clicável, com
-  // a aparência de que dava para confirmar. Clicar não fazia nada (o `confirmarAssumirTR`
-  // sai cedo se `PCS_ASSUMIR` estiver vazio), e é justamente isso que confunde: botão que
-  // aceita o clique e não responde.
+  // a aparência de que dava para confirmar. Clicar não fazia nada, e é justamente isso que
+  // confunde: botão que aceita o clique e não responde.
   assBotao(false, 'Carregando as PCs livres desta TR...')
   document.getElementById('moAss').classList.add('open')
   document.getElementById('mAssI').innerHTML = `
-    <strong>TR:</strong> ${tr}<br>
+    <strong>TR:</strong> ${escHtml(tr)}<br>
     <span style="font-size:10px;color:var(--ct);">⏳ Carregando PCs livres...</span>
   `
   document.getElementById('mAssNL').innerHTML = ''
 
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}&status=livre`)
+    // ⚠️ UMA chamada, e é o SERVIDOR que conta as PCs livres e responde se pode assumir.
+    // Antes a tela baixava a lista, contava sozinha e perguntava a trava numa segunda
+    // requisição — duas fontes para a mesma resposta, e a do navegador podia estar velha.
+    const r = await fetch(`${API_URL}/tr/${encodeURIComponent(tr)}/assumir?usuario_id=${U.id}`)
     const j = await r.json()
-    if(j.error) throw new Error(j.error.message || j.error)
-    PCS_ASSUMIR = j.data || []
-    if(!PCS_ASSUMIR.length) throw new Error('Nenhuma PC livre encontrada para esta TR')
-
-    const entidade = PCS_ASSUMIR[0].entidade || '—'
-    const totalPcs = PCS_ASSUMIR.length
-    const totalNls = new Set(PCS_ASSUMIR.map(p=>p.codigo_nl).filter(Boolean)).size
-
-    // A trava é conferida ANTES de deixar confirmar — o servidor confere de novo, mas
-    // descobrir o bloqueio só depois de clicar "Confirmar" seria assumir metade da TR e
-    // parar no meio.
-    const lim = await limiteChecar(tr)
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar.')
+    ASS_PREVIA = j.data
+    if(!ASS_PREVIA.livres) throw new Error('Nenhuma PC livre encontrada para esta TR')
 
     document.getElementById('mAssI').innerHTML = `
-      <strong>TR:</strong> ${tr}<br>
-      <strong>Entidade:</strong> ${entidade}<br>
-      <strong>PCs:</strong> ${totalPcs}<br>
-      <strong>NLs distintas:</strong> ${totalNls}<br>
-      <strong>Analista:</strong> ${U.nome}
-      ${limiteAviso(lim, tr)}
+      <strong>TR:</strong> ${escHtml(tr)}<br>
+      <strong>PCs livres:</strong> ${ASS_PREVIA.livres}<br>
+      <strong>NLs distintas:</strong> ${(ASS_PREVIA.nls||[]).length}<br>
+      <strong>Analista:</strong> ${escHtml(U.nome)}
+      ${limiteAviso({ pode: ASS_PREVIA.pode, motivo: ASS_PREVIA.motivo, limite: ASS_PREVIA.limite,
+                      ocupadas: ASS_PREVIA.ocupadas, reserva: ASS_PREVIA.reserva,
+                      jaMinha: ASS_PREVIA.jaMinha, autorizacao: ASS_PREVIA.autorizacao }, tr)}
     `
-    assBotao(lim.pode, lim.pode ? '' : (lim.motivo || 'Você não pode assumir esta TR agora.'))
+    assBotao(ASS_PREVIA.pode, ASS_PREVIA.pode ? '' : (ASS_PREVIA.motivo || 'Você não pode assumir esta TR agora.'))
   } catch(e) {
-    document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${tr}<br><span style="color:var(--r);font-size:11px;">Erro: ${e.message}</span>`
+    document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br><span style="color:var(--r);font-size:11px;">Erro: ${escHtml(e.message)}</span>`
     // ⚠️ O botão TEM de ser desabilitado aqui também. Era este o caminho que o deixava
     // clicável: a mensagem de erro aparecia e o Confirmar continuava aceso.
     assBotao(false, e.message)
@@ -2893,57 +2889,35 @@ async function assumirTR(tr) {
 
 
 async function confirmarAssumirTR() {
-  if(!TR_ASSUMIR || !PCS_ASSUMIR.length) return
+  if(!TR_ASSUMIR || !ASS_PREVIA || !ASS_PREVIA.livres) return
   const btn = document.getElementById('btnConfAss')
-  btn.disabled=true; btn.textContent='Salvando...'
-
-  // Fetch com timeout de 8s (evita requisição pendurada travando o botão)
-  const fetchTO = (url, opts={}, ms=8000) => {
-    const ctrl  = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), ms)
-    return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
-  }
-
-  const MAPA_PLAN = {
-    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
-    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
-    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
-    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
-  }
-  const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
-
+  btn.disabled = true; btn.textContent = 'Assumindo...'
   try {
-    let ok = 0
-    let erros = []
-    for(const pc of PCS_ASSUMIR) {
-      try {
-        const r = await fetchTO(`${API_URL}/prestacoes_contas/${encodeURIComponent(pc.codigo_pc)}`, {
-          method: 'PATCH',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ analista_nome: nomeAnalista, analista_id: U.id, status: 'analise' })
-        })
-        const j = await r.json()
-        if(j.error) erros.push(`${pc.codigo_pc}: ${j.error.message||j.error}`)
-        else ok++
-      } catch(eP) { erros.push(`${pc.codigo_pc}: ${eP.message}`) }
-    }
-
-    const total = PCS_ASSUMIR.length
-    if(erros.length === 0) {
-      toast(`✓ ${ok} PC${ok>1?'s':''} da TR ${TR_ASSUMIR} assumida${ok>1?'s':''}!`, 'ok')
-    } else if(ok > 0) {
-      toast(`⚠️ ${ok}/${total} PCs assumidas. Erros: ${erros.join(' | ')}`, 'err')
-      console.error('Erros ao assumir TR:', erros)
-    } else {
-      throw new Error('Nenhuma PC foi assumida. ' + erros.join(' | '))
-    }
+    // ⚠️ UMA REQUISIÇÃO, UMA TRANSAÇÃO — corrigido em 13/08/2026.
+    //
+    // Aqui havia um laço de PATCH por PC. Uma TR tem até 83: se a rede caísse no meio,
+    // metade ficava assumida e metade livre, e o código só sabia dizer "⚠️ ok/83 assumidas".
+    // Era o último lugar do sistema com esse padrão — a devolução já tinha sido corrigida.
+    //
+    // O nome curto do analista também saiu daqui: quem monta `analista_nome` é o servidor,
+    // a partir do `usuario_id`. A tela não decide mais o que vai para o banco.
+    const r = await fetch(`${API_URL}/tr/assumir`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr: TR_ASSUMIR, usuario_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível assumir.')
+    const d = j.data
+    toast(`✓ ${d.assumidas} PC${d.assumidas > 1 ? 's' : ''} da TR ${d.tr} assumida${d.assumidas > 1 ? 's' : ''}!`, 'ok')
+    fm('moAss'); TR_ASSUMIR = null; ASS_PREVIA = null
+    PAG = 0; buscar(); carregarContadores()
   } catch(e) {
     toast('Erro: '+e.message, 'err')
     console.error('confirmarAssumirTR erro:', e)
-  } finally {
-    btn.disabled=false; btn.textContent='✓ Assumir'
-    fm('moAss'); TR_ASSUMIR=null; PCS_ASSUMIR=[]
-    PAG=0; buscar(); carregarContadores()
+    // ⚠️ Repinta e MANTÉM o modal aberto no erro. Fechar o modal escondia a razão da
+    // recusa — a pessoa via só o toast passar e não sabia se tinha assumido ou não.
+    btn.textContent = '✓ Assumir'
+    assBotao(!!(ASS_PREVIA && ASS_PREVIA.pode), e.message)
   }
 }
 
@@ -3469,17 +3443,10 @@ function procRecarregar() {
 // A regra completa está em sigpc-api/lib/limite-tr.js. Aqui só se pergunta e se mostra.
 // ⚠️ Esta checagem é conveniência, NÃO é a trava: quem trava é o PATCH no servidor. Se o
 // front falhar em perguntar, o assumir continua sendo barrado lá.
-async function limiteChecar(tr) {
-  try {
-    const p = new URLSearchParams({ analista_id: U.id })
-    if(tr) p.set('tr', tr)
-    const j = await (await fetch(`${API_URL}/limite_tr/situacao?${p}`)).json()
-    return j.data || { pode: true, semLimite: true }
-  } catch(e) {
-    // Sem resposta, não bloqueia a tela — o servidor decide na hora de gravar.
-    return { pode: true, semLimite: true }
-  }
-}
+// ⚠️ `limiteChecar` FOI REMOVIDA em 13/08/2026. Ela perguntava a trava numa requisicao
+// propria; agora a previa de assumir (GET /tr/:tr/assumir) ja devolve `pode` e `motivo` junto
+// com a contagem de PCs livres — uma fonte so, e uma ida ao servidor em vez de duas.
+// A trava de verdade continua sendo a do servidor, agora dentro da transacao de POST /tr/assumir.
 
 function limiteAviso(lim, tr) {
   if(!lim || lim.pode !== false) {

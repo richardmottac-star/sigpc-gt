@@ -185,6 +185,26 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     (`planEhFinal`), nunca pelo texto: no acervo há `FINAL` (981), `Final` (39) e `final`
     (1), e cinco finais gravadas com `parcial_num = '1'`, que se misturam à parcial 1.
 
+16. **⚠️ A TELA NÃO CONTA, NÃO DECIDE E NÃO ITERA — quem faz isso é o servidor.**
+    Três lugares tinham o mesmo padrão, e os três caíram em 12–13/08:
+    · a **devolução** e o **assumir** faziam um PATCH por PC, em série, sem transação. Uma TR
+      tem até 83: rede caindo no meio deixava metade feita. Viraram `POST /tr/devolver` e
+      `POST /tr/assumir`, numa transação cada.
+    · o modal do assumir **contava as PCs livres sozinho** e perguntava a trava numa segunda
+      requisição — duas fontes para a mesma resposta. Agora `GET /tr/:tr/assumir` devolve as
+      duas coisas juntas.
+    · o **nome curto** do analista (`analista_nome` = "Richard") era montado aqui, com um mapa
+      de 8 nomes no `index.html`. Foi para `lib/assumir.js`: a tela não decide mais o que vai
+      para o banco.
+    **Se a tela está iterando requisições ou contando o que o banco sabe, é defeito.**
+
+17. **Corrigir o processo SGPe passa pelo `procHtml`.** Ele é o ponto único de desenho do
+    processo, usado em 11 telas — o lápis entrou nele e apareceu nas onze. `processo_mae`
+    também é editável, com o mesmo modal. **Automático primeiro, manual depois:** o campo de
+    colar o link só aparece quando mapa + cache + SGPe ao vivo não resolvem.
+    ⚠️ Sem lápis na linha do Estoque, de propósito: ela é agregada por TR e não tem uma PC de
+    referência para o servidor corrigir.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)
