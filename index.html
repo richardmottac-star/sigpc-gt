@@ -3540,7 +3540,7 @@ const BG_CI = { na_fila: 'Na fila do C.I.', com_analista: 'Devolvida ao analista
 function bgCard(c) {
   const dono = c.analista_nome
     ? `<b>${escHtml(c.analista_nome)}</b>${c.grupo ? ` · Grupo ${escHtml(String(c.grupo))}` : ''}`
-    : `<span style="color:var(--am);font-weight:700;">sem analista</span> · no estoque${
+    : `<span style="color:var(--am);font-weight:700;">Sem analista</span> · no estoque${
         c.no_estoque_desde ? ` desde ${bgData(c.no_estoque_desde)}` : ''}`
 
   const linhaDatas = [
@@ -3682,7 +3682,7 @@ function bgMontarDoc(c) {
 
   const dono = c.analista_nome
     ? `${escHtml(c.analista_nome)}${c.grupo ? ' — Grupo ' + escHtml(String(c.grupo)) : ''}`
-    : `sem analista — no estoque${c.no_estoque_desde ? ' desde ' + bgData(c.no_estoque_desde) : ''}`
+    : `Sem analista — no estoque${c.no_estoque_desde ? ' desde ' + bgData(c.no_estoque_desde) : ''}`
 
   const prazoTxt = c.prazo
     ? (c.prazo.vencido

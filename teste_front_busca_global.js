@@ -33,7 +33,12 @@ conf(/total_parciais/.test(card) && /total_pcs/.test(card) && /baixadas/.test(ca
 conf(/bgBadge\(c\.situacao\)/.test(card), 'a badge da situacao no cabecalho');
 conf(/c\.cnpj_cpf/.test(card), 'o CNPJ');
 conf(/Grupo \$\{escHtml\(String\(c\.grupo\)\)\}/.test(card), 'o analista COM o grupo');
-conf(/sem analista/.test(card) && /no estoque/.test(card), 'e "sem analista · no estoque" quando livre');
+conf(/Sem analista/.test(card) && /no estoque/.test(card), 'e "Sem analista · no estoque" quando livre');
+// ⚠️ A DATA SÓ APARECE NAS DEVOLVIDAS. Medido em 13/08: das 795 TRs sem dono, 793 nunca
+// tiveram um — para essas não existe "desde quando", e inventar a data da carga seria
+// mostrar um número que não quer dizer o que parece.
+conf(/no_estoque_desde \?/.test(card), 'a data e condicional, nao fixa');
+conf(/no_estoque_desde[\s\S]{0,80}?: ''/.test(card), 'e sem data nao sobra texto solto');
 conf(/assumida em/.test(card) && /em análise há/.test(card), 'assumida em, e ha quantos dias');
 conf(/parciais_casaram/.test(card), 'e diz quantas parciais a busca encontrou');
 
