@@ -942,15 +942,21 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
     <div class="mcb">
       <div class="mci am" id="mDevMI"></div>
       <div id="mDevMResumo" style="margin:12px 0;"></div>
-      <div class="mc-campo"><label>Motivo *</label>
-        <select id="devMMotivo">
-          <option value="">Selecione o motivo...</option>
-          <option>Não será analisada por mim</option>
-          <option>Redistribuição de carga</option>
-          <option>Documentação incompleta</option>
-          <option>Requer complementação do beneficiário</option>
-          <option>Outro</option>
-        </select>
+      <!-- Escondido quando há impedimento: com a TR travada não há motivo a escolher. -->
+      <div id="devMCampos">
+        <div class="mc-campo"><label>Motivo *</label>
+          <select id="devMMotivo" onchange="devMMudouMotivo()">
+            <option value="">Selecione o motivo...</option>
+          </select>
+        </div>
+        <!-- "Outro" sem explicação gravaria um registro que não explica nada, e registrar o
+             porquê é metade do motivo desta rota existir. -->
+        <div class="mc-campo" id="devMOutroBox" style="display:none;">
+          <label>Descreva o motivo *</label>
+          <textarea id="devMDetalhe" rows="2" maxlength="200" oninput="devMMudouMotivo()"
+            placeholder="Ex.: analista de licença médica a partir de 15/08."></textarea>
+          <div id="devMConta" style="font-size:10.5px;color:var(--ct);text-align:right;">0/200 caracteres</div>
+        </div>
       </div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moDevM')">Cancelar</button>
@@ -7415,6 +7421,39 @@ function planTrConcluida(r) {
   return r.total_pcs > 0 && r.baixadasQtd >= r.total_pcs
 }
 
+// ⚠️ `dt_assumida` NÃO É `dt_inicio_analise`, e a diferença é o motivo de ela existir.
+//
+//   dt_inicio_analise ... quando a análise COMEÇOU. Não reinicia ao reassumir (COALESCE no
+//                         servidor, de propósito): é o relógio do prazo.
+//   dt_assumida ......... quando ESTE analista pegou a TR. Reinicia a cada assunção.
+//
+// Antes da devolução ganhar botão, dava para confundir as duas. Agora não: devolvida a TR e
+// assumida por outro, a `dt_inicio_analise` continuaria mostrando a data do analista
+// ANTERIOR. Criada em 12/08/2026, SEM backfill — as 761 TRs de antes não têm data, e é
+// melhor campo vazio do que data plausível e errada (mesma decisão de 09/08).
+const DIAS_TR_NOVA = 7
+
+function planAssumidaEm(r) {
+  const datas = (r.parciais||[]).flatMap(p => p.pcs||[]).map(p => p.dt_assumida).filter(Boolean)
+  return datas.length ? datas.sort()[0] : null
+}
+
+/** Assumida nos últimos 7 dias? Sem data, NÃO é nova — vazio não é recente. */
+function planTrNova(r) {
+  const d = planAssumidaEm(r)
+  if(!d) return false
+  const dias = (Date.now() - new Date(d).getTime()) / 86400000
+  return dias >= 0 && dias <= DIAS_TR_NOVA
+}
+
+/** "hoje", "há 1 dia", "há 5 dias" — o que se quer saber de uma TR recém-assumida. */
+function planHaQuantoTempo(iso) {
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if(dias <= 0) return 'hoje'
+  if(dias === 1) return 'há 1 dia'
+  return `há ${dias} dias`
+}
+
 function planInicioAnalise(r) {
   const datas = (r.parciais||[]).flatMap(p => p.pcs||[]).map(p => p.dt_inicio_analise).filter(Boolean)
   const menor = datas.length ? datas.sort()[0] : null
@@ -7676,6 +7715,10 @@ function renderPlan(rows) {
     // TR com TUDO baixado recua: não é mais trabalho, é histórico. Cor da paleta — o verde
     // claro de fundo (--vbg) com texto escuro, em vez do gradiente forte do cabeçalho.
     const baixadaTr = planTrConcluida(r)
+    // TR concluída não é "nova": já acabou. A etiqueta serve para achar o que acabou de
+    // chegar, e uma TR terminada não é isso, por mais recente que seja a assunção.
+    const assumida  = planAssumidaEm(r)
+    const trNova    = !baixadaTr && planTrNova(r)
     const fundoCab  = baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
     const corCab    = baixadaTr ? 'var(--te)'  : '#fff'
     const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
@@ -7691,10 +7734,12 @@ function renderPlan(rows) {
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
             ${baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
+            ${trNova ? `<span title="Assumida ${planHaQuantoTempo(assumida)} — some sozinha depois de ${DIAS_TR_NOVA} dias"
+              style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--az);color:#fff;">✨ NOVA</span>` : ''}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
           </div>
           <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
-            ${escHtml(r.entidade||'—')}${planInicioAnalise(r)}
+            ${escHtml(r.entidade||'—')}${assumida ? ` · assumida em ${planData(assumida)}${trNova ? ` (${planHaQuantoTempo(assumida)})` : ''}` : ''}${planInicioAnalise(r)}
           </div>
         </div>
 
@@ -7708,6 +7753,13 @@ function renderPlan(rows) {
           <!-- No cabeçalho verde escuro, branco sem borda já contrasta. No cabeçalho claro da
                TR concluída (--vbg), branco sobre claro some: ali o botão precisa da borda em
                --v para se delimitar. A sombra sozinha não dava conta. -->
+          <!-- Devolver ao estoque: SÓ superadmin, e só enquanto houver o que devolver. Numa
+               TR concluída não há — todas as PCs estão baixadas, e baixada não volta.
+               ⚠️ Esconder aqui é conveniência, não garantia: quem confere é o servidor. -->
+          ${U.perfil === 'superadmin' && !baixadaTr && !verComoAtivo() ? `
+          <button class="btn-acao" title="Devolver a TR inteira ao estoque"
+            style="background:transparent;color:${corCab};border:1.5px solid ${baixadaTr?'var(--cb)':'rgba(255,255,255,.55)'};font-weight:700;white-space:nowrap;box-shadow:none;"
+            onclick="event.stopPropagation();abrirDevM('${escHtml(r.tr)}')">↩ Devolver</button>` : ''}
           <button class="btn-acao" style="background:#fff;color:var(--v);font-weight:800;white-space:nowrap;${
             baixadaTr ? 'border:2px solid var(--v);box-shadow:none;' : 'border:none;box-shadow:0 1px 4px rgba(0,0,0,.18);'}"
             onclick="planToggle('${escHtml(r.tr)}');event.stopPropagation();">${r.expandida?'▲ Recolher':'▼ Ver PCs'}</button>
@@ -10022,97 +10074,150 @@ function priorExportarCSV() {
 }
 
 // ══════════════════════════════════════
-//  DEVOLVER TR — MASTER (superadmin only)
-//  Devolve apenas PCs NÃO baixadas
+//  DEVOLVER TR AO ESTOQUE — só superadmin
 // ══════════════════════════════════════
+// ⚠️ REESCRITO EM 12/08/2026. O que havia aqui tinha três defeitos, e os três eram do
+// mesmo tipo: a tela fazendo o trabalho do servidor.
+//
+//   1. UM PATCH POR PC, EM SÉRIE. Uma TR tem até 83 PCs. Rede caindo no meio deixava
+//      metade no estoque e metade com o analista — sem desfazer. Agora é UMA chamada,
+//      e o servidor abre UMA transação.
+//   2. `if(U.perfil !== 'superadmin')` AQUI ERA A GARANTIA. Armadilha 9: contornável
+//      pelo DevTools. Agora o servidor confere o perfil no banco; o `if` daqui ficou só
+//      para não desenhar o botão.
+//   3. NÃO DEIXAVA RASTRO. Agora a rota grava em `parcela_historico` e avisa o analista.
+//
+// ⚠️ Os NÚMEROS do modal vêm do servidor (`GET /tr/:tr/devolucao`), não são contados
+// aqui. Antes a tela filtrava `analista_id === U.id` e contava sozinha; se a conta da
+// tela e a do banco divergissem, o modal prometia 71 e o banco devolvia outro número.
 let TR_DEVM = null
-let PCS_DEVM = []
+let DEVM_PREVIA = null
 
 async function abrirDevM(tr) {
-  if(U.perfil !== 'superadmin') { toast('Ação restrita.','err'); return }
+  if(U.perfil !== 'superadmin') { toast('Ação restrita ao superadmin.','err'); return }
+  if(verComoAtivo()) { toast('Modo leitura: devolver TR é ação, e está desabilitado.','err'); return }
   TR_DEVM = tr
-  PCS_DEVM = []
+  DEVM_PREVIA = null
   document.getElementById('moDevM').classList.add('open')
   document.getElementById('devMMotivo').value = ''
-  document.getElementById('mDevMI').innerHTML = `<strong>TR:</strong> ${tr}`
+  document.getElementById('devMDetalhe').value = ''
+  document.getElementById('devMOutroBox').style.display = 'none'
+  document.getElementById('devMCampos').style.display = 'none'
+  document.getElementById('mDevMI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}`
   document.getElementById('mDevMResumo').innerHTML =
-    '<div class="loading"><div class="spin"></div>Carregando PCs...</div>'
+    '<div class="loading"><div class="spin"></div>Carregando...</div>'
+  // ⚠️ Nasce desabilitado e só é habilitado no caminho que autoriza (armadilha 15).
+  devMBotao(false, 'Carregando as PCs desta TR...')
+
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}&limit=9999`)
-    const j = sgpeAbsorver(await r.json())
-    const todas = j.data || []
-    if(!todas.length) throw new Error('Nenhuma PC encontrada para esta TR')
-    const entidade = todas[0].entidade || '—'
-    const minhas = todas.filter(p => String(p.analista_id) === String(U.id))
-    const baixadas = minhas.filter(p => p.baixada === true)
-    PCS_DEVM = minhas.filter(p => p.baixada !== true)
-    document.getElementById('mDevMI').innerHTML =
-      `<strong>TR:</strong> ${tr}<br><strong>Entidade:</strong> ${entidade}`
-    document.getElementById('mDevMResumo').innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center;">
-        <div style="background:#FFF8E1;border-radius:8px;padding:10px;">
-          <div style="font-size:22px;font-weight:800;color:#B8860B;">${PCS_DEVM.length}</div>
-          <div style="font-size:10px;color:var(--ct);">PCs a devolver</div>
-        </div>
-        <div style="background:#E8F5E9;border-radius:8px;padding:10px;">
-          <div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas.length}</div>
-          <div style="font-size:10px;color:var(--ct);">Baixadas (mantidas)</div>
-        </div>
-      </div>
-      <p style="font-size:10px;color:var(--ct);margin-top:8px;line-height:1.5;">
-        As PCs já baixadas <strong>não</strong> serão devolvidas — sua produtividade permanece registrada.
-      </p>`
-    if(!PCS_DEVM.length) {
-      document.getElementById('mDevMResumo').innerHTML +=
-        '<p style="color:var(--r);font-size:11px;margin-top:6px;">Nenhuma PC disponível para devolução nesta TR.</p>'
+    const r = await fetch(`${API_URL}/tr/${encodeURIComponent(tr)}/devolucao?usuario_id=${U.id}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar.')
+    DEVM_PREVIA = j.data
+
+    const p = DEVM_PREVIA
+    document.getElementById('devMMotivo').innerHTML =
+      '<option value="">Selecione o motivo...</option>' +
+      (p.motivos||[]).map(m => `<option>${escHtml(m)}</option>`).join('')
+
+    const dono = p.analista_nome ? escHtml(p.analista_nome) : 'o analista'
+    const cel = (n, rot, cor, fundo) => `
+      <div style="background:${fundo};border-radius:8px;padding:10px;">
+        <div style="font-size:22px;font-weight:800;color:${cor};">${n}</div>
+        <div style="font-size:10px;color:var(--ct);line-height:1.3;">${rot}</div>
+      </div>`
+
+    let html = `
+      <div style="display:grid;grid-template-columns:repeat(${p.no_ci ? 3 : 2},1fr);gap:8px;text-align:center;">
+        ${cel(p.devolver, 'voltam ao estoque', '#B8860B', '#FFF8E1')}
+        ${cel(p.baixadas, 'baixadas (mantidas)', 'var(--v)', '#E8F5E9')}
+        ${p.no_ci ? cel(p.no_ci, 'no Controle Interno', '#991B1B', '#FEF2F2') : ''}
+      </div>`
+
+    if(p.impedimento) {
+      // Impedida: o motivo não tem o que fazer ali, e o botão fica cinza com a razão no title.
+      html += `<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;padding:11px 13px;margin-top:10px;">
+        <div style="font-size:12px;font-weight:800;color:#991B1B;margin-bottom:3px;">Não dá para devolver agora</div>
+        <div style="font-size:11.5px;color:var(--te);line-height:1.55;">${escHtml(p.impedimento)}</div>
+      </div>`
+      document.getElementById('mDevMResumo').innerHTML = html
+      devMBotao(false, p.impedimento)
+      return
     }
+
+    html += `
+      <div style="font-size:11px;color:var(--ct);margin-top:10px;line-height:1.55;">
+        A TR sai da planilha de <strong>${dono}</strong> e fica <strong>livre</strong> para outro analista assumir.
+        ${p.baixadas ? `As <strong>${p.baixadas}</strong> PCs já baixadas <strong>não</strong> voltam —
+          a produtividade ${p.analista_nome ? 'de '+dono : 'dele'} continua registrada e a baixa não é estornada.` : ''}
+        ${p.analista_id ? '<br>Ele é avisado pelo sino.' : ''}
+      </div>`
+    document.getElementById('mDevMResumo').innerHTML = html
+    document.getElementById('devMCampos').style.display = ''
+    devMBotao(false, 'Selecione o motivo da devolução')
   } catch(e) {
     document.getElementById('mDevMResumo').innerHTML =
-      `<p style="color:var(--r);font-size:11px;">Erro: ${e.message}</p>`
+      `<p style="color:var(--r);font-size:11.5px;">Erro: ${escHtml(e.message)}</p>`
+    devMBotao(false, 'Não foi possível carregar as PCs desta TR')
   }
 }
 
-async function confDevM() {
-  if(!TR_DEVM || !PCS_DEVM.length) { toast('Nada a devolver.','err'); return }
+/** O botão num lugar só: desabilitado com o motivo no title, ou aceso com o número. */
+function devMBotao(ativo, motivo) {
+  const b = document.getElementById('btnConfDevM')
+  if(!b) return
+  const n = DEVM_PREVIA ? DEVM_PREVIA.devolver : 0
+  b.disabled = !ativo
+  b.textContent = ativo ? `↩ Devolver ${n} PC${n > 1 ? 's' : ''}` : '↩ Devolver'
+  b.style.opacity = ativo ? '' : '.5'
+  b.style.cursor = ativo ? '' : 'not-allowed'
+  b.title = ativo ? '' : (motivo || '')
+}
+
+/** "Outro" abre o campo livre — e sem ele o botão não acende. */
+function devMMudouMotivo() {
   const mot = document.getElementById('devMMotivo').value
-  if(!mot) { toast('Selecione o motivo.','err'); return }
+  const box = document.getElementById('devMOutroBox')
+  const det = document.getElementById('devMDetalhe')
+  const ehOutro = mot === 'Outro'
+  box.style.display = ehOutro ? '' : 'none'
+  document.getElementById('devMConta').textContent = `${det.value.trim().length}/200 caracteres`
+
+  if(!mot) return devMBotao(false, 'Selecione o motivo da devolução')
+  if(ehOutro && det.value.trim().length < 10)
+    return devMBotao(false, 'Descreva o motivo com ao menos 10 caracteres')
+  devMBotao(true)
+}
+
+async function confDevM() {
+  if(!TR_DEVM || !DEVM_PREVIA || !DEVM_PREVIA.devolver) { toast('Nada a devolver.','err'); return }
+  const motivo = document.getElementById('devMMotivo').value
+  const detalhe = document.getElementById('devMDetalhe').value
+  if(!motivo) { toast('Selecione o motivo.','err'); return }
+
   const btn = document.getElementById('btnConfDevM')
   btn.disabled = true; btn.textContent = 'Devolvendo...'
-  const fetchTO = (url, opts={}, ms=8000) => {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), ms)
-    return fetch(url, {...opts, signal: ctrl.signal}).finally(() => clearTimeout(timer))
-  }
   try {
-    let ok = 0, erros = []
-    for(const pc of PCS_DEVM) {
-      try {
-        const r = await fetchTO(`${API_URL}/prestacoes_contas/${encodeURIComponent(pc.codigo_pc)}`, {
-          method: 'PATCH',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ status:'livre', analista_nome:null, analista_id:null })
-        })
-        const j = await r.json()
-        if(j.error) erros.push(`${pc.codigo_pc}: ${j.error.message||j.error}`)
-        else ok++
-      } catch(eP) { erros.push(`${pc.codigo_pc}: ${eP.message}`) }
-    }
-    if(erros.length === 0) {
-      toast(`✓ ${ok} PC${ok>1?'s':''} da TR ${TR_DEVM} devolvida${ok>1?'s':''} ao estoque!`,'ok')
-    } else if(ok > 0) {
-      toast(`⚠️ ${ok}/${PCS_DEVM.length} devolvidas. Erros: ${erros.length}`,'err')
-      console.error('Erros ao devolver:', erros)
-    } else {
-      throw new Error('Nenhuma PC devolvida. ' + erros.join(' | '))
-    }
+    // UMA chamada. O servidor abre a transação: ou volta a TR inteira, ou não volta nada.
+    const r = await fetch(`${API_URL}/tr/devolver`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr: TR_DEVM, usuario_id: U.id, motivo, detalhe })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível devolver.')
+    const d = j.data
+    toast(`✓ ${d.devolvidas} PC${d.devolvidas > 1 ? 's' : ''} da TR ${d.tr} devolvida${d.devolvidas > 1 ? 's' : ''} ao estoque.`,'ok')
+    fm('moDevM'); TR_DEVM = null; DEVM_PREVIA = null
+    // Recarrega a tela em que a pessoa está: o botão vive nas duas (cartão da Minha
+    // Planilha e tabela do Estoque), e recarregar a errada deixaria a TR devolvida à vista.
+    if(typeof buscarPlan === 'function' && document.getElementById('planConteudo')) buscarPlan()
+    if(typeof buscar === 'function' && document.getElementById('tbl')) { PAG = 0; buscar() }
+    if(typeof carregarContadores === 'function') carregarContadores()
   } catch(e) {
     toast('Erro: '+e.message,'err')
-    console.error('confDevM erro:', e)
-  } finally {
-    btn.disabled = false; btn.textContent = '↩ Devolver'
-    fm('moDevM'); TR_DEVM = null; PCS_DEVM = []
-    if(typeof buscar === 'function') { PAG = 0; buscar() }
-    if(typeof carregarContadores === 'function') carregarContadores()
+    // ⚠️ Repinta o botão no erro: sem isto ficaria "Devolvendo..." para sempre, aceso e
+    // sem responder — pior que botão cinza (armadilha 15).
+    devMMudouMotivo()
   }
 }
 
