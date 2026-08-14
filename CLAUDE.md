@@ -267,6 +267,28 @@ reportar — consumiu o dia inteiro e cansou o Richard sem necessidade.
 Isto NÃO afrouxa a regra de escrita no banco: `INSERT`/`UPDATE`/`DELETE`/`ALTER`/`CREATE`
 continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, não a permissão.
 
+20. **⚠️ SOLICITAR DEVOLUÇÃO: o analista PEDE, não devolve.** Botão no cartão da TR, ao lado
+    do "Ver PCs", só para analista e só em TR não concluída.
+
+    O modal `moDev` e a função `confDev` eram **código morto**: chamavam
+    `db.from('estoque').update(...)`, uma rota que **nunca existiu** — a TR nunca ficou
+    "Aguard. Dev." porque nada gravava isso. Foram ressuscitados em 13/08/2026.
+    ⚠️ **Continua valendo: não confundir com `moDevM`/`confDevM`**, a devolução direta do
+    superadmin.
+
+    ⚠️ **No motivo 1 a TR vai DIRETO para o analista indicado, NÃO para o estoque** — e o
+    cartão da fila diz isso na cara. É o ponto em que a tela poderia enganar: o coordenador
+    aprovaria achando que devolveu para a pessoa, e a TR ficaria no estoque para qualquer um
+    pegar. A carga do indicado aparece ("Marisa: 8 TRs, limite 6") **e o limite não barra** —
+    quem decide é o coordenador, não a regra.
+
+    ⚠️ **Quem não decide não vê botão.** O solicitante não decide o próprio pedido (exceção:
+    o superadmin, e aí o registro marca). Em vez de mostrar "Aprovar" e deixar a rota recusar,
+    o cartão diz de quem é a decisão. `devPodeDecidir` repete a regra do servidor.
+
+    ⚠️ **Sem aprovar em lote, de propósito.** Dez avisos com o mesmo texto genérico é o oposto
+    do que o motivo escrito serve — e é ele que faz o analista entender o que houve com a TR.
+
 ---
 
 ## As três regras do time de agentes (Richard, 13/08/2026)
@@ -371,7 +393,9 @@ telas que os 15 conjuntos de teste não pegaram.
       aprovação, prazo, diligência e recado. Ver `SESSAO.md`.
 - [x] E-mails dos analistas — campo `email` existe desde 19/07/2026 (Primeiro Acesso
       e Meu Perfil). Falta **envio**, que é funcionalidade nova, não item em aberto.
-- [ ] Código morto: `confDev` e modal `moDev` — **14 ocorrências** no `index.html`.
+- [x] ~~Código morto: `confDev` e modal `moDev`~~ — **RESSUSCITADOS em 13/08/2026.** São o
+      modal e a função do pedido de devolução, e gravam em `POST /solicitacao_devolucao`.
+      Ver a armadilha 20.
 
 ### Arquivos não versionados (intencional, conferir antes de apagar)
 - [ ] `sigpc-gt`: `identidade_sigpc.css`, `logo_sc_base64.js` — **nenhum `<script>` ou
