@@ -71,8 +71,11 @@ console.log('\n═══ 1. FORA DO MODO, NADA MUDA ═══');
   conf(chamadasReais.length === 1, 'e chegou ao fetch de verdade');
 }
 
-console.log('\n═══ 2. COM O MODO LIGADO, NENHUMA ESCRITA SAI ═══');
+console.log('\n═══ 2. COM O MODO LIGADO, A ESCRITA SAI CARIMBADA ═══');
 {
+  // ⚠️ MUDOU EM 14/08/2026. Ate 13/08 este `fetch` BLOQUEAVA toda escrita, e a secao provava
+  // isso. O Richard precisa AGIR pela conta do analista para dar suporte — sem agir nao se da
+  // suporte nenhum. O bloqueio virou CARIMBO, e o que se prova agora e a AUTORIA DUPLA.
   _setVerComo(ANA);
   conf(verComoAtivo() === true, 'o modo esta ligado');
   conf(alvo().id === 22, 'alvo() passa a ser a pessoa vista');
@@ -80,12 +83,48 @@ console.log('\n═══ 2. COM O MODO LIGADO, NENHUMA ESCRITA SAI ═══');
 
   for (const metodo of ['POST', 'PATCH', 'DELETE']) {
     chamadasReais.length = 0;
-    const r = await _fetch('http://api.teste/prestacoes_contas/baixar', { method: metodo, body:'{}' });
-    const corpo = await r.json();
-    conf(r.status === 403, `${metodo} e RECUSADO com 403`, `veio ${r.status}`);
-    conf(corpo.error && corpo.error.ver_como === true, `${metodo} devolve a marca ver_como`);
-    conf(chamadasReais.length === 0, `${metodo} NAO chegou ao fetch de verdade`);
+    const r = await _fetch('http://api.teste/parcela/parecer',
+      { method: metodo, body: JSON.stringify({ analista_id: 4, tr: '2020TR000612' }) });
+    conf(r === 'PASSOU', `${metodo} SAI do navegador`);
+    conf(chamadasReais.length === 1, `${metodo} chegou ao fetch de verdade`);
+
+    const corpo = JSON.parse(chamadasReais[0].opts.body);
+    // ⚠️ O par: o DONO vira o analista, o EXECUTOR vira voce. Trocar so um gravaria a baixa
+    // na produtividade errada — e mandar `analista_id: U.id` era o que o arquivo ja fazia.
+    conf(corpo.analista_id === 22, `${metodo}: analista_id vira o DONO (22)`, `veio ${corpo.analista_id}`);
+    conf(corpo.executado_por === 4, `${metodo}: executado_por vira VOCE (4)`, `veio ${corpo.executado_por}`);
+    conf(corpo.executado_por_nome === 'Richard', `${metodo}: e o nome do executor vai junto`);
+    conf(corpo.tr === '2020TR000612', `${metodo}: o resto do corpo nao e mexido`);
   }
+}
+
+console.log('\n═══ 2b. O CARIMBO SO VALE PARA QUEM DECLARA DONO ═══');
+{
+  _setVerComo(ANA);
+  // Rota que nao fala de analista_id nao e trabalho de analista — config, senha, faixa.
+  chamadasReais.length = 0;
+  await _fetch('http://api.teste/config_sistema', { method:'PATCH', body: JSON.stringify({ modo: true }) });
+  const semDono = JSON.parse(chamadasReais[0].opts.body);
+  conf(!('executado_por' in semDono), 'corpo sem analista_id NAO ganha carimbo');
+  conf(semDono.modo === true, 'e segue intacto');
+
+  // `usuario_id` tambem e dono: e o que o "assumir" manda.
+  chamadasReais.length = 0;
+  await _fetch('http://api.teste/tr/assumir', { method:'POST', body: JSON.stringify({ usuario_id: 4, tr: 'X' }) });
+  const comUser = JSON.parse(chamadasReais[0].opts.body);
+  conf(comUser.usuario_id === 22, 'usuario_id tambem vira o DONO');
+  conf(comUser.executado_por === 4, 'e o executor vai junto');
+
+  // Corpo que nao e JSON nao pode estourar o fetch inteiro.
+  chamadasReais.length = 0;
+  const r = await _fetch('http://api.teste/qualquer', { method:'POST', body: 'texto solto' });
+  conf(r === 'PASSOU', 'corpo que nao e JSON passa sem quebrar');
+
+  // O logout continua sendo a excecao: sair nao e agir pela pessoa.
+  chamadasReais.length = 0;
+  await _fetch('http://api.teste/usuarios/logout', { method:'POST', body: JSON.stringify({ usuario_id: 4 }) });
+  const lg = JSON.parse(chamadasReais[0].opts.body);
+  conf(lg.usuario_id === 4 && !('executado_por' in lg), 'o logout NAO e carimbado — sai como voce');
 }
 
 console.log('\n═══ 3. LEITURA CONTINUA PASSANDO ═══');
@@ -158,9 +197,17 @@ console.log('\n═══ 7. O BOTAO CINZA (camada de UX) ═══');
   conf(vcOff() === '', 'e nada fora do modo');
 
   // A faixa nao pode supor o genero de quem esta sendo visto — o Rafael e ele.
-  conf(!/no nome dela/.test(html), 'a faixa nao diz mais "no nome dela"');
-  conf((html.match(/nada do que você fizer é gravado no nome deste analista/gi) || []).length === 2,
-       'e diz "no nome deste analista" nos dois lugares — a tela e a faixa fixa');
+  // A faixa nao pode supor o genero de quem esta sendo visto — o Rafael e ele. O unico
+  // "no nome dela" que sobrou e o da TELA DE ESCOLHA, que fala da pessoa escolhida na lista
+  // e concorda com "a pessoa" — nao com o analista.
+  conf(!/gravado no nome dela/.test(html), 'a faixa nao diz mais "gravado no nome dela"');
+  // ⚠️ O texto mudou em 14/08: o modo passou a AGIR, e "nada do que você fizer é gravado no
+  // nome deste analista" virou MENTIRA — agora tudo é gravado no nome dele, e é o ponto.
+  conf(/O trabalho fica no nome dele; você fica registrado como quem executou/.test(html),
+       'a faixa explica a autoria dupla');
+  conf(!/nada do que você fizer é gravado no nome deste analista/i.test(html),
+       'e o texto antigo, que virou mentira, saiu');
+  conf(/VOCÊ ESTÁ AGINDO PELA CONTA DE/.test(html), 'e a faixa diz AGINDO, não vendo');
 }
 
 console.log('\n═══ 8. TRAVAS NO index.html ═══');
@@ -183,7 +230,8 @@ console.log('\n═══ 8. TRAVAS NO index.html ═══');
 
   // A trava, e a excecao do logout.
   conf(/window\.fetch = function\(url, opts\)/.test(html), 'o fetch e envolvido uma vez');
-  conf(/if\(_verComo && paraApi && metodo !== 'GET'\)/.test(html), 'e so age no modo, na API, fora do GET');
+  conf(/if\(_verComo && paraApi && metodo !== 'GET' && !String\(url\)\.includes\('\/usuarios\/logout'\)\)/.test(html),
+       'e so age no modo, na API, fora do GET e fora do logout');
   conf(/usuarios\/logout/.test(html.slice(html.indexOf('window.fetch = function'), html.indexOf('window.fetch = function') + 900)),
        'com a excecao do logout escrita ao lado');
 
@@ -194,40 +242,56 @@ console.log('\n═══ 8. TRAVAS NO index.html ═══');
 
 console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══');
 {
-  // ⚠️ A trava do fetch segura a GRAVACAO. Isto aqui e outra coisa: a tela nao pode dar a
-  // impressao de que da para agir. Modal que abre, campo que aceita texto e botao que
-  // aceita o clique dizem "voce pode" — e so na hora de salvar e que nao.
-  const acoes = [
-    ['pAbrirSit',      'mudar a situação'],
-    ['pAbrirPar',      'registrar parecer'],
-    ['pEstornar',      'estornar'],
-    ['pRespondeu',     'registrar a resposta'],
-    ['pEnviarCI',      'encaminhar ao C.I.'],
-    ['pCiResponder',   'responder ao C.I.'],
+  // ⚠️ REESCRITA EM 14/08/2026. Antes as 14 acoes recusavam na origem. Agora o modo AGE:
+  // dez foram liberadas, e QUATRO continuam recusando — e as quatro nao sao "leitura", sao
+  // DECISOES sobre o trabalho do analista, que nao se tomam no nome dele.
+  const LIBERADAS = [
+    ['pAbrirSit',        'mudar a situação'],
+    ['pAbrirPar',        'registrar parecer'],
+    ['pRespondeu',       'registrar a resposta da entidade'],
+    ['pEnviarCI',        'encaminhar ao C.I.'],
+    ['pCiResponder',     'responder ao C.I.'],
     ['salvarAnotacao',   'salvar anotação'],
-    // ⚠️ Havia DOIS caminhos de anotacao, e eu so tinha guardado um. O da Minha Planilha
-    // (`planNovaAnotacao`, botao "+ Adicionar anotação" / "Editar") abria o modal
-    // normalmente — foi o que o Richard achou testando na tela.
-    ['planNovaAnotacao',  'escrever anotação pela Minha Planilha'],
-    ['excluirAnotacao',   'excluir anotação'],
-    ['ciDecidir',      'decidir no C.I.'],
-    ['assumirTR',      'assumir TR'],
+    ['planNovaAnotacao', 'escrever anotação pela Minha Planilha'],
+    ['excluirAnotacao',  'excluir anotação'],
+    ['assumirTR',        'assumir TR'],
+    ['enviarAoCI',       'encaminhar ao C.I. pelo detalhe da TR'],
   ];
-  acoes.forEach(([fn, rot]) => {
+  const TRAVADAS = [
+    ['pEstornar',       'estornar — decisão de coordenação'],
+    ['abrirDevM',       'devolver TR — decisão de coordenação'],
+    ['abrirPedidoDev',  'solicitar devolução — o pedido é dele, não seu'],
+    ['ciDecidir',       'decidir no C.I. — é do técnico, não do analista'],
+  ];
+
+  LIBERADAS.forEach(([fn, rot]) => {
     const i = html.indexOf(`function ${fn}(`);
     const bloco = html.slice(i, i + 500);
-    conf(i > 0 && /if\(verComoAtivo\(\)\)/.test(bloco),
-         `${fn} recusa na ORIGEM (${rot})`);
+    conf(i > 0 && !/if\(verComoAtivo\(\)\)/.test(bloco), `${fn} AGE no modo (${rot})`);
   });
+  TRAVADAS.forEach(([fn, rot]) => {
+    const i = html.indexOf(`function ${fn}(`);
+    const bloco = html.slice(i, i + 500);
+    conf(i > 0 && /if\(verComoAtivo\(\)\)/.test(bloco), `${fn} continua RECUSANDO (${rot})`);
+  });
+  // Sao exatamente quatro, e nao "pelo menos quatro": uma quinta que aparecesse seria uma
+  // acao de trabalho que ficou travada por engano.
+  conf((html.match(/if\(verComoAtivo\(\)\) \{ toast\(/g) || []).length === 4,
+       'as travas que sobraram sao QUATRO, nem mais nem menos');
+  // E o texto delas nao diz mais "modo leitura" — o modo escreve.
+  conf(!/Modo leitura: /.test(html), 'nenhuma trava diz mais "Modo leitura:"');
 
   // O formulario de anotacao nem e desenhado no modo — so a lista do que ja existe.
   // O ramo do modo vem ANTES do formulario: `${verComoAtivo() ? <aviso> : <textarea>}`.
   const iAnot = html.indexOf('<label>Anotações</label>');
   const bAnot = html.slice(iAnot, iAnot + 1600);
-  conf(/\$\{verComoAtivo\(\) \?/.test(bAnot) && /Modo leitura — escrever anotação/.test(bAnot),
-       'o formulario de anotacao NAO e desenhado no modo leitura');
-  conf(bAnot.indexOf('Modo leitura') < bAnot.indexOf('<textarea id="anotTexto"'),
-       'o aviso vem no lugar do textarea, nao ao lado dele');
+  // ⚠️ MUDOU EM 14/08: a anotacao PODE ser gravada, entao o formulario FICA. Esconder o campo
+  // de uma acao que funciona seria a mesma mentira, ao contrario.
+  conf(/\$\{verComoAtivo\(\) \?/.test(bAnot) && /será gravada <b>no nome de/.test(bAnot),
+       'o aviso diz em nome de quem a anotacao vai');
+  conf(bAnot.includes('<textarea id="anotTexto"'), 'e o formulario CONTINUA desenhado');
+  conf(bAnot.indexOf('será gravada') < bAnot.indexOf('<textarea id="anotTexto"'),
+       'com o aviso ANTES do campo, nao depois');
 
   // ⚠️ E o SEGUNDO caminho, o da Minha Planilha: os botoes nem sao desenhados no modo.
   // Guardar so a funcao deixava o botao a vista, e ele abria o modal.
@@ -240,8 +304,8 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
   // As anotacoes ja escritas continuam legiveis — ler e o proposito do modo.
   conf(/white-space:pre-wrap;">\$\{escHtml\(atual\.texto\|\|''\)\}/.test(bBloco),
        'o texto da anotacao continua a vista');
-  conf(/As anotações já[\s\S]{0,40}?gravadas aparecem abaixo/.test(html),
-       'e diz que as anotacoes existentes continuam a vista');
+  conf(/O trabalho fica <strong>no nome dela<\/strong>/.test(html),
+       'e a tela de escolha diz que o trabalho fica no nome dela');
 
   // O botao Assumir nasce desabilitado e e desabilitado tambem no erro.
   // ⚠️ A ancora era a assinatura exata `(pode, motivo)` e quebrou quando o terceiro

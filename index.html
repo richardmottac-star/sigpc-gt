@@ -1687,21 +1687,49 @@ function alvo() { return _verComo || U }
 /** Está no modo leitura? Toda ação confere isto antes de fazer qualquer coisa. */
 function verComoAtivo() { return !!_verComo }
 
-// A trava. Envolve o `fetch` original uma única vez.
+// O rótulo do executor, na tela e no histórico. Vem do Richard, 14/08/2026.
+const ROTULO_TECNICO = 'Richard — técnico do sistema'
+
+// ══════════════════════════════════════
+//  O CARIMBO DA AUTORIA DUPLA  (14/08/2026)
+// ══════════════════════════════════════
+// Este `fetch` era uma TRAVA: bloqueava todo não-GET enquanto o modo estava ligado. Deixou
+// de bloquear e passou a CARIMBAR — o superadmin precisa AGIR pela conta do analista para
+// dar suporte, e sem agir não se dá suporte nenhum.
+//
+// ⚠️ ELE TROCA DOIS CAMPOS, não acrescenta um. As escritas deste arquivo mandam
+// `analista_id: U.id`; com o modo ligado, isso gravaria o RICHARD como DONO do trabalho — a
+// baixa entraria na produtividade dele, o oposto do que se quer. O par certo é:
+//
+//     analista_id   = alvo().id   ← o DONO, o analista
+//     executado_por = U.id        ← QUEM EXECUTOU, o técnico
+//
+// ⚠️ E É AQUI, num ponto só, porque são 56 chamadas de escrita neste arquivo. Carimbar botão
+// a botão erra uma — e a que errar é a que grava uma baixa no nome de outra pessoa. Vale para
+// o botão que eu esquecer, para o código escrito amanhã e para quem chamar pelo console.
+//
+// ⚠️ E O CARIMBO NÃO É A GARANTIA. Carimbo posto pelo navegador é carimbo que o navegador
+// tira: quem confere que só o superadmin age por outro é o SERVIDOR, contra o perfil lido no
+// banco (`lib/autoria.js` + `resolverAutoria`).
 const _fetchOriginal = window.fetch.bind(window)
 window.fetch = function(url, opts) {
   const metodo = ((opts && opts.method) || 'GET').toUpperCase()
   const paraApi = String(url || '').startsWith(API_URL)
-  if(_verComo && paraApi && metodo !== 'GET') {
-    // O `logout` é a única exceção: sair do sistema não é agir pela pessoa, e travá-lo
-    // deixaria o usuário preso na lista de online.
-    if(!String(url).includes('/usuarios/logout')) {
-      console.warn('[ver como] escrita bloqueada:', metodo, String(url).replace(API_URL,''))
-      toast('Modo leitura: nada é gravado enquanto você vê como outra pessoa.','err')
-      return Promise.resolve(new Response(
-        JSON.stringify({ data:null, error:{ message:'Modo leitura — ação bloqueada.', ver_como:true } }),
-        { status:403, headers:{'Content-Type':'application/json'} }))
-    }
+  if(_verComo && paraApi && metodo !== 'GET' && !String(url).includes('/usuarios/logout')) {
+    try {
+      const corpo = JSON.parse((opts && opts.body) || '{}')
+      // Só carimba o que declara dono. Rota que não fala de `analista_id` (config, senha,
+      // faixa) não é trabalho de analista e não ganha autoria dupla nenhuma.
+      if('analista_id' in corpo || 'usuario_id' in corpo) {
+        if('analista_id' in corpo) corpo.analista_id = alvo().id
+        if('usuario_id'  in corpo) corpo.usuario_id  = alvo().id
+        corpo.executado_por = U.id
+        corpo.executado_por_nome = U.nome
+        opts = { ...opts, body: JSON.stringify(corpo) }
+        console.info('[agir como] ' + metodo + ' ' + String(url).replace(API_URL,'')
+          + ' · dono ' + alvo().id + ' · executor ' + U.id)
+      }
+    } catch(_) { /* corpo que não é JSON segue como está */ }
   }
   return _fetchOriginal(url, opts)
 }
@@ -1730,11 +1758,13 @@ async function irVerComo() {
     <div style="max-width:720px;">
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="#8A6100"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-        <div style="font-size:16px;font-weight:800;">Ver como analista</div>
+        <div style="font-size:16px;font-weight:800;">Agir pela conta de um analista</div>
       </div>
       <div style="font-size:11.5px;color:var(--ct);margin-bottom:14px;">
-        Você vê as telas com os dados da pessoa, em <strong>modo leitura</strong>.
-        Nada do que você fizer é gravado no nome deste analista.
+        Você vê as telas com os dados da pessoa <strong>e trabalha por ela</strong>.
+        O trabalho fica <strong>no nome dela</strong>; você fica registrado como quem executou.
+        <br>Continuam fora: estornar, devolver TR, pedir devolução e decidir no C.I. — são
+        decisões <em>sobre</em> o trabalho dela, não o trabalho dela.
       </div>
       <input type="text" id="vcBusca" placeholder="Buscar por nome ou CPF" oninput="verComoRender()"
         style="width:100%;max-width:360px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 11px;font-size:12.5px;font-family:Barlow,sans-serif;margin-bottom:12px;">
@@ -1785,7 +1815,7 @@ function verComoEntrar(id) {
   renderSB()
   irDash()
   carregarContadores()
-  toast(`Vendo como ${u.nome}. Modo leitura.`,'ok')
+  toast(`Agindo pela conta de ${u.nome}. O trabalho fica no nome dele, e você fica registrado como executor.`,'ok')
 }
 
 function verComoSair(silencioso) {
@@ -1812,8 +1842,8 @@ function verComoFaixa() {
   d.innerHTML = `
     <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" style="flex-shrink:0;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
     <div style="min-width:0;">
-      <div style="font-size:13px;font-weight:800;">VOCÊ ESTÁ VENDO COMO ${escHtml(_verComo.nome||'')}${_verComo.grupo?` · G${escHtml(String(_verComo.grupo))}`:''}</div>
-      <div style="font-size:10.5px;opacity:.9;">Modo leitura — nada do que você fizer é gravado no nome deste analista</div>
+      <div style="font-size:13px;font-weight:800;">VOCÊ ESTÁ AGINDO PELA CONTA DE ${escHtml(_verComo.nome||'')}${_verComo.grupo?` · G${escHtml(String(_verComo.grupo))}`:''}</div>
+      <div style="font-size:10.5px;opacity:.9;">O trabalho fica no nome dele; você fica registrado como quem executou</div>
     </div>
     <button onclick="verComoSair()" style="margin-left:auto;background:#fff;color:#8A6100;border:none;border-radius:6px;
       padding:7px 15px;font-size:12px;font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">Sair deste modo</button>`
@@ -2890,7 +2920,6 @@ function assBotao(pode, motivo, sumir) {
 }
 
 async function assumirTR(tr) {
-  if(verComoAtivo()) { toast('Modo leitura: assumir TR é ação, e está desabilitado.','err'); return }
   TR_ASSUMIR = tr
   ASS_PREVIA = null
   // ⚠️ NASCE DESABILITADO. Antes o botão só era ajustado no caminho de sucesso: se a busca
@@ -3055,19 +3084,18 @@ async function abrirTR(tr) {
       <div class="mc-campo" style="margin-top:16px;">
         <label>Anotações</label>
         ${verComoAtivo() ? `
-        <!-- ⚠️ No modo leitura o formulário NÃO é desenhado. Um textarea que aceita texto e
-             um botão cinza ao lado dizem "dá para agir aqui, só falta alguma coisa" — que é
-             exatamente a impressão que este modo não pode dar. As anotações existentes
-             continuam à vista, porque ler é o propósito. -->
-        <div style="font-size:11px;color:#8A6100;background:#FFF3D6;border:1px solid #F0DDB0;border-radius:6px;padding:7px 10px;">
-          👁 Modo leitura — escrever anotação é ação e está indisponível. As anotações já
-          gravadas aparecem abaixo.
+        <!-- ⚠️ MUDOU EM 14/08/2026. Antes o formulário NÃO era desenhado neste modo, porque
+             nada podia ser gravado. Agora pode: o aviso vem ANTES do campo, e o campo fica.
+             Esconder o formulário de uma ação que funciona seria a mesma mentira ao contrário. -->
+        <div style="font-size:11px;color:#8A6100;background:#FFF3D6;border:1px solid #F0DDB0;border-radius:6px;padding:7px 10px;margin-bottom:7px;">
+          👁 A anotação será gravada <b>no nome de ${escHtml(alvo().nome||'')}</b>, com você
+          registrado como quem executou.
         </div>` : `
-        <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Seu coordenador pode ver estas anotações</div>
+        <div style="font-size:10px;color:var(--ct);margin-bottom:6px;">Seu coordenador pode ver estas anotações</div>`}
         <textarea id="anotTexto" rows="2" placeholder="Escreva uma anotação sobre esta TR..." style="resize:vertical;"></textarea>
         <div style="text-align:right;margin-top:6px;">
           <button class="mcok" id="btnSalvarAnot" onclick="salvarAnotacao('${tr}')" style="padding:6px 14px;font-size:11px;">Salvar anotação</button>
-        </div>`}
+        </div>
       </div>
       <div id="anotList"></div>
     `
@@ -5754,7 +5782,6 @@ async function carregarAnotacoes(tr) {
 }
 
 async function salvarAnotacao(tr) {
-  if(verComoAtivo()) { toast('Modo leitura: salvar anotação é ação, e está desabilitado.','err'); return }
   const ta = document.getElementById('anotTexto')
   const texto = ta.value.trim()
   if(!texto) { toast('Digite o texto da anotação', 'err'); return }
@@ -5779,7 +5806,6 @@ async function salvarAnotacao(tr) {
 }
 
 async function excluirAnotacao(id, tr) {
-  if(verComoAtivo()) { toast('Modo leitura: excluir anotação é ação, e está desabilitado.','err'); return }
   // A anotação é histórico: quem escreveu o quê e quando. Excluir apaga o registro — daí a
   // marca vermelha aqui, e não no encaminhamento ao Controle Interno, que é ato previsto.
   if(!await moConfirm('Excluir esta anotação?', {
@@ -5898,7 +5924,7 @@ let PED_PREVIA = null     // o que o SERVIDOR respondeu: motivos, aviso e se pod
 let PED_ANALISTAS = []    // o cadastro, para o campo "quem já analisava" do motivo 1
 
 async function abrirPedidoDev(tr) {
-  if(verComoAtivo()) { toast('Modo leitura: solicitar devolução é ação, e está desabilitado.','err'); return }
+  if(verComoAtivo()) { toast('Pedir devolução é decisão dele, não trabalho — não dá para pedir no lugar dele.','err'); return }
   PED_TR = tr; PED_PREVIA = null
   document.getElementById('devJust').value = ''
   document.getElementById('devIndicado').value = ''
@@ -7991,7 +8017,6 @@ async function planCarregarRespostas() {
 }
 
 async function pRespondeu(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: registrar a resposta da entidade é ação, e está desabilitado.','err'); return }
   if(!await moConfirm('Registrar que a entidade respondeu a esta diligência?', {
     titulo: 'Entidade respondeu',
     detalhe: 'A parcial continua em Diligência — você ainda vai avaliar a resposta. O sistema deixa de cobrar o prazo desta rodada.',
@@ -8677,7 +8702,6 @@ const planDataHora = (d) => d
 // Grava uma anotação nova. Não edita a anterior de propósito: o histórico é o registro de
 // quem escreveu o quê e quando, e sobrescrever apagaria isso.
 async function planNovaAnotacao(tr) {
-  if(verComoAtivo()) { toast('Modo leitura: escrever anotação é ação, e está desabilitado.','err'); return }
   const atual = (_planAnots[tr]||[])[0]
   const texto = await moPrompt('Anotação:', {
     titulo: `Anotação da TR ${tr}`,
@@ -8802,7 +8826,7 @@ function pBotaoCI(pa, chave) {
   return `${nota?`<span style="font-size:11px;color:var(--ct);">${nota}</span>`:''}
     <button class="btn-acao" style="font-weight:800;background:${pode?'#1A4E8A':'#E4EAE6'};color:${pode?'#fff':'#9AA8A0'};${pode?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
       ${pode?`onclick="pEnviarCI(${chave})"`:'disabled'}
-      title="${pode?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}"${vcOff()}>🏛 Encaminhar ao CI</button>`
+      title="${pode?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}">🏛 Encaminhar ao CI</button>`
 }
 
 function renderPlan(rows) {
@@ -8864,7 +8888,7 @@ function renderPlan(rows) {
           ${respEm
             ? `<span style="color:var(--v);font-weight:700;">✉ Entidade respondeu em ${planData(respEm)}</span>`
             : (emDilig && !semNum ? `<button class="btn-acao" style="margin-left:auto;background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
-                 onclick="pRespondeu(${chave})"${vcOff()} title="Registrar que a entidade respondeu — a parcial continua em Diligência">✉ Entidade respondeu</button>` : '')}
+                 onclick="pRespondeu(${chave})" title="Registrar que a entidade respondeu — a parcial continua em Diligência">✉ Entidade respondeu</button>` : '')}
         </div>` : ''
 
       return `<div style="border-bottom:1px solid var(--cl);">
@@ -8874,8 +8898,8 @@ function renderPlan(rows) {
             ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
-            <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})"${vcOff()}>Salvar situação</button>
-            <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})"${vcOff()}>Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
+            <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})">Salvar situação</button>
+            <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
             ${pBotaoCI(pa, chave)}`}
           </span>
         </div>
@@ -9048,7 +9072,6 @@ function pSitToggle() {
 }
 
 function pAbrirSit(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: mudar a situação é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
   _pAtual = { tr, num, parcial: pa }
@@ -9089,7 +9112,6 @@ async function pSitSalvar() {
 }
 
 function pAbrirPar(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: registrar parecer é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada. Recarregue a tela.','err'); return }
   _pAtual = { tr, num, parcial: pa }
@@ -9190,7 +9212,7 @@ function pCiBloco(r, pa) {
         style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px;font-size:12.5px;font-family:Barlow,sans-serif;resize:vertical;"></textarea>
       <div style="display:flex;align-items:center;gap:11px;margin-top:8px;flex-wrap:wrap;">
         <button class="btn-acao" id="pciBtn-${escHtml(chave)}" style="background:#1A4E8A;color:#fff;font-weight:800;padding:8px 15px;"
-          ${vcOff()} onclick="pCiResponder('${escHtml(r.tr)}','${escHtml(String(pa.num))}')">Responder e devolver ao C.I.</button>
+           onclick="pCiResponder('${escHtml(r.tr)}','${escHtml(String(pa.num))}')">Responder e devolver ao C.I.</button>
         <span style="font-size:11px;color:var(--ct);">Volta para a fila do controle interno.</span>
       </div>
     </div>`:''}
@@ -9228,7 +9250,6 @@ async function pCiCarregarConversas(rows) {
 }
 
 async function pCiResponder(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: responder ao Controle Interno é ação, e está desabilitado.','err'); return }
   const chave = `${tr}|${num}`
   const txt = (document.getElementById(`pciTxt-${chave}`)?.value || '').trim()
   if(!txt) { toast('Escreva a sua resposta ao Controle Interno.','err'); return }
@@ -9262,7 +9283,6 @@ async function pCiResponder(tr, num) {
 }
 
 async function pEnviarCI(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: encaminhar ao Controle Interno é ação, e está desabilitado.','err'); return }
   const pa = pBuscar(tr, num)
   if(!pa) { toast('Parcial não encontrada.','err'); return }
   if(!pa.parecer_tipo) { toast('Registre o parecer antes de encaminhar ao Controle Interno.','err'); return }
@@ -9290,7 +9310,7 @@ async function pEnviarCI(tr, num) {
 }
 
 async function pEstornar(tr, num) {
-  if(verComoAtivo()) { toast('Modo leitura: estornar é ação, e está desabilitado.','err'); return }
+  if(verComoAtivo()) { toast('Estornar é decisão de coordenação sobre o trabalho dele. Saia do modo para estornar.','err'); return }
   if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
   // O caso que mais doía: 14 caracteres eram recusados DEPOIS de fechar, e o texto sumia.
   // Agora o contador mostra o quanto falta e o botão só libera no 15.
@@ -10829,7 +10849,7 @@ function ciAtualizarBotoes(chave) {
 }
 
 async function ciDecidir(decisao, chave) {
-  if(verComoAtivo()) { toast('Modo leitura: decidir no Controle Interno é ação, e está desabilitado.','err'); return }
+  if(verComoAtivo()) { toast('Decidir no C.I. é do técnico do Controle Interno, não do analista.','err'); return }
   const g = ciGrupos().find(x => x.chave === chave)
   if(!g) return
   const codigos = g.pcs.filter(p => _ciSel.has(p.codigo_pc)).map(p => p.codigo_pc)
@@ -10900,7 +10920,6 @@ function ciLimparBusca() {
  * Quem baixa é o parecer. O encaminhamento é o passo seguinte, e é obrigatório.
  */
 async function enviarAoCI(tr, parcialNum) {
-  if(verComoAtivo()) { toast('Modo leitura: encaminhar ao Controle Interno é ação, e está desabilitado.','err'); return }
   if(!await moConfirm(`Encaminhar a Parcela ${parcialNum} da ${tr} ao Controle Interno?`, {
     titulo: 'Encaminhar ao Controle Interno',
     detalhe: 'Vai a parcela INTEIRA, não só esta PC. A sua baixa NÃO é desfeita — ela continua '
@@ -11310,7 +11329,7 @@ let DEVM_PREVIA = null
 
 async function abrirDevM(tr) {
   if(U.perfil !== 'superadmin') { toast('Ação restrita ao superadmin.','err'); return }
-  if(verComoAtivo()) { toast('Modo leitura: devolver TR é ação, e está desabilitado.','err'); return }
+  if(verComoAtivo()) { toast('Devolver TR é decisão de coordenação. Saia do modo para devolver.','err'); return }
   TR_DEVM = tr
   DEVM_PREVIA = null
   document.getElementById('moDevM').classList.add('open')

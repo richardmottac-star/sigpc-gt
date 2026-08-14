@@ -172,7 +172,9 @@ console.log('\n═══ 4b. A OUTRA TELA (detalhe da TR) SEGUE A MESMA REGRA �
   conf(!/method: 'PATCH'/.test(bEA), 'o PATCH por PC saiu');
   // ⚠️ A tela nao decide mais a baixa — nem o valor, nem a data.
   conf(!/baixada|data_baixa|origem_baixa/.test(bEA), 'e a tela nao monta mais baixada/data_baixa');
-  conf(/if\(verComoAtivo\(\)\)/.test(bEA), 'e o modo leitura foi conferido, que antes nem existia aqui');
+  // ⚠️ MUDOU EM 14/08: encaminhar ao C.I. é TRABALHO do analista, e foi liberado no modo
+  // "agir pela conta". O carimbo da autoria dupla é do `fetch`, num ponto só — não daqui.
+  conf(!/if\(verComoAtivo\(\)\)/.test(bEA), 'encaminhar ao C.I. AGE no modo agir-pela-conta');
 }
 
 console.log('\n═══ 4c. A ETIQUETA "SEM C.I." NA LISTA ═══');

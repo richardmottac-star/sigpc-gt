@@ -74,8 +74,11 @@ secao('6. A GUARDA DA TELA E CONVENIENCIA, NAO GARANTIA');
 
 conf(/U\.perfil !== 'superadmin'[\s\S]{0,80}?Ação restrita ao superadmin/.test(abrir),
      'a tela recusa quem nao e superadmin');
-conf(/verComoAtivo\(\)[\s\S]{0,120}?Modo leitura/.test(abrir),
-     'e o modo "ver como" tambem — devolver e acao');
+// ⚠️ Devolver TR é uma das QUATRO que continuam travadas: é decisão de coordenação SOBRE o
+// trabalho do analista, não o trabalho dele. O texto deixou de dizer "modo leitura" em 14/08,
+// porque o modo passou a escrever — o que se prova aqui é a RECUSA, não a palavra.
+conf(/verComoAtivo\(\)[\s\S]{0,140}?decisão de coordenação/.test(abrir),
+     'e o modo agir-pela-conta tambem recusa — devolver e decisao, nao trabalho');
 // o servidor e' quem garante; a tela so evita desenhar o que nao serve
 conf(/DEVOLVER TR AO ESTOQUE — só superadmin/.test(html), 'o cabecalho diz de quem e a garantia');
 
