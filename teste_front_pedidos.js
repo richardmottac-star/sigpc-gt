@@ -154,5 +154,50 @@ console.log('\n═══ 5. O MODAL DO LIMITE ATINGIDO ═══');
        'o assBotao repoe o botao quando sumir nao vem');
 }
 
+console.log('\n═══ 6. A FILA DE DEVOLUCAO DE TR ═══');
+{
+  // O bloco da fila mora fora da faixa extraida no topo — vai por texto.
+  const i = html.indexOf('function devAprovCard(s) {');
+  const b = html.slice(i, html.indexOf('async function devDecidir(', i));
+  const iR = html.indexOf('function devAprovRender(c) {');
+  const bR = html.slice(iR, i);
+
+  // ⚠️ O motivo 1 NAO manda ao estoque: manda DIRETO para o indicado. E o ponto em que a
+  // tela poderia enganar — o coordenador aprovaria achando que devolveu.
+  conf(/A TR vai DIRETO para/.test(b), 'o cartao avisa que a TR vai DIRETO para o indicado');
+  conf(/nao para o estoque|não para o estoque/.test(b), 'dizendo que NAO vai ao estoque');
+  conf(/Carga hoje/.test(b) && /limite 6/.test(b), 'e mostra a carga do indicado com o limite');
+  conf(/o limite NÃO barra a transferência/.test(b),
+       'deixando claro que o limite nao barra — quem decide e o coordenador');
+
+  // Os dois botoes nascem desabilitados, com o motivo no title (armadilha 15).
+  conf((b.match(/disabled onclick="devDecidir/g) || []).length === 2,
+       'Recusar e Aprovar nascem DESABILITADOS');
+  conf(/Aprovar e transferir/.test(b) && /Aprovar e devolver/.test(b),
+       'e o rotulo do Aprovar muda conforme o destino');
+
+  // ⚠️ No bloqueio, RECUSAR continua ativo: pedido pendente para sempre e pior que recusa
+  // com motivo escrito.
+  const iP = html.indexOf('function devPintarDecisao(id) {');
+  const bP = html.slice(iP, iP + 900);
+  conf(/neg\.disabled = !!faltaTexto/.test(bP), 'Recusar depende SO do texto');
+  conf(/apr\.disabled = !!faltaTexto \|\| !!imped/.test(bP), 'Aprovar depende do texto E do impedimento');
+
+  // Sem aprovar em lote: um "aprovar todos" daria dez avisos com o mesmo texto generico.
+  conf(!/aprovar.?todos|selecionar.?todos/i.test(b + bR), 'nao ha aprovacao em lote');
+
+  // O vazio nao e erro, e oferece o caminho de quem quer conferir o que ja decidiu.
+  conf(/Nenhum pedido de devolução/.test(bR), 'o vazio explica que nao ha pedido');
+  conf(/você é avisado pelo sino/.test(bR), 'e diz que o sino avisa quando houver');
+  conf(/Ver todas as decididas/.test(bR), 'com o atalho para as decididas');
+
+  // A mesma regra de impedimento do servidor, para o botao nao prometer o que a rota recusa.
+  const iI = html.indexOf('function devImpedimento(s) {');
+  const bI = html.slice(iI, iI + 700);
+  conf(/s\.motivo !== 'analise_anterior'/.test(bI), 'so o motivo 1 confere o indicado');
+  conf(/não tem cadastro no sistema/.test(bI), 'sem cadastro, bloqueia');
+  conf(/INATIVO/.test(bI), 'inativo tambem');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);

@@ -957,29 +957,44 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
-<!-- ══ MODAL DEVOLVER ══ -->
+<!-- ══ MODAL SOLICITAR DEVOLUÇÃO (o analista PEDE) ══
+     Reescrito em 13/08/2026. Era código morto: os motivos eram outros, a justificativa dizia
+     "mínimo 20 caracteres" sem ninguém conferir, e `confDev()` apontava para uma rota que
+     NUNCA EXISTIU — a TR nunca ficou "Aguard. Dev." porque nada gravava isso.
+     ⚠️ NÃO CONFUNDIR com `moDevM`/`confDevM`, a devolução do superadmin, que executa na hora. -->
 <div class="mo" id="moDev">
   <div class="mc">
-    <div class="mch am"><h3>↩ Solicitar Devolução</h3><button class="mcx" onclick="fm('moDev')">✕</button></div>
+    <div class="mch am"><h3>↩ Solicitar devolução da TR</h3><button class="mcx" onclick="fm('moDev')">✕</button></div>
     <div class="mcb">
       <div class="mci am" id="mDevI"></div>
-      <p style="font-size:11px;color:var(--ct);margin-bottom:10px;line-height:1.6;">A devolução precisa ser <strong>justificada</strong> e aprovada pelo coordenador. A TR ficará como <strong>"Aguard. Dev."</strong> até aprovação.</p>
+
+      <!-- O aviso vem do SERVIDOR, pela mesma conta da devolução. -->
+      <div id="devAviso"></div>
+
       <div class="mc-campo"><label>Motivo *</label>
-        <select id="devMotivo">
-          <option value="">Selecione o motivo...</option>
-          <option>Documentação incompleta</option>
-          <option>Requer complementação do beneficiário</option>
-          <option>Glosa identificada — aguarda manifestação</option>
-          <option>Redistribuição de carga</option>
-          <option>Outro</option>
-        </select>
+        <div id="devMotivos" style="display:flex;flex-direction:column;gap:2px;"></div>
       </div>
-      <div class="mc-campo"><label>Justificativa detalhada *</label>
-        <textarea id="devJust" rows="3" placeholder="Mínimo 20 caracteres..."></textarea>
+
+      <!-- Só aparece no motivo 1, e ali é OBRIGATÓRIO: sem ele a TR volta ao estoque para
+           qualquer um pegar, quando deveria ir para quem já estava com ela. -->
+      <div class="mc-campo" id="devIndicadoBox" style="display:none;">
+        <label>Quem já analisava esta TR *</label>
+        <input list="devAnalistas" id="devIndicado" placeholder="Nome do analista"
+          oninput="devPintarBotao()" style="width:100%;">
+        <datalist id="devAnalistas"></datalist>
+        <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">
+          Sem este nome a TR voltaria ao estoque para qualquer um pegar.</div>
       </div>
+
+      <div class="mc-campo"><label>Justificativa * <span id="devJustConta" style="font-weight:400;color:var(--ct);"></span></label>
+        <textarea id="devJust" rows="3" oninput="devPintarBotao()"
+          placeholder="Quem decide vai ler isto."></textarea>
+      </div>
+
       <div class="mcbt">
         <button class="mccn" onclick="fm('moDev')">Cancelar</button>
-        <button class="mcok rv" onclick="confDev()">↩ Solicitar Devolução</button>
+        <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15). -->
+        <button class="mcok rv" id="btnConfDev" disabled onclick="confDev()">↩ Enviar pedido</button>
       </div>
     </div>
   </div>
@@ -5329,7 +5344,10 @@ async function irAprovacoes() {
   ativarMenu('aprov')
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Aprovações</div>
-    <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Pedidos de vaga extra — analistas que atingiram o limite de TRs</div>
+    <div id="aprovSubtitulo" style="font-size:11px;color:var(--ct);margin-bottom:12px;"></div>
+    <!-- Duas conversas diferentes, duas abas: uma DÁ TR, a outra TIRA. Misturadas, o
+         coordenador aprovaria as duas no mesmo automático. -->
+    <div id="aprovSecoes" style="display:flex;gap:6px;margin-bottom:10px;"></div>
     <div id="aprovAbas" style="display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--bd);"></div>
     <div id="aprovCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
   await aprovCarregar()
@@ -5339,15 +5357,24 @@ async function irAprovacoes() {
 // deixaria as contagens fora de sincronia entre os dois cliques.
 let _aprovAba = 'pendentes'
 let _aprovTodos = []
+let _aprovSecao = 'vaga'   // 'vaga' | 'devolucao'
+let _devTodos = []         // os pedidos de devolução de TR
 
 async function aprovCarregar() {
   try {
     // Coordenador vê só o próprio grupo; superadmin vê tudo.
     const p = new URLSearchParams()
     if(U.perfil === 'coordenador' && U.grupo) p.set('grupo', U.grupo)
-    const j = await (await fetch(`${API_URL}/solicitacao_vaga?${p}`)).json()
-    _aprovTodos = j.data || []
+    // ⚠️ O RECORTE DA DEVOLUÇÃO É DO SERVIDOR, pelo perfil lido no banco — o `usuario_id` não
+    // é o filtro, é a identificação. Esconder na tela não bastaria.
+    const [jv, jd] = await Promise.all([
+      (await fetch(`${API_URL}/solicitacao_vaga?${p}`)).json(),
+      (await fetch(`${API_URL}/solicitacao_devolucao?usuario_id=${U.id}`)).json(),
+    ])
+    _aprovTodos = jv.data || []
     _aprovPend = _aprovTodos.filter(s => s.status === 'pendente')
+    _devTodos = jd.data || []
+    aprovSecoesRender()
     aprovAbasRender()
     aprovRender()
     aprovAtualizarBadge()
@@ -5357,16 +5384,46 @@ async function aprovCarregar() {
   }
 }
 
+function aprovSecoesRender() {
+  const b = document.getElementById('aprovSecoes')
+  if(!b) return
+  const nV = _aprovPend.filter(s => !pedDispensado(s)).length
+  const nD = _devTodos.filter(s => s.status === 'pendente').length
+  const secoes = [
+    { id:'vaga',      rot:'Vagas extras',     n:nV },
+    { id:'devolucao', rot:'Devoluções de TR', n:nD },
+  ]
+  b.innerHTML = secoes.map(s => `
+    <button onclick="aprovIrSecao('${s.id}')" style="border:1.5px solid ${_aprovSecao===s.id?'var(--v)':'var(--cb)'};
+      background:${_aprovSecao===s.id?'var(--vbg)':'#fff'};color:${_aprovSecao===s.id?'var(--v)':'var(--ct)'};
+      cursor:pointer;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:${_aprovSecao===s.id?'800':'600'};
+      font-family:Barlow,sans-serif;">${s.rot}${s.n?` (${s.n})`:''}${
+      s.n && _aprovSecao!==s.id ? ' <span style="color:var(--r);">●</span>' : ''}</button>`).join('')
+
+  const sub = document.getElementById('aprovSubtitulo')
+  if(sub) sub.textContent = _aprovSecao === 'vaga'
+    ? 'Pedidos de vaga extra — analistas que atingiram o limite de TRs'
+    : 'Pedidos de devolução de TR — o analista pede, você decide'
+}
+
+function aprovIrSecao(id) {
+  _aprovSecao = id; _aprovAba = 'pendentes'
+  aprovSecoesRender(); aprovAbasRender(); aprovRender()
+}
+
 function aprovAbasRender() {
   const b = document.getElementById('aprovAbas')
   if(!b) return
   // O contador de pendentes exclui os dispensados: são pendentes que não pedem decisão
   // nenhuma, e inflar o número faria a fila parecer maior do que é.
-  const nPend = _aprovPend.filter(s => !pedDispensado(s)).length
-  const nHist = _aprovTodos.length - _aprovPend.length
+  const devol = _aprovSecao === 'devolucao'
+  const nPend = devol ? _devTodos.filter(s => s.status === 'pendente').length
+                      : _aprovPend.filter(s => !pedDispensado(s)).length
+  const nHist = devol ? _devTodos.filter(s => s.status !== 'pendente').length
+                      : _aprovTodos.length - _aprovPend.length
   const abas = [
     { id:'pendentes', rot:`Pendentes${nPend?` (${nPend})`:''}` },
-    { id:'historico', rot:`Histórico${nHist?` (${nHist})`:''}` },
+    { id:'historico', rot:devol ? `Todas${nHist?` (${nHist})`:''}` : `Histórico${nHist?` (${nHist})`:''}` },
   ]
   b.innerHTML = abas.map(a => `
     <button onclick="aprovAba('${a.id}')" style="border:0;background:none;cursor:pointer;padding:8px 14px;font-size:12px;
@@ -5375,6 +5432,171 @@ function aprovAbasRender() {
 }
 
 function aprovAba(id) { _aprovAba = id; aprovAbasRender(); aprovRender() }
+
+// ══════════════════════════════════════
+//  FILA DE DEVOLUÇÃO DE TR — o coordenador decide  (13/08/2026)
+// ══════════════════════════════════════
+// ⚠️ SEM APROVAR EM LOTE, de propósito. Uma decisão por vez, com motivo escrito por vez —
+// um "aprovar todos" produziria dez avisos com o mesmo texto genérico, e é justamente o
+// texto que faz o analista entender o que aconteceu com a TR dele.
+
+const DEV_MOT_NUM = { analise_anterior:1, impedimento:2, falta_documentacao:3,
+                      afastamento:4, redistribuicao:5, outro:6 }
+const DEV_MOT_ROT = {
+  analise_anterior:  'Já estava em análise por outro analista antes de 01/08/2026',
+  impedimento:       'Impedimento ou suspeição',
+  falta_documentacao:'Falta de documentação no processo',
+  afastamento:       'Afastamento ou férias',
+  redistribuicao:    'Redistribuição pedida pela coordenação',
+  outro:             'Outro',
+}
+
+/** O impedimento do indicado, com a MESMA regra do servidor. */
+function devImpedimento(s) {
+  if(s.motivo !== 'analise_anterior') return null
+  if(!s.indicado_id) return `"${s.indicado_nome || 'o analista indicado'}" não tem cadastro no sistema. `
+    + 'Cadastre a pessoa ou recuse — a TR não pode ir ao estoque neste motivo, porque ela tem destino.'
+  if(s.indicado_ativo === false) return `${s.indicado_nome_cadastro} está com o cadastro INATIVO e não pode receber a TR.`
+  return null
+}
+
+function devAprovRender(c) {
+  const pend = _aprovAba === 'pendentes'
+  const lista = _devTodos.filter(s => pend ? s.status === 'pendente' : s.status !== 'pendente')
+
+  if(!lista.length) {
+    // Vazio NÃO é erro: quem abre a aba muitas vezes quer conferir o que já decidiu.
+    c.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:34px 20px;text-align:center;">
+      <div style="font-size:30px;color:var(--cb);">↩</div>
+      <div style="font-size:13px;font-weight:700;color:var(--te);margin-top:8px;">${
+        pend ? `Nenhum pedido de devolução ${U.perfil==='coordenador'?'no seu grupo':'no sistema'}.`
+             : 'Nenhum pedido decidido ainda.'}</div>
+      <div style="font-size:11.5px;color:var(--ct);margin-top:6px;line-height:1.6;">
+        Quando um analista pedir a devolução de uma TR, ela aparece aqui<br>e você é avisado pelo sino.</div>
+      ${pend ? `<button class="btn-acao" style="margin-top:13px;background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
+        onclick="aprovAba('historico')">Ver todas as decididas</button>` : ''}
+    </div>`
+    return
+  }
+  c.innerHTML = lista.map(devAprovCard).join('')
+}
+
+function devAprovCard(s) {
+  const pend = s.status === 'pendente'
+  const num = DEV_MOT_NUM[s.motivo] || '—'
+  const rot = DEV_MOT_ROT[s.motivo] || s.motivo
+  const paraIndicado = s.motivo === 'analise_anterior'
+  const imped = devImpedimento(s)
+  const quando = planDataHora ? planDataHora(s.criado_em) : ''
+  const nomeIndicado = s.indicado_nome_cadastro || s.indicado_nome || '—'
+
+  const etiqueta = pend
+    ? '<span style="background:#FFF4D6;color:#8A6100;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;">⏳ PENDENTE</span>'
+    : s.status === 'aprovada'
+      ? '<span style="background:var(--v);color:#fff;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;">✓ APROVADA</span>'
+      : `<span style="background:#8A9A90;color:#fff;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;">✕ ${escHtml((s.status||'').toUpperCase())}</span>`
+
+  return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:14px 16px;margin-bottom:11px;">
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+      <b style="font-size:14px;">${escHtml(s.tr)}</b>
+      <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        ${etiqueta}<span style="font-size:11px;color:var(--ct);">${escHtml(quando)}</span></span>
+    </div>
+    <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">
+      ${escHtml(s.analista_nome || '—')}${s.analista_grupo?` · Grupo ${escHtml(String(s.analista_grupo))}`:''}
+      ${!pend && s.decidido_por_nome ? ` · decidida por ${escHtml(s.decidido_por_nome)}` : ''}</div>
+
+    <div style="margin-top:10px;font-size:12px;">
+      <b style="color:var(--te);margin-right:9px;">Motivo</b>${num}. ${escHtml(rot)}
+      ${paraIndicado?'<div style="font-size:10.5px;color:var(--ct);margin-left:52px;">trabalho iniciado na planilha, antes do sistema</div>':''}
+    </div>
+
+    ${paraIndicado ? `
+    <!-- ⚠️ O ponto em que a tela poderia enganar: o sistema NÃO manda ao estoque neste
+         motivo, manda DIRETO para o indicado. Dizer isso evita o coordenador aprovar
+         achando que devolveu, e a TR ficar num lugar que ele não esperava. -->
+    <div style="margin-top:9px;background:#EAF1F9;border-radius:7px;padding:9px 11px;font-size:11.5px;color:#1A4E8A;">
+      <b>Quem já analisava:</b> ${escHtml(nomeIndicado)}${
+        s.indicado_id?` (id ${s.indicado_id}${s.indicado_grupo?`, Grupo ${escHtml(String(s.indicado_grupo))}`:''})`:''}
+      ${s.indicado_id ? `<br><span style="color:var(--ct);">Carga hoje: <b>${s.indicado_ocupadas} TR${s.indicado_ocupadas===1?'':'s'}</b>, limite 6 — o limite NÃO barra a transferência.</span>` : ''}
+      <br><b>A TR vai DIRETO para ${escHtml((nomeIndicado||'').split(' ')[0])}, não para o estoque.</b>
+    </div>` : ''}
+
+    <div style="margin-top:9px;font-size:12px;color:var(--te);font-style:italic;line-height:1.55;">
+      "${escHtml(s.justificativa || '')}"</div>
+
+    <div style="margin-top:10px;display:flex;gap:9px;flex-wrap:wrap;font-size:11px;">
+      ${[[`${s.pcs_total} PCs na TR`], [`${s.pcs_voltam} ${paraIndicado?'transferem':'voltam ao estoque'}`],
+         [`${s.pcs_ficam_baixadas} ficam baixadas`]].map(([t]) =>
+        `<span style="background:var(--cl);color:var(--ct);border-radius:7px;padding:5px 10px;font-weight:700;">${escHtml(t)}</span>`).join('')}
+      <span style="color:var(--ct);align-self:center;">números do pedido</span>
+    </div>
+
+    ${imped ? `
+    <div style="margin-top:11px;background:#FDE8EA;border:1.5px solid #F3C9CE;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);">
+      <b>🚫 NÃO DÁ PARA APROVAR AGORA</b><br>${escHtml(imped)}</div>` : ''}
+
+    ${pend ? `
+    <div style="margin-top:11px;">
+      <label style="font-size:11px;font-weight:700;color:var(--te);">Motivo da decisão *
+        <span style="font-weight:400;color:var(--ct);">— o analista recebe este texto no sino</span></label>
+      <textarea id="devDec-${s.id}" rows="2" oninput="devPintarDecisao(${s.id})"
+        style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:8px;font-size:12px;font-family:Barlow,sans-serif;resize:vertical;margin-top:4px;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;">
+        <!-- ⚠️ Recusar continua ATIVO no bloqueio: deixar o pedido pendente para sempre é
+             pior do que recusar com o motivo escrito. -->
+        <button class="btn-acao" id="devNeg-${s.id}" disabled onclick="devDecidir(${s.id},'negada')"
+          style="background:#fff;color:var(--r);border:1.5px solid var(--r);font-weight:800;">✕ Recusar</button>
+        <button class="btn-acao" id="devApr-${s.id}" disabled onclick="devDecidir(${s.id},'aprovada')"
+          style="background:var(--v);color:#fff;font-weight:800;">✓ ${paraIndicado?`Aprovar e transferir`:'Aprovar e devolver'}</button>
+      </div>
+    </div>` : `
+    <div style="margin-top:9px;font-size:11.5px;color:var(--te);">
+      <b>Resposta:</b> "${escHtml(s.motivo_decisao || '')}"</div>`}
+  </div>`
+}
+
+/** Os dois botões nascem desabilitados e só acendem com o motivo escrito. */
+function devPintarDecisao(id) {
+  const s = _devTodos.find(x => x.id === id)
+  const txt = (document.getElementById(`devDec-${id}`)?.value || '').trim()
+  const neg = document.getElementById(`devNeg-${id}`)
+  const apr = document.getElementById(`devApr-${id}`)
+  const imped = s ? devImpedimento(s) : null
+  const faltaTexto = txt.length < 10 ? `Escreva o motivo da decisão (faltam ${10 - txt.length}).` : ''
+
+  if(neg) { neg.disabled = !!faltaTexto; neg.title = faltaTexto }
+  if(apr) {
+    apr.disabled = !!faltaTexto || !!imped
+    apr.title = faltaTexto || imped || ''
+  }
+}
+
+async function devDecidir(id, status) {
+  const txt = (document.getElementById(`devDec-${id}`)?.value || '').trim()
+  const apr = document.getElementById(`devApr-${id}`), neg = document.getElementById(`devNeg-${id}`)
+  if(apr) apr.disabled = true
+  if(neg) neg.disabled = true
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_devolucao/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status, decidido_por: U.id, motivo_decisao: txt })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível decidir.')
+    const d = j.data
+    toast(status === 'aprovada'
+      ? (d.destino === 'indicado'
+          ? `TR transferida para ${d.indicado?.nome || 'o analista indicado'} (${d.devolvidas} PCs).`
+          : `TR devolvida ao estoque (${d.devolvidas} PCs).`)
+      : 'Pedido recusado. O analista foi avisado.', 'ok')
+    await aprovCarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    // ⚠️ Repinta: os botões voltam ao estado que o texto autoriza, em vez de ficarem mortos.
+    devPintarDecisao(id)
+  }
+}
 
 function aprovAtualizarBadge() {
   const b = document.getElementById('sbAprovBadge')
@@ -5389,6 +5611,7 @@ function aprovAtualizarBadge() {
 function aprovRender() {
   const c = document.getElementById('aprovCont')
   if(!c) return
+  if(_aprovSecao === 'devolucao') return devAprovRender(c)
   const pend = _aprovAba === 'pendentes'
   const lista = pend ? _aprovPend : _aprovTodos.filter(s => s.status !== 'pendente')
 
@@ -5620,21 +5843,150 @@ async function confirmarParecer() {
 // ══════════════════════════════════════
 //  DEVOLVER TR
 // ══════════════════════════════════════
-async function confDev() {
-  const mot = document.getElementById('devMotivo').value
-  const just = document.getElementById('devJust').value.trim()
-  if(!mot) { toast('Selecione o motivo.','err'); return }
-  if(just.length < 20) { toast('Justificativa muito curta (mín. 20 caracteres).','err'); return }
+// ══════════════════════════════════════
+//  SOLICITAR DEVOLUÇÃO — o analista PEDE, o coordenador decide  (13/08/2026)
+// ══════════════════════════════════════
+// Ressuscitado de código morto: a versão antiga chamava `db.from('estoque').update(...)`,
+// uma rota que NUNCA existiu. A TR nunca ficou "Aguard. Dev." porque nada gravava isso.
+//
+// ⚠️ A TR CONTINUA CONTANDO NO LIMITE ENQUANTO O PEDIDO ESTÁ PENDENTE. Ela só sai da
+// contagem na aprovação — senão qualquer um abriria vaga só pedindo devolução.
+let PED_TR = null         // a TR do modal aberto
+let PED_PREVIA = null     // o que o SERVIDOR respondeu: motivos, aviso e se pode pedir
+let PED_ANALISTAS = []    // o cadastro, para o campo "quem já analisava" do motivo 1
+
+async function abrirPedidoDev(tr) {
+  if(verComoAtivo()) { toast('Modo leitura: solicitar devolução é ação, e está desabilitado.','err'); return }
+  PED_TR = tr; PED_PREVIA = null
+  document.getElementById('devJust').value = ''
+  document.getElementById('devIndicado').value = ''
+  document.getElementById('devIndicadoBox').style.display = 'none'
+  document.getElementById('devMotivos').innerHTML = ''
+  document.getElementById('devAviso').innerHTML = ''
+  devBotao(false, 'Carregando a TR...')
+  document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br>
+    <span style="font-size:10px;color:var(--ct);">⏳ Conferindo o que volta e o que fica...</span>`
+  document.getElementById('moDev').classList.add('open')
+
   try {
-    const { error } = await db.from('estoque').update({
-      status:'dev_pendente', dev_motivo:mot, dev_justificativa:just,
-      dev_solicitado_por:U.nome, atualizado_em:new Date().toISOString()
-    }).eq('id',SEL)
-    if(error) throw error
-    fm('moDev'); SEL=null
-    toast('Devolução solicitada! Aguardando aprovação do coordenador.','ok')
-    buscar(); carregarContadores()
-  } catch(e) { toast('Erro: '+e.message,'err') }
+    // ⚠️ UMA chamada, e é o SERVIDOR que conta e diz se pode. A tela não decide.
+    const r = await fetch(`${API_URL}/tr/${encodeURIComponent(tr)}/pedido_devolucao?usuario_id=${U.id}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar.')
+    PED_PREVIA = j.data
+
+    const a = PED_PREVIA.aviso
+    document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br>
+      <strong>Parciais que voltam ao estoque:</strong> ${a.voltam} de ${a.total}`
+
+    // O AVISO ANTES DE ENVIAR — quantas baixadas ficam no nome dele, e o que bloqueia.
+    document.getElementById('devAviso').innerHTML = `
+      <div style="background:var(--vbg);border-radius:7px;padding:9px 11px;font-size:11.5px;color:var(--v);margin-bottom:11px;">
+        ✓ ${escHtml(a.texto_baixadas)}</div>
+      ${PED_PREVIA.motivo_bloqueio ? `
+      <div style="background:#FDE8EA;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);margin-bottom:11px;">
+        <b>Não dá para pedir agora.</b><br>${escHtml(PED_PREVIA.motivo_bloqueio)}</div>` : ''}`
+
+    document.getElementById('devMotivos').innerHTML = PED_PREVIA.motivos.map((m, i) => `
+      <label style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;">
+        <input type="radio" name="devMot" value="${escHtml(m.id)}" onchange="devTrocouMotivo()" style="margin-top:2px;">
+        <span><b>${i+1}.</b> ${escHtml(m.rotulo)}${m.subtexto
+          ? `<br><span style="font-size:10.5px;color:var(--ct);">${escHtml(m.subtexto)}</span>` : ''}</span>
+      </label>`).join('')
+
+    devPintarBotao()
+
+    // A lista de nomes do motivo 1 sai de quem já está em `usuarios` — mas o campo é LIVRE,
+    // porque há analista com meta e sem cadastro (a Caroline). Buscada depois de pintar o
+    // modal, e sem travar nada se falhar: o campo continua servindo digitado à mão.
+    if(!PED_ANALISTAS.length) {
+      try {
+        const ru = await fetch(`${API_URL}/usuarios?ativo=true`)
+        const ju = await ru.json()
+        PED_ANALISTAS = (ju.data || []).filter(u => u.perfil === 'analista' && u.nome)
+      } catch(_) { /* o campo livre continua valendo */ }
+    }
+    document.getElementById('devAnalistas').innerHTML =
+      PED_ANALISTAS.map(u => `<option value="${escHtml(u.nome)}">`).join('')
+  } catch(e) {
+    document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br>
+      <span style="color:var(--r);font-size:11px;">Erro: ${escHtml(e.message)}</span>`
+    // ⚠️ Desabilitado TAMBÉM no erro — era este o caminho que deixava o botão aceso.
+    devBotao(false, e.message)
+  }
+}
+
+/** Liga/desliga o Enviar, com o motivo no title. */
+function devBotao(pode, motivo) {
+  const b = document.getElementById('btnConfDev')
+  if(!b) return
+  b.disabled = !pode
+  b.title = pode ? '' : (motivo || '')
+}
+
+function devMotivoEscolhido() {
+  const el = document.querySelector('input[name="devMot"]:checked')
+  return el ? el.value : ''
+}
+
+function devTrocouMotivo() {
+  const m = (PED_PREVIA?.motivos || []).find(x => x.id === devMotivoEscolhido())
+  document.getElementById('devIndicadoBox').style.display = (m && m.exigeIndicado) ? '' : 'none'
+  devPintarBotao()
+}
+
+/**
+ * O botão só acende quando o pedido está completo.
+ *
+ * ⚠️ A mesma conferência roda no servidor (`validarPedido`) e no CHECK do banco. Aqui ela
+ * existe para o botão não aceitar clique que vai voltar erro — não como garantia.
+ */
+function devPintarBotao() {
+  const just = document.getElementById('devJust').value.trim()
+  const motivo = devMotivoEscolhido()
+  const m = (PED_PREVIA?.motivos || []).find(x => x.id === motivo)
+  const indicado = document.getElementById('devIndicado').value.trim()
+
+  const conta = document.getElementById('devJustConta')
+  if(conta) conta.textContent = just.length < 10 ? `(faltam ${10 - just.length})` : ''
+
+  if(!PED_PREVIA)            return devBotao(false, 'Carregando a TR...')
+  if(!PED_PREVIA.pode)       return devBotao(false, PED_PREVIA.motivo_bloqueio || 'Não é possível pedir agora.')
+  if(!motivo)                return devBotao(false, 'Selecione o motivo.')
+  if(m && m.exigeIndicado && !indicado)
+    return devBotao(false, 'Informe quem já analisava esta TR.')
+  if(just.length < 10)       return devBotao(false, 'Escreva a justificativa — quem decide vai ler.')
+  devBotao(true)
+}
+
+async function confDev() {
+  if(!PED_TR || !PED_PREVIA) return
+  const b = document.getElementById('btnConfDev')
+  b.disabled = true; b.textContent = 'Enviando...'
+  try {
+    const nome = document.getElementById('devIndicado').value.trim()
+    const achado = PED_ANALISTAS.find(u => u.nome === nome)
+    const r = await fetch(`${API_URL}/solicitacao_devolucao`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tr: PED_TR, analista_id: U.id,
+        motivo: devMotivoEscolhido(),
+        justificativa: document.getElementById('devJust').value.trim(),
+        // Manda o ID quando o nome bate com o cadastro — filtrar por nome é a armadilha 1.
+        indicado_id: achado ? achado.id : null,
+        indicado_nome: nome || null,
+      })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível enviar.')
+    toast('Pedido enviado. A coordenação foi avisada, e você recebe a resposta pelo sino.','ok')
+    fm('moDev'); PED_TR = null; PED_PREVIA = null
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    // ⚠️ Repinta e MANTÉM o modal aberto no erro — fechar esconderia a razão da recusa.
+    b.textContent = '↩ Enviar pedido'
+    devPintarBotao()
+  }
 }
 
 async function carregarNLs(tr, parcela) {
@@ -8562,6 +8914,15 @@ function renderPlan(rows) {
           <button class="btn-acao" title="Devolver a TR inteira ao estoque"
             style="background:transparent;color:${corCab};border:1.5px solid ${baixadaTr?'var(--cb)':'rgba(255,255,255,.55)'};font-weight:700;white-space:nowrap;box-shadow:none;"
             onclick="event.stopPropagation();abrirDevM('${escHtml(r.tr)}')">↩ Devolver</button>` : ''}
+          <!-- Solicitar devolução: o ANALISTA PEDE, não devolve. É da TR INTEIRA, nunca da
+               parcial. Fica ao lado do "Ver PCs", que é onde a pessoa está olhando quando
+               decide que a TR não é para ela.
+               ⚠️ Numa TR concluída não aparece: todas as PCs estão baixadas e baixada não
+               volta — são 334 TRs assim. Quem confere de verdade é o servidor. -->
+          ${U.perfil === 'analista' && !baixadaTr && !verComoAtivo() ? `
+          <button class="btn-acao" title="Pedir à coordenação a devolução desta TR ao estoque"
+            style="background:transparent;color:${corCab};border:1.5px solid ${baixadaTr?'var(--cb)':'rgba(255,255,255,.55)'};font-weight:700;white-space:nowrap;box-shadow:none;"
+            onclick="event.stopPropagation();abrirPedidoDev('${escHtml(r.tr)}')">↩ Solicitar devolução</button>` : ''}
           <button class="btn-acao" style="background:#fff;color:var(--v);font-weight:800;white-space:nowrap;${
             baixadaTr ? 'border:2px solid var(--v);box-shadow:none;' : 'border:none;box-shadow:0 1px 4px rgba(0,0,0,.18);'}"
             onclick="planToggle('${escHtml(r.tr)}');event.stopPropagation();">${r.expandida?'▲ Recolher':'▼ Ver PCs'}</button>
