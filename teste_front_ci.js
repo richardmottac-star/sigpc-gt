@@ -68,18 +68,22 @@ console.log('\n═══ 1. EM QUE PASSO A PARCIAL ESTA ═══');
 console.log('\n═══ 2. A FAIXA DIZ O QUE FALTA ═══');
 {
   const f1 = pFaixaPasso(SEM_PARECER);
-  conf(/Passo 1 de 2 · registre o parecer para poder baixar/.test(f1),
+  conf(/Passo 1 de 3 · registre o parecer para poder baixar/.test(f1),
        'passo 1: "registre o parecer para poder baixar"');
   conf(/#FFF4D6/.test(f1), 'em ambar — e um aviso, nao um erro');
 
   const f2 = pFaixaPasso(BAIXADA);
-  conf(/Passo 2 de 2/.test(f2), 'passo 2: "Passo 2 de 2"');
+  // ⚠️ TRES passos, nao dois: a baixa nao e o fim, porque o C.I. e obrigatorio. A faixa verde
+  // comemorava um fim que nao chegou — por isso ela agora diz o que FALTA.
+  conf(/Passo 2 de 3/.test(f2), 'passo 2: "Passo 2 de 3"');
+  conf(/falta encaminhar ao Controle Interno/.test(f2), 'e diz o que falta, no ambar do aviso');
   conf(/baixada em 10\/08\/2026/.test(f2), 'com a data da baixa');
   conf(/parecer: Parecer Regular/.test(f2), 'e com o tipo do parecer');
-  conf(/#E8F5E9/.test(f2), 'em verde — o trabalho do analista acabou aqui');
+  conf(/#E8F5E9/.test(f2), 'em verde — o parecer esta feito');
 
   const f3 = pFaixaPasso(NO_CI);
-  conf(/No Controle Interno desde 30\/06\/2026/.test(f3), 'passo 3: "No Controle Interno desde <data>"');
+  conf(/Passo 3 de 3/.test(f3), 'passo 3: "Passo 3 de 3"');
+  conf(/No Controle Interno desde 30\/06\/2026/.test(f3), 'com "No Controle Interno desde <data>"');
   conf(/aguardando retorno há \d+ dias/.test(f3), 'e ha quantos dias espera');
   conf(/o retorno do CI não cancela a baixa/.test(f3),
        'com a linha cinza: o retorno do CI NAO cancela a baixa');
@@ -110,7 +114,9 @@ console.log('\n═══ 3. O BOTAO DO C.I. — E ESTE O CONSERTO ═══');
   const b2 = pBotaoCI(BAIXADA, "'2020TR000612','1'");
   conf(!/disabled/.test(b2), 'passo 2: O BOTAO ACENDE — e o ramo que nao desenhava botao nenhum');
   conf(/onclick="pEnviarCI\('2020TR000612','1'\)"/.test(b2), 'e chama o pEnviarCI da parcela');
-  conf(/opcional — a parcial já está baixada/.test(b2), 'com "opcional — a parcial ja esta baixada"');
+  // ⚠️ O C.I. e OBRIGATORIO. O texto anterior dizia "opcional" e convidava a parar na baixa.
+  conf(/encaminhe ao Controle Interno/.test(b2), 'com o chamado "encaminhe ao Controle Interno"');
+  conf(!/opcional/.test(b2), 'e sem a palavra "opcional" — o encaminhamento nao e escolha');
   conf(/#1A4E8A/.test(b2), 'no azul do Controle Interno');
 
   conf(pBotaoCI(NO_CI, "'x','1'") === '', 'passo 3: o botao SOME — ja foi encaminhada');
@@ -145,6 +151,28 @@ console.log('\n═══ 4. OS DOIS RAMOS DO CARTAO USAM OS MESMOS AUXILIARES �
   // A data do envio precisa CHEGAR na parcial, senao a faixa 3 nasce sem "desde".
   conf(/dt_envio_ci:\s*pa\.pcs\.find\(x=>x\.dt_envio_ci\)\?\.dt_envio_ci \|\| null/.test(html),
        'a agregacao da parcial carrega o dt_envio_ci');
+}
+
+console.log('\n═══ 4b. A OUTRA TELA (detalhe da TR) SEGUE A MESMA REGRA ═══');
+{
+  // ⚠️ O detalhe da TR tinha a regra INVERTIDA: `!p.baixada && !p.enviado_ci` escondia o
+  // botao justamente quando a PC era baixada — que e quando o C.I. passa a ser possivel. E
+  // gravava por PATCH de UMA PC, montando baixada/data_baixa no navegador.
+  const iAT = html.indexOf('async function abrirTR(tr) {');
+  const bAT = html.slice(iAT, iAT + 4200);
+
+  conf(!/const podeEnviarCI = !p\.baixada/.test(html), 'a condicao invertida sumiu');
+  conf(/pPasso\(pa\) === 2/.test(bAT), 'e quem decide agora e o pPasso — a MESMA funcao do cartao');
+  conf(/Encaminha a parcela inteira/.test(bAT), 'o title avisa que vai a parcela inteira');
+
+  const iEA = html.indexOf('async function enviarAoCI(tr, parcialNum) {');
+  const bEA = html.slice(iEA, iEA + 1600);
+  conf(iEA > 0, 'enviarAoCI passou a receber (tr, parcial_num), nao um codigo_pc');
+  conf(/\$\{API_URL\}\/parcela\/ci/.test(bEA), 'e grava pela MESMA rota transacional do cartao');
+  conf(!/method: 'PATCH'/.test(bEA), 'o PATCH por PC saiu');
+  // ⚠️ A tela nao decide mais a baixa — nem o valor, nem a data.
+  conf(!/baixada|data_baixa|origem_baixa/.test(bEA), 'e a tela nao monta mais baixada/data_baixa');
+  conf(/if\(verComoAtivo\(\)\)/.test(bEA), 'e o modo leitura foi conferido, que antes nem existia aqui');
 }
 
 console.log('\n═══ 5. A CONFIRMACAO RESPONDE "VOU PERDER A BAIXA?" ═══');

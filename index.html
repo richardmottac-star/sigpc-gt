@@ -187,6 +187,12 @@ tr:last-child td{border-bottom:none;}
 .bdg-concluida{background:#EDE7F6;color:#4527A0;}
 .tec-chip{display:inline-flex;align-items:center;gap:4px;background:var(--chip-cinza-bg);border:1px solid #E0E3E8;border-radius:20px;padding:2px 7px;font-size:10px;color:var(--chip-cinza-tx);font-weight:600;}
 .btn-acao{border-radius:5px;font-family:'Barlow',sans-serif;font-size:10px;font-weight:700;padding:4px 9px;cursor:pointer;white-space:nowrap;border:1.5px solid;}
+/* Botao desabilitado PARECE desabilitado. Ate 13/08/2026 o `vcOff()` mandava a opacidade
+   num segundo atributo style=, e o HTML ignora o repetido: os botoes do modo "Ver como"
+   ficavam com a cor inteira e nao respondiam ao clique. Aqui a regra e do CSS, que nao
+   depende da ordem dos atributos. A especificidade de .btn-acao:disabled vence a de
+   .btn-acao no cursor, e a opacidade nao e escrita inline em botao nenhum. */
+.btn-acao:disabled{opacity:.45;cursor:not-allowed;}
 .btn-ass{background:var(--v);color:#fff;border-color:var(--v);}
 .btn-ass:hover{background:var(--vm);}
 .btn-ver{background:#fff;color:var(--v);border-color:var(--v);}
@@ -1713,7 +1719,7 @@ async function irVerComo() {
       </div>
       <div style="font-size:11.5px;color:var(--ct);margin-bottom:14px;">
         Você vê as telas com os dados da pessoa, em <strong>modo leitura</strong>.
-        Nada é gravado no nome dela.
+        Nada do que você fizer é gravado no nome deste analista.
       </div>
       <input type="text" id="vcBusca" placeholder="Buscar por nome ou CPF" oninput="verComoRender()"
         style="width:100%;max-width:360px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 11px;font-size:12.5px;font-family:Barlow,sans-serif;margin-bottom:12px;">
@@ -1792,7 +1798,7 @@ function verComoFaixa() {
     <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" style="flex-shrink:0;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
     <div style="min-width:0;">
       <div style="font-size:13px;font-weight:800;">VOCÊ ESTÁ VENDO COMO ${escHtml(_verComo.nome||'')}${_verComo.grupo?` · G${escHtml(String(_verComo.grupo))}`:''}</div>
-      <div style="font-size:10.5px;opacity:.9;">Modo leitura — nada que você fizer é gravado no nome dela</div>
+      <div style="font-size:10.5px;opacity:.9;">Modo leitura — nada do que você fizer é gravado no nome deste analista</div>
     </div>
     <button onclick="verComoSair()" style="margin-left:auto;background:#fff;color:#8A6100;border:none;border-radius:6px;
       padding:7px 15px;font-size:12px;font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">Sair deste modo</button>`
@@ -1800,9 +1806,20 @@ function verComoFaixa() {
   document.body.style.paddingTop = d.offsetHeight + 'px'
 }
 
-/** Atributos para desabilitar um botão de ação enquanto o modo está ligado. */
+/**
+ * Atributos para desabilitar um botão de ação enquanto o modo está ligado.
+ *
+ * ⚠️ NÃO DEVOLVE `style=`. Todos os sete botões que usam esta função já têm um `style=`
+ * inline antes, e o HTML mantém a PRIMEIRA ocorrência de um atributo repetido: a opacidade
+ * nunca chegava a valer. O resultado era o pior dos dois mundos — botão com a cor inteira,
+ * de aparência clicável, que não respondia ao clique (armadilha 15). A aparência agora é do
+ * CSS, em `.btn-acao:disabled`, que não depende de ordem nem de repetição.
+ *
+ * O `title` sofre do mesmo repetido, e aqui isso é aceitável: onde já existe um, ele explica
+ * a ação e é melhor do que o texto genérico.
+ */
 function vcOff() {
-  return verComoAtivo() ? ' disabled style="opacity:.45;cursor:not-allowed;" title="Desabilitado no modo Ver como."' : ''
+  return verComoAtivo() ? ' disabled title="Desabilitado no modo Ver como."' : ''
 }
 
 // ══════════════════════════════════════
@@ -2965,13 +2982,37 @@ async function abrirTR(tr) {
     const bdgClassPC = {livre:'st-livre',analise:'st-analise',diligencia:'st-diligencia',reanalise:'st-reanalise',baixada:'st-baixada'}
     const bdgTxtPC = {livre:'Livre',analise:'Em Análise',diligencia:'Diligência',reanalise:'Reanálise',baixada:'Baixada'}
 
+    // ⚠️ O ENCAMINHAMENTO É POR PARCELA, NÃO POR PC (13/08/2026).
+    //
+    // Esta tela tinha a regra INVERTIDA da do cartão: o botão aparecia com
+    // `!p.baixada && !p.enviado_ci` — ou seja, sumia justamente quando a PC era baixada, que
+    // é quando o C.I. passa a ser possível. E gravava por PATCH de uma PC só, montando
+    // `baixada`/`data_baixa` no navegador.
+    //
+    // Agora as duas telas decidem pela MESMA função (`pPasso`) e gravam pela MESMA rota
+    // (`POST /parcela/ci`, transacional, que não toca na baixa). A conversa do C.I. é por PC,
+    // mas o encaminhamento leva a parcela inteira — há parcela com 7 PCs.
+    const parcelas = new Map()
+    pcs.forEach(p => {
+      const k = String(p.parcial_num ?? '—')
+      if(!parcelas.has(k)) parcelas.set(k, { num: k, pcs: [], parecer_tipo: null, enviado_ci: false })
+      const pa = parcelas.get(k)
+      pa.pcs.push(p)
+      if(p.parecer_tipo && !pa.parecer_tipo) pa.parecer_tipo = p.parecer_tipo
+      if(p.enviado_ci) pa.enviado_ci = true
+    })
+
     const tdS = 'padding:5px 8px;font-size:13px;'
     const linhas = pcs.map(p => {
       const acao = p.baixada === true
         ? '<span style="color:var(--ct);font-size:10px;">Já baixada</span>'
         : `<button class="btn-acao btn-ass" onclick="registrarParecer('${p.codigo_pc}')">Registrar parecer</button>`
-      const podeEnviarCI = !p.baixada && !p.enviado_ci
-      const acaoCI = `${tagsEstadoPC(p, false)}${podeEnviarCI ? ` <button class="btn-acao btn-ver" onclick="enviarAoCI('${p.codigo_pc}', ${p.baixada === true})">Enviar ao CI</button>` : ''}`
+      const pa = parcelas.get(String(p.parcial_num ?? '—'))
+      const podeEnviarCI = pa && pPasso(pa) === 2 && p.parcial_num != null && p.parcial_num !== ''
+      const quantas = pa ? pa.pcs.length : 1
+      const acaoCI = `${tagsEstadoPC(p, false)}${podeEnviarCI ? ` <button class="btn-acao btn-ver"
+        title="Encaminha a parcela inteira — ${quantas} PC${quantas>1?'s':''}"
+        onclick="enviarAoCI('${escHtml(p.tr)}','${escHtml(String(p.parcial_num))}')">Enviar ao CI</button>` : ''}`
       const valorFmt = planMoedaPC(p)   // PC final nao tem valor proprio — ver planEhFinal
       return `<tr>
         <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
@@ -8311,7 +8352,7 @@ function pFaixaPasso(pa) {
       ? ` · aguardando retorno há ${dias} dia${dias === 1 ? '' : 's'}`
       : (aberto ? '' : ' · retorno recebido')
     return `<div style="padding:8px 16px;background:#EAF1F9;border-top:1px solid #CBDCF0;font-size:11.5px;color:#1A4E8A;font-weight:700;">
-      🏛 No Controle Interno${desde}${espera}
+      🏛 Passo 3 de 3 · No Controle Interno${desde}${espera}
       <div style="margin-top:3px;font-size:10.5px;color:var(--ct);font-weight:400;">o retorno do CI não cancela a baixa</div>
     </div>`
   }
@@ -8320,14 +8361,18 @@ function pFaixaPasso(pa) {
     // A parcial com parecer quase sempre está baixada — o parecer é que baixa. A exceção é o
     // estorno, que limpa a baixa e deixa o `parecer_tipo` para trás: ali a data não existe e
     // o trecho sai fora, em vez de escrever "baixada em —".
+    // ⚠️ São TRÊS passos, não dois (Richard, 13/08/2026). A baixa não é o fim: o
+    // encaminhamento ao C.I. é obrigatório, e a faixa verde comemorava um fim que não chegou.
+    // Por isso ela diz o que falta, e não só o que foi feito.
     const emData = pa.data_baixa ? ` · baixada em ${planData(pa.data_baixa)}` : ''
     return `<div style="padding:8px 16px;background:#E8F5E9;border-top:1px solid #C5E1A5;font-size:11.5px;color:#2E7D32;font-weight:700;">
-      ✓ Passo 2 de 2${emData} · parecer: ${escHtml(pa.parecer_tipo || '—')}
+      ✓ Passo 2 de 3${emData} · parecer: ${escHtml(pa.parecer_tipo || '—')}
+      <div style="margin-top:3px;font-size:10.5px;color:#8A6100;font-weight:700;">falta encaminhar ao Controle Interno</div>
     </div>`
   }
 
   return `<div style="padding:8px 16px;background:#FFF4D6;border-top:1px solid #F0DFAE;font-size:11.5px;color:#8A6100;font-weight:700;">
-    Passo 1 de 2 · registre o parecer para poder baixar
+    Passo 1 de 3 · registre o parecer para poder baixar
   </div>`
 }
 
@@ -8339,8 +8384,11 @@ function pFaixaPasso(pa) {
 function pBotaoCI(pa, chave) {
   if(pPasso(pa) === 3) return ''
   const pode = !!pa.parecer_tipo
+  // ⚠️ O encaminhamento ao C.I. é OBRIGATÓRIO, não opcional (Richard, 13/08/2026). O texto
+  // dizia "opcional — a parcial já está baixada" e convidava a parar na baixa. A baixa é o
+  // passo do parecer; o C.I. é o passo seguinte, e a parcial não está pronta sem ele.
   const nota = pode
-    ? (pa.baixada ? 'opcional — a parcial já está baixada' : '')
+    ? (pa.baixada ? 'encaminhe ao Controle Interno' : '')
     : 'exige parecer registrado'
   return `${nota?`<span style="font-size:11px;color:var(--ct);">${nota}</span>`:''}
     <button class="btn-acao" style="font-weight:800;background:${pode?'#1A4E8A':'#E4EAE6'};color:${pode?'#fff':'#9AA8A0'};${pode?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
@@ -10417,29 +10465,33 @@ function ciLimparBusca() {
   ciRender()
 }
 
-async function enviarAoCI(codigoPc, jaBaixada) {
-  if(!await moConfirm('Enviar esta PC ao Controle Interno?', {
-    titulo: 'Enviar ao Controle Interno',
-    // Vale dizer que registra a baixa: é o que faz a PC contar na produtividade, e quem
-    // clica sem saber disso acha que só encaminhou.
-    detalhe: 'O encaminhamento registra a baixa da PC — é ela que conta na sua produtividade.',
-    okTexto: 'Enviar', cancelarTexto: 'Voltar',
+/**
+ * Encaminha a PARCELA ao Controle Interno, do detalhe da TR.
+ *
+ * ⚠️ Reescrita em 13/08/2026. Antes era um PATCH de UMA PC que montava
+ * `baixada`/`status`/`data_baixa`/`origem_baixa` no navegador — a tela decidindo a baixa,
+ * com a data do relógio de quem clicou. Agora usa a MESMA rota do cartão: `POST /parcela/ci`,
+ * transacional, que exige parecer prévio e **não toca na baixa**.
+ *
+ * Quem baixa é o parecer. O encaminhamento é o passo seguinte, e é obrigatório.
+ */
+async function enviarAoCI(tr, parcialNum) {
+  if(verComoAtivo()) { toast('Modo leitura: encaminhar ao Controle Interno é ação, e está desabilitado.','err'); return }
+  if(!await moConfirm(`Encaminhar a Parcela ${parcialNum} da ${tr} ao Controle Interno?`, {
+    titulo: 'Encaminhar ao Controle Interno',
+    detalhe: 'Vai a parcela INTEIRA, não só esta PC. A sua baixa NÃO é desfeita — ela continua '
+           + 'contando na sua produtividade, e o retorno do C.I. também não a cancela.',
+    okTexto: 'Encaminhar', cancelarTexto: 'Voltar',
   })) return
   try {
-    const corpo = { enviado_ci: true, dt_envio_ci: new Date().toISOString() }
-    if(jaBaixada !== true) {
-      corpo.baixada = true
-      corpo.status = 'baixada'
-      corpo.data_baixa = new Date().toISOString()
-      corpo.origem_baixa = 'controle_interno'
-    }
-    const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(codigoPc)}`, {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(corpo)
+    const r = await fetch(`${API_URL}/parcela/ci`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, parcial_num: parcialNum, analista_id: U.id,
+                             setorial_id: U.setorialFiltro || 'FCEE' })
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    toast(jaBaixada===true ? 'PC enviada ao Controle Interno!' : 'PC enviada ao CI e baixada!','ok')
+    toast(`Parcela encaminhada ao CI (${j.count} PC${j.count>1?'s':''}).`,'ok')
     if(TR_DETALHE_ATUAL) abrirTR(TR_DETALHE_ATUAL)
   } catch(e) { toast('Erro: '+e.message,'err') }
 }

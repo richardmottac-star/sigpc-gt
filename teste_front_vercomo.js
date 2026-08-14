@@ -145,8 +145,22 @@ console.log('\n═══ 7. O BOTAO CINZA (camada de UX) ═══');
   const s = vcOff();
   conf(/disabled/.test(s), 'vcOff devolve disabled no modo');
   conf(/Desabilitado no modo Ver como/.test(s), 'e o motivo no title');
+
+  // ⚠️ O DEFEITO DE 13/08: o vcOff mandava a opacidade num SEGUNDO atributo style=, e o HTML
+  // fica com o PRIMEIRO. Os sete botoes ja tem style= inline, entao o cinza nunca aparecia:
+  // botao com a cor inteira, de aparencia clicavel, que nao respondia ao clique. Quem pinta
+  // agora e o CSS, que nao depende de ordem nem de repeticao.
+  conf(!/style=/.test(s), 'vcOff NAO devolve style — o segundo style= do HTML e ignorado');
+  conf(/\.btn-acao:disabled\{[^}]*opacity/.test(html), 'quem pinta o desabilitado e o CSS');
+  conf(/\.btn-acao:disabled\{[^}]*cursor:not-allowed/.test(html), 'com o cursor de bloqueado junto');
+
   _setVerComo(null);
   conf(vcOff() === '', 'e nada fora do modo');
+
+  // A faixa nao pode supor o genero de quem esta sendo visto — o Rafael e ele.
+  conf(!/no nome dela/.test(html), 'a faixa nao diz mais "no nome dela"');
+  conf((html.match(/nada do que você fizer é gravado no nome deste analista/gi) || []).length === 2,
+       'e diz "no nome deste analista" nos dois lugares — a tela e a faixa fixa');
 }
 
 console.log('\n═══ 8. TRAVAS NO index.html ═══');
