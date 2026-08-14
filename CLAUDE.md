@@ -379,6 +379,11 @@ exibição — o script inteiro deixa de rodar. Já aconteceu.
 > Conferida contra o banco em **13/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
 >
+> **▶ A PRÓXIMA SESSÃO COMEÇA NO `SESSAO.md`**, que abre com as cinco frentes deixadas em
+> 14/08 — a primeira delas é a **auditoria das planilhas × base do sistema, só leitura
+> primeiro**. ⚠️ Não "consertar" o banco para bater com a planilha: há caso medido em que a
+> planilha é que estava errada (Grupo 2, coluna "Número de PCs" inflada ~2x).
+>
 > **Estado em 13/08:** 53 usuários · **51 conseguem entrar** · fila de aprovação **vazia** ·
 > **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo** (este também inativo).
 
