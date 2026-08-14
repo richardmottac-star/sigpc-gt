@@ -1419,6 +1419,9 @@ function salvarSessao() {
     setorialAcesso: U.setorialAcesso,
     grupo: U.grupo,
     modoAnalista: U.modoAnalista,
+    // ⚠️ O papel ativo entra na sessão para sobreviver ao F5. Mas quem manda é o BANCO: o
+    // login RESETA para 'analista' no servidor, e é o valor que vem de lá que vale.
+    papelAtivo: U.papelAtivo,
     setorialFiltro: U.setorialFiltro,
     email: U.email,
     telefone: U.telefone,
@@ -1552,7 +1555,9 @@ async function login() {
       setorialAcesso: sec,
       // setorialFiltro: null = admin vê tudo; 'FCEE' = vê só FCEE
       setorialFiltro: sec === 'ADMIN' ? null : sec,
-      modoAnalista: sec !== 'ADMIN'
+      modoAnalista: sec !== 'ADMIN',
+      // O servidor reseta para 'analista' a cada login e devolve na linha do usuário.
+      papelAtivo: u.papel_ativo || PAPEL_PADRAO
     }
 
     // Senha provisória: não entra no sistema antes de trocar. A tela de troca vem no lugar
@@ -1744,7 +1749,9 @@ window.fetch = function(url, opts) {
  * para confundir.
  */
 function verComoPodeVer(u) {
-  if(U.perfil !== 'superadmin') return false
+  // ⚠️ Perfil EFETIVO: agir pela conta de outro é do papel TÉCNICO. No papel analista o
+  // item nem aparece no menu, e esta função recusa mesmo se alguém chamar pelo console.
+  if(perfilEfetivo(U) !== 'superadmin') return false
   if(!u || u.id === U.id) return false
   return ['analista','coordenador'].includes(u.perfil)
 }
@@ -2232,11 +2239,51 @@ const SB_ITENS = [
  *    igual para todo mundo. Deixá-las no menu seria oferecer um caminho que termina em
  *    botão cinza, e é justamente essa impressão de "posso agir por ela" que se quer evitar.
  */
+// ══════════════════════════════════════
+//  TROCA DE PAPEL DO SUPERADMIN  (14/08/2026)
+// ══════════════════════════════════════
+// Dois papéis no mesmo login, e eles deixam de se confundir:
+//   'analista' → "Richard Motta — analista": vê e faz só o que um analista vê e faz
+//   'tecnico'  → "Richard — técnico do sistema": acesso a tudo, e o ÚNICO papel que age
+//                pela conta de outro analista
+//
+// PAPEL PADRÃO AO ENTRAR: analista. Trocar é ato deliberado.
+//
+// ⚠️ ESCONDER ITEM DE MENU É COSMÉTICO. A guarda de verdade é do servidor, que lê
+// `usuarios.papel_ativo` do banco (`lib/papel.js`). Isto aqui só evita desenhar o caminho.
+const PAPEL_PADRAO = 'analista'
+
+/**
+ * O perfil que VALE agora — a MESMA regra do servidor (`papel.perfilEfetivo`).
+ *
+ * ⚠️ Só o superadmin tem dois papéis. Para os outros 52 cadastros a coluna nem é olhada, e
+ * `papelAtivo` neles não dá poder nenhum.
+ */
+function perfilEfetivo(u) {
+  if(!u) return null
+  if(u.perfil !== 'superadmin') return u.perfil
+  return (u.papelAtivo || PAPEL_PADRAO) === 'tecnico' ? u.perfil : PAPEL_PADRAO
+}
+
+/** Está no papel de técnico do sistema? */
+function souTecnico() { return perfilEfetivo(U) === 'superadmin' }
+
+/** Tem dois papéis para trocar? */
+function tenhoDoisPapeis() { return !!U && U.perfil === 'superadmin' }
+
+// ⚠️ O menu recebe o usuário com o perfil EFETIVO, e não uma condição a mais em cada item.
+// São 12 itens que somem no papel analista; um `pode:` que eu esquecesse de ajustar seria
+// justamente o que deixaria a Busca global à vista.
+function comoPapelAtivo(u) {
+  return u ? { ...u, perfil: perfilEfetivo(u) } : u
+}
+
 function sbMontar(u, verComo) {
+  const ef = comoPapelAtivo(u)
   return SB_BLOCOS
     .filter(b => !verComo || b.id === 'analista')
     .map(b => ({ ...b, itens: SB_ITENS.filter(i =>
-      i.bloco === b.id && i.pode(u) && !(verComo && i.soAcao)) }))
+      i.bloco === b.id && i.pode(ef) && !(verComo && i.soAcao)) }))
     .filter(b => b.itens.length > 0)
 }
 
@@ -2263,15 +2310,105 @@ function renderSB() {
         <span${i.destaque?' style="font-weight:800;color:var(--am);"':''}>${typeof i.rotulo==='function'?i.rotulo(U):i.rotulo}</span>
         ${i.badge?`<span id="${i.badge}" style="display:none;margin-left:auto;background:var(--r);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 6px;"></span>`:''}
       </div>`).join('')}
-    </div>`).join('') + `
+    </div>`).join('') + papelCaixa() + `
     <div class="sb-sec">
       <div class="sb-lbl">Setorial</div>
       <div class="sb-grupo">${U.setorialAcesso === 'ADMIN' ? 'ADMIN ●' : U.setorialAcesso + ' ●'}</div>
     </div>`
 
+  papelFaixa()
   onlineIniciar()
   sinoIniciar()
   faixaIniciar()
+}
+
+/**
+ * A caixa de troca de papel, no pé do menu.
+ *
+ * ⚠️ Fica VISÍVEL, não escondida em Configurações: se o papel muda o que a tela mostra, a
+ * pessoa precisa ver em que papel está sem ir procurar. Só aparece para quem tem dois.
+ */
+function papelCaixa() {
+  if(!tenhoDoisPapeis()) return ''
+  const tec = souTecnico()
+  return `
+    <div class="sb-sec">
+      <div class="sb-lbl">Papel ativo</div>
+      <div style="padding:0 10px 6px;">
+        <div style="font-size:11.5px;font-weight:800;color:${tec?'var(--am)':'var(--v)'};line-height:1.4;">
+          ${tec ? '🛠 Richard — técnico do sistema' : '📋 Richard Motta — analista'}</div>
+        <div style="font-size:10px;color:var(--ct);margin-top:2px;line-height:1.45;">
+          ${tec ? 'Acesso a tudo. É o único papel que age pela conta de outro analista.'
+                : 'Você vê e faz só o que um analista vê e faz.'}</div>
+        <button onclick="papelTrocar('${tec ? 'analista' : 'tecnico'}')"
+          style="width:100%;margin-top:7px;border:1.5px solid ${tec?'var(--v)':'var(--am)'};background:#fff;
+                 color:${tec?'var(--v)':'var(--am)'};border-radius:7px;padding:7px 9px;font-size:11px;
+                 font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">
+          ${tec ? '📋 Voltar a ser analista' : '🛠 Virar técnico do sistema'}</button>
+      </div>
+    </div>`
+}
+
+/**
+ * A faixa fixa do papel técnico — como a do "agir pela conta".
+ *
+ * ⚠️ Só no papel TÉCNICO. No papel analista não há faixa: ele é o padrão, e faixa que está
+ * sempre lá deixa de ser lida.
+ */
+function papelFaixa() {
+  const velha = document.getElementById('papelFaixa')
+  if(velha) { velha.remove(); document.body.style.paddingTop = '' }
+  if(!souTecnico()) return
+  // Se a faixa do "agir pela conta" já está no topo, esta entra abaixo dela.
+  const d = document.createElement('div')
+  d.id = 'papelFaixa'
+  const outra = document.getElementById('verComoFaixa')
+  d.style.cssText = `position:fixed;top:${outra ? outra.offsetHeight : 0}px;left:0;right:0;z-index:1199;
+    background:#1A4E8A;color:#fff;padding:7px 16px;display:flex;align-items:center;gap:11px;
+    flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.2);`
+  d.innerHTML = `
+    <span style="font-size:12.5px;font-weight:800;">🛠 PAPEL ATIVO: TÉCNICO DO SISTEMA</span>
+    <span style="font-size:10.5px;opacity:.9;">acesso a tudo — inclusive agir pela conta de outro analista</span>
+    <button onclick="papelTrocar('analista')" style="margin-left:auto;background:#fff;color:#1A4E8A;border:none;
+      border-radius:6px;padding:6px 13px;font-size:11.5px;font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">
+      Voltar a ser analista</button>`
+  document.body.appendChild(d)
+  document.body.style.paddingTop = ((outra ? outra.offsetHeight : 0) + d.offsetHeight) + 'px'
+}
+
+/**
+ * Troca o papel — e quem decide é o SERVIDOR.
+ *
+ * ⚠️ A tela não escreve `U.papelAtivo` por conta própria: ela manda o pedido e usa o que
+ * VOLTOU. Se gravasse localmente e a rota falhasse, o menu mostraria um papel que o servidor
+ * não reconhece — e aí a pessoa clica em Busca global e leva 403 sem entender.
+ */
+async function papelTrocar(novo) {
+  if(!tenhoDoisPapeis()) return
+  const virarTecnico = novo === 'tecnico'
+  const okDisso = await moConfirm(
+    virarTecnico ? 'Virar técnico do sistema?' : 'Voltar a ser analista?', {
+    titulo: virarTecnico ? '🛠 Papel: técnico do sistema' : '📋 Papel: analista',
+    detalhe: virarTecnico
+      ? 'Você passa a ver e poder tudo — inclusive agir pela conta de outro analista. A troca fica registrada.'
+      : 'As telas de coordenação e de superadmin somem do menu, e você volta a mexer só na sua carteira.',
+    okTexto: virarTecnico ? 'Virar técnico' : 'Voltar a analista', cancelarTexto: 'Ficar como está',
+  })
+  if(!okDisso) return
+  try {
+    const r = await fetch(`${API_URL}/usuarios/${U.id}/papel`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ papel: novo, usuario_id: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível trocar de papel.')
+    U.papelAtivo = j.data.papel_ativo
+    salvarSessao()
+    // Sai do "agir pela conta" ao voltar a analista: agir por outro é do papel técnico.
+    if(!souTecnico() && verComoAtivo()) verComoSair(true)
+    renderSB()
+    irDash()
+    toast(souTecnico() ? 'Papel: técnico do sistema.' : 'Papel: analista.', 'ok')
+  } catch(e) { toast('Erro: '+e.message, 'err') }
 }
 
 // ══════════════════════════════════════

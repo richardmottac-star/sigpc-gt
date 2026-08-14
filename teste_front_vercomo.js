@@ -52,7 +52,18 @@ function _setVerComo(v){ _verComo = v }
 function _getVerComo(){ return _verComo }
 function _fetch(u,o){ return window.fetch(u,o) }
 `, ctx);
-vm.runInContext('var U = { id: 4, nome: "Richard", perfil: "superadmin", grupo: "3" }', ctx);
+// ⚠️ `perfilEfetivo` mora no bloco do MENU, fora deste recorte — mas `verComoPodeVer` a
+// usa desde 14/08: agir pela conta de outro e do papel TECNICO. Sem ela aqui, o teste
+// quebraria por falta de funcao, e nao por defeito.
+vm.runInContext(`
+  var PAPEL_PADRAO = 'analista'
+  function perfilEfetivo(u) {
+    if(!u) return null
+    if(u.perfil !== 'superadmin') return u.perfil
+    return (u.papelAtivo || PAPEL_PADRAO) === 'tecnico' ? u.perfil : PAPEL_PADRAO
+  }
+`, ctx);
+vm.runInContext('var U = { id: 4, nome: "Richard", perfil: "superadmin", grupo: "3", papelAtivo: "tecnico" }', ctx);
 
 const { alvo, verComoAtivo, verComoPodeVer, vcOff, _setVerComo, _getVerComo, _fetch } = ctx;
 const ANA = { id: 22, nome: 'Ana Claudia', perfil: 'analista', grupo: '2' };
@@ -159,9 +170,17 @@ console.log('\n═══ 5. SAIR DO SISTEMA E A UNICA ESCRITA PERMITIDA ══�
 
 console.log('\n═══ 6. QUEM PODE VER QUEM ═══');
 {
-  vm.runInContext('U = { id: 4, nome:"Richard", perfil:"superadmin", grupo:"3" }', ctx);
+  // ⚠️ Agir pela conta de outro é do papel TÉCNICO (14/08). No papel analista a função
+  // recusa mesmo chamada pelo console — o item some do menu, mas o menu não é a guarda.
+  vm.runInContext('U = { id: 4, nome:"Richard", perfil:"superadmin", grupo:"3", papelAtivo:"tecnico" }', ctx);
   conf(verComoPodeVer(ANA) === true, 'superadmin ve analista de qualquer grupo');
   conf(verComoPodeVer({ id:5, perfil:'coordenador', grupo:'1' }) === true, 'superadmin ve coordenador');
+
+  vm.runInContext('U = { id: 4, nome:"Richard", perfil:"superadmin", grupo:"3", papelAtivo:"analista" }', ctx);
+  conf(verComoPodeVer(ANA) === false, 'mas NAO no papel analista');
+  vm.runInContext('U = { id: 4, nome:"Richard", perfil:"superadmin", grupo:"3" }', ctx);
+  conf(verComoPodeVer(ANA) === false, 'nem sem papel definido — o padrao e analista');
+  vm.runInContext('U = { id: 4, nome:"Richard", perfil:"superadmin", grupo:"3", papelAtivo:"tecnico" }', ctx);
   conf(verComoPodeVer({ id:4, perfil:'superadmin', grupo:'3' }) === false, 'ninguem se ve a si mesmo');
   conf(verComoPodeVer({ id:62, perfil:'controle_interno' }) === false, 'C.I. nao entra na lista');
   conf(verComoPodeVer(null) === false, 'nulo nao quebra');
@@ -339,7 +358,9 @@ console.log('\n═══ 8c. O MENU ENCOLHE NO MODO ═══');
   vm.runInContext(html.slice(iM, fM) + `
 function _m(u, vc){ return sbMontar(u, vc) }`, ctxM);
 
-  const sup = { id:4, perfil:'superadmin', grupo:'3' };
+  // ⚠️ Com dois papeis (14/08), o menu obedece ao papel ATIVO — e os tres blocos so
+  // existem no TECNICO. Sem `papelAtivo`, o padrao e analista e o bloco superadmin nem sai.
+  const sup = { id:4, perfil:'superadmin', grupo:'3', papelAtivo:'tecnico' };
   const normal = ctxM._m(sup, false).map(b => b.id);
   const modo   = ctxM._m(sup, true);
   conf(normal.length === 3, 'fora do modo, o superadmin ve os tres blocos');

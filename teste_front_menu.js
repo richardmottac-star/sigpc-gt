@@ -43,7 +43,10 @@ const SB_ITENS  = _itens();
 
 const analista = { id: 1, perfil: 'analista' };
 const coord    = { id: 2, perfil: 'coordenador' };
-const superad  = { id: 3, perfil: 'superadmin' };
+// ⚠️ O superadmin tem DOIS PAPEIS desde 14/08/2026, e o menu obedece ao papel ATIVO. Sem
+// `papelAtivo`, `perfilEfetivo` cai no padrao — que e 'analista', e e o padrao ao entrar.
+const superad  = { id: 3, perfil: 'superadmin', papelAtivo: 'tecnico' };
+const superAn  = { id: 3, perfil: 'superadmin', papelAtivo: 'analista' };
 const ci       = { id: 4, perfil: 'controle_interno' };
 
 const idsDe = (u) => sbMontar(u).flatMap(b => b.itens.map(i => i.id));
@@ -103,13 +106,48 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
     const item = SB_ITENS.find(i => i.id === id);
     if (!item) { conf(false, `item '${id}' existe no menu`); return; }
     const erra = PERFIS.filter(p => {
-      const veNoMenu = idsDe({ id: 9, perfil: p }).includes(id);
+      // O superadmin e testado no papel TECNICO: e nele que as telas de superadmin existem.
+      const veNoMenu = idsDe({ id: 9, perfil: p, papelAtivo: 'tecnico' }).includes(id);
       const podeNaTela = regra === 'todos' ? true : regra.includes(p);
       return veNoMenu !== podeNaTela;
     });
     conf(erra.length === 0, `'${id}' aparece exatamente para quem pode abrir`,
          erra.length ? `diverge em: ${erra.join(', ')}` : '');
   });
+}
+
+console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
+{
+  // ⚠️ 12 itens somem no papel analista. E uma regra so — o menu recebe o usuario com o
+  // perfil EFETIVO — porque um `pode:` que eu esquecesse de ajustar seria justamente o que
+  // deixaria a Busca global a vista.
+  // Sao 14, e nao 12: alem dos 12 que o Richard listou, somem tambem a 'prior' (Prioridades)
+  // e a 'config' (Configuracoes) — as duas ja eram so-superadmin, e no papel analista elas
+  // caem pela mesma regra, sem excecao escrita a mao.
+  const SOMEM = ['board','rel','vercomo','coord','aprov','afast','estlog','ci','faixa','recado',
+                 'admin','bglobal','prior','config'];
+  const comoTec = idsDe(superad);
+  const comoAn  = idsDe(superAn);
+
+  SOMEM.forEach(id => {
+    conf(comoTec.includes(id) && !comoAn.includes(id),
+         `'${id}' aparece no tecnico e SOME no analista`,
+         `tec=${comoTec.includes(id)} an=${comoAn.includes(id)}`);
+  });
+  conf(comoTec.length - comoAn.length === SOMEM.length,
+       `somem exatamente ${SOMEM.length} itens`, `sumiram ${comoTec.length - comoAn.length}`);
+
+  // O que FICA e a carteira do analista, e e igual a de um analista de verdade.
+  conf(JSON.stringify(comoAn) === JSON.stringify(idsDe(analista)),
+       'no papel analista o menu e IGUAL ao de um analista');
+
+  // ⚠️ Sem `papelAtivo`, cai no padrao — que e analista, o padrao ao entrar.
+  conf(JSON.stringify(idsDe({ id: 3, perfil: 'superadmin' })) === JSON.stringify(comoAn),
+       'sem papelAtivo, o padrao e analista');
+
+  // E papelAtivo em quem NAO e superadmin nao da poder nenhum.
+  conf(JSON.stringify(idsDe({ id: 1, perfil: 'analista', papelAtivo: 'tecnico' })) === JSON.stringify(idsDe(analista)),
+       'papelAtivo num analista nao abre nada');
 }
 
 console.log('\n═══ 3. PRODUTIVIDADE: DESCEU E FICOU ═══');
