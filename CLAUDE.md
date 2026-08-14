@@ -252,6 +252,26 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
 ---
 
+## As três regras do time de agentes (Richard, 13/08/2026)
+
+O time mora no `sigpc-api` (`.claude/agents/`), mas o `coder` toca **este** repositório —
+o `index.html`. As regras valem aqui igual:
+
+1. **NENHUM agente escreve no banco.** `INSERT`/`UPDATE`/`DELETE`/`ALTER`/`CREATE` passam
+   pelo Richard, com o comando na tela antes. `SELECT` e teste rodam livres.
+2. **NENHUM agente decide regra de negócio.** Regra → para e pergunta. Decisão técnica →
+   resolve e segue. *Se a resposta muda o que o sistema faz para o analista, é regra.*
+3. **NENHUM agente publica.** `git commit` e `git push` são do Richard.
+
+⚠️ **Neste repositório a regra 2 aparece disfarçada de layout.** "Que cor tem o aviso",
+"aparece ou não quando não há dado", "o botão nasce aceso" — parecem escolha de tela e são
+regra: mudam o que o analista vê e faz. O aviso de manutenção ser **vermelho** e os campos de
+login **sumirem** foram decisão dele, não do CSS.
+
+O fluxo completo está em `sigpc-api/TIME_AGENTES.md`.
+
+---
+
 ## Padrões de trabalho
 
 - Validar sempre com `node --check` antes de commit.
