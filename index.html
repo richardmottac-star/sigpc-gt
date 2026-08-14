@@ -2058,9 +2058,7 @@ function iniciarApp() {
   document.getElementById('sPainel').classList.add('ativa')
 
   document.getElementById('tNome').textContent = U.nome
-  document.getElementById('tPerfil').textContent =
-    (U.perfil==='superadmin'?'SUPERADMIN':U.perfil.toUpperCase()) + ' — ' +
-    (U.setorialAcesso==='ADMIN'?'GERAL':U.setorialAcesso)
+  atualizarCabecalhoPerfil()
   atualizarAvatarHeader()
 
   // A busca vem ANTES do primeiro render: se viesse depois, o analista veria o menu inteiro
@@ -2268,6 +2266,26 @@ function perfilEfetivo(u) {
 /** Está no papel de técnico do sistema? */
 function souTecnico() { return perfilEfetivo(U) === 'superadmin' }
 
+/**
+ * O rótulo do cabeçalho, no alto à direita.
+ *
+ * ⚠️ MOSTRA O PAPEL ATIVO, não o perfil do cadastro. Dizia "SUPERADMIN" mesmo no papel
+ * analista — e o cabeçalho é o único lugar da tela que diz quem você é: se ele mente, a
+ * pessoa procura no menu uma tela que ela mesma acabou de esconder.
+ */
+function rotuloPerfil() {
+  const ef = perfilEfetivo(U)
+  if(U && U.perfil === 'superadmin') return souTecnico() ? 'TÉCNICO DO SISTEMA' : 'ANALISTA'
+  return (ef || '').toUpperCase()
+}
+
+/** Repinta o cabeçalho — chamado no login e a cada troca de papel. */
+function atualizarCabecalhoPerfil() {
+  const el = document.getElementById('tPerfil')
+  if(!el || !U) return
+  el.textContent = rotuloPerfil() + ' — ' + (U.setorialAcesso === 'ADMIN' ? 'GERAL' : U.setorialAcesso)
+}
+
 /** Tem dois papéis para trocar? */
 function tenhoDoisPapeis() { return !!U && U.perfil === 'superadmin' }
 
@@ -2331,19 +2349,25 @@ function renderSB() {
 function papelCaixa() {
   if(!tenhoDoisPapeis()) return ''
   const tec = souTecnico()
+  // ⚠️ A BARRA É VERDE ESCURO (#00512D). As cores da paleta clara — `var(--v)`, `var(--am)` —
+  // desaparecem nela: o bloco nasceu ilegível. Aqui valem as mesmas cores que o resto da
+  // barra usa e que se leem sobre o verde: #C4E6D3 nos itens, #93D2B0 nos rótulos.
+  const cor = tec ? '#FFD98A' : '#C4E6D3'
   return `
     <div class="sb-sec">
       <div class="sb-lbl">Papel ativo</div>
-      <div style="padding:0 10px 6px;">
-        <div style="font-size:11.5px;font-weight:800;color:${tec?'var(--am)':'var(--v)'};line-height:1.4;">
+      <div style="padding:0 10px 8px;">
+        <div style="font-size:11.5px;font-weight:800;color:${cor};line-height:1.4;">
           ${tec ? '🛠 Richard — técnico do sistema' : '📋 Richard Motta — analista'}</div>
-        <div style="font-size:10px;color:var(--ct);margin-top:2px;line-height:1.45;">
+        <div style="font-size:10.5px;color:#93D2B0;margin-top:3px;line-height:1.5;">
           ${tec ? 'Acesso a tudo. É o único papel que age pela conta de outro analista.'
                 : 'Você vê e faz só o que um analista vê e faz.'}</div>
+        <!-- Botão branco sólido: é a única ação da caixa, e sobre verde escuro o branco é o
+             que tem mais contraste. -->
         <button onclick="papelTrocar('${tec ? 'analista' : 'tecnico'}')"
-          style="width:100%;margin-top:7px;border:1.5px solid ${tec?'var(--v)':'var(--am)'};background:#fff;
-                 color:${tec?'var(--v)':'var(--am)'};border-radius:7px;padding:7px 9px;font-size:11px;
-                 font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;">
+          style="width:100%;margin-top:8px;border:none;background:#fff;color:#00512D;
+                 border-radius:7px;padding:8px 9px;font-size:11px;font-weight:800;
+                 font-family:Barlow,sans-serif;cursor:pointer;">
           ${tec ? '📋 Voltar a ser analista' : '🛠 Virar técnico do sistema'}</button>
       </div>
     </div>`
@@ -2405,6 +2429,9 @@ async function papelTrocar(novo) {
     salvarSessao()
     // Sai do "agir pela conta" ao voltar a analista: agir por outro é do papel técnico.
     if(!souTecnico() && verComoAtivo()) verComoSair(true)
+    // ⚠️ O cabeçalho também muda. Sem esta linha ele continuaria dizendo o papel anterior —
+    // e é o único lugar da tela que diz quem você é.
+    atualizarCabecalhoPerfil()
     renderSB()
     irDash()
     toast(souTecnico() ? 'Papel: técnico do sistema.' : 'Papel: analista.', 'ok')

@@ -150,6 +150,37 @@ console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
        'papelAtivo num analista nao abre nada');
 }
 
+console.log('\n═══ 2c. A CAIXA DO PAPEL E O CABECALHO ═══');
+{
+  const iC = html.indexOf('function papelCaixa()');
+  const bC = html.slice(iC, html.indexOf('function papelFaixa()'));
+
+  // ⚠️ A BARRA E VERDE ESCURO (#00512D). As cores da paleta clara sumiam nela — o bloco
+  // nasceu ILEGIVEL, e foi o Richard quem viu na tela, nao o teste.
+  // ⚠️ So o CODIGO conta: o comentario do proprio bloco CITA `var(--v)` para explicar por que
+  // nao usa-lo, e a primeira versao deste teste reprovou a si mesma por causa disso.
+  const codigoC = bC.replace(/\/\/[^\n]*/g, '');
+  conf(!/var\(--am\)|var\(--v\)|var\(--ct\)/.test(codigoC),
+       'a caixa NAO usa cor da paleta clara sobre o verde escuro');
+  conf(/#FFD98A/.test(bC) && /#C4E6D3/.test(bC), 'usa as cores que se leem na barra');
+  conf(/color:#93D2B0/.test(bC), 'e o subtexto na cor dos rotulos da barra');
+  conf(/background:#fff;color:#00512D/.test(bC), 'o botao e branco solido — o maior contraste ali');
+
+  // O cabecalho mostra o PAPEL ATIVO, nao o perfil do cadastro.
+  const iR = html.indexOf('function rotuloPerfil()');
+  const bR = html.slice(iR, iR + 420);
+  conf(/TÉCNICO DO SISTEMA/.test(bR), 'o cabecalho diz TECNICO DO SISTEMA no papel tecnico');
+  conf(/'ANALISTA'/.test(bR), 'e ANALISTA no papel analista');
+  // Escopado ao cabecalho: 'SUPERADMIN' continua existindo no Painel ADMIN, onde e o
+  // rotulo do PERFIL cadastrado — e ali esta certo.
+  conf(!/SUPERADMIN/.test(bR), 'a palavra SUPERADMIN saiu do cabecalho');
+
+  // ⚠️ Sem repintar na troca, o cabecalho ficaria dizendo o papel anterior.
+  const iT = html.indexOf('async function papelTrocar(');
+  const bT = html.slice(iT, iT + 2200);
+  conf(/atualizarCabecalhoPerfil\(\)/.test(bT), 'e a troca REPINTA o cabecalho');
+}
+
 console.log('\n═══ 3. PRODUTIVIDADE: DESCEU E FICOU ═══');
 {
   // Estava em "Coordenação" e o analista abre. O menu escondia o que a pessoa alcançava
