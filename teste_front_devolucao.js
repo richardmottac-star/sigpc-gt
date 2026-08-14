@@ -82,8 +82,12 @@ conf(/DEVOLVER TR AO ESTOQUE — só superadmin/.test(html), 'o cabecalho diz de
 // ─────────────────────────────────────────────────────────────
 secao('7. O BOTAO NO CARTAO DA TR');
 
-const cartao = html.slice(html.indexOf('const baixadaTr = planTrConcluida(r)'),
-                          html.indexOf('const baixadaTr = planTrConcluida(r)') + 4200);
+// ⚠️ A janela era de 4.200 caracteres e estourou em 13/08, quando a etiqueta "N sem C.I."
+// entrou no cabecalho e empurrou o botao Devolver para 4.574. Contar caracteres e fragil por
+// natureza: o certo e fechar a janela no FIM do cartao, que e o rodape das PCs.
+const iCard = html.indexOf('const baixadaTr = planTrConcluida(r)');
+const fCard = html.indexOf('function planRenderPag()', iCard);
+const cartao = html.slice(iCard, fCard > iCard ? fCard : iCard + 9000);
 conf(/abrirDevM\('\$\{escHtml\(r\.tr\)\}'\)/.test(cartao), 'o cartao tem o botao Devolver');
 conf(/U\.perfil === 'superadmin' && !baixadaTr && !verComoAtivo\(\)/.test(cartao),
      'so superadmin, so em TR nao concluida, e nao no modo leitura');

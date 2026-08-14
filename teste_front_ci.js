@@ -35,7 +35,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(html.slice(ini, fim), ctx);
-const { pPasso, pDiasNoCi, pFaixaPasso, pBotaoCI } = ctx;
+const { pPasso, pDiasNoCi, pFaixaPasso, pBotaoCI, planSemCi } = ctx;
 
 let ok = 0, falhou = 0;
 const conf = (passou, rotulo, detalhe) => {
@@ -173,6 +173,34 @@ console.log('\n═══ 4b. A OUTRA TELA (detalhe da TR) SEGUE A MESMA REGRA �
   // ⚠️ A tela nao decide mais a baixa — nem o valor, nem a data.
   conf(!/baixada|data_baixa|origem_baixa/.test(bEA), 'e a tela nao monta mais baixada/data_baixa');
   conf(/if\(verComoAtivo\(\)\)/.test(bEA), 'e o modo leitura foi conferido, que antes nem existia aqui');
+}
+
+console.log('\n═══ 4c. A ETIQUETA "SEM C.I." NA LISTA ═══');
+{
+  // ⚠️ A cobranca que faltava. Encaminhar e obrigatorio e NADA exige: sem trava no servidor,
+  // sem sino, sem relatorio. Sao 2.186 parciais baixadas que nunca foram ao C.I., e o unico
+  // sinal era a faixa DENTRO do cartao — que so ve quem abre a TR, uma por uma.
+  conf(planSemCi({ parciais: [BAIXADA, BAIXADA, NO_CI] }) === 2, 'conta so as que faltam ir');
+  conf(planSemCi({ parciais: [NO_CI, NO_CI] }) === 0, 'TR toda encaminhada nao ganha etiqueta');
+  conf(planSemCi({ parciais: [SEM_PARECER] }) === 0, 'sem parecer ainda nao e divida — e o passo 1');
+  conf(planSemCi({ parciais: [] }) === 0, 'TR sem parcial nenhuma nao estoura');
+  conf(planSemCi({}) === 0, 'nem TR sem a lista de parciais');
+
+  // O estorno espera o C.I., mas nao e divida do mesmo tipo: a baixa foi desfeita.
+  conf(planSemCi({ parciais: [{ parecer_tipo: 'Parecer Regular', baixada: false, enviado_ci: false }] }) === 0,
+       'estorno nao entra na conta — a baixa dele foi desfeita');
+
+  const iRP = html.indexOf('function renderPlan(rows) {');
+  const bRP = html.slice(iRP, iRP + 12000);
+  conf(/const semCi\s+= planSemCi\(r\)/.test(bRP), 'o cartao calcula a etiqueta pela funcao unica');
+  conf(/🏛 \$\{semCi\} sem C\.I\./.test(bRP), 'e desenha "N sem C.I."');
+  // ⚠️ Principalmente na concluida: o cabecalho verde diz "✓ concluida" e a pessoa passa
+  // adiante sem saber que a TR nao acabou.
+  const iBad = bRP.indexOf('sem C.I.');
+  const iCon = bRP.indexOf('✓ concluída');
+  conf(iCon > 0 && iBad > iCon, 'a etiqueta fica AO LADO do "concluida", nao no lugar dela');
+  conf(/title="\$\{semCi\} parcial\$\{semCi>1\?'is':''\} baixada/.test(bRP),
+       'com o title dizendo o que fazer');
 }
 
 console.log('\n═══ 5. A CONFIRMACAO RESPONDE "VOU PERDER A BAIXA?" ═══');

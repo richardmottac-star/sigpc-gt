@@ -8333,6 +8333,21 @@ function pPasso(pa) {
   return pa.parecer_tipo ? 2 : 1
 }
 
+/**
+ * Quantas parciais desta TR estão baixadas e NUNCA foram ao Controle Interno.
+ *
+ * ⚠️ É a cobrança que faltava. Encaminhar é OBRIGATÓRIO, mas nada exige: não há trava no
+ * servidor, o sino não avisa e nenhum relatório mostra. Medido em 13/08/2026: **2.186
+ * parciais** nesse estado, e o único sinal era a faixa dentro do cartão — que só vê quem
+ * abre a TR, uma por uma.
+ *
+ * Conta só o que está BAIXADO. O estorno (parecer sem baixa) também espera o C.I., mas não
+ * é dívida do mesmo tipo: ali a baixa foi desfeita e a parcial voltou para a análise.
+ */
+function planSemCi(r) {
+  return (r.parciais || []).filter(pa => pa.baixada && pPasso(pa) === 2).length
+}
+
 /** Há quantos dias a parcela está no C.I. — null quando não há data de envio. */
 function pDiasNoCi(dt) {
   if(!dt) return null
@@ -8500,6 +8515,10 @@ function renderPlan(rows) {
     // chegar, e uma TR terminada não é isso, por mais recente que seja a assunção.
     const assumida  = planAssumidaEm(r)
     const trNova    = !baixadaTr && planTrNova(r)
+    // ⚠️ A etiqueta do C.I. aparece TAMBÉM na TR concluída — e principalmente nela. Uma TR
+    // toda baixada que nunca foi ao C.I. é justamente a dívida que ninguém enxerga: o
+    // cabeçalho verde diz "✓ concluída" e a pessoa passa adiante.
+    const semCi     = planSemCi(r)
     const fundoCab  = baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
     const corCab    = baixadaTr ? 'var(--te)'  : '#fff'
     const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
@@ -8515,6 +8534,8 @@ function renderPlan(rows) {
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
             ${baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
+            ${semCi ? `<span title="${semCi} parcial${semCi>1?'is':''} baixada${semCi>1?'s':''} que ainda não foi ao Controle Interno — abra a TR e encaminhe"
+              style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#FFF4D6;color:#8A6100;border:1px solid #E8CE8A;">🏛 ${semCi} sem C.I.</span>` : ''}
             ${trNova ? `<span title="Assumida ${planHaQuantoTempo(assumida)} — some sozinha depois de ${DIAS_TR_NOVA} dias"
               style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--az);color:#fff;">✨ NOVA</span>` : ''}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
