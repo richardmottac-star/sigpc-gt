@@ -231,6 +231,23 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     `2018TR000093-PFINAL` tem 19 caracteres contra 12 de `2018PC000015`. `nowrap` na tela e
     no papel. A final entra na tabela como as outras, com `—` na NL.
 
+19. **⚠️ O CARTÃO DA PARCIAL TEM DOIS RAMOS, E O QUE FALTAR NUM DELES SOME DA TELA.**
+    Até 13/08/2026 o botão "Encaminhar ao CI" era **inalcançável**, e nenhum dos 15 testes
+    pegou: sem parecer ele ficava cinza; **com** parecer a parcial virava `baixada` e caía no
+    ramo verde, que não desenhava botão nenhum. Medido: **4.259** parciais no cinza,
+    **2.181** sem botão, e **zero** encaminhamentos feitos por analista em produção — as 13
+    PCs que estão no C.I. entraram pela `migracao_ci` de 05/08, não pela tela.
+
+    O conserto foi tirar a regra de dentro do HTML: **`pPasso` · `pFaixaPasso` · `pBotaoCI`**,
+    chamados pelos **dois** ramos. Há teste que conta as duas chamadas — duplicar a regra em
+    vez de chamar o auxiliar faz os ramos divergirem de novo.
+
+    ⚠️ **Botão cinza NUNCA é mudo.** O motivo fica **ao lado, em texto** ("exige parecer
+    registrado"), não só no `title` — o `title` só aparece para quem passa o mouse e espera.
+
+    ⚠️ **A trava do servidor não mudou.** `POST /parcela/ci` continua exigindo parecer prévio.
+    O que se corrigiu foi a tela esconder o botão depois que o parecer existe.
+
 ---
 
 ## Método: TRABALHAR EM BLOCO, NÃO PASSO A PASSO (desde 12/08/2026)

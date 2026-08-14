@@ -186,8 +186,14 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   // escopado ao cabecalho do painel: `rgba(255,255,255,.16)` tambem e usado pelo botao do
   // menu superior (.btn-guia), que nao tem nada a ver com isto.
   conf(!/rgba\(255,255,255,\.16\)/.test(cab), 'o fundo apagado do botao saiu do cabecalho da TR');
-  const acoes = html.slice(html.indexOf('pAbrirSit(${chave})') - 300, html.indexOf('Encaminhar ao CI') + 40);
-  conf((acoes.match(/font-weight:800/g) || []).length >= 3, 'os 3 botoes da area expandida ganharam peso');
+  // ⚠️ A janela terminava em 'Encaminhar ao CI' e ficou NEGATIVA em 13/08: o botao do C.I.
+  // saiu do HTML do cartao e virou `pBotaoCI`, declarada ANTES de renderPlan. Fechar a janela
+  // na chamada mantem os tres botoes de acao juntos, que e o que a secao mede.
+  const acoes = html.slice(html.indexOf('pAbrirSit(${chave})') - 300,
+                           html.indexOf('${pBotaoCI(pa, chave)}`}') + 40);
+  const bCI = html.slice(html.indexOf('function pBotaoCI(pa, chave) {'), html.indexOf('function renderPlan(rows) {'));
+  conf((acoes.match(/font-weight:800/g) || []).length >= 2 && /font-weight:800/.test(bCI),
+       'os 3 botoes da area expandida ganharam peso');
   conf(/border:2px solid var\(--az\)/.test(acoes), 'o contorno do "Salvar situação" engrossou');
 
   // 2. TR baixada recua

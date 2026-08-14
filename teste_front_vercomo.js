@@ -230,7 +230,20 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
        'e diz que as anotacoes existentes continuam a vista');
 
   // O botao Assumir nasce desabilitado e e desabilitado tambem no erro.
-  conf(/function assBotao\(pode, motivo\)/.test(html), 'ha uma funcao unica para o botao Assumir');
+  // ⚠️ A ancora era a assinatura exata `(pode, motivo)` e quebrou quando o terceiro
+  // argumento entrou (13/08). Assinatura e decisao tecnica; o que precisa ser provado e a
+  // PROPRIEDADE: existe uma funcao so, e ninguem mais mexe no btnConfAss por fora dela.
+  conf(/function assBotao\(pode, motivo/.test(html), 'ha uma funcao unica para o botao Assumir');
+  // O btnConfAss e pego em dois lugares: o assBotao e o "Assumindo..." de
+  // confirmarAssumirTR. A propriedade que importa e que quem RELIGA o botao e sempre o
+  // assBotao — ninguem o reacende no braco, porque so o assBotao sabe se ele deve sumir.
+  conf(html.split("getElementById('btnConfAss')").length - 1 === 2,
+       'so dois lugares pegam o btnConfAss');
+  const iConf = html.indexOf('async function confirmarAssumirTR(');
+  const bConf = html.slice(iConf, iConf + 2600);
+  conf(!/\bbtn\.disabled\s*=\s*false/.test(bConf), 'e ninguem o REACENDE por fora do assBotao');
+  conf(/assBotao\([\s\S]{0,120}?assLimiteAtingido\(ASS_PREVIA\)\)/.test(bConf),
+       'no erro, o Assumir escondido pelo limite NAO volta cinza para a tela');
   conf(/assBotao\(false, 'Carregando as PCs livres desta TR\.\.\.'\)/.test(html),
        'ele NASCE desabilitado, antes da busca');
   const iAss = html.indexOf('async function assumirTR(');

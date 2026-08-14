@@ -2839,10 +2839,18 @@ let TR_ASSUMIR = null
 // Antes a tela baixava a lista inteira e contava sozinha — duas fontes para a mesma resposta.
 let ASS_PREVIA = null
 
-/** Liga/desliga o Confirmar do modal Assumir, com o motivo no title. */
-function assBotao(pode, motivo) {
+/**
+ * Liga/desliga o Confirmar do modal Assumir, com o motivo no title.
+ *
+ * ⚠️ `sumir` é o LIMITE ATINGIDO, e só ele. Botão cinza que nunca vai acender enquanto o
+ * modal estiver aberto não informa nada — ocupa o lugar da única ação possível, que é pedir
+ * a vaga. Nos outros bloqueios (reserva, erro de carga) o cinza FICA: ali ele explica.
+ * Como `sumir` nasce `false`, toda chamada que não passa o terceiro argumento repõe o botão.
+ */
+function assBotao(pode, motivo, sumir) {
   const b = document.getElementById('btnConfAss')
   if(!b) return
+  b.style.display = sumir ? 'none' : ''
   b.disabled = !pode
   b.style.opacity = pode ? '' : '.45'
   b.style.cursor = pode ? '' : 'not-allowed'
@@ -2884,7 +2892,8 @@ async function assumirTR(tr) {
                       ocupadas: ASS_PREVIA.ocupadas, reserva: ASS_PREVIA.reserva,
                       jaMinha: ASS_PREVIA.jaMinha, autorizacao: ASS_PREVIA.autorizacao }, tr)}
     `
-    assBotao(ASS_PREVIA.pode, ASS_PREVIA.pode ? '' : (ASS_PREVIA.motivo || 'Você não pode assumir esta TR agora.'))
+    assBotao(ASS_PREVIA.pode, ASS_PREVIA.pode ? '' : (ASS_PREVIA.motivo || 'Você não pode assumir esta TR agora.'),
+             assLimiteAtingido(ASS_PREVIA))
   } catch(e) {
     document.getElementById('mAssI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br><span style="color:var(--r);font-size:11px;">Erro: ${escHtml(e.message)}</span>`
     // ⚠️ O botão TEM de ser desabilitado aqui também. Era este o caminho que o deixava
@@ -2924,7 +2933,9 @@ async function confirmarAssumirTR() {
     // ⚠️ Repinta e MANTÉM o modal aberto no erro. Fechar o modal escondia a razão da
     // recusa — a pessoa via só o toast passar e não sabia se tinha assumido ou não.
     btn.textContent = '✓ Assumir'
-    assBotao(!!(ASS_PREVIA && ASS_PREVIA.pode), e.message)
+    // O terceiro argumento repete a decisão de esconder: sem ele, um erro aqui faria o
+    // "Assumir" REAPARECER cinza no modal de limite atingido, do qual ele tinha saído.
+    assBotao(!!(ASS_PREVIA && ASS_PREVIA.pode), e.message, assLimiteAtingido(ASS_PREVIA))
   }
 }
 
@@ -3866,15 +3877,36 @@ function limiteAviso(lim, tr) {
     </div>`
   }
 
+  // ── LIMITE ATINGIDO
+  // O "Assumir" cinza sai da tela (quem esconde é `assumirTR`, por `assLimiteAtingido`): ele
+  // não é o que a pessoa pode fazer aqui. O que ela pode fazer é pedir a vaga, e por isso o
+  // pedido deixou de ser um botão âmbar pequeno no canto e passou a ocupar a largura inteira.
   const podePedir = lim.pedidoAtivo !== false
-  return `<div style="margin-top:9px;background:#FDE8EA;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);">
-      <b>Limite atingido.</b> ${escHtml(lim.motivo||'')}<br>
-      <span style="color:var(--ct);">A vaga volta quando você baixar uma TR inteira.</span>
-      ${podePedir ? `<div style="margin-top:9px;">
-        <button class="btn-acao" style="background:var(--am);color:#fff;font-weight:800;"
-          onclick="limitePedir('${escHtml(tr||'')}')">Solicitar mais uma TR</button>
-      </div>` : ''}
+  return `<div style="margin-top:9px;border-radius:7px;overflow:hidden;border:1px solid #F3C9CE;">
+      <div style="background:#C62828;color:#fff;font-size:12px;font-weight:800;padding:8px 12px;">
+        Limite atingido</div>
+      <div style="background:#FDE8EA;padding:10px 12px;font-size:11.5px;color:var(--r);">
+        ${escHtml(lim.motivo||'')}<br>
+        <span style="color:var(--ct);">A vaga volta quando você baixar uma TR inteira.</span>
+        ${podePedir ? `
+        <button class="btn-acao" style="display:block;width:100%;margin-top:10px;background:#C62828;color:#fff;
+          font-weight:800;font-size:12.5px;padding:11px 12px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.18);"
+          onclick="limitePedir('${escHtml(tr||'')}')">➕ Pedir vaga extra para esta TR</button>
+        <div style="margin-top:7px;font-size:11px;color:var(--ct);line-height:1.45;">
+          O pedido vai para sua coordenação — você é avisado pelo sino quando houver resposta.</div>` : ''}
+      </div>
     </div>`
+}
+
+/**
+ * É o bloqueio de LIMITE ATINGIDO, e não outro?
+ *
+ * ⚠️ Só este caso esconde o "Assumir". A reserva ("outro pediu esta TR antes") também
+ * bloqueia, mas é outra conversa: ali o botão cinza continua, porque a TR pode voltar a ser
+ * dele em 3 dias. Misturar os dois mandaria o analista pedir uma TR que já é de outro.
+ */
+function assLimiteAtingido(lim) {
+  return !!lim && lim.pode === false && !lim.reserva && !lim.jaMinha
 }
 
 async function limitePedir(tr) {
@@ -7602,6 +7634,10 @@ async function buscarPlan() {
           qtd_diligencias:  ref.qtd_diligencias || 0,
           dt_situacao:      pa.pcs.find(x=>x.dt_situacao)?.dt_situacao || null,
           enviado_ci:     pa.pcs.some(x => x.enviado_ci === true),
+          // A data do encaminhamento alimenta a faixa "No Controle Interno desde ...". É a
+          // PRIMEIRA das PCs da parcela: todas foram na mesma transação, mas se alguma vier
+          // sem data, `find` pula a vazia em vez de zerar a faixa inteira.
+          dt_envio_ci:    pa.pcs.find(x=>x.dt_envio_ci)?.dt_envio_ci || null,
           // O ciclo do CI. `ci_situacao` diz onde a parcela está; `enviado_ci` continua
           // dizendo que ela foi — e é ele que sustenta a baixa.
           ci_situacao:    pa.pcs.find(x=>x.ci_situacao)?.ci_situacao || null,
@@ -8233,6 +8269,85 @@ async function planNovaAnotacao(tr) {
   } catch(e) { toast('Erro ao salvar: '+e.message,'err') }
 }
 
+// ══════════════════════════════════════
+//  OS TRÊS ESTADOS DA PARCIAL  (13/08/2026)
+// ══════════════════════════════════════
+// Antes desta data o botão "Encaminhar ao CI" era inalcançável, e não por acaso: sem parecer
+// ele ficava cinza, e COM parecer a parcial virava baixada e caía no ramo verde do cartão —
+// que não desenhava botão nenhum. Medido: 4.259 parciais no cinza, 2.181 sem botão, e ZERO
+// encaminhamentos feitos por analista em produção. As 13 PCs que estão no C.I. entraram pela
+// migração de 05/08, não pela tela.
+//
+// ⚠️ A trava do servidor NÃO mudou: `POST /parcela/ci` continua exigindo parecer prévio
+// (server.js, 'CI exige parecer prévio'). O que muda é só a tela deixar de esconder o botão
+// depois que o parecer existe.
+//
+// ⚠️ E NUNCA CINZA MUDO. Botão desabilitado sem motivo à vista é o mesmo que botão quebrado:
+// o motivo fica AO LADO, em texto, não só no `title` — o title só aparece para quem passa o
+// mouse por cima e espera.
+
+/** Em que passo esta parcial está: 1 (sem parecer), 2 (com parecer) ou 3 (já no C.I.). */
+function pPasso(pa) {
+  if(pa.enviado_ci) return 3
+  return pa.parecer_tipo ? 2 : 1
+}
+
+/** Há quantos dias a parcela está no C.I. — null quando não há data de envio. */
+function pDiasNoCi(dt) {
+  if(!dt) return null
+  return Math.floor((new Date().setHours(0,0,0,0) - new Date(String(dt).slice(0,10)+'T00:00:00')) / 86400000)
+}
+
+/** A faixa que diz em que passo a parcial está, e o que falta. */
+function pFaixaPasso(pa) {
+  const passo = pPasso(pa)
+
+  if(passo === 3) {
+    const dias = pDiasNoCi(pa.dt_envio_ci)
+    // "aguardando retorno" só enquanto o ciclo está aberto. Encerrado, esperar seria mentira.
+    const aberto = pa.ci_situacao !== 'encerrado'
+    const desde = pa.dt_envio_ci ? ` desde ${planData(pa.dt_envio_ci)}` : ''
+    const espera = (aberto && dias !== null)
+      ? ` · aguardando retorno há ${dias} dia${dias === 1 ? '' : 's'}`
+      : (aberto ? '' : ' · retorno recebido')
+    return `<div style="padding:8px 16px;background:#EAF1F9;border-top:1px solid #CBDCF0;font-size:11.5px;color:#1A4E8A;font-weight:700;">
+      🏛 No Controle Interno${desde}${espera}
+      <div style="margin-top:3px;font-size:10.5px;color:var(--ct);font-weight:400;">o retorno do CI não cancela a baixa</div>
+    </div>`
+  }
+
+  if(passo === 2) {
+    // A parcial com parecer quase sempre está baixada — o parecer é que baixa. A exceção é o
+    // estorno, que limpa a baixa e deixa o `parecer_tipo` para trás: ali a data não existe e
+    // o trecho sai fora, em vez de escrever "baixada em —".
+    const emData = pa.data_baixa ? ` · baixada em ${planData(pa.data_baixa)}` : ''
+    return `<div style="padding:8px 16px;background:#E8F5E9;border-top:1px solid #C5E1A5;font-size:11.5px;color:#2E7D32;font-weight:700;">
+      ✓ Passo 2 de 2${emData} · parecer: ${escHtml(pa.parecer_tipo || '—')}
+    </div>`
+  }
+
+  return `<div style="padding:8px 16px;background:#FFF4D6;border-top:1px solid #F0DFAE;font-size:11.5px;color:#8A6100;font-weight:700;">
+    Passo 1 de 2 · registre o parecer para poder baixar
+  </div>`
+}
+
+/**
+ * O botão do C.I., com o motivo AO LADO quando não dá para clicar.
+ *
+ * Some no passo 3 — já foi encaminhada, e o bloco do C.I. logo abaixo conta o resto.
+ */
+function pBotaoCI(pa, chave) {
+  if(pPasso(pa) === 3) return ''
+  const pode = !!pa.parecer_tipo
+  const nota = pode
+    ? (pa.baixada ? 'opcional — a parcial já está baixada' : '')
+    : 'exige parecer registrado'
+  return `${nota?`<span style="font-size:11px;color:var(--ct);">${nota}</span>`:''}
+    <button class="btn-acao" style="font-weight:800;background:${pode?'#1A4E8A':'#E4EAE6'};color:${pode?'#fff':'#9AA8A0'};${pode?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
+      ${pode?`onclick="pEnviarCI(${chave})"`:'disabled'}
+      title="${pode?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}"${vcOff()}>🏛 Encaminhar ao CI</button>`
+}
+
 function renderPlan(rows) {
   const cont = document.getElementById('planConteudo')
   if(!cont) return
@@ -8263,14 +8378,15 @@ function renderPlan(rows) {
               <span style="font-size:12px;color:var(--ct);">baixada em ${planData(pa.data_baixa)}</span>
               <button class="btn-acao" style="background:#8A9A90;color:#fff;" onclick="pVerParecer(${chave})">Ver parecer</button>
               ${(U.perfil==='coordenador'||U.perfil==='superadmin')?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
+              ${semNum ? '' : pBotaoCI(pa, chave)}
             </span>
           </div>
+          ${pFaixaPasso(pa)}
           ${pCiBloco(r, pa)}
         </div>`
       }
 
       // ── parcial em aberto
-      const podeCI = !!pa.parecer_tipo
       const linhasPC = pa.pcs.map(p => {
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
@@ -8303,11 +8419,10 @@ function renderPlan(rows) {
             ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
             <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})"${vcOff()}>Salvar situação</button>
             <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})"${vcOff()}>Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
-            <button class="btn-acao" style="font-weight:800;background:${podeCI?'#1A4E8A':'#E4EAE6'};color:${podeCI?'#fff':'#9AA8A0'};${podeCI?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
-              ${podeCI?`onclick="pEnviarCI(${chave})"`:'disabled'}
-              title="${podeCI?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}"${vcOff()}>🏛 Encaminhar ao CI</button>`}
+            ${pBotaoCI(pa, chave)}`}
           </span>
         </div>
+        ${pFaixaPasso(pa)}
         ${sub}
         ${pCiBloco(r, pa)}
         <table style="width:100%;border-collapse:collapse;">
@@ -8681,7 +8796,13 @@ async function pEnviarCI(tr, num) {
   if(!pa.parecer_tipo) { toast('Registre o parecer antes de encaminhar ao Controle Interno.','err'); return }
   if(!await moConfirm(`Encaminhar a Parcial ${num} da ${tr} ao Controle Interno?`, {
     titulo: 'Encaminhar ao Controle Interno',
-    detalhe: 'O parecer registrado é mantido. A parcial passa a constar como encaminhada.',
+    // A parcial baixada passou a poder ser encaminhada em 13/08/2026, e é a dúvida que ela
+    // levanta: "vou perder a baixa?". A resposta vai aqui, ANTES de a pessoa confirmar — não
+    // adianta estar só na faixa que ela vai ver depois.
+    detalhe: pa.baixada
+      ? 'A sua baixa NÃO é desfeita — ela continua contando na sua produtividade, e o '
+        + 'retorno do C.I. também não a cancela. O parecer registrado é mantido.'
+      : 'O parecer registrado é mantido. A parcial passa a constar como encaminhada.',
     okTexto: 'Encaminhar', cancelarTexto: 'Voltar',
   })) return
   try {

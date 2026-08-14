@@ -105,5 +105,54 @@ console.log('\n═══ 4. A CONTA DA FILA EXCLUI OS DISPENSADOS ═══');
   conf(contar([]) === 0, 'lista vazia -> 0');
 }
 
+console.log('\n═══ 5. O MODAL DO LIMITE ATINGIDO ═══');
+{
+  // O bloco do limite mora em `limiteAviso`, fora da faixa extraida acima — vai por texto.
+  const iLim = html.indexOf('function limiteAviso(lim, tr)');
+  const bLim = html.slice(iLim, html.indexOf('async function limitePedir('));
+  if (iLim < 0 || !bLim) {
+    conf(false, 'achei a funcao limiteAviso no index.html');
+  } else {
+    conf(/Limite atingido<\/div>/.test(bLim), 'a faixa vermelha tem o titulo "Limite atingido"');
+    conf(/background:#C62828;color:#fff;font-size:12px;font-weight:800/.test(bLim),
+         'e o fundo da faixa e o #C62828 pedido');
+
+    // O pedido e a UNICA acao possivel aqui — por isso ocupa a largura inteira.
+    conf(/display:block;width:100%/.test(bLim), 'o botao do pedido e de largura total');
+    conf(/background:#C62828;color:#fff;\s*\n?\s*font-weight:800/.test(bLim),
+         'fundo #C62828, texto branco e negrito');
+    conf(/➕ Pedir vaga extra para esta TR/.test(bLim), 'com icone e o rotulo combinado');
+    conf(/O pedido vai para sua coordenação — você é avisado pelo sino quando houver resposta\./.test(bLim),
+         'e a linha cinza explicando para onde o pedido vai');
+
+    // ⚠️ O ambar antigo nao pode ter sobrado: dois botoes de pedido no mesmo bloco seriam
+    // dois caminhos para a mesma acao, e o menor pareceria o secundario.
+    conf(!/Solicitar mais uma TR</.test(bLim), 'o botao ambar "Solicitar mais uma TR" saiu do bloco');
+  }
+
+  // ⚠️ Sumir e SO no limite. Na reserva o cinza fica: a TR pode voltar a ser dele em 3 dias,
+  // e oferecer "pedir vaga extra" ali mandaria pedir uma TR que ja e de outro.
+  const iSum = html.indexOf('function assLimiteAtingido(lim)');
+  const bSum = html.slice(iSum, iSum + 400);
+  const ctxL = { console };
+  vm.createContext(ctxL);
+  vm.runInContext(bSum.slice(0, bSum.indexOf('\n}') + 2), ctxL);
+  const { assLimiteAtingido } = ctxL;
+
+  conf(assLimiteAtingido({ pode:false }) === true, 'limite atingido -> o Assumir some');
+  conf(assLimiteAtingido({ pode:false, reserva:{ nome:'Ana' } }) === false,
+       'RESERVA nao some — e outra conversa, e o cinza ali explica');
+  conf(assLimiteAtingido({ pode:false, jaMinha:true }) === false, 'ja e minha tambem nao some');
+  conf(assLimiteAtingido({ pode:true }) === false, 'sem bloqueio nenhum, o Assumir fica');
+  conf(assLimiteAtingido(null) === false, 'previa que nao carregou nao esconde nada');
+
+  // O terceiro argumento tem de CHEGAR ao assBotao — senao a funcao existe e nao muda a tela.
+  conf(/assBotao\(ASS_PREVIA\.pode,[\s\S]{0,160}?assLimiteAtingido\(ASS_PREVIA\)\)/.test(html),
+       'e assumirTR passa isso para o assBotao');
+  // Como `sumir` nasce indefinido, as chamadas de dois argumentos repoem o botao.
+  conf(/b\.style\.display = sumir \? 'none' : ''/.test(html),
+       'o assBotao repoe o botao quando sumir nao vem');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);
