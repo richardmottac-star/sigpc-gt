@@ -4,7 +4,7 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 13/08/2026 — ver `SESSAO.md` para o estado do dia.
+**Última sessão:** 14/08/2026 — ver `SESSAO.md` para o estado do dia.
 
 > **O sistema está ABERTO.** Os dois interruptores estão **desligados** e a equipe trabalha.
 >
@@ -288,6 +288,33 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
     ⚠️ **Sem aprovar em lote, de propósito.** Dez avisos com o mesmo texto genérico é o oposto
     do que o motivo escrito serve — e é ele que faz o analista entender o que houve com a TR.
+
+21. **⚠️ DOIS PAPÉIS NO MESMO LOGIN, e o menu obedece ao papel ATIVO** (14/08/2026).
+    `analista` é o **padrão ao entrar** e esconde **14 itens**; `tecnico` mostra tudo e é o
+    único que age pela conta de outro.
+
+    ⚠️ **UMA REGRA SÓ:** o menu recebe o usuário com o **perfil efetivo** (`comoPapelAtivo`),
+    e não uma condição a mais em cada item — um `pode:` que ficasse para trás seria
+    justamente o que deixaria a Busca global à vista.
+
+    ⚠️ **ESCONDER MENU É COSMÉTICO.** A guarda é do servidor, que lê `usuarios.papel_ativo`
+    do banco. A URL antiga continua existindo.
+
+    ⚠️ **A troca não grava o papel localmente:** manda o pedido e usa o que VOLTOU. Gravar
+    local e a rota falhar deixaria o menu mostrando um papel que o servidor não reconhece.
+
+22. **⚠️ AGIR PELA CONTA DE UM ANALISTA — o `fetch` CARIMBA, não bloqueia** (14/08/2026).
+    Até 13/08 ele recusava todo não-GET. Agora troca **dois** campos:
+    `analista_id = alvo().id` (o dono) e `executado_por = U.id` (quem clicou).
+
+    ⚠️ **TROCAR SÓ UM É O DEFEITO:** as escritas mandavam `analista_id: U.id`, e liberar sem
+    mexer nisso gravaria a baixa na produtividade de quem está dando suporte.
+
+    ⚠️ **É num ponto só porque são 56 chamadas de escrita** neste arquivo. Carimbar botão a
+    botão erra uma, e a que errar é a que grava no nome de outra pessoa.
+
+    **Quatro travas FICAM** — estornar, devolver TR, solicitar devolução e decidir no C.I.
+    Não são leitura: são decisões *sobre* o trabalho dele. Há teste que falha na quinta.
 
 ---
 
