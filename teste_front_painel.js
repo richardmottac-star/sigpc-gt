@@ -280,7 +280,11 @@ console.log('\n═══ 10. TR CONCLUIDA — botao e inicio da analise ══�
   conf(/const baixadaTr = planTrConcluida\(r\)/.test(html), 'o cabecalho usa a mesma funcao');
 
   // ── o botao na TR concluida
-  const bloco = html.slice(html.indexOf('<!-- No cabeçalho verde escuro'), html.indexOf('Ver PCs') + 20);
+  // ⚠️ A janela fechava em `indexOf('Ver PCs')` e passou a fechar num COMENTÁRIO que cita
+  // "Ver PCs" — escrito em 13/08, acima do botão. Fecha-se agora no `planToggle` do próprio
+  // botão, que é o que a seção mede. Âncora que casa com prosa mede a prosa.
+  const bloco = html.slice(html.indexOf('<!-- No cabeçalho verde escuro'),
+                           html.indexOf("planToggle('${escHtml(r.tr)}');event.stopPropagation();") + 120);
   conf(/color:var\(--v\)/.test(bloco), 'texto do botao e sempre verde, nunca cinza claro');
   conf(/baixadaTr \? 'border:2px solid var\(--v\)/.test(bloco), 'na concluida ganha borda para se delimitar');
   conf(/: 'border:none/.test(bloco), 'na verde escura continua sem borda');
