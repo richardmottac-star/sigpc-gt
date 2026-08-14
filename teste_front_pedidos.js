@@ -191,6 +191,37 @@ console.log('\n═══ 6. A FILA DE DEVOLUCAO DE TR ═══');
   conf(/você é avisado pelo sino/.test(bR), 'e diz que o sino avisa quando houver');
   conf(/Ver todas as decididas/.test(bR), 'com o atalho para as decididas');
 
+  // ⚠️ O SOLICITANTE NAO DECIDE O PROPRIO PEDIDO. A tela nao mostra botoes que a rota vai
+  // recusar — mostra de quem e a decisao.
+  const iD = html.indexOf('function devPodeDecidir(s) {');
+  const bD = html.slice(iD, iD + 600);
+  const ctxD = { console, U: null };
+  vm.createContext(ctxD);
+  vm.runInContext(bD.slice(0, bD.indexOf('\n}') + 2), ctxD);
+  const ped = { analista_id: 31, analista_grupo: '3' };
+
+  ctxD.U = { id: 31, perfil: 'coordenador', grupo: '3' };
+  conf(ctxD.devPodeDecidir(ped) === false, 'coordenador NAO decide o proprio pedido');
+  ctxD.U = { id: 56, perfil: 'coordenador', grupo: '3' };
+  conf(ctxD.devPodeDecidir(ped) === true, 'mas decide o dos outros do grupo dele');
+  ctxD.U = { id: 57, perfil: 'coordenador', grupo: '2' };
+  conf(ctxD.devPodeDecidir(ped) === false, 'e nao decide o de outro grupo');
+  // EXCECAO: o superadmin decide o proprio, porque nao ha ninguem acima dele.
+  ctxD.U = { id: 31, perfil: 'superadmin', grupo: '3' };
+  conf(ctxD.devPodeDecidir(ped) === true, 'o SUPERADMIN decide o proprio');
+
+  conf(/Este pedido é seu — quem decide é a coordenação do seu grupo/.test(b),
+       'e o cartao explica de quem e a decisao, em vez de botao morto');
+  conf(/Você pode decidir porque é superadmin/.test(b),
+       'o superadmin e avisado de que o registro vai marcar');
+  conf(/Quem pediu e quem decidiu são a mesma pessoa/.test(b),
+       'e o cartao decidido carrega a marca');
+
+  const iA = html.indexOf('function devAutodecidido(s) {');
+  const bA = html.slice(iA, iA + 320);
+  conf(/decidido_por.*===.*analista_id|String\(s\.decidido_por\) === String\(s\.analista_id\)/.test(bA),
+       'a marca sai de decidido_por = analista_id — sem coluna nova');
+
   // A mesma regra de impedimento do servidor, para o botao nao prometer o que a rota recusa.
   const iI = html.indexOf('function devImpedimento(s) {');
   const bI = html.slice(iI, iI + 700);

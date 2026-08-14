@@ -5451,6 +5451,30 @@ const DEV_MOT_ROT = {
   outro:             'Outro',
 }
 
+/**
+ * Quem pediu e quem decidiu são a MESMA pessoa?
+ *
+ * Sai de `decidido_por = analista_id` — o banco já guarda. Coluna nova seria uma segunda
+ * fonte para a mesma resposta.
+ */
+function devAutodecidido(s) {
+  return s.decidido_por != null && String(s.decidido_por) === String(s.analista_id)
+}
+
+/**
+ * Este usuário decide ESTE pedido? Mesma regra do servidor (`podeDecidir`).
+ *
+ * ⚠️ O SOLICITANTE NÃO DECIDE O PRÓPRIO. Exceção: o superadmin, porque não há ninguém acima
+ * dele — e aí o registro fica marcado.
+ */
+function devPodeDecidir(s) {
+  const proprio = String(s.analista_id) === String(U.id)
+  if(U.perfil === 'superadmin') return true
+  if(proprio) return false
+  if(U.perfil !== 'coordenador') return false
+  return String(U.grupo ?? '') === String(s.analista_grupo ?? '') && String(U.grupo ?? '') !== ''
+}
+
 /** O impedimento do indicado, com a MESMA regra do servidor. */
 function devImpedimento(s) {
   if(s.motivo !== 'analise_anterior') return null
@@ -5505,6 +5529,12 @@ function devAprovCard(s) {
     <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">
       ${escHtml(s.analista_nome || '—')}${s.analista_grupo?` · Grupo ${escHtml(String(s.analista_grupo))}`:''}
       ${!pend && s.decidido_por_nome ? ` · decidida por ${escHtml(s.decidido_por_nome)}` : ''}</div>
+    ${!pend && devAutodecidido(s) ? `
+    <!-- ⚠️ O superadmin PODE decidir o próprio pedido — não há ninguém acima dele —, mas
+         isso não passa despercebido. A marca está também no parcela_historico: tela alguém
+         deixa de abrir, registro fica. -->
+    <div style="margin-top:7px;background:#FFF4D6;border:1px solid #E8CE8A;border-radius:7px;padding:7px 10px;font-size:11px;color:#8A6100;font-weight:700;">
+      ⚠️ Quem pediu e quem decidiu são a mesma pessoa.</div>` : ''}
 
     <div style="margin-top:10px;font-size:12px;">
       <b style="color:var(--te);margin-right:9px;">Motivo</b>${num}. ${escHtml(rot)}
@@ -5536,8 +5566,20 @@ function devAprovCard(s) {
     <div style="margin-top:11px;background:#FDE8EA;border:1.5px solid #F3C9CE;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);">
       <b>🚫 NÃO DÁ PARA APROVAR AGORA</b><br>${escHtml(imped)}</div>` : ''}
 
-    ${pend ? `
+    ${pend && !devPodeDecidir(s) ? `
+    <!-- O solicitante não decide o próprio pedido. Em vez de mostrar botões que a rota vai
+         recusar, a tela diz de quem é a decisão. -->
+    <div style="margin-top:11px;background:var(--cl);border-radius:7px;padding:9px 11px;font-size:11.5px;color:var(--ct);">
+      ${String(s.analista_id) === String(U.id)
+        ? 'Este pedido é seu — quem decide é a coordenação do seu grupo.'
+        : 'Este pedido é de outro grupo. Quem decide é a coordenação dele.'}</div>` : ''}
+
+    ${pend && devPodeDecidir(s) ? `
     <div style="margin-top:11px;">
+      ${String(s.analista_id) === String(U.id) ? `
+      <div style="background:#FFF4D6;border:1px solid #E8CE8A;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A6100;font-weight:700;margin-bottom:8px;">
+        ⚠️ Este pedido é seu. Você pode decidir porque é superadmin — e o registro vai dizer
+        que quem pediu e quem decidiu são a mesma pessoa.</div>` : ''}
       <label style="font-size:11px;font-weight:700;color:var(--te);">Motivo da decisão *
         <span style="font-weight:400;color:var(--ct);">— o analista recebe este texto no sino</span></label>
       <textarea id="devDec-${s.id}" rows="2" oninput="devPintarDecisao(${s.id})"
