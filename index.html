@@ -8969,13 +8969,38 @@ function pFaixaPasso(pa) {
     const dias = pDiasNoCi(pa.dt_envio_ci)
     // "aguardando retorno" só enquanto o ciclo está aberto. Encerrado, esperar seria mentira.
     const aberto = pa.ci_situacao !== 'encerrado'
-    const desde = pa.dt_envio_ci ? ` desde ${planData(pa.dt_envio_ci)}` : ''
-    const espera = (aberto && dias !== null)
+
+    // ⚠️ A DATA NÃO É A DO ENVIO — É A DO REGISTRO. Corrigido em 16/08/2026.
+    //
+    // O `dt_envio_ci` de **1.684 PCs** é igual à `data_baixa`: a marcação em massa herdou a
+    // data da baixa (`COALESCE(dt_envio_ci, data_baixa)`), e a carga histórica baixou tudo em
+    // **30/06/2026**. A faixa dizia "No Controle Interno desde 30/06/2026" para PCs que
+    // ninguém encaminhou naquele dia — e o "aguardando retorno há N dias" contava 47 dias de
+    // espera que nunca existiram.
+    //
+    // ⚠️ A data real do encaminhamento **não existe no sistema**: está no SIGEF. O que
+    // temos é quando o sistema REGISTROU. A faixa passa a dizer isso, e o contador de espera
+    // some quando a data é herdada — número que parece resposta e não é, é pior que
+    // número nenhum (mesma razão do "No estoque desde" das 793 TRs).
+    // ⚠️ `paraDia`, não `String(d).slice(0,10)` — armadilha 25. Num objeto `Date` o slice dá
+    // `"Thu Mar 31"`, e duas datas diferentes viram a mesma string. Hoje isto chega como ISO
+    // pelo JSON, mas a comparação não pode depender disso.
+    const paraDia = (d) => !d ? null
+      : (d instanceof Date ? d.toLocaleDateString('en-CA') : String(d).slice(0, 10))
+    const herdada = pa.dt_envio_ci && pa.data_baixa &&
+      paraDia(pa.dt_envio_ci) === paraDia(pa.data_baixa)
+    const desde = pa.dt_envio_ci
+      ? (herdada ? ` · registrado em ${planData(pa.dt_envio_ci)}` : ` desde ${planData(pa.dt_envio_ci)}`)
+      : ''
+    const espera = (aberto && dias !== null && !herdada)
       ? ` · aguardando retorno há ${dias} dia${dias === 1 ? '' : 's'}`
       : (aberto ? '' : ' · retorno recebido')
     return `<div style="padding:8px 16px;background:#EAF1F9;border-top:1px solid #CBDCF0;font-size:11.5px;color:#1A4E8A;font-weight:700;">
       🏛 Passo 3 de 3 · No Controle Interno${desde}${espera}
-      <div style="margin-top:3px;font-size:10.5px;color:var(--ct);font-weight:400;">o retorno do CI não cancela a baixa</div>
+      <div style="margin-top:3px;font-size:10.5px;color:var(--ct);font-weight:400;">
+        o retorno do CI não cancela a baixa${herdada
+          ? ' · <b>data de registro no sistema</b>, não a do envio ao C.I. — essa está no SIGEF'
+          : ''}</div>
     </div>`
   }
 

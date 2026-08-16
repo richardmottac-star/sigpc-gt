@@ -83,8 +83,25 @@ console.log('\n═══ 2. A FAIXA DIZ O QUE FALTA ═══');
 
   const f3 = pFaixaPasso(NO_CI);
   conf(/Passo 3 de 3/.test(f3), 'passo 3: "Passo 3 de 3"');
-  conf(/No Controle Interno desde 30\/06\/2026/.test(f3), 'com "No Controle Interno desde <data>"');
-  conf(/aguardando retorno há \d+ dias/.test(f3), 'e ha quantos dias espera');
+  // ⚠️ A DATA HERDADA NAO E DATA DE ENVIO — corrigido em 16/08/2026.
+  //
+  // O `NO_CI` tem `data_baixa` e `dt_envio_ci` IGUAIS (30/06), que e' exatamente o caso de
+  // 1.684 PCs no banco: a marcacao em massa herdou a data da baixa, e a carga historica
+  // baixou tudo em 30/06. A faixa dizia "No Controle Interno desde 30/06/2026" para PCs que
+  // ninguem encaminhou naquele dia, e contava 47 dias de espera que nunca existiram.
+  //
+  // Estes dois testes afirmavam o comportamento ERRADO. Agora afirmam o certo.
+  conf(/registrado em 30\/06\/2026/.test(f3), 'data herdada da baixa: diz "registrado em"');
+  conf(!/desde 30\/06\/2026/.test(f3), 'e NAO diz "desde" — nao foi encaminhada naquele dia');
+  conf(/data de registro no sistema/.test(f3), 'e explica na linha de baixo que a data e de registro');
+  conf(!/aguardando retorno h/.test(f3), 'e NAO conta dias de espera sobre uma data que nao e do envio');
+
+  // o caminho oposto: encaminhamento REAL, feito pela tela, com data propria
+  const NO_CI_REAL = { ...NO_CI, dt_envio_ci: '2026-08-14' };
+  const f3r = pFaixaPasso(NO_CI_REAL);
+  conf(/No Controle Interno desde 14\/08\/2026/.test(f3r), 'data propria: volta a dizer "desde <data>"');
+  conf(/aguardando retorno há \d+ dias?/.test(f3r), 'e aí SIM conta os dias de espera');
+  conf(!/data de registro no sistema/.test(f3r), 'e sem a ressalva, que ali nao cabe');
   conf(/o retorno do CI não cancela a baixa/.test(f3),
        'com a linha cinza: o retorno do CI NAO cancela a baixa');
 
