@@ -3497,14 +3497,30 @@ function sgpeAbsorver(j) {
 //
 // `codigo_pc` é o que diz ao servidor QUAL PC corrigir. Sem ele o lápis não é desenhado —
 // há telas que mostram o processo mãe agregado, sem uma PC de referência.
+// ⚠️ `-1` NÃO É PROCESSO — é a marca de "a CGE entregou a PC sem o número do SGPe".
+// São 77 PCs em 48 TRs, R$ 2,3 milhões, e antes de 16/08 elas apareciam como um "-1" solto
+// na coluna, que não diz nada a ninguém. O cruzamento com as planilhas dos analistas não
+// recuperou nenhuma com segurança (12 candidatos, todos reprovados pela armadilha 19), então
+// a recuperação é caso a caso, pelo lápis — e a etiqueta é o que mostra ONDE.
+const procVazio = (b) => { const t = String(b ?? '').trim(); return !t || t === '-1' || t === '-' }
+
 function procHtml(bruto, codigo_pc, campo) {
   const txt = escHtml(normalizarProcesso(bruto))
   const url = _sgpeCache.get(bruto)
   const semLink = !url
-  const corpo = url
-    ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
-    : `<span title="Sem link do SGPe" style="${semLink ? 'color:#B8860B;' : ''}">${txt}</span>`
+  const vazio = procVazio(bruto)
+  const corpo = vazio
+    ? `<span class="proc-sem" title="A CGE entregou esta PC sem o número do processo SGPe. Corrija pelo lápis, com o SGPe aberto."
+         style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;border-radius:4px;
+                padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap;">processo SGPe não localizado</span>`
+    : url
+      ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
+      : `<span title="Sem link do SGPe" style="${semLink ? 'color:#B8860B;' : ''}">${txt}</span>`
   if(!codigo_pc || !podeEditarProcesso()) return corpo
+  // ⚠️ No caso vazio o lápis nasce VISÍVEL, não em `opacity:0`. Lápis que só aparece com o
+  // mouse em cima é lápis que ninguém acha — e aqui ele é a única saída da etiqueta.
+  if(vazio) return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','')"
+    title="Informar o processo SGPe desta PC" style="cursor:pointer;margin-left:5px;font-size:12px;color:#B45309;">✎</span>`
   // Discreto: só aparece ao passar o mouse na linha. Âmbar quando não há link — ali o
   // convite a corrigir é a informação mais útil da célula.
   return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
@@ -8473,6 +8489,18 @@ const PARCIAL_SIT_BADGE = {
   'Reanálise':                {bg:'#F3E5F5',     cor:'#7B1FA2'},
   'Aguardando documentação':  {bg:'#EEF1EF',     cor:'var(--ct)'}
 }
+// ⚠️ CÉLULA VAZIA NÃO É INFORMAÇÃO. Até 16/08 a parcial sem `situacao_atual` não mostrava
+// nada, e "nada" tanto podia ser "ninguém começou" quanto "a tela não carregou".
+//
+// ⚠️ E NÃO É SÓ PÔR UM RÓTULO NO NULO: a parcial BAIXADA também tem `situacao_atual = NULL`,
+// de propósito — `POST /parcela/parecer` grava `situacao_atual = NULL` junto com a baixa.
+// Marcar essa como "não iniciada" seria mentir sobre trabalho concluído. Por isso o teste é
+// pelos três: sem situação, sem parecer e não baixada.
+function planBadgeSitOuNova(pa) {
+  if(pa?.situacao_atual) return planBadgeSit(pa.situacao_atual)
+  if(pa?.baixada || pa?.parecer_tipo || pa?.soFinal) return ''
+  return `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EEF1EF;color:var(--ct);">não iniciada</span>`
+}
 function planBadgeSit(s) {
   if(!s) return ''
   const c = PARCIAL_SIT_BADGE[s] || {bg:'#EEF1EF', cor:'var(--ct)'}
@@ -9055,7 +9083,7 @@ function renderPlan(rows) {
       return `<div style="border-bottom:1px solid var(--cl);">
         <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#FAFCFB;flex-wrap:wrap;">
           <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
-          <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSit(pa.situacao_atual)}
+          <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSitOuNova(pa)}
             ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
