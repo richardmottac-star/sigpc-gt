@@ -3536,7 +3536,7 @@ let _procEd = null
 async function procEditar(codigo_pc, campo, atual) {
   if(!podeEditarProcesso()) { toast('Você não pode corrigir o processo.','err'); return }
   const partes = procPartes(atual)
-  _procEd = { codigo_pc, campo, atual, juntar: false }
+  _procEd = { codigo_pc, campo, atual }
 
   document.getElementById('moProcEd').classList.add('open')
   document.getElementById('procEdTit').textContent =
@@ -3594,7 +3594,7 @@ async function procEdSalvar() {
   bt.disabled = true; bt.textContent = 'Salvando...'
   try {
     const corpo = {
-      campo: _procEd.campo, usuario_id: U.id, juntar: _procEd.juntar,
+      campo: _procEd.campo, usuario_id: U.id,
       sigla:  document.getElementById('procEdSigla').value,
       numero: document.getElementById('procEdNumero').value,
       ano:    document.getElementById('procEdAno').value,
@@ -3604,34 +3604,31 @@ async function procEdSalvar() {
     })
     const j = await r.json()
 
-    // 409 = fusão de parcela. O servidor recusou de propósito e mandou o aviso; a pessoa
-    // decide, e a segunda tentativa vai com `juntar: true`.
-    if(r.status === 409 && j.error && j.error.fusao) {
-      const f = j.error.fusao
-      const ok = await moConfirm(j.error.message, {
-        titulo: '⚠ Isto junta duas parciais', perigo: true,
-        detalhe: `A parcial ${f.parcial_atual} deixa de existir e as ${f.pcs} PCs passam a fazer parte da parcial ${f.parcial_destino}.\n\nNão dá para desfazer pela tela.`,
-        okTexto: 'Entendi, juntar', cancelarTexto: 'Voltar',
-      })
-      if(!ok) { procEdMudou(); bt.textContent = 'Salvar e buscar o link'; return }
-      _procEd.juntar = true
-      bt.textContent = 'Salvando...'
-      return procEdSalvar()
-    }
+    // ⚠️ O 409 DE "FUSÃO DE PARCELA" NÃO EXISTE MAIS (16/08/2026, decisão do Richard).
+    // Ele recusava a correção quando o processo já aparecia em outra parcial da TR e oferecia
+    // "Entendi, juntar" — que mandava o servidor igualar o `parcial_num` das duas. Medido no
+    // estoque oficial da CGE: um processo SGPe carrega várias parcelas do SIGEF em 113 pares
+    // (78 TRs, 465 PCs). Não havia o que juntar; havia numeração do SIGEF sendo apagada.
+    // Hoje o servidor devolve `convive` no sucesso — aviso, não pergunta.
     if(j.error) throw new Error(j.error.message || 'Não foi possível salvar.')
 
     const d = j.data
     _procEd.texto = d.texto
+    // O processo passa a aparecer em mais de uma parcial da TR. É legítimo e o analista tem
+    // de saber, senão ele reabre o lápis achando que a correção não pegou.
+    const conv = d.convive
+      ? ` — este processo também está na parcial ${d.convive.outras_parciais.join(', ')} desta TR.`
+      : ''
     if(d.link) {
       // Resolveu sozinho: guarda no cache da tela e fecha. O manual nem chega a aparecer.
       _sgpeCache.set(d.texto, d.link)
-      toast(`Processo corrigido para ${d.texto}${d.pcs > 1 ? ` (${d.pcs} PCs)` : ''} — link gerado.`,'ok')
+      toast(`Processo corrigido para ${d.texto}${d.pcs > 1 ? ` (${d.pcs} PCs)` : ''} — link gerado.${conv}`,'ok')
       fm('moProcEd'); _procEd = null
       procRecarregar()
       return
     }
     // Não resolveu: AGORA sim o manual.
-    toast(`Processo salvo como ${d.texto}, mas sem link.`,'ok')
+    toast(`Processo salvo como ${d.texto}, mas sem link.${conv}`,'ok')
     document.getElementById('procEdManual').style.display = ''
     document.getElementById('procEdManualMot').textContent = d.motivo || 'O SGPe não devolveu este processo.'
     document.getElementById('procEdUrl').focus()

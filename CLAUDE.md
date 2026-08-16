@@ -184,15 +184,29 @@ lista de **inclusão** (`perfil === 'analista'`), que exclui qualquer perfil nov
     Havia DOIS caminhos de anotação e eu só tinha guardado um — o outro abria normalmente.
     Onze funções recusam na origem, e os botões nem são desenhados.
 
-14. **`parcial_num` VOLTOU a ser o número do SIGEF** — em 1.545 das 1.554 TRs, desde a
-    renumeração de 12/08/2026. Já dá para conversar com o analista por ele.
-    **Uma parcial = (tr, processo_pc).**
+14. **⚠️ UM PROCESSO SGPe PODE CARREGAR VÁRIAS PARCELAS DO SIGEF.** Reescrita em 16/08/2026 —
+    até então esta armadilha dizia **"uma parcial = (tr, processo_pc)"**, e era **falso**.
 
-    ⚠️ Em **9 TRs** ele continua não sendo: 623, 638, 681, 718, 722, 809, 2385 (o SIGEF tem
-    parcela que a base não tem) e 791, 967 (mesmo SGPe escrito de dois jeitos). Nessas, a
-    referência segue sendo o **processo SGPe**. E a **2020TR000637** fecha 1..20 contra 19 do
-    SIGEF — a sobra é a PC de `processo_pc = '-1'`, isolada no 20. Detalhe no `CLAUDE.md`
-    do `sigpc-api`.
+    Medido no estoque oficial da CGE por dois agentes cegos um ao outro: **113 pares
+    (TR, processo) com 2+ parcelas — 78 TRs, 465 PCs**, e a 2019TR000193 com **11 parcelas**
+    num processo só. A direção contrária também existe: **81** parcelas com 2+ processos.
+    A regra parecia verdadeira porque foi lida do banco já deformado pela recarga de 05/08.
+
+    ⚠️ **A TELA JÁ ESTAVA CERTA, e é por isso que nada aqui quebrou:** o agrupamento é por
+    `parcial_num` nos três pontos (`3205` no detalhe da TR, `8235` na Minha Planilha, `10813`
+    no C.I.), nunca por `processo_pc`. Um processo em três parciais vira **três cartões**.
+
+    ⚠️ **O QUE MUDOU NA TELA foi o lápis** — ver a armadilha 17. O `procEdSalvar` tinha um
+    ramo de `409` com o modal *"⚠ Isto junta duas parciais"* e o botão **"Entendi, juntar"**;
+    ele mandava o servidor igualar o `parcial_num` das duas. **Saiu.** No lugar, o sucesso traz
+    `convive` e o toast avisa *"este processo também está na parcial N desta TR"*.
+
+    ⚠️ **`parcial_num` continua sendo o número do SIGEF** e serve para conversar com o
+    analista. Em **9 TRs** ele não é: 623, 638, 681, 718, 722, 809, 2385 (o SIGEF tem parcela
+    que a base não tem) e 791, 967 (mesmo SGPe escrito de dois jeitos — e essas duas **deixaram
+    de ser exceção**, o processo em duas parcelas ali é legítimo). A **2020TR000637** fecha
+    1..20 contra 19 do SIGEF: a sobra é a PC de `processo_pc = '-1'`, isolada no 20.
+    Detalhe no `CLAUDE.md` do `sigpc-api` e em `SPLIT_PROCESSO_2026-08-16.md`.
 
 15. **A PC final não é uma parcial.** O agrupamento é por `parcial_num`, e a final tem
     `parcial_num = 'FINAL'` — ela virava um grupo e era contada. O teste é por **`tipo`**
@@ -383,12 +397,10 @@ estragou foi a **recarga de 05/08**, que apagou 5.716 números e trocou 77 — p
 "numerado por `parcela_seq`" que a auditoria mediu é resíduo da renumeração de 13/08
 preenchendo as lacunas que a recarga abriu.
 
-⚠️ **A armadilha 16 não é verdade literal:** já existem **10 casos** de um processo com mais
-de um número. A regra "uma parcial = (tr, processo_pc)" só sobrevive porque a chave crua
-**não normaliza** (`SCC8214/2024` ≠ `SCC 00008214/2024`).
-
-⚠️ **A pergunta que trava tudo, e é do Richard:** o SIGEF permite duas parcelas no mesmo
-processo SGPe? O mapa da CGE diz que sim em **114 casos**; o banco de hoje diz que não.
+✅ **A PERGUNTA QUE TRAVAVA TUDO FOI RESPONDIDA EM 16/08/2026: SIM**, o SIGEF permite várias
+parcelas no mesmo processo SGPe — **113 pares, 78 TRs, 465 PCs**, medidos no estoque oficial
+da CGE por dois agentes cegos um ao outro. A armadilha 14 foi reescrita, e o `juntar` do
+lápis saiu da tela. Ver `sigpc-api/SPLIT_PROCESSO_2026-08-16.md`.
 
 ---
 
