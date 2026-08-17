@@ -25,10 +25,30 @@ if (ini < 0 || fim < 0 || fim < ini) {
   process.exit(1);
 }
 
+// ⚠️ Dublê do `diaBr` do index.html, definido FORA do ctx para o `planDataTs` poder chamá-lo.
+// Se os dois divergirem, o teste passa a provar outra coisa — por isso o corpo é idêntico.
+const ctxDiaBr = (d) => {
+  if (!d) return null;
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/T00:00:00(\.0+)?Z?$/.test(s)) return s.slice(0, 10);
+  return new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+};
+
 const ctx = {
   console,
   // As dependências reais do bloco, no comportamento que importa aqui.
+  // `date` puro — o valor JA E o dia civil.
   planData: (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—',
+  // ⚠️ TIMESTAMP EM UTC — outra funcao, de proposito. As colunas data_baixa, dt_envio_ci e
+  // dt_situacao guardam UTC, e o Postgres do Railway roda em Etc/UTC: depois das 21h de
+  // Brasilia o instante ja e o dia seguinte. Um encaminhamento das 22h15 de 16/08 aparecia
+  // como 17/08, e o contador dava "aguardando retorno ha -1 dias". Sao os dublês reais das
+  // funcoes do index.html — se divergirem, o teste passa a provar outra coisa.
+  // ⚠️ E a meia-noite cravada NAO e convertida: a carga historica gravou
+  // data_baixa = 2026-06-30 (meia-noite), e converter daria 29/06 em 3.619 baixas.
+  diaBr: ctxDiaBr,
+  planDataTs: (d) => { const x = ctxDiaBr(d); return x ? new Date(x + 'T12:00:00').toLocaleDateString('pt-BR') : '—' },
   escHtml: (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
   vcOff: () => '',

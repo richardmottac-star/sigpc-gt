@@ -8515,7 +8515,42 @@ const planMoeda = (v) => (parseFloat(v)||0).toLocaleString('pt-BR',{style:'curre
 // PC final: sem valor monetario. Ver planEhFinal.
 const planMoedaPC  = (p)  => planEhFinal(p) ? '—' : planMoeda(p.valor)
 const planMoedaAgr = (o)  => o?.soFinal ? '—' : planMoeda(o?.valor)
+// ⚠️ `date` PURO: o valor JÁ É o dia civil, e cortar os 10 primeiros caracteres é o certo.
+// Vale para `dt_limite_pc` e `prazo_diligencia`. NÃO usar em timestamp — ver `planDataTs`.
 const planData  = (d) => d ? new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : '—'
+
+// ⚠️ TIMESTAMP QUE GUARDA UTC — É OUTRA COISA, E CONFUNDIR AS DUAS CUSTOU UM DEFEITO REAL.
+//
+// `data_baixa`, `dt_envio_ci`, `dt_situacao` e `parcela_historico.criado_em` são
+// `timestamp WITHOUT time zone` **com valor em UTC** (armadilha 18), e o Postgres do Railway
+// roda em `Etc/UTC`. Depois das 21h de Brasília o instante UTC já é o dia seguinte:
+// `slice(0,10)` devolvia **17/08** para um encaminhamento feito às 22h15 de **16/08**, e o
+// contador de dias no C.I. mostrou **"aguardando retorno há -1 dias"**.
+//
+// ⚠️ NÃO DÁ PARA CONSERTAR O `planData` PARA OS DOIS CASOS. Uma coluna `date` chega como
+// `2026-08-01T00:00:00.000Z`; convertê-la para Brasília daria **31/07** e estragaria todo
+// prazo do sistema. São duas perguntas diferentes e por isso são duas funções.
+//
+// `en-CA` porque devolve `YYYY-MM-DD`, e `timeZone` explícito porque a tela não pode depender
+// do fuso do navegador — a CGE abre isto de fora.
+// ⚠️ E A MEIA-NOITE EXATA NÃO É CONVERTIDA — sem isto, 3.619 baixas voltariam um dia.
+//
+// A carga histórica gravou `data_baixa = 2026-06-30` (meia-noite naive), e a API devolve
+// `2026-06-30T00:00:00.000Z`. Convertido para Brasília, isso vira **29/06** — e a tela
+// mostraria a véspera em todo o acervo antigo. Meia-noite UTC cravada não é um instante que
+// alguém produziu às 21h: é uma DATA que foi escrita sem hora.
+//
+// É heurística, e está escrita porque é. O caso ambíguo — alguém baixando exatamente às
+// 21h00m00s de Brasília — mostraria o dia seguinte; é um segundo por dia contra 3.619 linhas
+// erradas todo dia.
+const diaBr = (d) => {
+  if (!d) return null
+  const s = String(d)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s                    // data pura, já é o dia civil
+  if (/T00:00:00(\.0+)?Z?$/.test(s)) return s.slice(0, 10)       // meia-noite cravada: idem
+  return new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+}
+const planDataTs = (d) => { const x = diaBr(d); return x ? new Date(x + 'T12:00:00').toLocaleDateString('pt-BR') : '—' }
 
 // ══════════════════════════════════════
 //  PRAZO DE ANÁLISE — dias, cor e ajuda
@@ -8958,7 +8993,11 @@ function planSemCi(r) {
 /** Há quantos dias a parcela está no C.I. — null quando não há data de envio. */
 function pDiasNoCi(dt) {
   if(!dt) return null
-  return Math.floor((new Date().setHours(0,0,0,0) - new Date(String(dt).slice(0,10)+'T00:00:00')) / 86400000)
+  // ⚠️ pelo DIA CIVIL BRASILEIRO dos dois lados — ver planDataTs. Com o slice(0,10) sobre o
+  // instante UTC, um encaminhamento das 22h15 contava '-1 dias'.
+  const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const d = diaBr(dt); if(!d) return null
+  return Math.floor((new Date(hojeBr+'T00:00:00') - new Date(d+'T00:00:00')) / 86400000)
 }
 
 /** A faixa que diz em que passo a parcial está, e o que falta. */
@@ -8982,15 +9021,13 @@ function pFaixaPasso(pa) {
     // temos é quando o sistema REGISTROU. A faixa passa a dizer isso, e o contador de espera
     // some quando a data é herdada — número que parece resposta e não é, é pior que
     // número nenhum (mesma razão do "No estoque desde" das 793 TRs).
-    // ⚠️ `paraDia`, não `String(d).slice(0,10)` — armadilha 25. Num objeto `Date` o slice dá
-    // `"Thu Mar 31"`, e duas datas diferentes viram a mesma string. Hoje isto chega como ISO
-    // pelo JSON, mas a comparação não pode depender disso.
-    const paraDia = (d) => !d ? null
-      : (d instanceof Date ? d.toLocaleDateString('en-CA') : String(d).slice(0, 10))
+    // ⚠️ `diaBr` nos DOIS lados. São os dois `timestamp` em UTC, e comparar por
+    // `String(d).slice(0,10)` erra duas vezes: pelo fuso (armadilha 18) e num objeto `Date`,
+    // onde o slice dá `"Thu Mar 31"` (armadilha 25).
     const herdada = pa.dt_envio_ci && pa.data_baixa &&
-      paraDia(pa.dt_envio_ci) === paraDia(pa.data_baixa)
+      diaBr(pa.dt_envio_ci) === diaBr(pa.data_baixa)
     const desde = pa.dt_envio_ci
-      ? (herdada ? ` · registrado em ${planData(pa.dt_envio_ci)}` : ` desde ${planData(pa.dt_envio_ci)}`)
+      ? (herdada ? ` · registrado em ${planDataTs(pa.dt_envio_ci)}` : ` desde ${planDataTs(pa.dt_envio_ci)}`)
       : ''
     const espera = (aberto && dias !== null && !herdada)
       ? ` · aguardando retorno há ${dias} dia${dias === 1 ? '' : 's'}`
@@ -9011,7 +9048,7 @@ function pFaixaPasso(pa) {
     // ⚠️ São TRÊS passos, não dois (Richard, 13/08/2026). A baixa não é o fim: o
     // encaminhamento ao C.I. é obrigatório, e a faixa verde comemorava um fim que não chegou.
     // Por isso ela diz o que falta, e não só o que foi feito.
-    const emData = pa.data_baixa ? ` · baixada em ${planData(pa.data_baixa)}` : ''
+    const emData = pa.data_baixa ? ` · baixada em ${planDataTs(pa.data_baixa)}` : ''
     return `<div style="padding:8px 16px;background:#E8F5E9;border-top:1px solid #C5E1A5;font-size:11.5px;color:#2E7D32;font-weight:700;">
       ✓ Passo 2 de 3${emData} · parecer: ${escHtml(pa.parecer_tipo || '—')}
       <div style="margin-top:3px;font-size:10.5px;color:#8A6100;font-weight:700;">falta encaminhar ao Controle Interno</div>
@@ -9077,7 +9114,7 @@ function renderPlan(rows) {
             <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeParecer(pa.parecer_tipo)}
               ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}</span>
             <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-              <span style="font-size:12px;color:var(--ct);">baixada em ${planData(pa.data_baixa)}</span>
+              <span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>
               <button class="btn-acao" style="background:#8A9A90;color:#fff;" onclick="pVerParecer(${chave})">Ver parecer</button>
               ${(U.perfil==='coordenador'||U.perfil==='superadmin')?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
               ${semNum ? '' : pBotaoCI(pa, chave)}
@@ -9105,9 +9142,9 @@ function renderPlan(rows) {
         <div style="padding:0 16px 11px;background:#FAFCFB;display:flex;gap:16px;align-items:center;font-size:11.5px;color:var(--ct);flex-wrap:wrap;">
           ${pa.prazo_diligencia?`<span><b style="color:var(--te);">Prazo da diligência:</b> ${planData(pa.prazo_diligencia)}</span>`:''}
           ${pa.qtd_diligencias?`<span><b style="color:var(--te);">Nº de diligências:</b> ${pa.qtd_diligencias}</span>`:''}
-          ${pa.dt_situacao?`<span><b style="color:var(--te);">Última movimentação:</b> ${planData(pa.dt_situacao)}</span>`:''}
+          ${pa.dt_situacao?`<span><b style="color:var(--te);">Última movimentação:</b> ${planDataTs(pa.dt_situacao)}</span>`:''}
           ${respEm
-            ? `<span style="color:var(--v);font-weight:700;">✉ Entidade respondeu em ${planData(respEm)}</span>`
+            ? `<span style="color:var(--v);font-weight:700;">✉ Entidade respondeu em ${planDataTs(respEm)}</span>`
             : (emDilig && !semNum ? `<button class="btn-acao" style="margin-left:auto;background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
                  onclick="pRespondeu(${chave})" title="Registrar que a entidade respondeu — a parcial continua em Diligência">✉ Entidade respondeu</button>` : '')}
         </div>` : ''
