@@ -19,7 +19,7 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 | cabeçalho | faixa **54 → 62 px** · logo do Estado **40 → 48 px** · caixa branca **220 → 240 px** |
 | ícone de pessoas | entrou **antes** do ponto verde de "N usuários online" |
 | tabela | **BAIXADAS e ANALISTA saíram** — 9 colunas viraram 7 |
-| larguras | TR 13% · SGPe MÃE 19% · **Entidade 36%** · PCs 6% · NLs 6% · Status 10% · Ações 10% |
+| larguras | TR 14% · SGPe MÃE 20% · **Entidade 32%** · PCs 7% · NLs 7% · Status 10% · Ações 10% |
 | entidade | **quebra em mais de uma linha** — o maior nome do acervo tem 81 caracteres |
 | cabeçalho da tabela | centralizado; **as células não** |
 
@@ -39,11 +39,23 @@ cálculo, e há teste para isso.
 grupo). Um `colspan` que não acompanha **não dá erro**: as linhas apenas deixam de ocupar a
 tabela toda.
 
-⚠️ **A coluna STATUS ficou, e foi decisão do agente.** O Richard mandou tirar **duas** colunas
-e sugeriu larguras que somam 100% **sem o Status** (14+20+42+7+7+10). Mantê-lo custou 6% da
-entidade; tirá-lo sem ele ter pedido custaria a etiqueta no filtro **"Todos"**, onde as cinco
-situações vêm misturadas. **Reverter é tirar um `<col>`, um `<th>`, uma `<td>` e pôr
-`colspan="6"`.**
+⚠️ **A COLUNA STATUS FICOU — decisão do Richard, 16/08.** E com ela a conta das larguras não
+fechava: ele passou TR 14 · SGPe 20 · **Entidade 42** · PCs 7 · NLs 7 · Ações 10, que somam
+100% para **seis** colunas. Com o Status são **sete**.
+
+**Os 10% do Status saíram da ENTIDADE**, pela regra de desempate que ele mesmo escreveu na
+primeira mensagem: *"se faltar espaço, tira da ENTIDADE"*. Cinco das seis larguras dele estão
+**intactas**; a entidade é a única que absorveu — 42% → **32%**. Há teste que fixa os cinco
+números e a conta `42 − Status = Entidade`, para não derivarem depois.
+
+⚠️ **E os 10 pontos a menos NÃO escondem nome nenhum.** Com a quebra ligada, a largura decide
+quantas **linhas** o nome ocupa, não se ele aparece: o maior do acervo (81 caracteres) sai em
+**2 linhas** tanto em 1920 quanto em 1366. Foi o `nowrap` com reticências que escondia — e
+esse saiu.
+
+A alternativa registrada, se um dia a entidade precisar de mais: **Status 8% e Ações 9%**
+devolvem 3 pontos a ela. Os dois cabem — a maior etiqueta é "Diligência" e o maior botão é
+"Assumir".
 
 ⚠️ **Um comentário meu dentro do template literal quebrou o arquivo** — armadilha 10, de novo,
 e no mesmo dia em que ela aparece três vezes no `SESSAO.md` do `sigpc-api`. Escrevi crases em

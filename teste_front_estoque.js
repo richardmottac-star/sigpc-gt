@@ -99,6 +99,21 @@ conf(larguras[2] === maior && larguras.filter(l => l === maior).length === 1,
 conf(larguras[0] >= 12 && larguras[1] >= 18,
   'TR e SGPe MAE tem largura para o maior valor do acervo', `${larguras[0]}% · ${larguras[1]}%`);
 
+// ⚠️ OS NUMEROS DO RICHARD, FIXADOS. Ele pediu TR 14 · SGPe 20 · ENTIDADE 42 · PCs 7 ·
+// NLs 7 · ACOES 10 -- que somam 100 para SEIS colunas -- e mandou MANTER o Status, que e a
+// setima. Os 10% do Status saem da ENTIDADE, pela regra de desempate que ele mesmo escreveu:
+// "se faltar espaco, tira da ENTIDADE". Cinco das seis larguras dele estao intactas; a
+// entidade e a unica que absorve. Se alguem mexer, e aqui que aparece.
+const PEDIDO = { tr: 14, mae: 20, pcs: 7, nls: 7, acoes: 10 };
+conf(larguras[0] === PEDIDO.tr,    'TR ficou nos 14% pedidos',       `${larguras[0]}%`);
+conf(larguras[1] === PEDIDO.mae,   'SGPe MAE nos 20% pedidos',       `${larguras[1]}%`);
+conf(larguras[3] === PEDIDO.pcs,   'PCs nos 7% pedidos',             `${larguras[3]}%`);
+conf(larguras[4] === PEDIDO.nls,   'NLs nos 7% pedidos',             `${larguras[4]}%`);
+conf(larguras[6] === PEDIDO.acoes, 'ACOES nos 10% pedidos',          `${larguras[6]}%`);
+conf(larguras[2] === 42 - larguras[5],
+  'e a ENTIDADE cedeu exatamente a largura do Status',
+  `42% - ${larguras[5]}% = ${larguras[2]}%`);
+
 console.log('\n═══ 5. A ENTIDADE QUEBRA, E SO ELA ═══');
 
 conf(/\.tbl-est \.est-ent\{white-space:normal;overflow-wrap:anywhere;/.test(html),
