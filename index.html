@@ -11198,6 +11198,13 @@ function ciLimparBusca() {
 let _ciLoteTr = null
 let _ciLote = new Set()          // parcial_num selecionados, só da _ciLoteTr
 
+// ⚠️ O PLURAL EM UM LUGAR SÓ. A primeira versão tinha `${n} parciais · ${n} PCs` cravado no
+// modal e "Encaminhar as 1" no botão — o Richard viu na tela. Espalhar `n>1?'s':''` por seis
+// pontos garante que um deles fique para trás; foi o que aconteceu.
+// `parcial` é irregular (parcial/parciais) e leva o artigo junto — daí os dois parâmetros.
+const plural = (n, sing, plur) => `${n} ${n === 1 ? sing : plur}`
+const artigo = (n, f = true) => n === 1 ? (f ? 'a' : 'o') : (f ? 'as' : 'os')
+
 // ⚠️ `function`, não `const ... = () =>`. O teste_front_menu confere que todo `onclick`
 // aponta para função que existe, e ele lê declarações — arrow em `const` não é hoisted e
 // passaria despercebida até alguém clicar. O teste pegou.
@@ -11244,11 +11251,11 @@ function ciLoteBarra() {
       + 'box-shadow:0 -2px 12px rgba(0,0,0,.22);font-size:13px;'
     document.body.appendChild(el)
   }
-  el.innerHTML = `<b>☑ ${sel.length} parcial${sel.length>1?'is':''} selecionada${sel.length>1?'s':''}</b>`
-    + `<span style="opacity:.9;">${_ciLoteTr} · ${pcs} PC${pcs>1?'s':''} · ${planMoeda(valor)}</span>`
+  el.innerHTML = `<b>☑ ${plural(sel.length,'parcial selecionada','parciais selecionadas')}</b>`
+    + `<span style="opacity:.9;">${_ciLoteTr} · ${plural(pcs,'PC','PCs')} · ${planMoeda(valor)}</span>`
     + `<span style="margin-left:auto;display:flex;gap:9px;align-items:center;">`
     + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteLimpar();planAplicar()">limpar seleção</button>`
-    + `<button class="btn-acao" style="background:#fff;color:#1A4E8A;font-weight:800;" onclick="ciLoteEnviar()">🏛 Encaminhar as ${sel.length} ao C.I.</button>`
+    + `<button class="btn-acao" style="background:#fff;color:#1A4E8A;font-weight:800;" onclick="ciLoteEnviar()">🏛 Encaminhar ${artigo(sel.length)} ${sel.length} ao C.I.</button>`
     + `</span>`
 }
 
@@ -11261,16 +11268,16 @@ async function ciLoteEnviar() {
     .sort((a,b) => (parseInt(a.num,10)||0) - (parseInt(b.num,10)||0))
   const pcs = sel.reduce((n,p) => n + (p.qtd||0), 0)
   const valor = sel.reduce((v,p) => v + (parseFloat(p.valor)||0), 0)
-  const lista = sel.slice(0,8).map(p => `   parcial ${p.num}  ·  ${p.qtd} PC${p.qtd>1?'s':''}  ·  ${planMoedaAgr(p)}`).join('\n')
+  const lista = sel.slice(0,8).map(p => `   parcial ${p.num}  ·  ${plural(p.qtd,'PC','PCs')}  ·  ${planMoedaAgr(p)}`).join('\n')
     + (sel.length > 8 ? `\n   ... e mais ${sel.length - 8}` : '')
 
-  if(!await moConfirm(`Encaminhar ${sel.length} parcial${sel.length>1?'is':''} ao Controle Interno?`, {
+  if(!await moConfirm(`Encaminhar ${plural(sel.length,'parcial','parciais')} ao Controle Interno?`, {
     titulo: '🏛 Encaminhar ao Controle Interno',
     detalhe: `${tr} · ${r?.entidade||''}\n\n${lista}\n\n`
-      + `${sel.length} parciais · ${pcs} PCs · ${planMoeda(valor)}\n\n`
+      + `${plural(sel.length,'parcial','parciais')} · ${plural(pcs,'PC','PCs')} · ${planMoeda(valor)}\n\n`
       + 'Vai a parcela INTEIRA, não só as PCs que você vê. A sua baixa NÃO é desfeita — '
       + 'continua contando na sua produtividade, e o retorno do C.I. também não a cancela.',
-    okTexto: `Encaminhar as ${sel.length}`, cancelarTexto: 'Voltar',
+    okTexto: `Encaminhar ${artigo(sel.length)} ${sel.length}`, cancelarTexto: 'Voltar',
   })) return
 
   try {
@@ -11293,7 +11300,7 @@ async function ciLoteEnviar() {
     }
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     ciLoteLimpar()
-    toast(`${j.count} parcial${j.count>1?'is':''} encaminhada${j.count>1?'s':''} ao C.I. (${j.data.pcs} PCs).`,'ok')
+    toast(`${plural(j.count,'parcial encaminhada','parciais encaminhadas')} ao C.I. (${plural(j.data.pcs,'PC','PCs')}).`,'ok')
     buscarPlan()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
