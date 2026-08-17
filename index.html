@@ -9066,6 +9066,13 @@ function renderPlan(rows) {
       if(pa.baixada) {
         return `<div style="border-bottom:1px solid var(--cl);">
           <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#F2FAF5;flex-wrap:wrap;">
+            ${/* ⚠️ A CAIXA SÓ EXISTE NO PASSO 2. No passo 1 não há o que encaminhar (o servidor
+                  recusa com 'CI exige parecer prévio') e no passo 3 já foi. Caixa desabilitada
+                  nos outros dois seria a armadilha 15 — aqui ela simplesmente não existe. */''}
+            ${ciLotePode(pa) ? `<input type="checkbox" title="Selecionar para encaminhar ao C.I. em lote"
+              ${(_ciLoteTr === r.tr && _ciLote.has(String(pa.num))) ? 'checked' : ''}
+              onclick="event.stopPropagation();ciLoteToggle('${escHtml(r.tr)}','${escHtml(String(pa.num))}',this.checked)"
+              style="width:auto;cursor:pointer;margin:0;">` : ''}
             <span style="background:var(--vc);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">✓ ${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
             <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeParecer(pa.parecer_tipo)}
               ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}</span>
@@ -9166,8 +9173,13 @@ function renderPlan(rows) {
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
             ${baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
-            ${semCi ? `<span title="${semCi} parcial${semCi>1?'is':''} baixada${semCi>1?'s':''} que ainda não foi ao Controle Interno — abra a TR e encaminhe"
-              style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#FFF4D6;color:#8A6100;border:1px solid #E8CE8A;">🏛 ${semCi} sem C.I.</span>` : ''}
+            ${/* ⚠️ A ETIQUETA VIROU O GATILHO DA SELEÇÃO EM LOTE (16/08/2026). Ela já existia e
+                  já contava certo; ganhou um `onclick` em vez de nascer um controle novo ao
+                  lado. Só é clicável na Minha Planilha, onde a seleção faz sentido — o
+                  `stopPropagation` impede que o clique abra/feche a TR junto. */''}
+            ${semCi ? `<span title="${semCi} parcial${semCi>1?'is':''} baixada${semCi>1?'s':''} que ainda não foi ao Controle Interno — clique para selecionar todas"
+              onclick="event.stopPropagation();ciLoteTodas('${escHtml(r.tr)}')"
+              style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#FFF4D6;color:#8A6100;border:1px solid #E8CE8A;cursor:pointer;">🏛 ${semCi} sem C.I. · selecionar</span>` : ''}
             ${trNova ? `<span title="Assumida ${planHaQuantoTempo(assumida)} — some sozinha depois de ${DIAS_TR_NOVA} dias"
               style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--az);color:#fff;">✨ NOVA</span>` : ''}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
@@ -11133,6 +11145,122 @@ function ciLimparBusca() {
  *
  * Quem baixa é o parecer. O encaminhamento é o passo seguinte, e é obrigatório.
  */
+// ══════════════════════════════════════════════════════════════════════════════
+//  ENCAMINHAR AO C.I. EM LOTE (16/08/2026)
+//
+//  Medido: 764 parcelas baixadas com parecer e fora do C.I., em 41 analistas. A Geisa
+//  clicaria 63 vezes, a Perla 77 — um `moConfirm` cada.
+//
+//  ⚠️ A SELEÇÃO É POR TR, E MORRE AO TROCAR DE TELA. Selecionar em três TRs e mandar tudo
+//  junto seria uma transação atravessando TRs sem a pessoa ver o conjunto. `_ciLoteTr` guarda
+//  de qual TR é a seleção; qualquer outra TR limpa tudo.
+//
+//  ⚠️ E A TELA NÃO ITERA: manda UM `POST /parcela/ci_lote` com a lista, e o servidor abre uma
+//  transação só. Um laço de 63 `fetch` é a armadilha 16 — três lugares caíram nela em 12–13/08.
+// ══════════════════════════════════════════════════════════════════════════════
+let _ciLoteTr = null
+let _ciLote = new Set()          // parcial_num selecionados, só da _ciLoteTr
+
+// ⚠️ `function`, não `const ... = () =>`. O teste_front_menu confere que todo `onclick`
+// aponta para função que existe, e ele lê declarações — arrow em `const` não é hoisted e
+// passaria despercebida até alguém clicar. O teste pegou.
+function ciLoteLimpar() { _ciLoteTr = null; _ciLote = new Set(); ciLoteBarra() }
+
+/** Só a parcela do PASSO 2 entra. É a mesma regra que o servidor aplica. */
+const ciLotePode = (pa) => !!pa && !pa.soFinal && pa.num !== '—' && pPasso(pa) === 2
+
+function ciLoteToggle(tr, num, marcado) {
+  if(_ciLoteTr && _ciLoteTr !== tr) { _ciLoteTr = null; _ciLote = new Set() }
+  _ciLoteTr = tr
+  if(marcado) _ciLote.add(String(num)); else _ciLote.delete(String(num))
+  if(!_ciLote.size) _ciLoteTr = null
+  ciLoteBarra()
+}
+
+/** A etiqueta "N sem C.I." do cabeçalho: marca (ou desmarca) todas as do passo 2 da TR. */
+function ciLoteTodas(tr) {
+  const r = (window._planDadosCache||[]).find(x => x.tr === tr)
+  if(!r) return
+  const elegiveis = (r.parciais||[]).filter(ciLotePode).map(p => String(p.num))
+  if(!elegiveis.length) { toast('Nenhuma parcial desta TR está pronta para o C.I.','err'); return }
+  const jaTodas = _ciLoteTr === tr && elegiveis.every(n => _ciLote.has(n))
+  _ciLoteTr = jaTodas ? null : tr
+  _ciLote = jaTodas ? new Set() : new Set(elegiveis)
+  ciLoteBarra()
+  planAplicar()
+}
+
+/** A barra do rodapé. Só existe enquanto houver seleção. */
+function ciLoteBarra() {
+  let el = document.getElementById('ciLoteBarra')
+  if(!_ciLote.size) { if(el) el.remove(); return }
+  const r = (window._planDadosCache||[]).find(x => x.tr === _ciLoteTr)
+  const sel = (r?.parciais||[]).filter(p => _ciLote.has(String(p.num)))
+  // ⚠️ O NÚMERO DE PCs VAI JUNTO DO DE PARCIAIS, de propósito: o encaminhamento leva a
+  // parcela INTEIRA, e há parcela com 7 PCs. "7 parciais" esconderia o tamanho do ato.
+  const pcs = sel.reduce((n,p) => n + (p.qtd||0), 0)
+  const valor = sel.reduce((v,p) => v + (parseFloat(p.valor)||0), 0)
+  if(!el) {
+    el = document.createElement('div'); el.id = 'ciLoteBarra'
+    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:900;background:#1A4E8A;'
+      + 'color:#fff;padding:11px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;'
+      + 'box-shadow:0 -2px 12px rgba(0,0,0,.22);font-size:13px;'
+    document.body.appendChild(el)
+  }
+  el.innerHTML = `<b>☑ ${sel.length} parcial${sel.length>1?'is':''} selecionada${sel.length>1?'s':''}</b>`
+    + `<span style="opacity:.9;">${_ciLoteTr} · ${pcs} PC${pcs>1?'s':''} · ${planMoeda(valor)}</span>`
+    + `<span style="margin-left:auto;display:flex;gap:9px;align-items:center;">`
+    + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteLimpar();planAplicar()">limpar seleção</button>`
+    + `<button class="btn-acao" style="background:#fff;color:#1A4E8A;font-weight:800;" onclick="ciLoteEnviar()">🏛 Encaminhar as ${sel.length} ao C.I.</button>`
+    + `</span>`
+}
+
+/** Uma confirmação, com a lista — não uma por parcela. */
+async function ciLoteEnviar() {
+  if(!_ciLote.size || !_ciLoteTr) return
+  const tr = _ciLoteTr
+  const r = (window._planDadosCache||[]).find(x => x.tr === tr)
+  const sel = (r?.parciais||[]).filter(p => _ciLote.has(String(p.num)))
+    .sort((a,b) => (parseInt(a.num,10)||0) - (parseInt(b.num,10)||0))
+  const pcs = sel.reduce((n,p) => n + (p.qtd||0), 0)
+  const valor = sel.reduce((v,p) => v + (parseFloat(p.valor)||0), 0)
+  const lista = sel.slice(0,8).map(p => `   parcial ${p.num}  ·  ${p.qtd} PC${p.qtd>1?'s':''}  ·  ${planMoedaAgr(p)}`).join('\n')
+    + (sel.length > 8 ? `\n   ... e mais ${sel.length - 8}` : '')
+
+  if(!await moConfirm(`Encaminhar ${sel.length} parcial${sel.length>1?'is':''} ao Controle Interno?`, {
+    titulo: '🏛 Encaminhar ao Controle Interno',
+    detalhe: `${tr} · ${r?.entidade||''}\n\n${lista}\n\n`
+      + `${sel.length} parciais · ${pcs} PCs · ${planMoeda(valor)}\n\n`
+      + 'Vai a parcela INTEIRA, não só as PCs que você vê. A sua baixa NÃO é desfeita — '
+      + 'continua contando na sua produtividade, e o retorno do C.I. também não a cancela.',
+    okTexto: `Encaminhar as ${sel.length}`, cancelarTexto: 'Voltar',
+  })) return
+
+  try {
+    const resp = await fetch(`${API_URL}/parcela/ci_lote`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, parciais: sel.map(p => String(p.num)),
+                             analista_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' })
+    })
+    const j = await resp.json()
+    // ⚠️ 409 = TUDO OU NADA. A tela só oferece as do passo 2, então uma recusa quer dizer que
+    // o estado mudou embaixo da pessoa. Mostra o motivo de cada uma e manda recarregar.
+    if(resp.status === 409 && j.error?.recusadas) {
+      ciLoteLimpar()
+      await moConfirm(j.error.message, {
+        titulo: '⚠ Nada foi encaminhado', perigo: true,
+        detalhe: j.error.recusadas.map(x => `   parcial ${x.parcial}: ${x.motivo}`).join('\n'),
+        okTexto: 'Recarregar', cancelarTexto: 'Fechar',
+      })
+      return buscarPlan()
+    }
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    ciLoteLimpar()
+    toast(`${j.count} parcial${j.count>1?'is':''} encaminhada${j.count>1?'s':''} ao C.I. (${j.data.pcs} PCs).`,'ok')
+    buscarPlan()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
 async function enviarAoCI(tr, parcialNum) {
   if(!await moConfirm(`Encaminhar a Parcela ${parcialNum} da ${tr} ao Controle Interno?`, {
     titulo: 'Encaminhar ao Controle Interno',
