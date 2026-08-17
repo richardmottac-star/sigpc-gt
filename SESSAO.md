@@ -73,6 +73,22 @@ conteúdo dele. A janela foi para 2.800.
 **Nada disso foi clicado por uma pessoa.** O mockup fiel está em `MOCKUP_ESTOQUE_AB.html`
 (não versionado), com o logo real e as cinco maiores entidades do acervo.
 
+### A tabela `estoque` — medida, e NÃO mexida
+
+⚠️ **Ordem do Richard em 16/08: não mexer.** Ela continua no banco com 4.476 linhas. O que
+segue é medição, para quando a decisão vier.
+
+**Esta tela não depende dela.** O `index.html` faz fetch em **63 rotas**, e nenhuma é
+`/estoque`, `/contadores` ou `/planilha_analista` — o Estoque de TRs lê
+`GET /prestacoes_contas/resumo_tr`.
+
+⚠️ **A função `carregarContadores()` do `index.html` NÃO chama a rota `/contadores`**, apesar
+do nome: ela conta por `GET /prestacoes_contas?limit=1`, quatro vezes. Quem for procurar a
+dependência pelo nome da função vai achar que existe uma e não existe.
+
+O detalhe das oito rotas do servidor que tocam a tabela — inclusive a única com `LEFT JOIN`,
+que é a que quebraria de verdade — está no `SESSAO.md` do `sigpc-api`, seção 3-B.
+
 ---
 
 ## ▶▶ 16/08 — A NUMERAÇÃO DAS PARCIAIS: ONDE PARAMOS
