@@ -20,11 +20,15 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 > e pela tela. Antes eram duas, e 87 PCs caíam no vão.
 > ⚠️ **`recarga_exec.js` está DESARMADO** — zera 14.652 linhas, e o sistema está aberto.
 >
-> **📌 Quatro pendências registradas, sem executar** (detalhe no `SESSAO.md`):
-> **18 PCs em 5 TRs com `analista_id` sem `analista_nome`** (todas baixadas — a produtividade
-> conta certo, a tela é que mostra vazio) · **os ajustes da tela Estoque**, incluindo a tabela
-> `estoque` morta (4.476 linhas, parada em 18/07, sem consumidor) · e as listas
-> `CI_PENDENTE_POR_ANALISTA/` (42 arquivos, 1.487 PCs) já geradas e não versionadas.
+> **✅ As 18 PCs com `analista_id` sem `analista_nome` FORAM GRAVADAS** (16/08). Elas revelaram
+> que o `MAPA_NOME` do `sigpc-api/lib/assumir.js` tinha **três chaves mortas** — o rótulo de
+> **5 analistas** saía errado, e os ids 22 e 23 viravam os dois "Ana". Corrigido, 10 chaves.
+> Detalhe no `CLAUDE.md` do `sigpc-api`, armadilha 1.
+>
+> **📌 O que continua registrado e sem executar** (detalhe no `SESSAO.md` do `sigpc-api`):
+> **os ajustes da tela Estoque**, incluindo a tabela `estoque` morta (4.476 linhas, parada em
+> 18/07, sem consumidor) · as listas `CI_PENDENTE_POR_ANALISTA/` · e 10 PCs em que o
+> `analista_nome` contradiz o `analista_id`.
 > As **PCs soltas em TR com dono já foram corrigidas** — 78 em 5 TRs; não repetir.
 >
 > **O sistema está ABERTO.** Os dois interruptores estão **desligados** e a equipe trabalha.
