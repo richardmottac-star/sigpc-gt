@@ -21,9 +21,9 @@ publicação é que atravessou a meia-noite.
 
 ### 🔴 O que atravessa para a próxima sessão — os dois itens
 
-1. **O `UPDATE` do aviso id 6 não foi rodado.** O script é do `sigpc-api`
-   (`atualizar_aviso_id6.js`) e **espera ordem do Richard**. ⚠️ O aviso tem período
-   **17/08 → 18/08** e sai do ar sozinho.
+1. ✅ **O aviso id 6 FOI GRAVADO** em 17/08, às 09h54 — texto curto (233 → **179** caracteres)
+   e o `fim` estendido de 18/08 para **31/08**, na mesma transação. **A faixa que passa na tela
+   é essa**, e ela fica no ar até o dia 31 inteiro. Detalhe no `SESSAO.md` do `sigpc-api`.
 2. **O `isMeuTR` erra em 5 analistas** — o botão "Ver" some no Estoque para os ids 19, 22, 23,
    40 e 51. **Não corrigido de propósito:** o conserto certo é no servidor
    (`MAX(analista_id)` no `resumo_tr`), e mata o `MAPA_PLAN_EST` desta tela. Detalhe na seção
@@ -219,21 +219,30 @@ o superadmin veem a tela de todo mundo, não a deles.
 Passou a medir o **caminho** (`onclick="irProd()"` + `</button>`), e o rótulo é conferido num
 lugar só. **É a lição 8 do dia acontecendo de novo.**
 
-### O aviso id 6 — o `UPDATE` está PRONTO e NÃO foi rodado
+### ✅ O aviso id 6 — GRAVADO em 17/08/2026, às 09h54
 
-`atualizar_aviso_id6.js`, dry-run passou nas **7 conferências**. Troca **uma coluna de uma
-linha** (`texto`) e confere, na mesma transação, que `escopo`, `ativo`, `grupo`, `ordem` e o
-período não mudaram, e que nenhum outro aviso foi tocado.
+**É o texto que passa na faixa agora.** `atualizar_aviso_id6.js --gravar`, no `sigpc-api`, com
+as **9 conferências** passando depois da escrita, na mesma transação.
 
-Saem **54 caracteres**: os primeiros 178 são idênticos, e a diferença é a cauda
-*": há orientações sobre o que verificar e como proceder."* virando *"."*.
+| coluna | antes | depois |
+|---|---|---|
+| `texto` | 233 caracteres | **179** — saíram 54 |
+| `fim` | `2026-08-18` | **`2026-08-31`** |
+
+Os primeiros **178 caracteres são idênticos**: saiu a cauda *": há orientações sobre o que
+verificar e como proceder."* e entrou *"."*. **Não mudaram** `inicio` (17/08), `escopo`
+(`urgente`), `ativo`, `grupo` nem `ordem` — trocar o texto e o prazo não pode mudar **quem** vê.
+
+⚠️ **O `fim` é INCLUSIVO** — `lib/faixa.js` filtra `fim >= HOJE_BR`. A faixa passa o dia **31
+inteiro** e some em **01/09**.
 
 ⚠️ **Vai por script e não por `psql`**: o texto tem travessão, acento e cedilha, e o parâmetro
 `$1` do `pg` entrega a string byte a byte. Colar SQL com acento no terminal do Windows é como
 se perde um "ç" sem ninguém ver.
 
-⚠️ **O aviso tem PERÍODO: início 17/08 e fim 18/08.** Ele sai do ar sozinho depois de amanhã —
-o que talvez não seja o que se espera de um recado sobre a versão nova.
+⚠️ **O texto novo tem 179 caracteres e a faixa do Dashboard ROLA** — ela não precisa caber na
+tela, e por isso encurtar não era sobre espaço, era sobre o recado. **Nada na tela mudou por
+causa disto**; quem quiser conferir, é só abrir e ler o que passa.
 
 ### ⚠️ ACHADO NA MESMA FUNÇÃO, **NÃO CORRIGIDO** — o `isMeuTR` erra em 5 analistas
 

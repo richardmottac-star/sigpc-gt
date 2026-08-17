@@ -36,9 +36,9 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 > `GET /prestacoes_contas/resumo_tr` **não devolve `analista_id`**. **É decisão do Richard**,
 > e o conserto é no `sigpc-api`.
 >
-> **📌 E o `UPDATE` do aviso id 6 continua ESPERANDO ORDEM** — script no `sigpc-api`
-> (`atualizar_aviso_id6.js`), dry-run passou. ⚠️ O aviso tem período **17/08 → 18/08** e sai
-> do ar sozinho.
+> **✅ O AVISO id 6 FOI GRAVADO** (17/08, 09h54, pelo `sigpc-api`): o texto curto — **é o que
+> passa na faixa agora** — e o `fim` estendido de 18/08 para **31/08**. ⚠️ O `fim` é
+> **inclusivo** (`fim >= HOJE_BR`): a faixa passa o dia 31 inteiro e some em 01/09.
 >
 > **Testes em 17/08:** **18 suítes · 1.033 checagens · 0 falhas** neste repositório
 > (`teste_front_faixa.js` é a nova, 43) · `sigpc-api` **19 · 949 · 0**.
