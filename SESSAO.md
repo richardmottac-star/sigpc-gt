@@ -1,6 +1,37 @@
-# SIGPC-GT — ESTADO EM 16/08/2026
+# SIGPC-GT — ESTADO EM 17/08/2026 (madrugada)
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
+
+---
+
+## ▶ 17/08/2026, 00h–01h30 — O FECHAMENTO
+
+**Três commits nesta madrugada, todos de TELA. Nada foi gravado no banco.** As seções abaixo
+descrevem esse trabalho e estão marcadas "16/08" porque é a sessão a que pertencem — a
+publicação é que atravessou a meia-noite.
+
+| commit | o que é | onde está descrito |
+|---|---|---|
+| `18a8e1e` `6130178` | as larguras finais do Estoque | *A tela Estoque de TRs* |
+| `72d2d13` | **regressão:** a etiqueta de reserva vazava por cima do SGPe MÃE | *O DEFEITO QUE O RICHARD ACHOU* |
+| `2f151f6` → `cbaf55c` | a **faixa de avisos** no Dashboard — errada, depois certa | *A FAIXA DE AVISOS* |
+
+**Testes medidos em 17/08:** **18 suítes · 1.033 checagens · 0 falhas** neste repositório
+(a suíte nova é a `teste_front_faixa.js`, 43). No `sigpc-api`: **19 · 949 · 0**.
+
+### 🔴 O que atravessa para a próxima sessão — os dois itens
+
+1. **O `UPDATE` do aviso id 6 não foi rodado.** O script é do `sigpc-api`
+   (`atualizar_aviso_id6.js`) e **espera ordem do Richard**. ⚠️ O aviso tem período
+   **17/08 → 18/08** e sai do ar sozinho.
+2. **O `isMeuTR` erra em 5 analistas** — o botão "Ver" some no Estoque para os ids 19, 22, 23,
+   40 e 51. **Não corrigido de propósito:** o conserto certo é no servidor
+   (`MAX(analista_id)` no `resumo_tr`), e mata o `MAPA_PLAN_EST` desta tela. Detalhe na seção
+   *ACHADO NA MESMA FUNÇÃO*, mais abaixo.
+
+⚠️ **A tela Estoque continua NÃO ABERTA no navegador.** A lista do que olhar está em
+*▶ O QUE OLHAR AO ABRIR O ESTOQUE* — e agora ela tem mais dois pontos: a **faixa no Dashboard**
+(rolando, abaixo da Estrutura de Governança, com o rodapé vazio) e as **logos em 48 px**.
 
 ---
 

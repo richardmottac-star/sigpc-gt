@@ -4,7 +4,47 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 16/08/2026 — ver `SESSAO.md`. **DOZE escritas em produção nesse dia.**
+**Última sessão:** 17/08/2026 (madrugada) — ver `SESSAO.md`. **DOZE escritas em produção em
+16/08; NENHUMA em 17/08.**
+
+> ## ▶ 17/08/2026 — SÓ TELA. Nada gravado no banco.
+>
+> **✅ A FAIXA DE AVISOS MUDOU DE LUGAR NO DASHBOARD.** Ela sai do rodapé e vai para **logo
+> abaixo da Estrutura de Governança** — **rolando igual**, mesma cor, mesma etiqueta URGENTE.
+> Altura **30 → 40 px**, corpo **12 → 13 px**. Nas demais telas, o rodapé, como sempre foi.
+> ⚠️ **A primeira versão disto estava errada** e fica registrado: virou um bloco parado com o
+> texto inteiro. **É a mesma faixa; muda só a posição.**
+> ⚠️ **A marcação é montada UMA VEZ SÓ** e as duas posições saem dela — a única diferença
+> permitida é a classe `.faixa-dash`, que só pode mexer em **posição**. **Ver a armadilha 25.**
+>
+> **✅ REGRESSÃO CORRIGIDA: a etiqueta de reserva vazava por cima da coluna SGPe MÃE** e tapava
+> o link do processo (visto na `2022TR001511`). É filha do `table-layout:fixed` de 16/08.
+> **Ver a armadilha 24** — ela é a metade que faltava da 23.
+>
+> **✅ As logos da governança 30 → 48 px** (opacidade `.55` → `.7` junto: logo maior e
+> igualmente apagada só fica maior e apagada). O botão do Dashboard virou **"SUA
+> PRODUTIVIDADE"**, e o título da tela, **"Produtividade"** — o "(NL)" contradizia a regra:
+> a unidade é a **PC baixada** (CGE nº 727/2025), não a NL.
+>
+> **🔴 O `isMeuTR` ERRA EM 5 ANALISTAS, E NÃO FOI CORRIGIDO — de propósito.** O `renderEst`
+> decide "esta TR é minha" **comparando NOME**, com o `MAPA_PLAN_EST` daqui — a **segunda
+> cópia** do mapa que estava quebrado no `sigpc-api/lib/assumir.js`, com as **mesmas três
+> chaves mortas**. O botão **"Ver" some** nas TRs da Sandra Rocha (19), Ana Claudia (22),
+> Ana Letícia (23), Goreti (40) e Janaína (51).
+> ⚠️ **Copiar o mapa arrumado para cá resolve hoje e recria a divergência amanhã.** O certo é
+> a armadilha 1 do `sigpc-api` — comparar por `analista_id` —, mas o
+> `GET /prestacoes_contas/resumo_tr` **não devolve `analista_id`**. **É decisão do Richard**,
+> e o conserto é no `sigpc-api`.
+>
+> **📌 E o `UPDATE` do aviso id 6 continua ESPERANDO ORDEM** — script no `sigpc-api`
+> (`atualizar_aviso_id6.js`), dry-run passou. ⚠️ O aviso tem período **17/08 → 18/08** e sai
+> do ar sozinho.
+>
+> **Testes em 17/08:** **18 suítes · 1.033 checagens · 0 falhas** neste repositório
+> (`teste_front_faixa.js` é a nova, 43) · `sigpc-api` **19 · 949 · 0**.
+>
+> ⚠️ **A tela Estoque e o Dashboard continuam NÃO ABERTOS no navegador.** A lista do que olhar
+> está no `SESSAO.md` deste repo.
 
 > ## ✅ 16/08/2026 — DOZE ESCRITAS EM PRODUÇÃO. Ver `SESSAO.md`.
 >
@@ -385,6 +425,53 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
     erro, "nenhum registro" e o separador de grupo. Um `colspan` defasado **não dá erro**: a
     linha apenas deixa de atravessar a tabela.
 
+24. **⚠️ O `table-layout:fixed` TIRA DA COLUNA A LICENÇA DE ESTICAR — e conteúdo `nowrap` que
+    não cabe VAZA POR CIMA DA VIZINHA** (17/08/2026). É a metade que faltava da armadilha 23,
+    e apareceu como **regressão dos ajustes do dia anterior**: a etiqueta
+    "⏳ Aguardando aprovação — Fulano" passou por cima da coluna SGPe MÃE e **tapou o link do
+    processo** (visto na `2022TR001511`).
+
+    Enquanto a tabela tinha largura automática, a coluna esticava para caber e ninguém via
+    problema. Com o `fixed` ela passou a ter **14% fixos** — e texto `nowrap` que não cabe
+    **não quebra e não é cortado: escapa da célula**. Medido: a etiqueta tem 32 caracteres no
+    caso real e **41** no pior (`— você  ✕ cancelar`); a 9,5 px isso passa de 215 px, e os 14%
+    dão ~196 px num conteúdo de 1400. **Nunca coube.**
+
+    ⚠️ **A regra que fica: toda célula que hospeda conteúdo de tamanho variável precisa poder
+    quebrar.** O `nowrap` saiu da **célula** e foi para o **código da TR**, que é curto e fixo;
+    a etiqueta virou `display:block` e quebra dentro da própria coluna.
+
+    ⚠️ **`display` e `white-space` foram para a classe `.est-reserva`, e NÃO ficaram no
+    `style`: estilo inline vence classe, e foi exatamente um inline que causou o defeito.**
+    Há dois testes que falham se voltarem para lá.
+
+25. **⚠️ A FAIXA DE AVISOS SAI EM DUAS POSIÇÕES, MAS É MONTADA UMA VEZ SÓ** (17/08/2026).
+    No **Dashboard** ela fica logo abaixo da Estrutura de Governança; nas **demais telas**,
+    no rodapé. **É a mesma faixa rolando** — a primeira versão virou um bloco parado com o
+    texto inteiro, e estava errada.
+
+    ⚠️ **As duas posições saem da mesma função e da mesma string.** A única diferença permitida
+    é a classe **`.faixa-dash`**, que acrescenta canto arredondado e respiro — porque ali a
+    faixa mora *dentro* do conteúdo, não colada na borda da janela. **Há teste que compara as
+    duas marcações caractere a caractere**, e outro que falha se a `.faixa-dash` ganhar
+    `background`, `height` ou `animation` próprios. Uma segunda montagem divergiria da primeira
+    no dia em que alguém mexesse numa e esquecesse a outra — é o defeito dos dois ramos do
+    cartão da parcial (armadilha 19) tentando nascer de novo.
+
+    ⚠️ **NO DASHBOARD O RODAPÉ FICA VAZIO, de propósito** — as duas ao mesmo tempo seriam o
+    mesmo recado duas vezes na mesma tela.
+
+    ⚠️ **A `irDash` chama `faixaPintar()` DE NOVO, depois do `innerHTML`.** O
+    `ativarMenu('dash')` já chamou `faixaTela('inicial')` lá em cima, mas naquele instante o
+    `#faixaBloco` **ainda não existia** — o BODY só é reescrito depois. Sem a segunda chamada a
+    faixa **nasce vazia** no Dashboard e só aparece na recarga de 5 minutos. Há teste que
+    compara a posição das duas chamadas no arquivo.
+
+    ⚠️ **`teste_front_faixa.js` executa a `faixaPintar` de verdade** num DOM de mentira, em vez
+    de casar texto do arquivo — e **para isso troca `let`/`const` de topo por `var`**:
+    declaração léxica não vira propriedade do contexto do `vm`, e o teste não conseguiria nem
+    ler nem escrever `_faixas`.
+
 ---
 
 ## As três regras do time de agentes (Richard, 13/08/2026)
@@ -507,6 +594,22 @@ exibição — o script inteiro deixa de rodar. Já aconteceu.
 >
 > **Estado em 13/08:** 53 usuários · **51 conseguem entrar** · fila de aprovação **vazia** ·
 > **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo** (este também inativo).
+
+### ⚠️ 16–17/08/2026 — no ar, NÃO abertas no navegador
+
+- [ ] **A tela Estoque de TRs inteira.** A lista do que olhar, ponto a ponto, está no
+      `SESSAO.md` deste repo — TR e SGPe MÃE sem quebrar, entidade inteira em duas linhas,
+      cabeçalho centralizado e células não, separador de grupo atravessando a tabela.
+- [ ] **A etiqueta de reserva não invade o SGPe MÃE.** Só duas TRs a têm hoje:
+      **`2022TR001511`** (Juliana) e **`2023TR000582`** (Rafael). Ela tem de ficar em linha
+      própria abaixo da TR, **dentro** da coluna. É o teste visual da armadilha 24.
+- [ ] **A faixa de avisos no Dashboard** — rolando, abaixo da Estrutura de Governança, e o
+      **rodapé vazio**. Nas demais telas, no rodapé. ⚠️ Se ela **nascer vazia** no Dashboard, é
+      a segunda chamada de `faixaPintar()` que se perdeu (armadilha 25).
+- [ ] **As logos da governança em 48 px** e o botão **"SUA PRODUTIVIDADE"**.
+- [ ] **🔴 O botão "Ver" nas TRs de 5 analistas** — ids 19, 22, 23, 40 e 51. **Hoje ele NÃO
+      aparece**, e isso é o defeito do `isMeuTR` descrito no bloco do topo. Só se vê com o
+      filtro fora de "Livre". **Espera decisão do Richard**; o conserto é no `sigpc-api`.
 
 ### ⚠️ Telas de 13/08/2026 — no ar, NÃO testadas em navegador
 Nada disto foi clicado por uma pessoa. Em 12/08 o Richard achou três defeitos abrindo as
