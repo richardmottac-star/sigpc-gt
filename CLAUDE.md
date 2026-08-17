@@ -4,9 +4,9 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 16/08/2026 — ver `SESSAO.md`. **Onze escritas em produção nesse dia.**
+**Última sessão:** 16/08/2026 — ver `SESSAO.md`. **DOZE escritas em produção nesse dia.**
 
-> ## ✅ 16/08/2026 — ONZE ESCRITAS EM PRODUÇÃO. Ver `SESSAO.md`.
+> ## ✅ 16/08/2026 — DOZE ESCRITAS EM PRODUÇÃO. Ver `SESSAO.md`.
 >
 > **14.658 PCs** · 1.031 finais · 3.804 baixadas · **2.318 no C.I.** · **6.090 sem dono, todas
 > `livre`**. Renumeração pelo SIGEF em **211 TRs**; 6 PCs incluídas; 87 destravadas; 78 soltas
@@ -25,10 +25,20 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 > **5 analistas** saía errado, e os ids 22 e 23 viravam os dois "Ana". Corrigido, 10 chaves.
 > Detalhe no `CLAUDE.md` do `sigpc-api`, armadilha 1.
 >
+> **✅ A TELA ESTOQUE DE TRs FOI AJUSTADA** (16/08): faixa **62px**, logo do Estado **48px**,
+> ícone de pessoas antes do ponto verde. Na tabela, **BAIXADAS e ANALISTA saíram** (9 → 7
+> colunas) e a entidade passou a **quebrar** — TR 14% · SGPe 20% · **Entidade 32%** · PCs 7% ·
+> NLs 7% · Status 10% · Ações 10%.
+> ⚠️ **O que faz o `nowrap` valer é o `table-layout:fixed` na classe `.tbl-est`**, nunca no
+> seletor `table{}`, que é global e vale para o relatório CGE. Sem ele o percentual do `<col>`
+> é só sugestão e a TR quebra em duas linhas. **Ver a armadilha 23.**
+> ⚠️ **Não foi aberta no navegador** — o Richard vai abrir. A lista do que olhar está no
+> `SESSAO.md` deste repo.
+>
 > **📌 O que continua registrado e sem executar** (detalhe no `SESSAO.md` do `sigpc-api`):
-> **os ajustes da tela Estoque**, incluindo a tabela `estoque` morta (4.476 linhas, parada em
-> 18/07, sem consumidor) · as listas `CI_PENDENTE_POR_ANALISTA/` · e 10 PCs em que o
-> `analista_nome` contradiz o `analista_id`.
+> a tabela **`estoque` morta** (4.476 linhas, parada em 18/07 — **não mexer, ordem do
+> Richard**) · as listas `CI_PENDENTE_POR_ANALISTA/` · e 10 PCs em que o `analista_nome`
+> contradiz o `analista_id`.
 > As **PCs soltas em TR com dono já foram corrigidas** — 78 em 5 TRs; não repetir.
 >
 > **O sistema está ABERTO.** Os dois interruptores estão **desligados** e a equipe trabalha.
@@ -354,6 +364,26 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
 
     **Quatro travas FICAM** — estornar, devolver TR, solicitar devolução e decidir no C.I.
     Não são leitura: são decisões *sobre* o trabalho dele. Há teste que falha na quinta.
+
+23. **⚠️ LARGURA DE COLUNA SÓ VALE COM `table-layout:fixed` — e ele NÃO PODE SER GLOBAL**
+    (16/08/2026). Percentual em `<col>` ou em `<th>` é **sugestão**: no modo automático o
+    navegador estica a coluna que o conteúdo exigir. Foi por isso que a TR do Estoque quebrava
+    em duas linhas **mesmo com o `white-space:nowrap` escrito** — o `nowrap` proíbe quebrar o
+    texto, mas quem decide a largura é o algoritmo da tabela, e ele reparte o que sobra.
+
+    ⚠️ **E o `fixed` mora numa CLASSE (`.tbl-est`), nunca no seletor `table{}`.** Aquele
+    seletor é global e vale para dezenas de tabelas deste arquivo — o **relatório CGE** depende
+    da largura automática delas, e um `table-layout:fixed` global espremeria os quadros do
+    documento oficial sem dar erro nenhum. Há teste que falha se ele vazar.
+
+    ⚠️ **Com quebra ligada, a largura deixa de decidir se o texto aparece** e passa a decidir
+    em **quantas linhas** ele aparece. Foi o que permitiu a entidade do Estoque ceder 10 pontos
+    para o Status sem esconder nome nenhum: o maior do acervo (81 caracteres) sai em 2 linhas
+    tanto em 1920 quanto em 1366. Quem escondia era o `nowrap` com reticências.
+
+    ⚠️ **O `colspan` das linhas de serviço tem de acompanhar** o número de colunas — carregando,
+    erro, "nenhum registro" e o separador de grupo. Um `colspan` defasado **não dá erro**: a
+    linha apenas deixa de atravessar a tabela.
 
 ---
 

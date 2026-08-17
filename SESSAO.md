@@ -73,6 +73,31 @@ conteúdo dele. A janela foi para 2.800.
 **Nada disso foi clicado por uma pessoa.** O mockup fiel está em `MOCKUP_ESTOQUE_AB.html`
 (não versionado), com o logo real e as cinco maiores entidades do acervo.
 
+### ▶ O QUE OLHAR AO ABRIR O ESTOQUE — a lista do Richard
+
+O que os 38 testes **não** conseguem provar, porque nenhum deles desenha um pixel:
+
+- [ ] **A TR não quebra em duas linhas.** É o ponto do `table-layout:fixed`. Se quebrar, a
+      classe `.tbl-est` não pegou na tabela.
+- [ ] **O SGPe MÃE também não.** O maior do acervo é `ADR05  00001022/2017`, com **dois
+      espaços** depois do ADR05 — 20 caracteres. Procure uma TR de 2017.
+- [ ] **A entidade aparece inteira**, em duas linhas quando o nome é longo. As maiores estão
+      na `2024TR000906` (Diomicio Freitas / Pestalozzi de Criciúma) e na `2021TR002236`
+      (APADAVIX de Xanxerê) — 81 caracteres cada.
+- [ ] **A linha fica mais alta** onde a entidade quebra. É o preço, e é proposital.
+- [ ] **O cabeçalho está centralizado e as células não.** TR, SGPe e entidade à esquerda;
+      PCs e NLs no centro.
+- [ ] **Não há mais coluna Baixadas nem Analista** — e a etiqueta de Status continua.
+- [ ] **O separador de bloco** (`Livre — 788 TRs`) atravessa a tabela inteira. Se ele parar
+      no meio, o `colspan` ficou para trás.
+- [ ] **A faixa verde do topo está mais alta e o brasão maior**, sem encostar na borda
+      arredondada da caixa branca.
+- [ ] **O ícone de pessoas** aparece **antes** do ponto verde, no "N usuários online".
+- [ ] **Numa janela estreita**, passe o mouse na entidade: o `title` continua lá.
+
+⚠️ **Se o "Assumir" ficar apertado**, é a coluna Ações em 10% — e a saída registrada é
+Status 8% + Ações 9%, que devolvem 3 pontos à entidade.
+
 ### A tabela `estoque` — medida, e NÃO mexida
 
 ⚠️ **Ordem do Richard em 16/08: não mexer.** Ela continua no banco com 4.476 linhas. O que
