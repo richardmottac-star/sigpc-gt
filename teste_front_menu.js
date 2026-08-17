@@ -187,7 +187,11 @@ console.log('\n═══ 3. PRODUTIVIDADE: DESCEU E FICOU ═══');
   // por outro caminho — a Produtividade tem botão no proprio Dashboard.
   conf(idsDe(analista).includes('prod'), 'PRODUTIVIDADE aparece para o analista');
   conf(SB_ITENS.find(i=>i.id==='prod').bloco === 'analista', 'e mora no bloco do analista');
-  conf(/onclick="irProd\(\)"[\s\S]{0,300}?Produtividade \(NL\)/.test(html),
+  // ⚠️ ESTE TESTE CASAVA A REDACAO — "Produtividade (NL)" — e quebrou quando o Richard
+  // renomeou o botao para "SUA PRODUTIVIDADE" em 16/08/2026, sem que nada tivesse sumido.
+  // O que ele quer provar e que o CAMINHO existe, nao como o botao se chama. O rotulo em si
+  // e conferido no `teste_front_faixa.js`, num lugar so.
+  conf(/onclick="irProd\(\)"[\s\S]{0,400}?<\/button>/.test(html),
        'o botao rapido do Dashboard continua la, e o menu concorda com ele');
 }
 

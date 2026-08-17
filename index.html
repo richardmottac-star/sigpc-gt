@@ -140,12 +140,16 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 /* Rodape de governanca - Dashboard */
 .gov-ft{margin-top:22px;background:#fff;border-radius:12px;box-shadow:var(--sombra);border-top:3px solid var(--v);padding:16px 20px 13px;}
 .gov-ft-hd{font-size:9.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:var(--ct);text-align:center;margin-bottom:13px;}
-.gov-ft-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:center;}
-.ft-lg{display:flex;flex-direction:column;align-items:center;gap:7px;padding:6px 8px;position:relative;transition:.18s;}
+.gov-ft-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:center;}
+.ft-lg{display:flex;flex-direction:column;align-items:center;gap:9px;padding:10px 8px;position:relative;transition:.18s;}
 .ft-lg+.ft-lg::before{content:"";position:absolute;left:0;top:16%;height:68%;width:1px;background:var(--cb);}
-.ft-lg img{height:30px;width:auto;max-width:100%;object-fit:contain;filter:grayscale(100%);opacity:.55;transition:.18s;}
+/* ⚠️ 30 -> 48px em 16/08/2026 (ordem do Richard: estavam pequenas demais). A opacidade subiu
+   de .55 para .7 junto: uma logo maior e igualmente apagada so fica maior e apagada. O
+   `grayscale` fica — sao quatro marcas de orgaos diferentes, e em cor elas brigariam entre si
+   e com o verde do sistema; a cor volta no hover, uma de cada vez. */
+.ft-lg img{height:48px;width:auto;max-width:100%;object-fit:contain;filter:grayscale(100%);opacity:.7;transition:.18s;}
 .ft-lg:hover img{filter:none;opacity:1;}
-.ft-lg span{font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ct);}
+.ft-lg span{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ct);}
 .gov-ft-legal{margin-top:12px;padding-top:10px;border-top:1px solid var(--cl);text-align:center;font-size:10px;color:var(--ct);line-height:1.5;}
 @media(max-width:820px){.gov-ft-grid{grid-template-columns:repeat(2,1fr);}.ft-lg+.ft-lg::before{display:none;}}
 
@@ -325,21 +329,14 @@ tr:last-child td{border-bottom:none;}
                border-radius:4px;padding:1px 7px;margin-right:9px;}
 @keyframes faixaRolar{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 
-/* ══ O BLOCO DA FAIXA NO DASHBOARD (16/08/2026) ═══════════════════════════════════════════
-   ⚠️ NO DASHBOARD A FAIXA NAO ROLA. Ela vira um bloco parado logo abaixo da Estrutura de
-   Governanca, e o texto aparece INTEIRO, quebrando em quantas linhas precisar. O motivo e o
-   que a rolagem custa: para ler o fim de um recado longo e preciso esperar a volta, e quem
-   chega no meio le pela metade. No Dashboard ha espaco; nas outras telas nao ha, e la a
-   faixa do rodape continua rolando.
-   ⚠️ E A MESMA MENSAGEM, A MESMA COR E A MESMA ETIQUETA — muda so a forma. Duas fontes de
-   texto dariam dois recados diferentes no mesmo dia. */
-.faixa-bloco{margin-top:14px;background:#0F3D2E;border-radius:12px;border-top:3px solid var(--vc);
-             box-shadow:var(--sombra);padding:14px 18px;display:flex;flex-direction:column;gap:9px;}
-.faixa-bloco.urg{background:#7A1620;border-top-color:#E5484D;}
-.faixa-bloco-item{font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.94);font-weight:600;
-                  letter-spacing:.2px;white-space:normal;overflow-wrap:anywhere;}
-/* A etiqueta URGENTE acompanha a primeira linha do texto em vez de flutuar sozinha. */
-.faixa-bloco-item .faixa-urg-tag{vertical-align:2px;}
+/* ══ A FAIXA NO DASHBOARD (16/08/2026) ════════════════════════════════════════════════════
+   ⚠️ E A MESMA FAIXA, ROLANDO IGUAL — muda so O LUGAR. No Dashboard ela sai do rodape e vai
+   para logo abaixo da Estrutura de Governanca; nas demais telas continua no rodape. Decisao
+   do Richard.
+   ⚠️ Aqui ela mora DENTRO do conteudo, e nao colada na borda da janela: por isso ganha
+   cantos arredondados e um respiro em cima, para acompanhar os cartoes vizinhos. O que roda
+   por dentro (`.faixa-mv`) e exatamente o mesmo. */
+.faixa-dash{margin-top:14px;border-radius:12px;border-top-width:3px;box-shadow:var(--sombra);}
 /* Quem pediu para reduzir movimento não recebe a rolagem: o texto fica parado e legível. */
 @media (prefers-reduced-motion: reduce){
   .faixa-mv{animation:none;padding-left:18px;white-space:normal;}
@@ -742,7 +739,7 @@ input:focus, select:focus, textarea:focus { border-color: #00A05A; box-shadow: 0
 .bnum strong{color:#fff;}
 .bnum span{color:#C4E6D3;opacity:1;}
 
-/* 2) Botão "Produtividade (NL)" igual ao "Estoque de TRs" */
+/* 2) Botão "SUA PRODUTIVIDADE" igual ao "Estoque de TRs" (era "Produtividade (NL)") */
 .btn-rap.az{background:linear-gradient(180deg, #006B3C, #00512D);}
 
 /* 3) Sidebar */
@@ -2736,7 +2733,7 @@ function irDash() {
       </button>
       <button class="btn-rap az" onclick="irProd()">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-        Produtividade (NL)
+        SUA PRODUTIVIDADE
       </button>
     </div>
     <div class="mn" id="manualCard">
@@ -4798,61 +4795,53 @@ function faixaVisiveis() {
   return _faixas.filter(f => f.escopo !== 'inicial' || _faixaTela === 'inicial')
 }
 
-// ⚠️ A MESMA MENSAGEM EM DUAS FORMAS, E UMA DE CADA VEZ (16/08/2026).
+// ⚠️ A MESMA FAIXA, ROLANDO IGUAL — SÓ MUDA O LUGAR (16/08/2026, decisão do Richard).
 //
-//   Dashboard      -> BLOCO parado (`#faixaBloco`), texto inteiro, quebrando em linhas.
-//   demais telas   -> a faixa ROLANDO no rodape (`#faixaAviso`), como sempre foi.
+//   Dashboard      -> logo abaixo da Estrutura de Governança (`#faixaBloco`)
+//   demais telas   -> no rodapé (`#faixaAviso`), como sempre foi
 //
-// ⚠️ NO DASHBOARD O RODAPE FICA VAZIO, de proposito. Mostrar as duas seria o mesmo recado
-// duas vezes na mesma tela, uma delas passando devagar por baixo da outra.
+// ⚠️ NO DASHBOARD O RODAPÉ FICA VAZIO, de propósito. As duas ao mesmo tempo seriam o mesmo
+// recado duas vezes na mesma tela, um passando por baixo do outro.
 //
-// ⚠️ E OS DOIS SAIAM DA MESMA LISTA `vis`. Se cada forma filtrasse por conta propria, um dia
-// o bloco diria uma coisa e o rodape outra — e ninguem saberia qual e a certa.
+// ⚠️ E A MARCAÇÃO É MONTADA UMA VEZ SÓ, aqui dentro. Uma segunda montagem para o Dashboard
+// divergiria da primeira no dia em que alguém mexesse numa e esquecesse a outra — foi o
+// defeito dos dois ramos do cartão da parcial (armadilha 19).
 function faixaPintar() {
   const rodape = document.getElementById('faixaAviso')
-  const bloco = document.getElementById('faixaBloco')   // só existe no Dashboard
   const noDash = _faixaTela === 'inicial'
+  // Só existe no Dashboard, e só depois de a `irDash` escrever o BODY.
+  const naTela = document.getElementById('faixaBloco')
   const vis = faixaVisiveis()
 
   // Sem aviso, os dois ficam vazios — nem o espaço é ocupado (ver o comentário do topo).
   if(!vis.length) {
     if(rodape) rodape.innerHTML = ''
-    if(bloco) bloco.innerHTML = ''
+    if(naTela) naTela.innerHTML = ''
     return
   }
 
   const urgente = vis.some(f => f.escopo === 'urgente')
-  const etiqueta = (f) => f.escopo === 'urgente' ? '<span class="faixa-urg-tag">URGENTE</span>' : ''
-
-  // ── O BLOCO do Dashboard ────────────────────────────────────────────────────
-  // Um item por aviso, e não tudo emendado com bullet: quebrando em linhas, dois recados
-  // colados viram um parágrafo só e o segundo se perde.
-  if(bloco) {
-    bloco.innerHTML = noDash
-      ? `<div class="faixa-bloco ${urgente?'urg':''}">${
-          vis.map(f => `<div class="faixa-bloco-item">${etiqueta(f)}${escHtml(f.texto||'')}</div>`).join('')
-        }</div>`
-      : ''
-  }
-
-  if(!rodape) return
-  // ── A FAIXA ROLANTE do rodapé — só fora do Dashboard ────────────────────────
-  if(noDash) { rodape.innerHTML = ''; return }
-
   // Uma volta proporcional ao texto: fixar a duração faria aviso curto rastejar e aviso longo
   // passar rápido demais para ser lido.
   const chars = vis.reduce((n,f) => n + (f.texto||'').length, 0)
   const seg = Math.max(FAIXA_SEG_MIN, Math.round(chars / 4))
 
-  const conteudo = vis.map(f => `${etiqueta(f)}${escHtml(f.texto||'')}`)
-    .join('<span class="faixa-sep">•</span>')
+  const conteudo = vis.map(f =>
+    `${f.escopo === 'urgente' ? '<span class="faixa-urg-tag">URGENTE</span>' : ''}${escHtml(f.texto||'')}`
+  ).join('<span class="faixa-sep">•</span>')
 
   // O conteúdo vai DUPLICADO: com uma cópia só, o fim do texto deixa um vão em branco
   // atravessando a tela antes de recomeçar.
-  rodape.innerHTML = `<div class="faixa ${urgente?'urg':''}" style="--faixa-seg:${seg}s"
-      title="Passe o mouse para pausar e ler">
-      <div class="faixa-mv">${conteudo}<span class="faixa-sep">•</span>${conteudo}</div>
-    </div>`
+  // `faixa-dash` só acrescenta o canto arredondado e o respiro de quem mora dentro do
+  // conteúdo, em vez de colado na borda da janela. O que rola por dentro é idêntico.
+  const marcacao = (ondeDash) =>
+    `<div class="faixa ${urgente?'urg':''} ${ondeDash?'faixa-dash':''}" style="--faixa-seg:${seg}s"
+        title="Passe o mouse para pausar e ler">
+        <div class="faixa-mv">${conteudo}<span class="faixa-sep">•</span>${conteudo}</div>
+      </div>`
+
+  if(naTela) naTela.innerHTML = noDash ? marcacao(true) : ''
+  if(rodape) rodape.innerHTML = noDash ? '' : marcacao(false)
 }
 
 function faixaIniciar() {
@@ -6434,7 +6423,11 @@ async function irProd() {
   const podeFiltrarGrupo = U.perfil === 'coordenador' || U.perfil === 'superadmin'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <div style="font-size:16px;font-weight:700;">Produtividade (NL)</div>
+      <!-- O "(NL)" saiu em 16/08/2026, por ordem do Richard. A unidade de produtividade e a
+           PC baixada (CGE 727/2025), nao a NL — o rotulo antigo contradizia a regra do
+           sistema. No botao do Dashboard virou "SUA PRODUTIVIDADE"; aqui fica neutro, porque
+           o coordenador e o superadmin veem a tela de todo mundo, nao a "sua". -->
+      <div style="font-size:16px;font-weight:700;">Produtividade</div>
       <div style="display:flex;gap:6px;align-items:center;">
         ${podeFiltrarGrupo ? `<div class="fg"><label style="font-size:10px;">Filtrar Grupo</label>
           <select id="prodFiltGrupo" onchange="prodCarregar()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">

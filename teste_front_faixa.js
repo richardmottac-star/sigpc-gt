@@ -4,8 +4,9 @@
 // Sem navegador, sem rede, sem login.
 //
 // A regra, decidida pelo Richard em 16/08/2026:
-//   Dashboard      -> BLOCO parado abaixo da Estrutura de Governanca, texto INTEIRO.
-//   demais telas   -> a faixa ROLANDO no rodape, como sempre foi.
+//   E A MESMA FAIXA, ROLANDO IGUAL -- muda so O LUGAR.
+//   Dashboard      -> logo abaixo da Estrutura de Governanca.
+//   demais telas   -> no rodape, como sempre foi.
 //   e uma de cada vez: no Dashboard o rodape fica VAZIO.
 //
 // USO: node teste_front_faixa.js
@@ -64,40 +65,44 @@ const AVISO = { escopo: 'todas', texto: 'SISTEMA AJUSTADO E ATUALIZADO EM 16/08/
 const URGENTE = { escopo: 'urgente', texto: 'Sistema em manutencao as 18h' };
 const SO_INICIAL = { escopo: 'inicial', texto: 'Recado da tela inicial' };
 
-console.log('\n═══ 1. NO DASHBOARD: BLOCO SIM, RODAPE NAO ═══');
+console.log('\n═══ 1. NO DASHBOARD: NA TELA SIM, RODAPE NAO ═══');
 
 let r = pintar([AVISO], 'inicial');
-conf(r.bloco.includes('faixa-bloco'), 'o bloco e desenhado no Dashboard');
+conf(r.bloco.includes('faixa-mv'), 'a faixa e desenhada no Dashboard, e ROLANDO');
 conf(r.bloco.includes(AVISO.texto), 'e traz o texto do aviso');
-// ⚠️ O PONTO DA MUDANCA: mostrar os dois seria o mesmo recado duas vezes na mesma tela.
+// ⚠️ O PONTO DA MUDANCA: mostrar as duas seria o mesmo recado duas vezes na mesma tela.
 conf(r.rodape === '', 'e o RODAPE fica vazio no Dashboard', JSON.stringify(r.rodape));
 
-console.log('\n═══ 2. NAS DEMAIS TELAS: RODAPE SIM, BLOCO NAO ═══');
+console.log('\n═══ 2. NAS DEMAIS TELAS: RODAPE SIM, NA TELA NAO ═══');
 
 r = pintar([AVISO], 'outra');
 conf(r.rodape.includes('faixa-mv'), 'a faixa rolante volta no rodape');
 conf(r.rodape.includes(AVISO.texto), 'com o texto do aviso');
-conf(r.bloco === '', 'e o bloco fica vazio', JSON.stringify(r.bloco));
+conf(r.bloco === '', 'e o lugar do Dashboard fica vazio', JSON.stringify(r.bloco));
 
-// A tela nova nao tem o elemento do bloco — a funcao nao pode quebrar por isso.
+// A tela nova nao tem o elemento do Dashboard — a funcao nao pode quebrar por isso.
 r = pintar([AVISO], 'outra', false);
-conf(r.rodape.includes('faixa-mv'), 'sem o elemento do bloco, o rodape continua funcionando');
+conf(r.rodape.includes('faixa-mv'), 'sem o elemento do Dashboard, o rodape continua funcionando');
 
-console.log('\n═══ 3. O BLOCO NAO ROLA, E O RODAPE ROLA ═══');
+console.log('\n═══ 3. AS DUAS ROLAM, E A MARCACAO E A MESMA ═══');
 
-r = pintar([AVISO], 'inicial');
-// ⚠️ `faixa-mv` e a classe que carrega a animacao e o `white-space:nowrap`. Se ela aparecer
-// no bloco, o texto volta a correr e a rolagem que o Richard tirou volta pela porta dos fundos.
-conf(!r.bloco.includes('faixa-mv'), 'o bloco NAO usa a classe que anima');
-conf(!r.bloco.includes('--faixa-seg'), 'nem recebe duracao de volta');
-conf(r.bloco.includes('faixa-bloco-item'), 'ele usa o item de bloco, que quebra em linhas');
+const noDash = pintar([AVISO], 'inicial').bloco;
+const noRodape = pintar([AVISO], 'outra').rodape;
 
-r = pintar([AVISO], 'outra');
-conf(r.rodape.includes('--faixa-seg'), 'o rodape continua com a duracao proporcional');
-// O conteudo vai duplicado para nao deixar vao em branco na volta.
-conf(r.rodape.split(AVISO.texto).length - 1 === 2, 'e com o conteudo DUPLICADO na volta',
-  String(r.rodape.split(AVISO.texto).length - 1));
-conf(!r.rodape.includes('faixa-bloco'), 'e o rodape nao vira bloco');
+// ⚠️ E A MESMA FAIXA. A unica diferenca permitida e a classe `faixa-dash`, que so acrescenta
+// canto arredondado e respiro a quem mora dentro do conteudo. Se aparecer qualquer outra
+// diferenca, as duas formas comecaram a divergir.
+conf(noDash.includes('--faixa-seg') && noRodape.includes('--faixa-seg'),
+  'as duas recebem a duracao proporcional');
+conf(noDash.includes('faixa-mv') && noRodape.includes('faixa-mv'), 'as duas rolam');
+conf(noDash.includes('faixa-dash'), 'a do Dashboard ganha a classe de posicao');
+conf(!noRodape.includes('faixa-dash'), 'e a do rodape nao');
+conf(noDash.replace(' faixa-dash', '') === noRodape.replace('  ', ' '),
+  'fora essa classe, a marcacao das duas e IDENTICA');
+
+// O conteudo vai duplicado para nao deixar vao em branco na volta — nas duas.
+conf(noDash.split(AVISO.texto).length - 1 === 2, 'o conteudo vai DUPLICADO no Dashboard');
+conf(noRodape.split(AVISO.texto).length - 1 === 2, 'e duplicado no rodape tambem');
 
 console.log('\n═══ 4. SEM AVISO, NENHUM DOS DOIS OCUPA ESPACO ═══');
 
@@ -116,29 +121,25 @@ conf(r.rodape === '' && r.bloco === '', 'fora do Dashboard ele some, e nada fica
 console.log('\n═══ 6. A ETIQUETA URGENTE E A COR, NAS DUAS FORMAS ═══');
 
 r = pintar([URGENTE], 'inicial');
-conf(r.bloco.includes('faixa-urg-tag') && r.bloco.includes('URGENTE'), 'o bloco traz a etiqueta URGENTE');
-conf(/class="faixa-bloco urg"/.test(r.bloco), 'e a classe de cor urgente');
+conf(r.bloco.includes('faixa-urg-tag') && r.bloco.includes('URGENTE'), 'o Dashboard traz a etiqueta URGENTE');
+conf(/class="faixa urg faixa-dash"/.test(r.bloco), 'e a classe de cor urgente');
 r = pintar([URGENTE], 'outra');
 conf(r.rodape.includes('URGENTE'), 'o rodape tambem traz a etiqueta');
-conf(/class="faixa urg"/.test(r.rodape), 'e a mesma classe de cor');
+conf(/class="faixa urg "/.test(r.rodape), 'e a mesma classe de cor');
 
 // Um aviso urgente no meio de outros pinta o conjunto — a regra e a mesma nas duas formas.
 r = pintar([AVISO, URGENTE], 'inicial');
-conf(/class="faixa-bloco urg"/.test(r.bloco), 'um urgente entre varios pinta o bloco inteiro');
+conf(/class="faixa urg faixa-dash"/.test(r.bloco), 'um urgente entre varios pinta a faixa inteira');
 r = pintar([AVISO, URGENTE], 'outra');
-conf(/class="faixa urg"/.test(r.rodape), 'e o rodape inteiro, igual');
+conf(/class="faixa urg "/.test(r.rodape), 'e o rodape inteiro, igual');
 
-console.log('\n═══ 7. DOIS AVISOS NAO VIRAM UM PARAGRAFO SO ═══');
+console.log('\n═══ 7. DOIS AVISOS, O MESMO SEPARADOR NAS DUAS ═══');
 
 r = pintar([AVISO, URGENTE], 'inicial');
-conf((r.bloco.match(/faixa-bloco-item/g) || []).length === 2,
-  'no bloco sao DOIS itens, um por aviso',
-  String((r.bloco.match(/faixa-bloco-item/g) || []).length));
-// ⚠️ No bloco o texto QUEBRA. Dois recados emendados com bullet viravam um paragrafo unico e
-// o segundo se perdia — por isso o separador do rodape nao entra aqui.
-conf(!r.bloco.includes('faixa-sep'), 'e sem o bullet separador, que e coisa da rolagem');
+conf(r.bloco.includes('faixa-sep'), 'no Dashboard os dois avisos vem separados por bullet');
+conf(r.bloco.includes(AVISO.texto) && r.bloco.includes(URGENTE.texto), 'e os dois textos estao la');
 r = pintar([AVISO, URGENTE], 'outra');
-conf(r.rodape.includes('faixa-sep'), 'no rodape o bullet continua, porque ali e uma linha so');
+conf(r.rodape.includes('faixa-sep'), 'no rodape, igual');
 
 console.log('\n═══ 8. O TEXTO DO AVISO E ESCAPADO NAS DUAS FORMAS ═══');
 
@@ -163,11 +164,35 @@ const irDash = html.slice(html.indexOf('function irDash()'), html.indexOf('funct
 conf(irDash.indexOf('faixaPintar()') > irDash.indexOf('faixaBloco'),
   'e a irDash chama faixaPintar() DEPOIS de escrever o BODY');
 
-conf(/\.faixa\{[^}]*height:40px;/.test(html), 'a faixa do rodape subiu para 40px');
+conf(/\.faixa\{[^}]*height:40px;/.test(html), 'a faixa subiu para 40px');
 conf(/\.faixa-mv\{[^}]*font-size:13px;/.test(html), 'e o texto dela para 13px');
-conf(/\.faixa-bloco\{[^}]*padding:14px 18px;/.test(html), 'o bloco tem respiro de 14x18');
-conf(/\.faixa-bloco-item\{[^}]*white-space:normal;/.test(html), 'e o texto do bloco quebra');
-conf(/\.faixa-bloco\.urg\{background:#7A1620;/.test(html), 'o bloco urgente usa a MESMA cor do rodape');
+// ⚠️ A classe do Dashboard so pode mexer em POSICAO. Cor, altura e animacao vem da `.faixa`,
+// que e uma so — se ela ganhar background ou height proprios, as duas formas divergem.
+const regraDash = (html.match(/\.faixa-dash\{[^}]*\}/) || [''])[0];
+conf(/margin-top:14px/.test(regraDash) && /border-radius:12px/.test(regraDash),
+  'a classe do Dashboard da respiro e canto arredondado');
+conf(!/background|height:|animation/.test(regraDash),
+  'e NAO mexe em cor, altura nem animacao', regraDash);
+conf(!/\.faixa-bloco\b/.test(html), 'o bloco parado saiu do CSS — nao ha marcacao morta');
+
+console.log('\n═══ 10. AS LOGOS DA GOVERNANCA E O BOTAO DA PRODUTIVIDADE ═══');
+
+conf(/\.ft-lg img\{height:48px;/.test(html), 'as logos da governanca subiram para 48px');
+conf(/\.ft-lg img\{[^}]*opacity:\.7;/.test(html),
+  'e a opacidade subiu junto — logo maior e apagada so fica maior e apagada');
+conf(/\.ft-lg img\{[^}]*grayscale\(100%\)/.test(html) && /\.ft-lg:hover img\{filter:none/.test(html),
+  'o cinza fica, e a cor volta no hover — sao quatro marcas de orgaos diferentes');
+
+conf(/>\s*SUA PRODUTIVIDADE\s*<\/button>/.test(html), 'o botao do Dashboard diz SUA PRODUTIVIDADE');
+// ⚠️ O "(NL)" saiu dos DOIS ROTULOS VISIVEIS. A unidade de produtividade e a PC baixada
+// (CGE 727/2025), nao a NL — o rotulo antigo contradizia a regra do sistema.
+//
+// ⚠️ E O TESTE MEDE O ROTULO, NAO A STRING. A primeira versao procurava "Produtividade (NL)"
+// no arquivo inteiro e falhava por causa de um COMENTARIO de CSS que registra o nome antigo.
+// Teste que casa comentario proibe explicar a mudanca no codigo.
+conf(!/>\s*Produtividade \(NL\)\s*</.test(html), 'e nenhum rotulo visivel diz "(NL)"');
+conf(/<div style="font-size:16px;font-weight:700;">Produtividade<\/div>/.test(html),
+  'o titulo da tela ficou neutro — o coordenador ve a de todos, nao "a sua"');
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);

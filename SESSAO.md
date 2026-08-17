@@ -131,41 +131,78 @@ O que os 38 testes **não** conseguem provar, porque nenhum deles desenha um pix
 ⚠️ **Se o "Assumir" ficar apertado**, é a coluna Ações em 10% — e a saída registrada é
 Status 8% + Ações 9%, que devolvem 3 pontos à entidade.
 
-### A FAIXA DE AVISOS — duas formas, uma de cada vez (16/08/2026)
+### A FAIXA DE AVISOS — a MESMA faixa, só que em outro lugar (16/08/2026)
 
-| tela | forma |
+| tela | onde |
 |---|---|
-| **Dashboard** | **BLOCO PARADO** logo abaixo da Estrutura de Governança, texto **inteiro**, quebrando em linhas. **O rodapé fica vazio.** |
-| demais telas | a faixa **rolando** no rodapé, como sempre foi |
+| **Dashboard** | logo abaixo da **Estrutura de Governança**. **Rola igual.** O rodapé fica vazio. |
+| demais telas | no **rodapé**, como sempre foi |
 
-Altura **30 → 40 px** nas duas; corpo **12 → 13 px**. O bloco usa 13,5 px com entrelinha 1,6 e
-respiro de 14×18. Mesma cor, mesma etiqueta **URGENTE**.
+Altura **30 → 40 px**, corpo **12 → 13 px**. Mesma cor, mesma etiqueta **URGENTE**, mesmo
+carrossel.
 
-⚠️ **NO DASHBOARD O RODAPÉ FICA VAZIO, de propósito.** Mostrar os dois seria o mesmo recado
-duas vezes na mesma tela, um deles passando devagar por baixo do outro.
+⚠️ **A PRIMEIRA VERSÃO DISTO ESTAVA ERRADA**, e fica registrado: eu fiz um **bloco parado**
+com o texto inteiro, quebrando em linhas. O Richard corrigiu — **é a mesma faixa rolando, só
+muda a posição.** O que a rolagem custa em legibilidade era problema meu, não dele.
 
-⚠️ **OS DOIS SAEM DA MESMA LISTA `vis`, dentro da MESMA `faixaPintar`.** Se cada forma
-filtrasse por conta própria, um dia o bloco diria uma coisa e o rodapé outra — e ninguém
-saberia qual é a certa. É o mesmo raciocínio do `PC_LIVRE_SQL`.
+⚠️ **A MARCAÇÃO É MONTADA UMA VEZ SÓ.** As duas posições saem da mesma função e da mesma
+string; a única diferença permitida é a classe **`.faixa-dash`**, que acrescenta canto
+arredondado e respiro — porque ali a faixa mora *dentro* do conteúdo, não colada na borda da
+janela. **Há teste que compara as duas marcações caractere a caractere** e falha se elas
+divergirem em qualquer outra coisa. Uma segunda montagem divergiria da primeira no dia em que
+alguém mexesse numa e esquecesse a outra — foi o defeito dos dois ramos do cartão da parcial
+(armadilha 19).
+
+⚠️ **`.faixa-dash` só pode mexer em POSIÇÃO.** Cor, altura e animação vêm da `.faixa`, que é
+uma só. Há teste que falha se ela ganhar `background`, `height` ou `animation` próprios.
+
+⚠️ **NO DASHBOARD O RODAPÉ FICA VAZIO, de propósito.** As duas ao mesmo tempo seriam o mesmo
+recado duas vezes na mesma tela, um passando por baixo do outro.
 
 ⚠️ **A `irDash` chama `faixaPintar()` DE NOVO, depois do `innerHTML`.** O `ativarMenu('dash')`
 já chamou `faixaTela('inicial')` lá em cima, mas naquele instante o `#faixaBloco` **ainda não
-existia** — o BODY só é reescrito depois. Sem a segunda chamada o bloco nasce vazio e só
-aparece na recarga de 5 minutos. Há teste que compara as posições das duas no arquivo.
+existia** — o BODY só é reescrito depois. Sem a segunda chamada a faixa nasce vazia no
+Dashboard e só aparece na recarga de 5 minutos. Há teste que compara as posições das duas
+chamadas no arquivo.
 
-⚠️ **Dois avisos viram DOIS itens no bloco, não um parágrafo.** No rodapé eles são emendados
-com `•`, porque ali é uma linha só; com o texto quebrando, dois recados colados virariam um
-parágrafo e o segundo se perderia.
-
-**Suíte nova `teste_front_faixa.js` — 36 checagens**, e ela **executa a `faixaPintar` de
+**Suíte nova `teste_front_faixa.js` — 43 checagens**, e ela **executa a `faixaPintar` de
 verdade** num DOM de mentira, em vez de casar texto do arquivo.
 ⚠️ **Para isso ela troca `let`/`const` de topo por `var`**: declaração léxica não vira
 propriedade do contexto do `vm`, e o teste não conseguiria nem ler nem escrever `_faixas`.
 
-**O aviso que está no ar é o id 6**, escopo `urgente`, ativo — criado pelo Richard na tela.
-⚠️ **O texto no banco é MAIOR que o que ele colou no chat**: termina em *"...no seu grupo: há
-orientações sobre o que verificar e como proceder."*, contra *"...no seu grupo."*. **Não foi
-alterado** — mudar aviso é escrita, e a tela Faixa de avisos resolve em dez segundos.
+### As logos da governança, e o botão da produtividade (16/08/2026)
+
+**Logos: 30 → 48 px**, e a opacidade de `.55` para `.7` no mesmo movimento — **uma logo maior
+e igualmente apagada só fica maior e apagada**. O `grayscale` fica: são quatro marcas de órgãos
+diferentes, e em cor elas brigariam entre si e com o verde do sistema; a cor volta no *hover*,
+uma de cada vez.
+
+**O botão do Dashboard virou "SUA PRODUTIVIDADE"** (era "Produtividade (NL)"). O título da
+tela, que também dizia "(NL)", ficou **"Produtividade"** — sem o "sua", porque o coordenador e
+o superadmin veem a tela de todo mundo, não a deles.
+⚠️ **O "(NL)" contradizia a regra do sistema:** a unidade de produtividade é a **PC baixada**
+(CGE nº 727/2025), não a NL.
+
+⚠️ **UM TESTE DO MENU QUEBROU POR CASAR A REDAÇÃO** — ele procurava a string
+`Produtividade (NL)` para provar que o botão existia. Nada tinha sumido: só o nome mudou.
+Passou a medir o **caminho** (`onclick="irProd()"` + `</button>`), e o rótulo é conferido num
+lugar só. **É a lição 8 do dia acontecendo de novo.**
+
+### O aviso id 6 — o `UPDATE` está PRONTO e NÃO foi rodado
+
+`atualizar_aviso_id6.js`, dry-run passou nas **7 conferências**. Troca **uma coluna de uma
+linha** (`texto`) e confere, na mesma transação, que `escopo`, `ativo`, `grupo`, `ordem` e o
+período não mudaram, e que nenhum outro aviso foi tocado.
+
+Saem **54 caracteres**: os primeiros 178 são idênticos, e a diferença é a cauda
+*": há orientações sobre o que verificar e como proceder."* virando *"."*.
+
+⚠️ **Vai por script e não por `psql`**: o texto tem travessão, acento e cedilha, e o parâmetro
+`$1` do `pg` entrega a string byte a byte. Colar SQL com acento no terminal do Windows é como
+se perde um "ç" sem ninguém ver.
+
+⚠️ **O aviso tem PERÍODO: início 17/08 e fim 18/08.** Ele sai do ar sozinho depois de amanhã —
+o que talvez não seja o que se espera de um recado sobre a versão nova.
 
 ### ⚠️ ACHADO NA MESMA FUNÇÃO, **NÃO CORRIGIDO** — o `isMeuTR` erra em 5 analistas
 
