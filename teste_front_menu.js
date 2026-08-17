@@ -297,9 +297,18 @@ console.log('\n═══ 9. ONLINE AGORA SAIU DO MENU E FOI PARA O CABECALHO ═
 
   // ── O botao precisa PARECER botao (12/08/2026) ──────────────────────────
   // Antes eram so a bolinha e o numero, e ninguem descobria que abria uma lista.
-  const btn = html.slice(html.indexOf('id="onlineBox"'), html.indexOf('id="onlineBox"') + 1600);
+  // ⚠️ A JANELA CRESCEU DE 1600 PARA 2800 EM 16/08/2026, e o motivo importa: o icone de
+  // pessoas entrou com um `path` de SVG longo, e o rotulo "Usuários online" saiu do recorte.
+  // Os TRES testes abaixo falharam sem que nada tivesse sumido da tela. Recorte de tamanho
+  // fixo sobre marcacao que cresce mede o tamanho do bloco, nao o conteudo dele.
+  const btn = html.slice(html.indexOf('id="onlineBox"'), html.indexOf('id="onlineBox"') + 2800);
   conf(/Usuários online/.test(btn), 'o rotulo "Usuários online" esta no botao');
   conf(/id="onlineSeta"/.test(btn), 'e ha uma seta indicando que abre');
+  // O icone de pessoas, ao lado do ponto verde (16/08/2026). O ponto sozinho dizia que algo
+  // estava ligado, mas nao dizia do que.
+  conf(/<svg[^>]*>\s*<path[^>]*d="M16 11c1\.66/.test(btn), 'o icone de pessoas esta no botao');
+  conf(btn.indexOf('<svg') < btn.indexOf('background:#7BE38B'),
+       'e o icone vem ANTES do ponto verde, nao depois');
   conf(/class="online-rot"/.test(btn) && /@media\(max-width:900px\)\{ \.online-rot\{display:none;\} \}/.test(html),
        'o rotulo sai em tela estreita — o cabecalho ja leva sino, nome, perfil, avatar e Sair');
   conf(/aria-expanded="false"/.test(btn), 'nasce com aria-expanded=false');

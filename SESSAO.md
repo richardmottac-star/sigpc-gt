@@ -4,10 +4,72 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 ---
 
-## ▶▶ 16/08 — A NUMERAÇÃO DAS PARCIAIS: ONDE PARAMOS (leia isto primeiro)
+## ✅ O ESTADO DE AGORA — leia isto primeiro
 
-**Nada foi gravado nesta frente.** Um backup foi criado; o `renumerar_sigef.js` NUNCA rodou
-com `--gravar`. Tudo abaixo é medição.
+> ⚠️ **ESTE ARQUIVO ESTAVA DESATUALIZADO.** A seção "A NUMERAÇÃO DAS PARCIAIS: ONDE PARAMOS",
+> mais abaixo, abre dizendo que nada foi gravado e que falta o Richard responder se o SIGEF
+> permite duas parcelas no mesmo processo SGPe. **As duas coisas mudaram**: a pergunta foi
+> respondida (**SIM** — 113 pares, 78 TRs, 465 PCs) e a renumeração **foi gravada** em 211 TRs.
+> A seção fica como registro do que se mediu, não como estado. **O estado é este bloco.**
+
+### A tela Estoque de TRs — ajustada em 16/08/2026
+
+| | |
+|---|---|
+| cabeçalho | faixa **54 → 62 px** · logo do Estado **40 → 48 px** · caixa branca **220 → 240 px** |
+| ícone de pessoas | entrou **antes** do ponto verde de "N usuários online" |
+| tabela | **BAIXADAS e ANALISTA saíram** — 9 colunas viraram 7 |
+| larguras | TR 13% · SGPe MÃE 19% · **Entidade 36%** · PCs 6% · NLs 6% · Status 10% · Ações 10% |
+| entidade | **quebra em mais de uma linha** — o maior nome do acervo tem 81 caracteres |
+| cabeçalho da tabela | centralizado; **as células não** |
+
+⚠️ **O QUE FAZ O NOWRAP VALER É O `table-layout:fixed`, NÃO A LARGURA.** Percentual em
+`<col>` é sugestão: sem o `fixed`, o navegador estica a coluna que o conteúdo exigir e a TR
+quebra em duas linhas **mesmo com o `white-space:nowrap` escrito**. Por isso ele mora na
+classe **`.tbl-est`**, e não no seletor `table{}` — que é global e vale para dezenas de
+tabelas, inclusive o relatório CGE, que depende da largura automática. Há teste que falha se
+o `fixed` vazar para o seletor global.
+
+⚠️ **BAIXADAS e ANALISTA saíram porque a TR SOME desta tela quando é assumida** — as duas só
+sabiam mostrar zero e travessão. Mas `t.baixadas` e `analista_nome` **continuam sendo lidos**:
+é deles que saem o `statusDerivado` e o "esta TR é minha". Tirar a coluna não podia tirar o
+cálculo, e há teste para isso.
+
+⚠️ **O `colspan` acompanhou** — 9 → 7 em cinco lugares (carregando, erro, vazio, separador de
+grupo). Um `colspan` que não acompanha **não dá erro**: as linhas apenas deixam de ocupar a
+tabela toda.
+
+⚠️ **A coluna STATUS ficou, e foi decisão do agente.** O Richard mandou tirar **duas** colunas
+e sugeriu larguras que somam 100% **sem o Status** (14+20+42+7+7+10). Mantê-lo custou 6% da
+entidade; tirá-lo sem ele ter pedido custaria a etiqueta no filtro **"Todos"**, onde as cinco
+situações vêm misturadas. **Reverter é tirar um `<col>`, um `<th>`, uma `<td>` e pôr
+`colspan="6"`.**
+
+⚠️ **Um comentário meu dentro do template literal quebrou o arquivo** — armadilha 10, de novo,
+e no mesmo dia em que ela aparece três vezes no `SESSAO.md` do `sigpc-api`. Escrevi crases em
+volta de `0` num comentário HTML que mora dentro de uma `` `...` ``. O `node --check` pegou.
+
+**Testes: 17 suítes · 977 passaram · 0 falharam**, incluindo a nova `teste_front_estoque.js`
+(32 checagens).
+
+⚠️ **O `teste_front_menu.js` quebrou por motivo falso e vale como lição:** ele recorta 1.600
+caracteres a partir de `id="onlineBox"` e procura o rótulo lá dentro. O `path` do SVG novo
+empurrou o rótulo para fora do recorte, e **três testes falharam sem que nada tivesse sumido
+da tela**. Recorte de tamanho fixo sobre marcação que cresce mede o tamanho do bloco, não o
+conteúdo dele. A janela foi para 2.800.
+
+**Nada disso foi clicado por uma pessoa.** O mockup fiel está em `MOCKUP_ESTOQUE_AB.html`
+(não versionado), com o logo real e as cinco maiores entidades do acervo.
+
+---
+
+## ▶▶ 16/08 — A NUMERAÇÃO DAS PARCIAIS: ONDE PARAMOS
+
+> ⚠️ **SEÇÃO HISTÓRICA — o estado dela está superado.** Ver o bloco acima. A pergunta do SIGEF
+> foi respondida (**SIM**) e a renumeração foi gravada em 211 TRs.
+
+**Nada foi gravado nesta frente** *(verdade quando isto foi escrito, de manhã)*. Um backup foi
+criado; o `renumerar_sigef.js` NUNCA rodou com `--gravar`. Tudo abaixo é medição.
 
 ### A cadeia causal — o diagnóstico MUDOU no meio do dia
 
