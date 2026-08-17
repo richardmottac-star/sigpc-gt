@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Faixa de Avisos</title>
+<style>
+  :root{
+    --pg-bg:#F7F9F8; --pg-card:#FFFFFF; --pg-linha:#DFE6E2;
+    --pg-tx:#16211D; --pg-tx2:#5C6B64; --pg-tx3:#8B968F;
+    --pg-verde:#006B3C; --pg-ambar:#B45309; --pg-ambar-bg:#FEF6E7;
+    --pg-verm:#B3202F; --pg-verm-bg:#FDEEEF; --pg-cod:#F1F5F3;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --pg-bg:#0E1513; --pg-card:#161F1C; --pg-linha:#2A3733;
+      --pg-tx:#E6EDEA; --pg-tx2:#9DAAA4; --pg-tx3:#6F7C76;
+      --pg-verde:#3FBF80; --pg-ambar:#E9A03C; --pg-ambar-bg:#2A2114;
+      --pg-verm:#F0808C; --pg-verm-bg:#2A1417; --pg-cod:#1D2926;
+    }
+  }
+  :root[data-theme="dark"]{
+    --pg-bg:#0E1513; --pg-card:#161F1C; --pg-linha:#2A3733;
+    --pg-tx:#E6EDEA; --pg-tx2:#9DAAA4; --pg-tx3:#6F7C76;
+    --pg-verde:#3FBF80; --pg-ambar:#E9A03C; --pg-ambar-bg:#2A2114;
+    --pg-verm:#F0808C; --pg-verm-bg:#2A1417; --pg-cod:#1D2926;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--pg-bg);color:var(--pg-tx);
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.55;}
+  .pg{max-width:1080px;margin:0 auto;padding:40px 24px 80px;display:flex;flex-direction:column;gap:36px;}
+  .cab{display:flex;flex-direction:column;gap:8px;padding-bottom:20px;border-bottom:2px solid var(--pg-linha);}
+  .cab .olho{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pg-verde);}
+  .cab h1{margin:0;font-size:31px;line-height:1.15;font-weight:800;letter-spacing:-.02em;text-wrap:balance;}
+  .cab p{margin:0;max-width:66ch;color:var(--pg-tx2);font-size:14.5px;}
+  section{display:flex;flex-direction:column;gap:14px;}
+  h2{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em;}
+  h2 .n{color:var(--pg-tx3);font-weight:700;margin-right:9px;}
+  .sub{margin:0;color:var(--pg-tx2);font-size:14px;max-width:74ch;}
+  .rot{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;font-size:10.5px;
+       font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--pg-tx2);}
+  .rot::before{content:"";width:16px;height:2px;background:var(--pg-tx3);border-radius:2px;}
+  .rot.dep{color:var(--pg-verde);} .rot.dep::before{background:var(--pg-verde);}
+  .moldura{border:1px solid var(--pg-linha);border-radius:10px;overflow:hidden;background:#EDF2EE;}
+  .moldura.pal{opacity:.72;}
+
+  /* ══ a paleta real do SIGPC-GT, fixa nos dois temas ══ */
+  .app{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1A2E22;background:#EDF2EE;padding:14px;}
+  .gov-ft{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);
+          border-top:3px solid #006B3C;padding:16px 20px 13px;}
+  .gov-ft-hd{font-size:9.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
+             color:#4A5E52;text-align:center;margin-bottom:13px;}
+  .gov-ft-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:center;}
+  .ft-lg{display:flex;flex-direction:column;align-items:center;gap:7px;padding:6px 8px;}
+  .ft-lg .sel{width:68px;height:40px;border-radius:4px;background:#E3E8E5;}
+  .ft-lg span{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#4A5E52;}
+  .gov-ft-legal{margin-top:12px;padding-top:10px;border-top:1px solid #F2F5F3;text-align:center;
+                font-size:10px;color:#4A5E52;line-height:1.5;}
+
+  /* o BLOCO — como ficou no código */
+  .faixa-bloco{margin-top:14px;background:#0F3D2E;border-radius:12px;border-top:3px solid #00A85E;
+               box-shadow:0 2px 8px rgba(0,0,0,.08);padding:14px 18px;display:flex;flex-direction:column;gap:9px;}
+  .faixa-bloco.urg{background:#7A1620;border-top-color:#E5484D;}
+  .faixa-bloco-item{font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.94);font-weight:600;
+                    letter-spacing:.2px;white-space:normal;overflow-wrap:anywhere;}
+  .faixa-urg-tag{background:#E5484D;color:#fff;font-size:9.5px;font-weight:800;border-radius:4px;
+                 padding:1px 7px;margin-right:9px;}
+  .faixa-bloco-item .faixa-urg-tag{vertical-align:2px;}
+
+  /* a FAIXA do rodapé */
+  .faixa{background:#0F3D2E;border-top:2px solid #006B3C;overflow:hidden;position:relative;
+         height:40px;display:flex;align-items:center;}
+  .faixa.urg{background:#7A1620;border-top-color:#E5484D;}
+  .faixa.antiga{height:30px;}
+  .faixa-dash{margin-top:14px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .faixa-mv{display:inline-block;white-space:nowrap;padding-left:100%;
+            animation:faixaRolar 34s linear infinite;font-size:13px;color:rgba(255,255,255,.94);
+            font-weight:600;letter-spacing:.2px;}
+  .faixa.antiga .faixa-mv{font-size:12px;color:rgba(255,255,255,.92);}
+  .faixa:hover .faixa-mv{animation-play-state:paused;}
+  .faixa-sep{opacity:.45;margin:0 22px;}
+  @keyframes faixaRolar{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+  @media (prefers-reduced-motion: reduce){
+    .faixa-mv{animation:none;padding-left:18px;white-space:normal;}
+    .faixa{height:auto;padding:6px 0;}
+  }
+  .rodape-falso{background:#fff;border-top:1px solid #D0DDD5;padding:7px 16px;font-size:11px;color:#4A5E52;}
+
+  .cx{border:1px solid var(--pg-linha);border-left:3px solid var(--pg-ambar);background:var(--pg-ambar-bg);
+      border-radius:0 8px 8px 0;padding:14px 16px;display:flex;flex-direction:column;gap:7px;}
+  .cx.dec{border-left-color:var(--pg-verm);background:var(--pg-verm-bg);}
+  .cx h3{margin:0;font-size:13.5px;font-weight:800;}
+  .cx p{margin:0;font-size:13.5px;}
+  .cx ul{margin:2px 0 0;padding-left:19px;display:flex;flex-direction:column;gap:5px;}
+  .cx li{font-size:13.5px;}
+  code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:12.5px;
+       background:var(--pg-cod);padding:1.5px 5px;border-radius:4px;}
+  .grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+  .fato{background:var(--pg-card);border:1px solid var(--pg-linha);border-radius:9px;padding:12px 14px;
+        display:flex;flex-direction:column;gap:3px;}
+  .fato .k{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--pg-tx3);}
+  .fato .v{font-size:22px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+  .fato .d{font-size:12.5px;color:var(--pg-tx2);}
+</style>
+
+<div class="pg">
+
+  <header class="cab">
+    <div class="olho">SIGPC-GT · já está no código</div>
+    <h1>Faixa de Avisos</h1>
+    <p>A mesma faixa, rolando igual — muda só o lugar. No Dashboard ela sai do rodapé e vai
+       para logo abaixo da Estrutura de Governança. Mais alta nas duas, as logos maiores, e o
+       botão da produtividade renomeado.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span>No Dashboard — a mesma faixa rolando, só que aqui</h2>
+    <p class="sub">Logo abaixo da Estrutura de Governança, em vez do rodapé. <strong>Rola
+       igual</strong> — é a mesma faixa, no mesmo carrossel. As logos também subiram de
+       30 para 48 px.</p>
+
+    <span class="rot dep">Depois</span>
+    <div class="moldura">
+      <div class="app">
+        <div class="gov-ft">
+          <div class="gov-ft-hd">Estrutura de Governança do Grupo de Trabalho</div>
+          <div class="gov-ft-grid">
+            <div class="ft-lg"><div class="sel"></div><span>SEGOV</span></div>
+            <div class="ft-lg"><div class="sel"></div><span>Casa Civil</span></div>
+            <div class="ft-lg"><div class="sel"></div><span>FCEE</span></div>
+            <div class="ft-lg"><div class="sel"></div><span>CGE</span></div>
+          </div>
+          <div class="gov-ft-legal"><b>SIGPC-GT</b> — Sistema de Gestão de Prestações de Contas</div>
+        </div>
+        <div class="faixa urg faixa-dash" title="Passe o mouse para pausar e ler">
+          <div class="faixa-mv"><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.<span class="faixa-sep">•</span><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sub">É este o texto que está no ar agora (aviso id 6, escopo <code>urgente</code>).
+       O rodapé do Dashboard fica <strong>vazio</strong> — mostrar as duas seria o mesmo recado
+       duas vezes na mesma tela.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Nas demais telas — rolando no rodapé</h2>
+    <p class="sub">Como sempre foi, só que mais alta. Passe o mouse por cima para pausar.</p>
+
+    <span class="rot">Antes — 30 px</span>
+    <div class="moldura pal">
+      <div class="app" style="padding:0;">
+        <div class="faixa urg antiga" title="Passe o mouse para pausar e ler">
+          <div class="faixa-mv"><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.<span class="faixa-sep">•</span><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.</div>
+        </div>
+        <div class="rodape-falso">SIGPC-GT · FCEE</div>
+      </div>
+    </div>
+
+    <span class="rot dep">Depois — 40 px</span>
+    <div class="moldura">
+      <div class="app" style="padding:0;">
+        <div class="faixa urg" title="Passe o mouse para pausar e ler">
+          <div class="faixa-mv"><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.<span class="faixa-sep">•</span><span class="faixa-urg-tag">URGENTE</span>SISTEMA AJUSTADO E ATUALIZADO EM 16/08/2026 — Numeração das parciais corrigida e Controle Interno regularizado. Dê Ctrl+F5 para carregar a versão nova. Leia o recado no seu grupo: há orientações sobre o que verificar e como proceder.</div>
+        </div>
+        <div class="rodape-falso">SIGPC-GT · FCEE</div>
+      </div>
+    </div>
+
+    <div class="grade">
+      <div class="fato"><span class="k">Altura da faixa</span><span class="v">30 → 40 px</span><span class="d">nas duas versões</span></div>
+      <div class="fato"><span class="k">Corpo do texto</span><span class="v">12 → 13 px</span><span class="d">e opacidade .92 → .94</span></div>
+      <div class="fato"><span class="k">Texto do bloco</span><span class="v">13,5 px</span><span class="d">entrelinha 1,6</span></div>
+      <div class="fato"><span class="k">Respiro do bloco</span><span class="v">14 × 18 px</span><span class="d">era colado nas bordas</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>O que decidi, e o que precisa de você</h2>
+
+    <div class="cx">
+      <h3>✓ No Dashboard o rodapé fica vazio</h3>
+      <p>É a mesma faixa, só que ali em cima. Mostrar as duas seria o mesmo recado duas vezes
+         na mesma tela, um passando por baixo do outro.</p>
+    </div>
+
+    <div class="cx">
+      <h3>✓ A marcação é montada uma vez só</h3>
+      <p>As duas posições saem da <strong>mesma linha de código</strong>. A única diferença é
+         a classe <code>faixa-dash</code>, que acrescenta canto arredondado e um respiro em
+         cima — porque no Dashboard a faixa mora <em>dentro</em> do conteúdo, e não colada na
+         borda da janela. Cor, altura e animação vêm da mesma regra.</p>
+      <p>Há teste que compara as duas marcações caractere a caractere e falha se elas
+         divergirem em qualquer coisa além dessa classe.</p>
+    </div>
+
+    <div class="cx">
+      <h3>✓ As logos: 30 → 48 px, e a opacidade junto</h3>
+      <p>Subi a opacidade de <code>.55</code> para <code>.7</code> no mesmo movimento — uma
+         logo maior e igualmente apagada só fica maior e apagada. O cinza fica: são quatro
+         marcas de órgãos diferentes, e em cor elas brigariam entre si e com o verde do
+         sistema. A cor volta no <em>hover</em>, uma de cada vez.</p>
+    </div>
+
+    <div class="cx">
+      <h3>✓ "SUA PRODUTIVIDADE", e o (NL) saiu dos dois lugares</h3>
+      <p>O botão do Dashboard virou <strong>SUA PRODUTIVIDADE</strong>. O título da tela, que
+         também dizia "(NL)", ficou só <strong>Produtividade</strong> — sem o "sua", porque o
+         coordenador e o superadmin veem a tela de todo mundo.</p>
+      <p>O "(NL)" contradizia a regra do sistema: a unidade de produtividade é a
+         <strong>PC baixada</strong> (CGE nº 727/2025), não a NL.</p>
+    </div>
+
+    <div class="cx dec">
+      <h3>⚠ O texto no ar é MAIOR que o que você colou</h3>
+      <p>O aviso <strong>id 6</strong> já existe no banco, escopo <code>urgente</code> e ativo.
+         O que está lá termina assim:</p>
+      <p>“… Leia o recado no seu grupo<strong>: há orientações sobre o que verificar e como
+         proceder.</strong>”</p>
+      <p>O que você colou agora termina em “<strong>Leia o recado no seu grupo.</strong>”</p>
+      <p><strong>O <code>UPDATE</code> está pronto e o dry-run passou nas 7 conferências</strong>
+         — <code>atualizar_aviso_id6.js</code>. Ele troca <em>uma coluna de uma linha</em> e
+         confere, na mesma transação, que escopo, ativo, grupo, ordem e período não mudaram.
+         <strong>Falta a sua ordem para rodar com <code>--gravar</code>.</strong></p>
+      <p>Saem 54 caracteres: os primeiros 178 são idênticos, e a diferença é só a cauda
+         “<em>: há orientações sobre o que verificar e como proceder.</em>” virando “<em>.</em>”</p>
+      <p>⚠️ E uma coisa que você talvez não saiba: o aviso tem <strong>período</strong> —
+         início 17/08 e fim <strong>18/08</strong>. Ele sai do ar sozinho depois de amanhã.</p>
+    </div>
+  </section>
+
+</div>
+
+</html>
