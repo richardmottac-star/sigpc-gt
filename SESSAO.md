@@ -131,6 +131,42 @@ O que os 38 testes **não** conseguem provar, porque nenhum deles desenha um pix
 ⚠️ **Se o "Assumir" ficar apertado**, é a coluna Ações em 10% — e a saída registrada é
 Status 8% + Ações 9%, que devolvem 3 pontos à entidade.
 
+### A FAIXA DE AVISOS — duas formas, uma de cada vez (16/08/2026)
+
+| tela | forma |
+|---|---|
+| **Dashboard** | **BLOCO PARADO** logo abaixo da Estrutura de Governança, texto **inteiro**, quebrando em linhas. **O rodapé fica vazio.** |
+| demais telas | a faixa **rolando** no rodapé, como sempre foi |
+
+Altura **30 → 40 px** nas duas; corpo **12 → 13 px**. O bloco usa 13,5 px com entrelinha 1,6 e
+respiro de 14×18. Mesma cor, mesma etiqueta **URGENTE**.
+
+⚠️ **NO DASHBOARD O RODAPÉ FICA VAZIO, de propósito.** Mostrar os dois seria o mesmo recado
+duas vezes na mesma tela, um deles passando devagar por baixo do outro.
+
+⚠️ **OS DOIS SAEM DA MESMA LISTA `vis`, dentro da MESMA `faixaPintar`.** Se cada forma
+filtrasse por conta própria, um dia o bloco diria uma coisa e o rodapé outra — e ninguém
+saberia qual é a certa. É o mesmo raciocínio do `PC_LIVRE_SQL`.
+
+⚠️ **A `irDash` chama `faixaPintar()` DE NOVO, depois do `innerHTML`.** O `ativarMenu('dash')`
+já chamou `faixaTela('inicial')` lá em cima, mas naquele instante o `#faixaBloco` **ainda não
+existia** — o BODY só é reescrito depois. Sem a segunda chamada o bloco nasce vazio e só
+aparece na recarga de 5 minutos. Há teste que compara as posições das duas no arquivo.
+
+⚠️ **Dois avisos viram DOIS itens no bloco, não um parágrafo.** No rodapé eles são emendados
+com `•`, porque ali é uma linha só; com o texto quebrando, dois recados colados virariam um
+parágrafo e o segundo se perderia.
+
+**Suíte nova `teste_front_faixa.js` — 36 checagens**, e ela **executa a `faixaPintar` de
+verdade** num DOM de mentira, em vez de casar texto do arquivo.
+⚠️ **Para isso ela troca `let`/`const` de topo por `var`**: declaração léxica não vira
+propriedade do contexto do `vm`, e o teste não conseguiria nem ler nem escrever `_faixas`.
+
+**O aviso que está no ar é o id 6**, escopo `urgente`, ativo — criado pelo Richard na tela.
+⚠️ **O texto no banco é MAIOR que o que ele colou no chat**: termina em *"...no seu grupo: há
+orientações sobre o que verificar e como proceder."*, contra *"...no seu grupo."*. **Não foi
+alterado** — mudar aviso é escrita, e a tela Faixa de avisos resolve em dez segundos.
+
 ### ⚠️ ACHADO NA MESMA FUNÇÃO, **NÃO CORRIGIDO** — o `isMeuTR` erra em 5 analistas
 
 O `renderEst` decide se a TR é sua comparando **NOME**, com um mapa próprio no `index.html`

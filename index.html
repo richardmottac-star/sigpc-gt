@@ -309,12 +309,14 @@ tr:last-child td{border-bottom:none;}
 /* ══ FAIXA DE AVISOS (rodapé) ══ */
 /* Fica ACIMA do rodapé fixo e só existe quando há aviso — sem mensagem, nem o espaço é
    ocupado, e a tela continua exatamente como era. */
+/* Altura 30 -> 40px e corpo 12 -> 13px em 16/08/2026: o texto estava apertado contra as
+   bordas, e a faixa e justamente o lugar em que se le de passagem. */
 .faixa{background:#0F3D2E;border-top:2px solid var(--v);overflow:hidden;position:relative;
-       height:30px;display:flex;align-items:center;}
+       height:40px;display:flex;align-items:center;}
 .faixa.urg{background:#7A1620;border-top-color:#E5484D;}
 .faixa-mv{display:inline-block;white-space:nowrap;padding-left:100%;
           animation:faixaRolar var(--faixa-seg,40s) linear infinite;
-          font-size:12px;color:rgba(255,255,255,.92);font-weight:600;letter-spacing:.2px;}
+          font-size:13px;color:rgba(255,255,255,.94);font-weight:600;letter-spacing:.2px;}
 /* Pausa ao passar o mouse: sem isso, texto longo obriga a esperar a volta inteira para
    terminar de ler — e o aviso vira ruído em vez de recado. */
 .faixa:hover .faixa-mv{animation-play-state:paused;}
@@ -322,6 +324,22 @@ tr:last-child td{border-bottom:none;}
 .faixa-urg-tag{background:#E5484D;color:#fff;font-size:9.5px;font-weight:800;
                border-radius:4px;padding:1px 7px;margin-right:9px;}
 @keyframes faixaRolar{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+
+/* ══ O BLOCO DA FAIXA NO DASHBOARD (16/08/2026) ═══════════════════════════════════════════
+   ⚠️ NO DASHBOARD A FAIXA NAO ROLA. Ela vira um bloco parado logo abaixo da Estrutura de
+   Governanca, e o texto aparece INTEIRO, quebrando em quantas linhas precisar. O motivo e o
+   que a rolagem custa: para ler o fim de um recado longo e preciso esperar a volta, e quem
+   chega no meio le pela metade. No Dashboard ha espaco; nas outras telas nao ha, e la a
+   faixa do rodape continua rolando.
+   ⚠️ E A MESMA MENSAGEM, A MESMA COR E A MESMA ETIQUETA — muda so a forma. Duas fontes de
+   texto dariam dois recados diferentes no mesmo dia. */
+.faixa-bloco{margin-top:14px;background:#0F3D2E;border-radius:12px;border-top:3px solid var(--vc);
+             box-shadow:var(--sombra);padding:14px 18px;display:flex;flex-direction:column;gap:9px;}
+.faixa-bloco.urg{background:#7A1620;border-top-color:#E5484D;}
+.faixa-bloco-item{font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.94);font-weight:600;
+                  letter-spacing:.2px;white-space:normal;overflow-wrap:anywhere;}
+/* A etiqueta URGENTE acompanha a primeira linha do texto em vez de flutuar sozinha. */
+.faixa-bloco-item .faixa-urg-tag{vertical-align:2px;}
 /* Quem pediu para reduzir movimento não recebe a rolagem: o texto fica parado e legível. */
 @media (prefers-reduced-motion: reduce){
   .faixa-mv{animation:none;padding-left:18px;white-space:normal;}
@@ -2835,9 +2853,18 @@ function irDash() {
         <b>SIGPC-GT</b> — Sistema de Gestão de Prestações de Contas
       </div>
     </div>
+    <!-- A faixa de avisos, aqui em forma de BLOCO PARADO e com o texto inteiro. Quem enche
+         este elemento e a mesma funcao faixaPintar que enche o rodape.
+         (Sem crase neste comentario: template literal, armadilha 10.) -->
+    <div id="faixaBloco"></div>
   `
   // Carregar dados frescos e atualizar tela
   carregarContadores()
+  // ⚠️ DE NOVO, E DEPOIS DO innerHTML. O `ativarMenu('dash')` la em cima ja chamou
+  // `faixaTela('inicial')`, mas naquele instante o `#faixaBloco` ainda nao existia — o BODY
+  // so foi reescrito agora. Sem esta linha o bloco nasce vazio e so aparece na recarga de 5
+  // minutos do `faixaCarregar`.
+  faixaPintar()
 }
 
 // ══════════════════════════════════════
@@ -4771,25 +4798,58 @@ function faixaVisiveis() {
   return _faixas.filter(f => f.escopo !== 'inicial' || _faixaTela === 'inicial')
 }
 
+// ⚠️ A MESMA MENSAGEM EM DUAS FORMAS, E UMA DE CADA VEZ (16/08/2026).
+//
+//   Dashboard      -> BLOCO parado (`#faixaBloco`), texto inteiro, quebrando em linhas.
+//   demais telas   -> a faixa ROLANDO no rodape (`#faixaAviso`), como sempre foi.
+//
+// ⚠️ NO DASHBOARD O RODAPE FICA VAZIO, de proposito. Mostrar as duas seria o mesmo recado
+// duas vezes na mesma tela, uma delas passando devagar por baixo da outra.
+//
+// ⚠️ E OS DOIS SAIAM DA MESMA LISTA `vis`. Se cada forma filtrasse por conta propria, um dia
+// o bloco diria uma coisa e o rodape outra — e ninguem saberia qual e a certa.
 function faixaPintar() {
-  const el = document.getElementById('faixaAviso')
-  if(!el) return
+  const rodape = document.getElementById('faixaAviso')
+  const bloco = document.getElementById('faixaBloco')   // só existe no Dashboard
+  const noDash = _faixaTela === 'inicial'
   const vis = faixaVisiveis()
-  if(!vis.length) { el.innerHTML = ''; return }
+
+  // Sem aviso, os dois ficam vazios — nem o espaço é ocupado (ver o comentário do topo).
+  if(!vis.length) {
+    if(rodape) rodape.innerHTML = ''
+    if(bloco) bloco.innerHTML = ''
+    return
+  }
 
   const urgente = vis.some(f => f.escopo === 'urgente')
+  const etiqueta = (f) => f.escopo === 'urgente' ? '<span class="faixa-urg-tag">URGENTE</span>' : ''
+
+  // ── O BLOCO do Dashboard ────────────────────────────────────────────────────
+  // Um item por aviso, e não tudo emendado com bullet: quebrando em linhas, dois recados
+  // colados viram um parágrafo só e o segundo se perde.
+  if(bloco) {
+    bloco.innerHTML = noDash
+      ? `<div class="faixa-bloco ${urgente?'urg':''}">${
+          vis.map(f => `<div class="faixa-bloco-item">${etiqueta(f)}${escHtml(f.texto||'')}</div>`).join('')
+        }</div>`
+      : ''
+  }
+
+  if(!rodape) return
+  // ── A FAIXA ROLANTE do rodapé — só fora do Dashboard ────────────────────────
+  if(noDash) { rodape.innerHTML = ''; return }
+
   // Uma volta proporcional ao texto: fixar a duração faria aviso curto rastejar e aviso longo
   // passar rápido demais para ser lido.
   const chars = vis.reduce((n,f) => n + (f.texto||'').length, 0)
   const seg = Math.max(FAIXA_SEG_MIN, Math.round(chars / 4))
 
-  const conteudo = vis.map(f =>
-    `${f.escopo === 'urgente' ? '<span class="faixa-urg-tag">URGENTE</span>' : ''}${escHtml(f.texto||'')}`
-  ).join('<span class="faixa-sep">•</span>')
+  const conteudo = vis.map(f => `${etiqueta(f)}${escHtml(f.texto||'')}`)
+    .join('<span class="faixa-sep">•</span>')
 
   // O conteúdo vai DUPLICADO: com uma cópia só, o fim do texto deixa um vão em branco
   // atravessando a tela antes de recomeçar.
-  el.innerHTML = `<div class="faixa ${urgente?'urg':''}" style="--faixa-seg:${seg}s"
+  rodape.innerHTML = `<div class="faixa ${urgente?'urg':''}" style="--faixa-seg:${seg}s"
       title="Passe o mouse para pausar e ler">
       <div class="faixa-mv">${conteudo}<span class="faixa-sep">•</span>${conteudo}</div>
     </div>`
