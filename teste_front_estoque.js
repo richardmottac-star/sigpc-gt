@@ -78,10 +78,34 @@ const regraTabelaGlobal = html.match(/\ntable\{[^}]*\}/);
 conf(regraTabelaGlobal && !/table-layout/.test(regraTabelaGlobal[0]),
   'e o fixed NAO vazou para o seletor table{} global');
 
-conf(/\.tbl-est \.est-tr, \.tbl-est \.est-mae\{white-space:nowrap;\}/.test(html),
-  'TR e SGPe MAE tem nowrap');
+conf(/\.tbl-est \.est-mae\{white-space:nowrap;\}/.test(html), 'o SGPe MAE tem nowrap');
 conf(/<td class="est-tr">/.test(est), 'a celula da TR usa a classe est-tr');
 conf(/class="proc-sgpe est-mae"/.test(est), 'e a do SGPe MAE usa est-mae');
+
+// ⚠️ O NOWRAP DA TR E DO CODIGO, NAO DA CELULA — e a diferenca foi um defeito na tela.
+// A celula tambem hospeda a etiqueta de reserva ("Aguardando aprovacao — Fulano", ate 41
+// caracteres). Com o nowrap na CELULA e o table-layout:fixed, ela transbordava por cima da
+// coluna SGPe MAE e tapava o link do processo. Visto na 2022TR001511 em 16/08/2026.
+conf(/\.tbl-est \.est-tr\{white-space:normal;\}/.test(html),
+  'a celula da TR pode ter mais de uma linha');
+conf(/\.tbl-est \.est-tr > strong\{white-space:nowrap;\}/.test(html),
+  'mas o CODIGO da TR continua preso numa linha so');
+
+console.log('\n═══ 3-B. A ETIQUETA DE RESERVA NAO INVADE A COLUNA AO LADO ═══');
+
+conf(/\.tbl-est \.est-reserva\{display:block;white-space:normal;overflow-wrap:anywhere;/.test(html),
+  'a etiqueta e block, quebra, e cabe na coluna');
+conf(/<div class="est-reserva"/.test(est), 'e a etiqueta usa a classe');
+
+// ⚠️ ESTILO INLINE VENCE CLASSE. Foi um `display:inline-block;white-space:nowrap` no atributo
+// style que causou o transbordo — se voltar para la, a classe acima nao adianta nada.
+const tag = est.slice(est.indexOf('const tagReserva'), est.indexOf('const tagReserva') + 900);
+conf(!/style="[^"]*display:inline-block/.test(tag), 'o display NAO voltou para o style inline');
+conf(!/style="[^"]*white-space:nowrap[^"]*">\s*⏳/.test(tag),
+  'nem o nowrap na div da etiqueta');
+// O "✕ cancelar" continua inteiro: e um link, e quebrar no meio dele seria pior que a quebra.
+conf(/cancelar<\/a>/.test(tag) && /white-space:nowrap;"\s*\n?\s*title="Cancelar/.test(tag),
+  'so o "✕ cancelar" fica sem quebra, por ser link');
 
 console.log('\n═══ 4. AS LARGURAS ═══');
 

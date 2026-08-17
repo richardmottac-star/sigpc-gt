@@ -73,6 +73,35 @@ conteúdo dele. A janela foi para 2.800.
 **Nada disso foi clicado por uma pessoa.** O mockup fiel está em `MOCKUP_ESTOQUE_AB.html`
 (não versionado), com o logo real e as cinco maiores entidades do acervo.
 
+### ⚠️ O DEFEITO QUE O RICHARD ACHOU ABRINDO A TELA — e é regressão dos ajustes
+
+**A etiqueta "⏳ Aguardando aprovação — Fulano" transbordava por cima da coluna SGPe MÃE e
+tapava o link do processo.** Visto na `2022TR001511`.
+
+**A causa é o `table-layout:fixed`.** A etiqueta mora na célula da TR e era
+`display:inline-block` com `white-space:nowrap` **no atributo `style`**. Enquanto a tabela
+tinha largura automática, a coluna esticava para caber e ninguém via problema. Com o `fixed`
+a coluna passou a ter **14% fixos** — e conteúdo `nowrap` que não cabe **não quebra e não é
+cortado: ele vaza para fora da célula**, por cima da coluna vizinha.
+
+**Medido:** a etiqueta tem 32 caracteres no caso real e **41** no pior (`— você  ✕ cancelar`).
+A 9,5 px isso passa de 215 px, e os 14% dão ~196 px num conteúdo de 1400. **Nunca coube.**
+
+**A correção:** o `nowrap` saiu da **célula** e foi para o **código da TR**. A célula pode ter
+mais de uma linha; a etiqueta virou `display:block` e quebra dentro da própria coluna.
+
+⚠️ **`display` e `white-space` foram para a classe `.est-reserva`, e NÃO ficaram no `style`:
+estilo inline vence classe, e foi exatamente um inline que causou o defeito.** Há dois testes
+que falham se voltarem para lá.
+
+⚠️ **A lição, e ela vale para o resto da tela:** `table-layout:fixed` não é só sobre larguras
+— ele tira da coluna a licença de esticar. **Toda célula que hospeda conteúdo de tamanho
+variável precisa poder quebrar**, ou vaza por cima da vizinha sem erro nenhum. A da TR era a
+única com esse caso, porque é a única que hospeda duas coisas.
+
+**Sobre o nome:** o Richard leu "Silvana"; a reserva daquela TR é da **Juliana** (id 45).
+**Não existe Silvana no cadastro** — conferido. O nome na etiqueta está certo.
+
 ### ▶ O QUE OLHAR AO ABRIR O ESTOQUE — a lista do Richard
 
 O que os 38 testes **não** conseguem provar, porque nenhum deles desenha um pixel:
@@ -95,8 +124,35 @@ O que os 38 testes **não** conseguem provar, porque nenhum deles desenha um pix
 - [ ] **O ícone de pessoas** aparece **antes** do ponto verde, no "N usuários online".
 - [ ] **Numa janela estreita**, passe o mouse na entidade: o `title` continua lá.
 
+- [ ] **A etiqueta de reserva não invade o SGPe MÃE.** Só duas TRs a têm hoje:
+      **`2022TR001511`** (Juliana) e **`2023TR000582`** (Rafael). Ela tem de ficar em linha
+      própria abaixo da TR, dentro da coluna.
+
 ⚠️ **Se o "Assumir" ficar apertado**, é a coluna Ações em 10% — e a saída registrada é
 Status 8% + Ações 9%, que devolvem 3 pontos à entidade.
+
+### ⚠️ ACHADO NA MESMA FUNÇÃO, **NÃO CORRIGIDO** — o `isMeuTR` erra em 5 analistas
+
+O `renderEst` decide se a TR é sua comparando **NOME**, com um mapa próprio no `index.html`
+(`MAPA_PLAN_EST`). É a **mesma tabela de nomes curtos** que estava quebrada no
+`sigpc-api/lib/assumir.js`, com **as mesmas três chaves mortas** — `Sandra Rocha`,
+`Ana Claudia` e `Ana Leticia` são o nome CURTO, e a chave é o `U.nome`, que é o completo.
+
+**Consequência:** para a Sandra Rocha (19), a Ana Claudia (22), a Ana Letícia (23), a Goreti
+(40) e a Janaína (51), `meuNomePlan` sai errado e **`isMeuTR` devolve `false` nas TRs delas** —
+o botão **"Ver" não aparece**, sai um travessão. Só se vê com o filtro fora de "Livre".
+
+⚠️ **NÃO foi corrigido, e o motivo é que o conserto certo não é copiar o mapa arrumado.**
+É a **armadilha 1**: comparar por `analista_id`, nunca por nome. Mas o
+`GET /prestacoes_contas/resumo_tr` **não devolve `analista_id`** — só `MAX(analista_nome)`.
+Fazer certo é mexer na rota do servidor, e isso é frente nova, não o defeito que o Richard
+relatou.
+
+**As duas saídas, para quando ele decidir:**
+1. **Certa:** acrescentar `MAX(analista_id)` ao `resumo_tr` e trocar `isMeuTR` por comparação
+   de id. Mata o `MAPA_PLAN_EST` inteiro — a tela deixa de ter opinião sobre nome.
+2. **Paliativa:** arrumar as três chaves do `MAPA_PLAN_EST` como se fez no servidor. Resolve
+   hoje e deixa a segunda cópia da mesma tabela viva, para divergir de novo depois.
 
 ### A tabela `estoque` — medida, e NÃO mexida
 

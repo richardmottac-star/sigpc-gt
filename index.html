@@ -186,10 +186,23 @@ tr:last-child td{border-bottom:none;}
    `title`, que so aparece para quem passa o mouse e espera. `anywhere` porque ha nome sem
    espaco util ("APAE-ASSOCIACAO..."), que sem isso estouraria a coluna. */
 .tbl-est .est-ent{white-space:normal;overflow-wrap:anywhere;line-height:1.35;}
-/* ⚠️ Estas duas NUNCA quebram — decisao do Richard. A largura do `<colgroup>` foi medida
+/* ⚠️ Estas NUNCA quebram — decisao do Richard. A largura do `<colgroup>` foi medida
    contra o acervo: TR tem sempre 12 caracteres, e o maior processo mae tem 20
    ("ADR05  00001022/2017", com dois espacos). */
-.tbl-est .est-tr, .tbl-est .est-mae{white-space:nowrap;}
+.tbl-est .est-mae{white-space:nowrap;}
+/* ⚠️ O NOWRAP E DO CODIGO DA TR, NAO DA CELULA — e a diferenca custou um defeito na tela.
+   A celula tambem hospeda a etiqueta "Aguardando aprovacao — Fulano", que tem ate 41
+   caracteres e nao cabe nos 14% da coluna. Com o nowrap na CELULA e o `table-layout:fixed`
+   (que tirou a licenca de a coluna esticar), a etiqueta TRANSBORDAVA por cima da coluna
+   SGPe MAE e tapava o link do processo. Visto na 2022TR001511 em 16/08/2026.
+   Agora a celula pode ter mais de uma linha e so o codigo da TR fica preso numa. */
+.tbl-est .est-tr{white-space:normal;}
+.tbl-est .est-tr > strong{white-space:nowrap;}
+/* A etiqueta ocupa LINHA PROPRIA abaixo da TR e quebra dentro da propria coluna.
+   ⚠️ `display:block` e `white-space:normal` tem de estar AQUI e nao no atributo `style`:
+   estilo inline vence classe, e foi um `display:inline-block;white-space:nowrap` inline que
+   causou o transbordo. */
+.tbl-est .est-reserva{display:block;white-space:normal;overflow-wrap:anywhere;max-width:100%;}
 
 /* ═══════ RELATÓRIO CGE — visual de documento oficial (papel) ═══════ */
 .cge-doc-wrap{background:#E8E8E8;border-radius:10px;padding:24px 12px;margin-bottom:12px;}
@@ -3079,11 +3092,21 @@ function renderEst(rows) {
     // está de pé. Só o texto muda: "você" em vez do próprio nome, que soaria estranho.
     const resTag = t.statusDerivado==='livre' ? EST_RESERVAS.get(t.tr) : null
     const resMinha = resTag && Number(resTag.analista_id)===Number(U.id)
+    // ⚠️ LINHA PROPRIA, DENTRO DA COLUNA TR — corrigido em 16/08/2026.
+    //
+    // Esta etiqueta era `display:inline-block` com `white-space:nowrap` no atributo `style`.
+    // Enquanto a tabela tinha largura automatica, a coluna esticava e ninguem via problema.
+    // Com o `table-layout:fixed` a coluna passou a ter 14% fixos, e a etiqueta — ate 41
+    // caracteres — TRANSBORDOU por cima da coluna SGPe MAE, tapando o link do processo.
+    // O Richard viu na 2022TR001511.
+    //
+    // O `display:block` e o `white-space` moram na classe `.est-reserva`, e NAO aqui: estilo
+    // inline vence classe, e foi exatamente um inline que causou o defeito.
     const tagReserva = resTag
-      ? `<div style="margin-top:3px;font-size:9.5px;color:#8A6100;background:#FFF4D6;border-radius:5px;padding:2px 6px;display:inline-block;white-space:nowrap;">
+      ? `<div class="est-reserva" style="margin-top:3px;font-size:9.5px;color:#8A6100;background:#FFF4D6;border-radius:5px;padding:2px 6px;">
            ⏳ Aguardando aprovação — ${resMinha ? 'você' : escHtml((resTag.nome||'—').split(' ')[0])}
            ${resMinha ? `<a href="javascript:void(0)" onclick="estCancelarReserva('${escHtml(t.tr)}',${resTag.id})"
-                style="margin-left:6px;color:var(--r);font-weight:700;text-decoration:none;"
+                style="margin-left:6px;color:var(--r);font-weight:700;text-decoration:none;white-space:nowrap;"
                 title="Cancelar meu pedido e devolver a TR ao estoque">✕ cancelar</a>` : ''}
          </div>`
       : ''
