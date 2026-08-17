@@ -2883,7 +2883,24 @@ async function buscar() {
       const totalPcs = parseInt(t.total_pcs)||0
       const baixadas = parseInt(t.baixadas)||0
       const statusList = t.status||[]
-      const statusDerivado = !t.analista_nome ? 'livre'
+      // ⚠️ "LIVRE" PASSA A VIR DO SERVIDOR, PELA MESMA REGRA DO ASSUMIR (16/08/2026).
+      //
+      // Isto dizia `!t.analista_nome ? 'livre'` — olhava SÓ o nome. O assumir
+      // (`lib/assumir.js`) exige sem dono **E** `status='livre'`. Sem dono com
+      // `status='analise'` caía no vão: **87 PCs em 6 TRs** apareciam como Livre no Estoque e
+      // recusavam com "Nenhuma PC livre nesta TR". Ninguém conseguia pegá-las desde 10/08.
+      //
+      // Agora `pcs_livres` vem do `resumo_tr`, contado com `assumir.PC_LIVRE_SQL` — a mesma
+      // string que o `SQL_LIVRES` usa. Não há duas implementações para divergirem de novo.
+      //
+      // ⚠️ E O `!t.analista_nome` FICA, junto: TR que já tem dono não é Livre, mesmo tendo PC
+      // solta dentro (são 4 hoje). Decisão do Richard — a unidade que se assume é a TR
+      // INTEIRA, e mostrar no Estoque uma TR que já é de outra pessoa convida a um conflito
+      // que a trava de limite não pega. As 4 órfãs são item de dado, à parte.
+      //
+      // Conferido contra o banco antes de trocar: 788 TRs Livres pela regra antiga, 788 pela
+      // nova. Nenhuma some da tela — o que muda é que as que aparecem agora dão para assumir.
+      const statusDerivado = (!t.analista_nome && (t.pcs_livres === undefined || +t.pcs_livres > 0)) ? 'livre'
         : baixadas >= totalPcs ? 'baixada'
         : statusList.includes('reanalise') ? 'reanalise'
         : statusList.includes('diligencia') ? 'diligencia'
