@@ -1310,6 +1310,135 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════
+     AS QUATRO FRENTES DE 18/08/2026 — os modais
+     A) corrigir situação · B) puxar do C.I. · C) cadastrar PC · D) pedir ao coordenador
+
+     ⚠️ TODOS ENTRAM POR `codigo_pc`, nunca por `parcial_num`. A PC final tem quatro grafias
+     de parcial_num no banco e, em 5 casos, divide o '1' com a parcial 1 da mesma TR.
+     ══════════════════════════════════════════════════════════════════════════ -->
+
+<div class="mo" id="moCorrigir">
+  <div class="mc">
+    <div class="mch v"><h3>✎ Corrigir situação da parcial</h3><button class="mcx" onclick="fm('moCorrigir')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="corInfo"></div>
+      <div id="corAvisoBaixa"></div>
+      <div class="mc-campo"><label>Nova situação *</label>
+        <select id="corDestino" onchange="corAtualizarAviso()"><option value="">Selecione…</option></select>
+      </div>
+      <div class="mc-campo"><label>Motivo * (mínimo 10 caracteres — fica no histórico e a CGE lê)</label>
+        <textarea id="corMotivo" rows="3" oninput="corContar()" style="resize:vertical;"
+          placeholder="Descreva por que esta parcial precisa mudar de situação..."></textarea>
+        <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="corContador">0/10 caracteres</div>
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moCorrigir')">Cancelar</button>
+        <button class="mcok" id="corBtn" onclick="corSalvar()" disabled
+          title="Escolha a situação e escreva o motivo">✓ Corrigir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="moPuxarCi">
+  <div class="mc">
+    <div class="mch v"><h3>↩ Puxar de volta do Controle Interno</h3><button class="mcx" onclick="fm('moPuxarCi')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="pxInfo"></div>
+      <!-- ⚠️ O aviso é fixo e vermelho: puxar de volta DESFAZ A BAIXA. É a única porta do
+           sistema em que o C.I. mexe na baixa, e quem clica precisa saber antes. -->
+      <div style="background:#FFEBEE;border:1.5px solid #C62828;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11.5px;color:#8E1B1B;">
+        <b>Isto desfaz a baixa.</b> A parcial sai da sua produtividade e volta para “Em análise”.
+        Use quando o encaminhamento ao C.I. foi um erro — não houve relação C.I.–analista.
+      </div>
+      <div class="mc-campo"><label>Motivo * (mínimo 10 caracteres)</label>
+        <textarea id="pxMotivo" rows="3" oninput="pxContar()" style="resize:vertical;"
+          placeholder="Por que este encaminhamento precisa ser desfeito..."></textarea>
+        <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="pxContador">0/10 caracteres</div>
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moPuxarCi')">Cancelar</button>
+        <button class="mcok rv" id="pxBtn" onclick="pxSalvar()" disabled
+          title="Escreva o motivo">↩ Puxar de volta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="moPcNova">
+  <div class="mc">
+    <div class="mch v"><h3>➕ Cadastrar PC nesta TR</h3><button class="mcx" onclick="fm('moPcNova')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="pnInfo"></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:2px solid var(--bd);">
+        <button class="btn-acao" id="pnAbaParcial" onclick="pnAba('parcial')">Parcial</button>
+        <button class="btn-acao" id="pnAbaFinal" onclick="pnAba('final')">PC Final</button>
+      </div>
+
+      <!-- ⚠️ NA ABA FINAL NÃO HÁ CAMPO NENHUM DESSES. O sufixo -PFINAL, o parcela_seq 999,
+           o valor zero e a NL nula são postos pelo SERVIDOR (lib/pc-nova.js). Mostrar campos
+           cuja única resposta certa já é conhecida é convite a digitar errado. -->
+      <div id="pnCamposParcial">
+        <div class="mc-campo"><label>Código da PC * (o do SIGEF)</label>
+          <input type="text" id="pnCodigo" placeholder="2021PC001234" oninput="pnValidar()"></div>
+        <div class="mc-campo"><label>Nº da parcial *</label>
+          <input type="text" id="pnParcial" placeholder="3" oninput="pnValidar()"></div>
+        <div class="mc-campo"><label>Valor (R$)</label>
+          <input type="number" id="pnValor" step="0.01" min="0" placeholder="0,00"></div>
+        <div class="mc-campo"><label>Nota de Liquidação (NL)</label>
+          <input type="text" id="pnNl" placeholder="2021NL012345"></div>
+      </div>
+
+      <div id="pnCamposFinal" style="display:none;">
+        <div style="background:#EAF1F9;border:1.5px solid #1A4E8A;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11.5px;color:#14406F;">
+          <b>A PC final é o relatório de conclusão.</b> Ela <b>não tem valor financeiro</b>,
+          <b>conta produtividade</b> e vence <b>90 dias após a extinção do convênio</b>.<br>
+          O sistema preenche sozinho: código <code id="pnCodFinalPrevia">—</code>,
+          sequência 999, sem NL e valor zero.
+        </div>
+      </div>
+
+      <div class="mc-campo"><label>Processo SGPe da PC</label>
+        <input type="text" id="pnProcesso" placeholder="SCC 00001234/2021"></div>
+      <div class="mc-campo"><label>Prazo de análise (dias)</label>
+        <input type="number" id="pnPrazo" min="1" placeholder="150"></div>
+      <div class="mc-campo"><label>Data limite da PC</label>
+        <input type="date" id="pnLimite"></div>
+
+      <div id="pnMsg" style="display:none;background:#FFEBEE;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:8px 12px;font-size:11px;margin-top:8px;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moPcNova')">Cancelar</button>
+        <button class="mcok" id="pnBtn" onclick="pnSalvar()" disabled
+          title="Preencha o código e o nº da parcial">✓ Cadastrar PC</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="moSolCor">
+  <div class="mc">
+    <div class="mch v"><h3>📨 Solicitar correção ao coordenador</h3><button class="mcx" onclick="fm('moSolCor')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="scInfo"></div>
+      <div id="scPorque" style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11.5px;color:#7A4800;"></div>
+      <div class="mc-campo" id="scCampoDestino" style="display:none;"><label>Nova situação pedida *</label>
+        <select id="scDestino" onchange="scValidar()"><option value="">Selecione…</option></select>
+      </div>
+      <div class="mc-campo"><label>Motivo * (mínimo 10 caracteres — o coordenador vai ler)</label>
+        <textarea id="scMotivo" rows="3" oninput="scValidar()" style="resize:vertical;"
+          placeholder="Explique o que precisa ser corrigido e por quê..."></textarea>
+        <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="scContador">0/10 caracteres</div>
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moSolCor')">Cancelar</button>
+        <button class="mcok" id="scBtn" onclick="scEnviar()" disabled
+          title="Escreva o motivo">📨 Enviar ao coordenador</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -5709,13 +5838,17 @@ async function aprovCarregar() {
     if(U.perfil === 'coordenador' && U.grupo) p.set('grupo', U.grupo)
     // ⚠️ O RECORTE DA DEVOLUÇÃO É DO SERVIDOR, pelo perfil lido no banco — o `usuario_id` não
     // é o filtro, é a identificação. Esconder na tela não bastaria.
-    const [jv, jd] = await Promise.all([
+    // ⚠️ As TRÊS filas numa ida só. Buscar cada uma no clique da aba deixaria os contadores
+    // das outras duas parados no número de quando a tela abriu.
+    const [jv, jd, jc] = await Promise.all([
       (await fetch(`${API_URL}/solicitacao_vaga?${p}`)).json(),
       (await fetch(`${API_URL}/solicitacao_devolucao?usuario_id=${U.id}`)).json(),
+      (await fetch(`${API_URL}/solicitacao_correcao?usuario_id=${U.id}`)).json(),
     ])
     _aprovTodos = jv.data || []
     _aprovPend = _aprovTodos.filter(s => s.status === 'pendente')
     _devTodos = jd.data || []
+    _corTodos = jc.data || []
     aprovSecoesRender()
     aprovAbasRender()
     aprovRender()
@@ -5731,9 +5864,14 @@ function aprovSecoesRender() {
   if(!b) return
   const nV = _aprovPend.filter(s => !pedDispensado(s)).length
   const nD = _devTodos.filter(s => s.status === 'pendente').length
+  const nC = _corTodos.filter(s => s.status === 'pendente').length
+  // ⚠️ TRÊS conversas diferentes, três seções. A de vaga DÁ TR, a de devolução TIRA, e a de
+  // correção mexe na BAIXA de uma parcial — que é produtividade de alguém. Misturadas, o
+  // coordenador aprovaria as três no mesmo automático.
   const secoes = [
     { id:'vaga',      rot:'Vagas extras',     n:nV },
     { id:'devolucao', rot:'Devoluções de TR', n:nD },
+    { id:'correcao',  rot:'Correções',        n:nC },
   ]
   b.innerHTML = secoes.map(s => `
     <button onclick="aprovIrSecao('${s.id}')" style="border:1.5px solid ${_aprovSecao===s.id?'var(--v)':'var(--cb)'};
@@ -5745,7 +5883,9 @@ function aprovSecoesRender() {
   const sub = document.getElementById('aprovSubtitulo')
   if(sub) sub.textContent = _aprovSecao === 'vaga'
     ? 'Pedidos de vaga extra — analistas que atingiram o limite de TRs'
-    : 'Pedidos de devolução de TR — o analista pede, você decide'
+    : _aprovSecao === 'devolucao'
+      ? 'Pedidos de devolução de TR — o analista pede, você decide'
+      : 'Pedidos de correção de parcial — aprovar EXECUTA a correção na hora'
 }
 
 function aprovIrSecao(id) {
@@ -5992,9 +6132,107 @@ function aprovAtualizarBadge() {
   b.style.display = n ? '' : 'none'
 }
 
+// ══════════════════════════════════════
+//  A FILA DE CORREÇÕES DO COORDENADOR   (frente D, 18/08/2026)
+// ══════════════════════════════════════
+// ⚠️ APROVAR EXECUTA A CORREÇÃO NA HORA, na mesma transação do servidor — não é um "de
+// acordo" que alguém aplica depois. Por isso o cartão mostra o ESTADO DE AGORA da parcial
+// (`status_atual`, `baixada`, `enviado_ci`), e não a foto de quando o pedido foi aberto: em
+// 13/08 a devolução aprendeu isso do jeito difícil, reconferindo no momento da decisão.
+let _corTodos = []
+
+function corAprovRender(c) {
+  const pend = _aprovAba === 'pendentes'
+  const lista = pend ? _corTodos.filter(s => s.status === 'pendente')
+                     : _corTodos.filter(s => s.status !== 'pendente')
+  if(!lista.length) {
+    c.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);">${
+      pend ? 'Nenhum pedido de correção pendente.' : 'Nenhum pedido decidido ainda.'}</div>`
+    return
+  }
+  c.innerHTML = lista.map(s => {
+    const cor = s.status === 'pendente' ? 'var(--am)' : (s.status === 'aprovada' ? 'var(--v)' : 'var(--r)')
+    const acao = s.acao === 'puxar_ci' ? '↩ Puxar de volta do Controle Interno' : '✎ Corrigir a situação da parcial'
+    // O que a aprovação vai FAZER, escrito antes de o coordenador clicar.
+    const efeito = s.acao === 'puxar_ci'
+      ? 'A parcial sai do C.I., <b>a baixa é desfeita</b> e ela sai da produtividade.'
+      : `A parcial vai para <b>${escHtml(s.situacao_destino || '—')}</b>.`
+        + (s.baixada ? ' Como está baixada, <b>a baixa é desfeita</b> e ela sai da produtividade.' : '')
+    return `
+    <div style="background:#fff;border-radius:10px;box-shadow:var(--sombra);padding:14px 16px;margin-bottom:11px;border-left:4px solid ${cor};">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <b style="font-size:14px;">${escHtml(s.analista_nome_completo || ('id ' + s.analista_id))}</b>
+        ${s.analista_grupo?`<span class="bdg">G${escHtml(String(s.analista_grupo))}</span>`:''}
+        ${pend?'':`<span class="bdg" style="background:${cor};color:#fff;">${escHtml(s.status.toUpperCase())}</span>`}
+        <span style="margin-left:auto;font-size:11px;color:var(--ct);">${planDataHora(s.criado_em)}</span>
+      </div>
+      <div style="font-size:12px;margin-top:7px;line-height:1.7;">
+        <b>PC:</b> <span class="proc-sgpe">${escHtml(s.codigo_pc)}</span>
+        &nbsp;·&nbsp; <b>TR:</b> ${escHtml(s.tr)}
+        ${s.tipo === 'final' ? ' &nbsp;·&nbsp; <b style="color:#1A4E8A;">PC FINAL</b>' : ''}
+        ${s.entidade?`<br><span style="color:var(--ct);">${escHtml(s.entidade)}</span>`:''}
+        <br><b>Pedido:</b> ${acao}
+        ${s.autor_original_nome?`<br><b>Ação original de:</b> ${escHtml(s.autor_original_nome)}`:''}
+        <br><b>Estado agora:</b> ${s.baixada?'baixada':escHtml(s.status_atual||'—')}${s.enviado_ci?' · no C.I.':''}
+      </div>
+      <div style="background:#F7FAF8;border-radius:7px;padding:9px 12px;margin-top:9px;font-size:12px;font-style:italic;">
+        "${escHtml(s.motivo)}"</div>
+      ${pend ? `
+        <div style="background:#FFF3CD;border:1.5px solid #F57F17;border-radius:7px;padding:8px 12px;margin-top:9px;font-size:11.5px;color:#7A4800;">
+          <b>Se aprovar:</b> ${efeito}</div>
+        <div class="mc-campo" style="margin-top:9px;">
+          <label>Motivo da decisão * (o analista recebe este texto no sino)</label>
+          <textarea id="corDec${s.id}" rows="2" oninput="corDecValidar(${s.id})" style="resize:vertical;"></textarea>
+        </div>
+        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="mccn" id="corNeg${s.id}" onclick="corDecidir(${s.id},'negada')" disabled
+            title="Escreva o motivo da decisão">✕ Recusar</button>
+          <button class="mcok" id="corApr${s.id}" onclick="corDecidir(${s.id},'aprovada')" disabled
+            title="Escreva o motivo da decisão">✓ Aprovar e executar</button>
+        </div>`
+      : `<div style="margin-top:9px;font-size:11.5px;color:var(--ct);">
+           ${escHtml(s.decidido_por_nome || '—')} em ${planDataHora(s.decidido_em)}:
+           "${escHtml(s.motivo_decisao || '—')}"</div>`}
+    </div>`
+  }).join('')
+}
+
+// ⚠️ Os dois botões NASCEM DESABILITADOS, com o motivo no title — armadilha 15. A primeira
+// versão do Confirmar do modal Assumir aceitava clique e não fazia nada.
+function corDecValidar(id) {
+  const t = (document.getElementById('corDec'+id).value || '').trim()
+  const ok = t.length >= 10
+  for(const p of ['corApr','corNeg']) {
+    const b = document.getElementById(p+id)
+    if(b) { b.disabled = !ok; b.title = ok ? '' : 'O motivo precisa de ao menos 10 caracteres' }
+  }
+}
+
+async function corDecidir(id, status) {
+  const motivo = (document.getElementById('corDec'+id).value || '').trim()
+  const bt = document.getElementById((status==='aprovada'?'corApr':'corNeg')+id)
+  if(bt) { bt.disabled = true; bt.textContent = 'Enviando…' }
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_correcao/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status, decidido_por: U.id, motivo_decisao: motivo })
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || j.error)
+    toast(status==='aprovada'
+      ? `✓ Correção aplicada em ${(j.data.aplicadas||[]).length} PC(s).`
+      : '✕ Pedido recusado. O analista foi avisado.', 'ok')
+    await aprovCarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    if(bt) { bt.disabled = false; bt.textContent = status==='aprovada'?'✓ Aprovar e executar':'✕ Recusar' }
+  }
+}
+
 function aprovRender() {
   const c = document.getElementById('aprovCont')
   if(!c) return
+  if(_aprovSecao === 'correcao') return corAprovRender(c)
   if(_aprovSecao === 'devolucao') return devAprovRender(c)
   const pend = _aprovAba === 'pendentes'
   const lista = pend ? _aprovPend : _aprovTodos.filter(s => s.status !== 'pendente')
@@ -9219,6 +9457,385 @@ function pBotaoCI(pa, chave) {
       title="${pode?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}">🏛 Encaminhar ao CI</button>`
 }
 
+// ══════════════════════════════════════
+//  O BOTÃO "AÇÕES" — as quatro frentes de 18/08/2026
+// ══════════════════════════════════════
+// Substitui os botões soltos da linha da parcial por um botão único que abre a lista.
+//
+// ⚠️ QUEM DECIDE O QUE APARECE É O SERVIDOR, em `GET /parcela/acoes`. A tela NÃO repete as
+// regras de `podeCorrigirBaixa`/`podePuxarCi`: uma segunda cópia divergiria da primeira no
+// primeiro ajuste, que foi exatamente o que aconteceu com o mapa de nomes curtos — ele chegou
+// a ter TRÊS cópias, duas delas com chaves mortas.
+//
+// ⚠️ E O QUE NÃO PODE NÃO FICA CINZA: vira "Solicitar correção". Item cinza é a armadilha 15
+// ("botão que aceita clique e não responde é pior que botão cinza") — aqui o item que a
+// pessoa não pode executar continua clicável, e leva ao caminho que existe para ela.
+
+let _acAberto = null;   // o elemento do menu aberto agora, ou null
+
+function acFechar() {
+  if (_acAberto) { _acAberto.remove(); _acAberto = null; }
+  document.removeEventListener('click', acCliqueFora, true);
+  document.removeEventListener('keydown', acEsc, true);
+}
+function acCliqueFora(e) { if (_acAberto && !_acAberto.contains(e.target)) acFechar(); }
+// ⚠️ Esc fecha, como o indicador de online. Menu que só fecha clicando fora prende quem
+// abriu sem querer no meio de um formulário.
+function acEsc(e) { if (e.key === 'Escape') acFechar(); }
+
+function acItem(rotulo, icone, acao, ativo, dica) {
+  const cor = ativo ? 'var(--te)' : '#9AA8A0';
+  return `<button role="menuitem" onclick="acFechar();${acao}"
+    ${ativo ? '' : 'disabled'}
+    title="${escHtml(dica || rotulo)}"
+    style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;
+           border:0;padding:9px 14px;font-size:12.5px;font-family:inherit;color:${cor};
+           cursor:${ativo ? 'pointer' : 'not-allowed'};white-space:nowrap;"
+    onmouseover="if(!this.disabled)this.style.background='#F2FAF5'"
+    onmouseout="this.style.background='none'">
+    <span style="width:16px;display:inline-block;">${icone}</span>${escHtml(rotulo)}</button>`;
+}
+
+/**
+ * Abre a lista de ações de uma parcial.
+ *
+ * ⚠️ ENTRA POR `codigo_pc`. A parcela é resolvida no servidor, a partir da linha da própria
+ * PC — a tela não manda `tr` nem `parcial_num`, e é isso que impede a final de arrastar a
+ * parcial 1 junto nos 5 casos em que as duas dividem o mesmo número.
+ */
+async function acAbrir(ev, codigoPc, tr) {
+  ev.stopPropagation();
+  const jaEra = _acAberto && _acAberto.dataset.pc === codigoPc;
+  acFechar();
+  if (jaEra) return;   // segundo clique no mesmo botão fecha
+
+  const bt = ev.currentTarget;
+  const cx = document.createElement('div');
+  cx.dataset.pc = codigoPc;
+  cx.setAttribute('role', 'menu');
+  const r = bt.getBoundingClientRect();
+  cx.style.cssText = `position:fixed;z-index:9999;background:#fff;border:1.5px solid var(--cl);
+    border-radius:9px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:5px 0;min-width:246px;
+    top:${Math.min(r.bottom + 5, window.innerHeight - 300)}px;
+    left:${Math.max(8, Math.min(r.left, window.innerWidth - 262))}px;`;
+  cx.innerHTML = `<div style="padding:9px 14px;color:var(--ct);font-size:11px;">
+    <span class="spin" style="width:11px;height:11px;display:inline-block;"></span> carregando…</div>`;
+  document.body.appendChild(cx);
+  _acAberto = cx;
+  document.addEventListener('click', acCliqueFora, true);
+  document.addEventListener('keydown', acEsc, true);
+
+  try {
+    const j = await (await fetch(`${API_URL}/parcela/acoes?codigo_pc=${encodeURIComponent(codigoPc)}&usuario_id=${U.id}`)).json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    if (_acAberto !== cx) return;   // fecharam enquanto carregava
+    const d = j.data;
+    _acDados = d;
+
+    const pc = `'${escHtml(codigoPc)}'`;
+    const linhas = [];
+
+    linhas.push(acItem('Ver parecer', '📄', `pVerParecerPc(${pc})`, !!d.baixada,
+      d.baixada ? 'Ver o parecer registrado' : 'A parcial ainda não tem parecer'));
+
+    linhas.push(acItem('Encaminhar ao C.I.', '🏛', `pEnviarCiPc(${pc})`,
+      d.baixada === true && d.enviado_ci !== true,
+      d.enviado_ci ? 'Já está no Controle Interno'
+        : (d.baixada ? 'Encaminhar ao Controle Interno' : 'Registre o parecer antes')));
+
+    // ── A: corrigir situação ────────────────────────────────────────────────
+    const c = d.corrigir_situacao || {};
+    if (c.pendente)
+      linhas.push(acItem('Correção já pedida', '⏳', '', false,
+        'Já existe um pedido pendente com o coordenador'));
+    else if (c.pode)
+      linhas.push(acItem('Corrigir situação', '✎', `corAbrir(${pc})`, true,
+        'Mudar a situação desta parcial'));
+    else
+      linhas.push(acItem('Solicitar correção da situação', '📨',
+        `scAbrir(${pc},'corrigir_situacao')`, c.viaSolicitacao, c.motivo));
+
+    // ── B: puxar do C.I. ────────────────────────────────────────────────────
+    const p = d.puxar_ci || {};
+    if (d.enviado_ci) {
+      if (p.pendente)
+        linhas.push(acItem('Volta do C.I. já pedida', '⏳', '', false,
+          'Já existe um pedido pendente com o coordenador'));
+      else if (p.pode)
+        linhas.push(acItem('Puxar de volta do C.I.', '↩', `pxAbrir(${pc})`, true,
+          'Desfaz o encaminhamento — e desfaz a baixa'));
+      else
+        linhas.push(acItem('Solicitar volta do C.I.', '📨', `scAbrir(${pc},'puxar_ci')`,
+          p.viaSolicitacao, p.motivo));
+    } else {
+      linhas.push(acItem('Puxar de volta do C.I.', '↩', '', false,
+        'Esta parcial não está no Controle Interno'));
+    }
+
+    linhas.push(`<div style="height:1px;background:var(--cl);margin:5px 0;"></div>`);
+    linhas.push(acItem('Cadastrar PC nesta TR', '➕', `pnAbrir('${escHtml(tr)}')`, !!d.cadastrar_pc,
+      d.cadastrar_pc ? 'Criar uma PC nova nesta TR' : 'Esta TR não está com você'));
+    linhas.push(acItem('Histórico da parcial', '🕘', `pHistoricoPc(${pc})`, true,
+      'Ver tudo o que foi feito nesta parcial'));
+
+    cx.innerHTML = linhas.join('');
+  } catch (e) {
+    if (_acAberto === cx)
+      cx.innerHTML = `<div style="padding:10px 14px;color:var(--r);font-size:11.5px;max-width:250px;">
+        Erro ao carregar as ações: ${escHtml(e.message)}</div>`;
+  }
+}
+
+let _acDados = null;      // o que o servidor disse sobre a PC aberta agora
+let _acPc = null;         // a codigo_pc em foco nos modais
+
+// ── Pontes para o que já existia, agora entrando por codigo_pc ───────────────
+// As telas antigas chamam por (tr, parcial_num). Estas pontes leem os dois da resposta do
+// servidor, que veio da própria linha — a tela continua sem usar parcial_num como chave.
+function pVerParecerPc(codigoPc) {
+  const d = _acDados; if (!d) return;
+  pVerParecer(d.tr, _acParcialDe(codigoPc));
+}
+function pEnviarCiPc(codigoPc) {
+  const d = _acDados; if (!d) return;
+  pEnviarCI(d.tr, _acParcialDe(codigoPc));
+}
+// O histórico e o parecer moram no MESMO modal (`pVerParecer` já lista `parcela_historico`).
+// Duas telas para a mesma consulta divergiriam na primeira vez que um evento novo entrasse —
+// e hoje entraram cinco.
+function pHistoricoPc(codigoPc) {
+  const d = _acDados; if (!d) return;
+  pVerParecer(d.tr, _acParcialDe(codigoPc));
+}
+// A parcial da PC sai do agrupamento já carregado na tela — nunca de um palpite.
+function _acParcialDe(codigoPc) {
+  for (const r of (_planDados || [])) for (const pa of (r.parciais || []))
+    if ((pa.pcs || []).some(x => x.codigo_pc === codigoPc)) return String(pa.num);
+  return '';
+}
+
+// ══════════════════════════════════════
+//  A — CORRIGIR SITUAÇÃO
+// ══════════════════════════════════════
+function corAbrir(codigoPc) {
+  _acPc = codigoPc;
+  const d = _acDados || {};
+  document.getElementById('moCorrigir').classList.add('open');
+  document.getElementById('corInfo').innerHTML =
+    `<strong>PC:</strong> ${escHtml(codigoPc)} &nbsp;·&nbsp; <strong>TR:</strong> ${escHtml(d.tr || '—')}`
+    + (d.tipo === 'final' ? ' &nbsp;·&nbsp; <b style="color:#1A4E8A;">PC FINAL</b>' : '');
+  const sel = document.getElementById('corDestino');
+  sel.innerHTML = '<option value="">Selecione…</option>'
+    + (d.destinos || []).map(x => `<option>${escHtml(x)}</option>`).join('');
+  document.getElementById('corMotivo').value = '';
+  corContar(); corAtualizarAviso();
+}
+// ⚠️ O aviso de "sai da produtividade" só aparece quando a parcial ESTÁ baixada. Mostrá-lo
+// sempre ensinaria a ignorá-lo.
+function corAtualizarAviso() {
+  const el = document.getElementById('corAvisoBaixa');
+  const baixada = (_acDados || {}).baixada === true;
+  el.innerHTML = baixada
+    ? `<div style="background:#FFEBEE;border:1.5px solid #C62828;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11.5px;color:#8E1B1B;">
+         <b>Esta parcial está baixada.</b> Corrigir a situação <b>desfaz a baixa</b> e ela
+         <b>sai da produtividade</b>. A data da baixa é preservada no histórico.</div>`
+    : '';
+  corContar();
+}
+function corContar() {
+  const t = (document.getElementById('corMotivo').value || '').trim();
+  const dest = document.getElementById('corDestino').value;
+  document.getElementById('corContador').textContent = `${t.length}/10 caracteres`;
+  const bt = document.getElementById('corBtn');
+  const ok = t.length >= 10 && !!dest;
+  bt.disabled = !ok;
+  bt.title = ok ? 'Corrigir a situação desta parcial'
+    : (!dest ? 'Escolha a nova situação' : 'O motivo precisa de ao menos 10 caracteres');
+}
+async function corSalvar() {
+  const bt = document.getElementById('corBtn'); bt.disabled = true; bt.textContent = 'Salvando…';
+  try {
+    const r = await fetch(`${API_URL}/parcela/corrigir_situacao`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codigo_pc: _acPc,
+        situacao_destino: document.getElementById('corDestino').value,
+        motivo: document.getElementById('corMotivo').value.trim(),
+        analista_id: alvo().id, executado_por: U.id,
+      }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    toast(`✓ Situação corrigida em ${j.count} PC${j.count > 1 ? 's' : ''}.`
+      + (j.data.desfez_baixa ? ' A baixa foi desfeita.' : ''), 'ok');
+    fm('moCorrigir'); buscarPlan(); carregarContadores && carregarContadores();
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  finally { bt.disabled = false; bt.textContent = '✓ Corrigir'; }
+}
+
+// ══════════════════════════════════════
+//  B — PUXAR DE VOLTA DO C.I.
+// ══════════════════════════════════════
+function pxAbrir(codigoPc) {
+  _acPc = codigoPc;
+  const d = _acDados || {};
+  document.getElementById('moPuxarCi').classList.add('open');
+  document.getElementById('pxInfo').innerHTML =
+    `<strong>PC:</strong> ${escHtml(codigoPc)} &nbsp;·&nbsp; <strong>TR:</strong> ${escHtml(d.tr || '—')}`;
+  document.getElementById('pxMotivo').value = '';
+  pxContar();
+}
+function pxContar() {
+  const t = (document.getElementById('pxMotivo').value || '').trim();
+  document.getElementById('pxContador').textContent = `${t.length}/10 caracteres`;
+  const bt = document.getElementById('pxBtn');
+  bt.disabled = t.length < 10;
+  bt.title = bt.disabled ? 'O motivo precisa de ao menos 10 caracteres' : 'Desfazer o encaminhamento';
+}
+async function pxSalvar() {
+  const bt = document.getElementById('pxBtn'); bt.disabled = true; bt.textContent = 'Salvando…';
+  try {
+    const r = await fetch(`${API_URL}/parcela/puxar_ci`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codigo_pc: _acPc, motivo: document.getElementById('pxMotivo').value.trim(),
+        analista_id: alvo().id, executado_por: U.id,
+      }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    toast(`✓ ${j.count} PC${j.count > 1 ? 's' : ''} fora do C.I. A baixa foi desfeita.`, 'ok');
+    fm('moPuxarCi'); buscarPlan();
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  finally { bt.disabled = false; bt.textContent = '↩ Puxar de volta'; }
+}
+
+// ══════════════════════════════════════
+//  C — CADASTRAR PC
+// ══════════════════════════════════════
+let _pnTr = null, _pnTipo = 'parcial';
+function pnAbrir(tr) {
+  _pnTr = tr; _pnTipo = 'parcial';
+  document.getElementById('moPcNova').classList.add('open');
+  document.getElementById('pnInfo').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}`;
+  ['pnCodigo', 'pnParcial', 'pnValor', 'pnNl', 'pnProcesso', 'pnPrazo', 'pnLimite']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('pnMsg').style.display = 'none';
+  document.getElementById('pnCodFinalPrevia').textContent = `${tr}-PFINAL`;
+  pnAba('parcial');
+}
+function pnAba(tipo) {
+  _pnTipo = tipo;
+  document.getElementById('pnCamposParcial').style.display = tipo === 'parcial' ? '' : 'none';
+  document.getElementById('pnCamposFinal').style.display = tipo === 'final' ? '' : 'none';
+  const on = 'background:var(--v);color:#fff;font-weight:800;';
+  const off = 'background:#fff;color:var(--ct);border:1.5px solid var(--cl);';
+  document.getElementById('pnAbaParcial').style.cssText = tipo === 'parcial' ? on : off;
+  document.getElementById('pnAbaFinal').style.cssText = tipo === 'final' ? on : off;
+  pnValidar();
+}
+function pnValidar() {
+  const bt = document.getElementById('pnBtn');
+  if (_pnTipo === 'final') { bt.disabled = false; bt.title = 'Cadastrar a PC final desta TR'; return; }
+  const cod = (document.getElementById('pnCodigo').value || '').trim();
+  const par = (document.getElementById('pnParcial').value || '').trim();
+  bt.disabled = !(cod && par);
+  bt.title = bt.disabled ? 'Preencha o código da PC e o nº da parcial' : 'Cadastrar a PC';
+}
+async function pnSalvar() {
+  const bt = document.getElementById('pnBtn'); bt.disabled = true; bt.textContent = 'Salvando…';
+  const msg = document.getElementById('pnMsg'); msg.style.display = 'none';
+  try {
+    const corpo = {
+      tr: _pnTr, tipo: _pnTipo, analista_id: U.id,
+      processo_pc: document.getElementById('pnProcesso').value.trim() || null,
+      prazo_analise_dias: document.getElementById('pnPrazo').value || null,
+      dt_limite_pc: document.getElementById('pnLimite').value || null,
+    };
+    // ⚠️ Na aba Final NÃO se manda código, parcial, valor nem NL. O servidor os define, e
+    // mandar lixo aqui só criaria a ilusão de que a tela escolhe.
+    if (_pnTipo === 'parcial') {
+      corpo.codigo_pc = document.getElementById('pnCodigo').value.trim();
+      corpo.parcial_num = document.getElementById('pnParcial').value.trim();
+      corpo.valor = document.getElementById('pnValor').value || 0;
+      corpo.codigo_nl = document.getElementById('pnNl').value.trim() || null;
+    }
+    const r = await fetch(`${API_URL}/prestacoes_contas/nova`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    toast(`✓ PC ${j.data.codigo_pc} cadastrada.`, 'ok');
+    fm('moPcNova'); buscarPlan();
+  } catch (e) {
+    msg.textContent = e.message; msg.style.display = 'block';
+  } finally { bt.disabled = false; bt.textContent = '✓ Cadastrar PC'; pnValidar(); }
+}
+
+// ══════════════════════════════════════
+//  D — SOLICITAR CORREÇÃO AO COORDENADOR
+// ══════════════════════════════════════
+let _scAcao = null;
+function scAbrir(codigoPc, acao) {
+  _acPc = codigoPc; _scAcao = acao;
+  const d = _acDados || {};
+  const r = acao === 'puxar_ci' ? (d.puxar_ci || {}) : (d.corrigir_situacao || {});
+  document.getElementById('moSolCor').classList.add('open');
+  document.getElementById('scInfo').innerHTML =
+    `<strong>PC:</strong> ${escHtml(codigoPc)} &nbsp;·&nbsp; <strong>TR:</strong> ${escHtml(d.tr || '—')}`
+    + `<br><span style="font-size:11px;color:var(--ct);">Pedido: <b>${acao === 'puxar_ci'
+        ? 'puxar de volta do Controle Interno' : 'corrigir a situação da parcial'}</b></span>`;
+  document.getElementById('scPorque').innerHTML =
+    `<b>Por que passa pelo coordenador:</b> ${escHtml(r.motivo || 'a ação foi registrada por outra pessoa.')}`;
+  const campo = document.getElementById('scCampoDestino');
+  campo.style.display = acao === 'corrigir_situacao' ? '' : 'none';
+  if (acao === 'corrigir_situacao') {
+    document.getElementById('scDestino').innerHTML = '<option value="">Selecione…</option>'
+      + (d.destinos || []).map(x => `<option>${escHtml(x)}</option>`).join('');
+  }
+  document.getElementById('scMotivo').value = '';
+  scValidar();
+}
+function scValidar() {
+  const t = (document.getElementById('scMotivo').value || '').trim();
+  document.getElementById('scContador').textContent = `${t.length}/10 caracteres`;
+  const precisaDest = _scAcao === 'corrigir_situacao';
+  const dest = document.getElementById('scDestino').value;
+  const bt = document.getElementById('scBtn');
+  const ok = t.length >= 10 && (!precisaDest || !!dest);
+  bt.disabled = !ok;
+  bt.title = ok ? 'Enviar ao coordenador do seu grupo'
+    : (precisaDest && !dest ? 'Escolha a situação pedida' : 'O motivo precisa de ao menos 10 caracteres');
+}
+async function scEnviar() {
+  const bt = document.getElementById('scBtn'); bt.disabled = true; bt.textContent = 'Enviando…';
+  try {
+    const r = await fetch(`${API_URL}/solicitacao_correcao`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codigo_pc: _acPc, acao: _scAcao, analista_id: U.id,
+        motivo: document.getElementById('scMotivo').value.trim(),
+        situacao_destino: _scAcao === 'corrigir_situacao'
+          ? document.getElementById('scDestino').value : null,
+      }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    toast('📨 Pedido enviado ao coordenador do seu grupo.', 'ok');
+    fm('moSolCor');
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  finally { bt.disabled = false; bt.textContent = '📨 Enviar ao coordenador'; }
+}
+
+/** O botão único que substitui os soltos. Recebe a PRIMEIRA PC da parcela. */
+function pBotaoAcoes(pa, tr) {
+  const pc = (pa.pcs && pa.pcs[0] && pa.pcs[0].codigo_pc) || '';
+  if (!pc) return '';
+  return `<button class="btn-acao" onclick="acAbrir(event,'${escHtml(pc)}','${escHtml(tr)}')"
+    title="Ações desta parcial"
+    style="background:#fff;color:var(--te);border:1.5px solid var(--cl);font-weight:800;">⋯ Ações</button>`;
+}
+
 function renderPlan(rows) {
   const cont = document.getElementById('planConteudo')
   if(!cont) return
@@ -9254,8 +9871,18 @@ function renderPlan(rows) {
               ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}</span>
             <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>
-              <button class="btn-acao" style="background:#8A9A90;color:#fff;" onclick="pVerParecer(${chave})">Ver parecer</button>
-              ${(U.perfil==='coordenador'||U.perfil==='superadmin')?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
+              ${/* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
+                    Estornar e Encaminhar ao C.I. —, e as quatro frentes novas levariam a linha
+                    a sete. Quem decide o que está ativo é o SERVIDOR, em GET /parcela/acoes;
+                    o que a pessoa não pode fazer vira "Solicitar correção", nunca item cinza
+                    sem explicação (armadilha 15). */''}
+              ${pBotaoAcoes(pa, r.tr)}
+              ${(perfilEfetivo(U)==='coordenador'||perfilEfetivo(U)==='superadmin')?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
+              ${/* ⚠️ O BOTÃO DO C.I. FICA À VISTA, e NÃO só dentro do menu — é desvio
+                    deliberado do "substituir os botões soltos". Encaminhar ao C.I. é
+                    OBRIGATÓRIO (decisão do Richard, 13/08/2026), e foi exatamente esconder
+                    este botão que deixou 2.181 parciais baixadas sem caminho para o C.I.
+                    Ele está TAMBÉM no menu; aqui continua sendo o passo 3 visível. */''}
               ${semNum ? '' : pBotaoCI(pa, chave)}
             </span>
           </div>
@@ -9297,6 +9924,10 @@ function renderPlan(rows) {
             ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
             <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})">Salvar situação</button>
             <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
+            ${/* Na parcial ABERTA os botões do fluxo normal ficam: são o caminho de todo dia,
+                  e escondê-los atrás do menu custaria um clique em cada análise. O menu
+                  carrega o que é exceção — corrigir, puxar, cadastrar, histórico. */''}
+            ${pBotaoAcoes(pa, r.tr)}
             ${pBotaoCI(pa, chave)}`}
           </span>
         </div>
@@ -9748,7 +10379,14 @@ async function pVerParecer(tr, num) {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const pa = pBuscar(tr, num)
-    const evLabel = {parecer:'📝 Parecer', situacao:'🔄 Situação', ci:'🏛 Controle Interno', estorno:'↩ Estorno', migracao_ci:'⚙ Migração CI'}
+    // ⚠️ Evento sem rótulo aqui aparece como o código cru na tela do analista. Os cinco de
+    // 18/08/2026 entraram junto com as rotas — acrescentar a rota e esquecer o rótulo é o
+    // jeito de a trilha ficar ilegível justamente para quem ela existe.
+    const evLabel = {parecer:'📝 Parecer', situacao:'🔄 Situação', ci:'🏛 Controle Interno', estorno:'↩ Estorno', migracao_ci:'⚙ Migração CI',
+      correcao_situacao:'✎ Correção de situação', puxar_ci:'↩ Puxada de volta do C.I.',
+      pc_nova:'➕ PC cadastrada', solicitacao_correcao:'📨 Correção solicitada',
+      correcao_negada:'✕ Correção negada', assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
+      resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC', processo_mae:'✎ Processo mãe'}
     const hist = (j.data||[]).map(h => `
       <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--cb);font-size:11px;">
         <span style="font-weight:700;white-space:nowrap;">${evLabel[h.evento]||escHtml(h.evento)}</span>
