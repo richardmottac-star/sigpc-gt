@@ -1158,7 +1158,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         <select id="parecerTipo">
           <option value="">Selecione...</option>
           <option>Parecer Regular</option>
-          <option>Parecer Regular com Ressalva(s)</option>
+          <option>Parecer Regular com Ressalvas</option>
           <option>Parecer Irregular</option>
         </select>
       </div>
@@ -6184,13 +6184,11 @@ async function confirmarParecer() {
   const chkBaixarNL = document.getElementById('parecerBaixarNL')
   const baixarNlCompleta = chkBaixarNL ? chkBaixarNL.checked : false
 
-  const MAPA_PLAN = {
-    'Richard Motta Coelho':'Richard','Nayara Limas Ferreira':'Nayara',
-    'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
-    'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
-    'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
-  }
-  const nomeAnalista = MAPA_PLAN[U.nome.trim()] || U.nome.trim().split(' ')[0]
+  // ⚠️ SEM MAPA DE NOME CURTO AQUI. Esta era a TERCEIRA cópia (as outras: `lib/assumir.js` e
+  // `MAPA_PLAN_EST`, `index.html:3076`), com as mesmas três chaves mortas — 'Sandra Rocha',
+  // 'Ana Claudia' e 'Ana Leticia' são o nome CURTO, nunca casavam com `usuarios.nome` e
+  // caíam no `split(' ')[0]`. Quem responde "de quem é a baixa" é o `analista_id`; o
+  // `registrado_por` é texto para leitura humana, e vai igual ao do cartão: `U.nome`.
 
   const btn = document.getElementById('btnConfParecer')
   btn.disabled = true; btn.textContent = 'Salvando...'
@@ -6201,8 +6199,8 @@ async function confirmarParecer() {
       body: JSON.stringify({
         codigo_pc: PARECER_ALVO,
         parecer_tipo: parecerTipo,
-        analista_nome: nomeAnalista,
         analista_id: U.id,
+        registrado_por: U.nome,
         baixar_nl_completa: baixarNlCompleta
       })
     })
