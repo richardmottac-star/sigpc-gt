@@ -87,7 +87,11 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
     meuspedidos:['analista','coordenador','superadmin'],
     // irRel GANHOU guarda em 12/08: a tela e de coordenacao, e antes abria para qualquer um.
     rel:['coordenador','superadmin'],
-    estornar:['analista','coordenador','superadmin'],
+    // ⚠️ SO SUPERADMIN desde 18/08/2026 — era ['analista','coordenador','superadmin'].
+    // O estorno em lote e o caminho SEM RASTRO: grava motivo_estorno na PC, mas nao abre
+    // linha em parcela_historico. Analista e coordenador passam pelo "Corrigir situacao",
+    // que desfaz a mesma baixa com motivo obrigatorio e trilha.
+    estornar:['superadmin'],
     board:['coordenador','superadmin'],
     coord:['coordenador','superadmin'],
     aprov:['coordenador','superadmin'],
@@ -121,11 +125,14 @@ console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
   // ⚠️ 12 itens somem no papel analista. E uma regra so — o menu recebe o usuario com o
   // perfil EFETIVO — porque um `pode:` que eu esquecesse de ajustar seria justamente o que
   // deixaria a Busca global a vista.
-  // Sao 14, e nao 12: alem dos 12 que o Richard listou, somem tambem a 'prior' (Prioridades)
+  // Sao 15, e nao 12: alem dos 12 que o Richard listou, somem tambem a 'prior' (Prioridades)
   // e a 'config' (Configuracoes) — as duas ja eram so-superadmin, e no papel analista elas
   // caem pela mesma regra, sem excecao escrita a mao.
+  // ⚠️ E a 15a entrou em 18/08/2026: 'estornar' (Estornar Baixa) passou a ser so-superadmin,
+  // porque o estorno em lote nao deixa linha em parcela_historico. Quem precisa desfazer uma
+  // baixa usa "Corrigir situacao", que tem motivo obrigatorio e trilha.
   const SOMEM = ['board','rel','vercomo','coord','aprov','afast','estlog','ci','faixa','recado',
-                 'admin','bglobal','prior','config'];
+                 'admin','bglobal','prior','config','estornar'];
   const comoTec = idsDe(superad);
   const comoAn  = idsDe(superAn);
 
