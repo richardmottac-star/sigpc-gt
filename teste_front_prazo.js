@@ -140,7 +140,16 @@ console.log('\n═══ 7. CONTEUDO DO BALAO, NA ORDEM PEDIDA ═══');
 console.log('\n═══ 8. ONDE O ICONE APARECE ═══');
 {
   conf(/\$\{prazoCelula\(p\.dt_limite_pc\)\}/.test(html), 'Minha Planilha: coluna do prazo');
-  conf(/\$\{prazoIcone\(r\.dt_limite_pc\)\}/.test(html), 'Alertas de prazo: ao lado do atraso');
+  // ⚠️ MUDOU EM 18/08/2026. O alerta de prazo deixou de listar PCs uma a uma: a lista das
+  // "10 mais criticas" foi removida, porque as dez linhas repetiam a mesma TR, a mesma
+  // entidade e o mesmo atraso — uma TR vencida tem dezenas de PCs vencidas no mesmo dia.
+  // Sem linha de PC nao ha onde por o icone, e ele continua na coluna do prazo da lista,
+  // que e' onde a PC aparece individualmente. O que se mede aqui agora e' que o `prazoIcone`
+  // NAO ficou orfao ao perder aquele chamador.
+  conf(/\+ prazoIcone\(dtLimite\)/.test(html),
+       'prazoIcone continua vivo, dentro do prazoCelula da lista');
+  conf(!/10 mais críticas/.test(html),
+       'e a lista das "10 mais criticas" saiu do alerta');
   conf(!/Prazo PC/.test(html), 'o cabecalho antigo "Prazo PC" nao existe mais');
   conf(/>Prazo de análise</.test(html), 'o cabecalho novo esta la');
   // o calculo antigo, inline, tem de ter saido — senao haveria duas formulas

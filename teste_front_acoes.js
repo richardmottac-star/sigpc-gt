@@ -143,5 +143,62 @@ conf(/'Encaminhar ao C\.I\.', '🏛'/.test(html), 'e o C.I. tambem esta DENTRO d
 for (const ev of ['correcao_situacao', 'puxar_ci', 'pc_nova', 'solicitacao_correcao', 'correcao_negada'])
   conf(new RegExp(`${ev}:'`).test(html), `o evento '${ev}' tem rotulo no historico`);
 
+
+// ═════════════════════════════════════════════════════════════════════════════
+S('10. O TOPO DA MINHA PLANILHA (18/08/2026)');
+
+// ⚠️ A ORDEM. Titulo -> NUMEROS -> alerta. Antes o alerta vinha primeiro e empurrava os
+// cards para baixo da dobra: a pessoa abria a propria planilha e via primeiro uma lista de
+// dez PCs vencidas ha mais de um ano, que ela nao pode resolver hoje.
+const iT = html.indexOf('Minha planilha de análise');
+conf(iT > 0, 'o titulo e "Minha planilha de análise"');
+conf(html.indexOf('id="planResumo"') > iT
+  && html.indexOf('id="planResumo"') < html.indexOf('id="planAlertas"'),
+  'e a ordem e titulo -> numeros -> alerta');
+conf(/PC\$\{total === 1 \? '' : 's'\} sob sua responsabilidade/.test(html),
+     'o total virou contexto no subtitulo, e nao um sexto card');
+
+S('10b. OS CINCO CARDS');
+conf(/const PLAN_CARDS = \[/.test(html), 'as cores moram numa lista so');
+for (const [ch, bg, fg] of [['analise','#185FA5','#B5D4F4'], ['diligencia','#BA7517','#FAC775'],
+                            ['reanalise','#534AB7','#CECBF6'], ['baixada','#3B6D11','#C0DD97'],
+                            ['livre','#5F5E5A','#D3D1C7']])
+  conf(new RegExp(`chave: '${ch}'[^\n]*bg: '${bg}'[^\n]*fg: '${fg}'`).test(html),
+       `card ${ch}: fundo ${bg}, rotulo ${fg}`);
+conf(/font-size:36px;font-weight:500;color:#fff;line-height:1/.test(html),
+     'o numero e 36px, peso 500, branco, line-height 1');
+conf(/grid-template-columns:repeat\(5,1fr\);gap:10px/.test(html), 'grid de 5 colunas, gap 10px');
+conf(/border-radius:12px;padding:14px 12px/.test(html), 'raio 12px e padding 14px 12px');
+// ⚠️ SEM PERCENTUAL. Era `baixadas / META` colado num numero de PCs, sem dizer o
+// denominador: imprimia "27 (31%)" com 440 PCs no acervo, e 27 de 440 e 6%.
+conf(!/Math\.round\(baixadas\/meta\*100\)/.test(html), 'o percentual da meta saiu dos cards');
+conf(!/function carregarMetaAnalista/.test(html), 'e a meta, que so ele usava, foi removida');
+
+S('10c. AS DUAS FAIXAS DO ALERTA');
+conf(!/10 mais críticas/.test(html), 'a lista das 10 mais criticas saiu');
+conf(!/max-height:280px;overflow-y:auto/.test(html), 'e o scroll interno junto');
+conf(/com prazo vencido há mais de um ano/.test(html), 'faixa 1: o passivo historico');
+conf(/Passivo histórico — a maior parte veio da carga inicial/.test(html),
+     'com a linha que impede ler o numero como culpa de quem abriu a tela');
+conf(/Ver as \$\{contagem\.vencida365\}/.test(html), 'e o botao que leva ao filtro');
+conf(/Nenhuma PC vence nos próximos 30 dias/.test(html),
+     'faixa 2: aparece TAMBEM no zero — o zero e' + ' uma boa noticia, e some se nao for dita');
+// ⚠️ O botao nao monta consulta propria: mexe no MESMO <select> e chama o MESMO buscarPlan.
+conf(/function planFiltrarPrazo\(valor\)/.test(html), 'o filtro passa por uma funcao so');
+conf(/sel\.value = valor[\s\S]{0,80}buscarPlan\(\)/.test(html),
+     'que usa o select da tela, e nao uma segunda definicao de "vencida"');
+
+S('10d. UM BOTAO BUSCAR SO');
+const filtros = html.slice(html.indexOf('id="plBusca"'), html.indexOf('btn-limpar" onclick="limparPlan'));
+conf((filtros.match(/BTN_BUSCAR\('buscarPlan\(\)'\)/g) || []).length === 1,
+     'um unico Buscar, e vindo do helper compartilhado');
+conf(!/class="btn-buscar" onclick="buscarPlan\(\)"/.test(html),
+     'a copia escrita a mao saiu — ela era a sexta versao de um botao que ja tem dono');
+
+
+// ⚠️ O RESUMO FICA NO FIM DO ARQUIVO, e nao no meio. Em 18/08/2026 um bloco novo foi
+// acrescentado DEPOIS destas duas linhas: as assercoes rodavam, imprimiam OK, e nao
+// entravam na contagem nem no exit code — uma falha ali passaria despercebida. Teste
+// que nao conta e pior que teste que nao existe, porque parece cobertura.
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exitCode = falhou ? 1 : 0;

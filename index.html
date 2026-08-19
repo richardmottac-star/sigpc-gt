@@ -8418,24 +8418,33 @@ async function irPlanilha() {
   if(U.perfil === 'controle_interno') { toast('Esta tela nao faz parte do Controle Interno.','err'); return }
   ativarMenu('plan')
   document.getElementById('BODY').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-      <div>
-        <div style="font-size:16px;font-weight:700;">Minha Planilha de Análise</div>
-        <div style="font-size:11px;color:var(--ct);">Analista: <strong>${U.nome}</strong></div>
+    ${/* ⚠️ A ORDEM DO TOPO MUDOU EM 18/08/2026 — decisão do Richard: título, NÚMEROS, e só
+          então o alerta. Antes o alerta vinha primeiro e empurrava os cards para baixo: a
+          pessoa abria a própria planilha e a primeira coisa que via era uma lista de dez PCs
+          vencidas há mais de um ano, que ela não pode resolver hoje. */''}
+    <div style="margin-bottom:12px;">
+      <div style="font-size:16px;font-weight:700;">Minha planilha de análise</div>
+      ${/* O total saiu do card e virou CONTEXTO no subtítulo: ele não é uma situação como as
+            outras cinco, é o tamanho do acervo — e como card competia com números que a
+            pessoa usa para decidir o que fazer agora. */''}
+      <div style="font-size:11.5px;color:var(--ct);margin-top:2px;" id="planSubtitulo">
+        <strong>${escHtml(U.nome)}</strong>
       </div>
     </div>
-    <!-- Alertas de prazo -->
+    <!-- Números: as cinco situações, logo abaixo do título -->
+    <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;"></div>
+    <!-- Alertas de prazo: DEPOIS dos números -->
     <div id="planAlertas" style="margin-bottom:12px;"></div>
-    <!-- Resumo estatístico -->
-    <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;"></div>
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
       <div class="fg"><label>Buscar Entidade / TR</label>
         <input type="text" id="plBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
-      <div style="display:flex;align-items:flex-end;">
-        ${BTN_BUSCAR('buscarPlan()')}
-      </div>
+      ${/* ⚠️ HAVIA DOIS "Buscar" NA MESMA LINHA (18/08/2026), e eles NÃO eram o mesmo botão:
+            um vinha do helper BTN_BUSCAR, compartilhado com outras cinco telas, e o outro
+            era HTML escrito à mão depois dos selects. Ficou o do HELPER, movido para o fim
+            da linha — a posição de quem fecha os filtros. Ter mantido o escrito à mão
+            arrumaria a tela e deixaria de pé a sexta cópia de um botão que já tem dono. */''}
       <div class="fg"><label>Situação</label>
         <select id="plSit">
           <option value="">Todas as situações</option>
@@ -8453,9 +8462,10 @@ async function irPlanilha() {
           <option value="30d">A vencer em 30 dias</option>
         </select>
       </div>
-      <button class="btn-buscar" onclick="buscarPlan()">
-        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Buscar
-      </button>
+      ${/* O ÚNICO "Buscar" da tela, e vem do helper que as outras cinco telas usam. */''}
+      <div style="display:flex;align-items:flex-end;">
+        ${BTN_BUSCAR('buscarPlan()')}
+      </div>
       <button class="btn-limpar" onclick="limparPlan()">✕ Limpar</button>
     </div>
     <!-- Área de conteúdo -->
@@ -8475,24 +8485,22 @@ async function irPlanilha() {
   `
   window._planPag = 0
   window._planTot = 0
-  window._planMeta = null
-  await carregarMetaAnalista()
   carregarAlertasPrazo()
   buscarPlan()
 }
 
-async function carregarMetaAnalista() {
-  try {
-    const r = await fetch(`${API_URL}/metas_analistas?analista_id=${alvo().id}&vigente=true`)
-    const j = await r.json()
-    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    const metas = j.data||[]
-    window._planMeta = metas.length ? metas.reduce((s,m)=>s+(parseInt(m.meta)||0),0) : null
-  } catch(e) {
-    window._planMeta = null
-    console.error('carregarMetaAnalista erro:', e)
-  }
-}
+// ⚠️ `carregarMetaAnalista` e `_planMeta` FORAM REMOVIDOS em 18/08/2026, e não comentados —
+// código que ninguém chama é código que ninguém revisa.
+//
+// A meta servia a UMA coisa só nesta tela: o "(31%)" ao lado do número de baixadas, que era
+// `baixadas / meta` — progresso da meta, impresso colado num número de PCs e sem dizer o
+// denominador. Na planilha do Richard saía "27 (31%)" com 440 PCs no acervo, e 27 de 440 é
+// 6%: quem lê entende participação, o código calculava outra coisa. Com o percentual fora
+// dos cards, a meta deixou de ter leitor aqui — e some junto uma requisição a
+// `/metas_analistas` a cada abertura da tela.
+//
+// A meta continua viva e visível na tela **Produtividade**, onde o denominador está escrito
+// ao lado do número e a comparação é o assunto da tela.
 
 async function carregarAlertasPrazo() {
   const cont = document.getElementById('planAlertas')
@@ -8510,51 +8518,89 @@ async function carregarAlertasPrazo() {
   }
 }
 
+/**
+ * O ALERTA DE PRAZO, em duas faixas finas. Reescrito em 18/08/2026 — decisão do Richard.
+ *
+ * ⚠️ A LISTA DAS "10 MAIS CRÍTICAS" FOI REMOVIDA. Ela ocupava meia tela com scroll próprio e
+ * não oferecia ação nenhuma: as dez linhas repetiam a mesma TR, a mesma entidade e o mesmo
+ * atraso, porque uma TR vencida tem dezenas de PCs vencidas no mesmo dia. Ver dez vezes a
+ * mesma informação não é ver dez informações.
+ *
+ * ⚠️ E A ORDEM DE IMPORTÂNCIA ESTAVA INVERTIDA. O passivo histórico (vencidas há mais de um
+ * ano) tomava a tela inteira, e o que a pessoa PODE resolver esta semana — o que vence nos
+ * próximos 30 dias — estava escondido num contador de 10px no canto direito. As duas faixas
+ * novas trocam esse peso: o passivo vira uma linha com o número e um caminho, e o "vence em
+ * 30 dias" ganha faixa própria, inclusive quando é zero (o zero é uma boa notícia, e some se
+ * não for dito).
+ *
+ * ⚠️ Nenhuma das duas tem scroll interno.
+ */
 function renderAlertasPrazo(alertas) {
   const cont = document.getElementById('planAlertas')
   if(!cont || !alertas) return
-  const { contagem, top10 } = alertas
-  const total = contagem.vencida365 + contagem.vencidaMenos365 + contagem.aVencer30
-  if(!total) { cont.innerHTML = ''; return }
+  const { contagem } = alertas
+  const vencidas = (contagem.vencida365 || 0) + (contagem.vencidaMenos365 || 0)
+  const aVencer = contagem.aVencer30 || 0
 
-  const faixaDe = (dias) => dias > 365
-    ? {cor:'var(--r)', bg:'#FFEBEE', label:'Vencida há +365 dias'}
-    : dias > 0
-      ? {cor:'#E65100', bg:'#FFF3E0', label:'Vencida há -365 dias'}
-      : {cor:'var(--am)', bg:'#FFF8E1', label:'A vencer em 30 dias'}
+  const faixas = []
 
-  const mkItem = (r) => {
-    const f = faixaDe(r.dias)
-    const diasTxt = r.dias > 0 ? `${r.dias}d atraso` : `vence em ${Math.abs(r.dias)}d`
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cb);cursor:pointer;" onclick="abrirTR('${r.tr}')">
-      <span style="width:8px;height:8px;border-radius:50%;background:${f.cor};flex-shrink:0;"></span>
+  // ── Faixa 1: o passivo. Só aparece se houver. ──────────────────────────────
+  if(contagem.vencida365) {
+    faixas.push(`
+    <div style="display:flex;align-items:center;gap:11px;background:#FFEBEE;border:1.5px solid #E5A3A3;
+                border-radius:9px;padding:10px 14px;">
+      <span style="font-size:17px;line-height:1;">⏰</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:11px;font-weight:700;color:${f.cor};">${r.tr||'—'} — ${r.codigo_pc||'—'}</div>
-        <div style="font-size:10px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.entidade||'—'}</div>
-        <div style="font-size:9px;color:var(--ct);white-space:nowrap;">SGPe PC: <span class="proc-sgpe">${procHtml(r.processo_pc, r.codigo_pc)}</span></div>
+        <div style="font-size:12.5px;font-weight:800;color:#8E1B1B;">
+          ${contagem.vencida365} PC${contagem.vencida365>1?'s':''} com prazo vencido há mais de um ano</div>
+        ${/* ⚠️ Esta linha existe para a pessoa NÃO ler o número como culpa dela. A
+              dt_limite_pc do acervo antigo é cálculo em lote, não prazo — decisão do
+              Richard, 10/08/2026 —, e a maior parte veio da carga inicial. */''}
+        <div style="font-size:10.5px;color:#A85454;margin-top:1px;">
+          Passivo histórico — a maior parte veio da carga inicial</div>
       </div>
-      <span style="font-size:9px;white-space:nowrap;color:${f.cor};font-weight:700;">${diasTxt}${prazoIcone(r.dt_limite_pc)}</span>
-    </div>`
+      <button class="btn-acao" onclick="planIrParaVencidas()"
+        style="background:#C62828;color:#fff;border-color:#C62828;font-weight:800;white-space:nowrap;"
+        title="Filtra a lista pelas vencidas e rola até ela">Ver as ${contagem.vencida365}</button>
+    </div>`)
   }
 
-  cont.innerHTML = `
-  <div style="background:#FCFDFC;border-radius:10px;box-shadow:var(--sombra);overflow:hidden;">
-    <div style="background:${contagem.vencida365?'#FFEBEE':contagem.vencidaMenos365?'#FFF3E0':'#FFF8E1'};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;">⚠</span>
-        <div style="font-size:12px;font-weight:800;color:var(--te);">${total} PC${total>1?'s':''} com prazo em alerta</div>
+  // ── Faixa 2: o que vence agora. Aparece SEMPRE, inclusive no zero. ─────────
+  faixas.push(`
+    <div style="display:flex;align-items:center;gap:11px;background:#F3F6F4;border:1.5px solid var(--cl);
+                border-radius:9px;padding:10px 14px;margin-top:${faixas.length?'8px':'0'};">
+      <span style="font-size:15px;line-height:1;">${aVencer?'📅':'✓'}</span>
+      <div style="flex:1;min-width:0;font-size:12.5px;color:var(--te);">
+        ${aVencer
+          ? `<b>${aVencer} PC${aVencer>1?'s':''}</b> vence${aVencer>1?'m':''} nos próximos 30 dias`
+          : 'Nenhuma PC vence nos próximos 30 dias'}
       </div>
-      <div style="display:flex;gap:10px;font-size:10px;font-weight:700;">
-        <span style="color:var(--r);">🔴 ${contagem.vencida365} vencida${contagem.vencida365!==1?'s':''} +365d</span>
-        <span style="color:#E65100;">🟠 ${contagem.vencidaMenos365} vencida${contagem.vencidaMenos365!==1?'s':''} -365d</span>
-        <span style="color:var(--am);">🟡 ${contagem.aVencer30} a vencer 30d</span>
-      </div>
-    </div>
-    <div style="padding:8px 14px;max-height:280px;overflow-y:auto;">
-      <div style="font-size:10px;font-weight:800;color:var(--ct);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;">10 mais críticas</div>
-      ${top10.map(mkItem).join('')}
-    </div>
-  </div>`
+      ${aVencer ? `<button class="btn-acao" onclick="planIrPara30d()"
+        style="background:#fff;color:var(--te);border:1.5px solid var(--cl);font-weight:700;white-space:nowrap;"
+        title="Filtra a lista pelas que vencem em 30 dias">Ver as ${aVencer}</button>` : ''}
+    </div>`)
+
+  cont.innerHTML = faixas.join('')
+  // Guardado para o botão: o filtro "venc" da tela cobre TODAS as vencidas, não só as de
+  // mais de um ano — é o que o `<select>` oferece, e inventar um filtro novo aqui criaria
+  // uma terceira definição de "vencida".
+  cont.dataset.vencidas = String(vencidas)
+}
+
+/** Aplica o filtro de vencidas e rola até a lista. */
+function planIrParaVencidas() { planFiltrarPrazo('venc') }
+/** Aplica o filtro das que vencem em 30 dias e rola até a lista. */
+function planIrPara30d() { planFiltrarPrazo('30d') }
+
+// ⚠️ O botão NÃO monta uma consulta própria: ele mexe no MESMO `<select>` de prazo que a
+// pessoa usaria à mão e chama o MESMO `buscarPlan()`. Uma segunda porta para o mesmo filtro
+// divergiria da primeira — e a tela ficaria com dois conceitos de "vencida".
+function planFiltrarPrazo(valor) {
+  const sel = document.getElementById('plPrazo')
+  if(sel) sel.value = valor
+  buscarPlan()
+  const alvoEl = document.getElementById('planBarra') || document.getElementById('planConteudo')
+  if(alvoEl) alvoEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 // PC final nao tem valor monetario proprio: o numero gravado na coluna `valor` e o
@@ -8620,7 +8666,7 @@ async function buscarPlan() {
     let pcs = j.data||[]
     // Sem filtro no cliente: a API já devolveu só o que casa, sobre os sete campos.
 
-    renderPlanResumo(pcs, window._planMeta)
+    renderPlanResumo(pcs)
 
     // Agrupar TR -> Parcial. Uma parcial = PCs do mesmo (tr, parcial_num).
     const grupos = {}
@@ -9053,36 +9099,45 @@ document.addEventListener('click', prazoAjudaFechar)
 document.addEventListener('keydown', (e) => { if(e.key === 'Escape') prazoAjudaFechar() })
 window.addEventListener('resize', prazoAjudaFechar)
 
-function renderPlanResumo(pcs, meta) {
+// As cinco cores dos cards — especificação do Richard, 18/08/2026. Fundo SÓLIDO, e o rótulo
+// numa cor clara da MESMA família: é o que faz o card ser lido como um bloco só, e não como
+// uma caixa branca com uma tarja colorida em cima.
+const PLAN_CARDS = [
+  { chave: 'analise',    rotulo: 'Em análise',    bg: '#185FA5', fg: '#B5D4F4' },
+  { chave: 'diligencia', rotulo: 'Diligência',    bg: '#BA7517', fg: '#FAC775' },
+  { chave: 'reanalise',  rotulo: 'Reanálise',     bg: '#534AB7', fg: '#CECBF6' },
+  { chave: 'baixada',    rotulo: 'Baixadas',      bg: '#3B6D11', fg: '#C0DD97' },
+  { chave: 'livre',      rotulo: 'Não iniciadas', bg: '#5F5E5A', fg: '#D3D1C7' },
+]
+
+/**
+ * Os cinco números do topo, e o total no subtítulo.
+ *
+ * ⚠️ O PERCENTUAL SAIU DOS CARDS, e não foi por estética. Ele era
+ * `Math.round(baixadas / META * 100)` — progresso da meta —, mostrado colado num número de
+ * PCs, sem dizer sobre o quê. Na planilha do Richard isso imprimia "27 (31%)" com 440 PCs no
+ * acervo, e 27 de 440 é 6%: quem lê entende participação, o código calcula meta. O número da
+ * meta continua existindo na tela Produtividade, onde o denominador está escrito ao lado.
+ *
+ * ⚠️ E O TOTAL SAIU DO GRID. Ele não é uma situação como as outras cinco — é a soma delas.
+ * Como sexto card competia por atenção com números que dizem o que fazer agora.
+ */
+function renderPlanResumo(pcs) {
   const resumo = document.getElementById('planResumo')
   if(!resumo) return
   const total = pcs.length
-  const emAnalise = pcs.filter(r=>r.status==='analise').length
-  const diligencia = pcs.filter(r=>r.status==='diligencia').length
-  const reanalise = pcs.filter(r=>r.status==='reanalise').length
-  const baixadas = pcs.filter(r=>r.status==='baixada').length
-  const pctTxt = meta ? ` <span style="font-size:13px;">(${Math.round(baixadas/meta*100)}%)</span>` : ''
-  resumo.innerHTML = `
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
-      <div style="font-size:22px;font-weight:800;color:var(--te);">${total}</div>
-      <div style="font-size:10px;color:var(--ct);">Total de PCs</div>
-    </div>
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
-      <div style="font-size:22px;font-weight:800;color:#1565C0;">${emAnalise}</div>
-      <div style="font-size:10px;color:var(--ct);">Em Análise</div>
-    </div>
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--am);">
-      <div style="font-size:22px;font-weight:800;color:var(--am);">${diligencia}</div>
-      <div style="font-size:10px;color:var(--ct);">Diligência</div>
-    </div>
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #6A1B9A;">
-      <div style="font-size:22px;font-weight:800;color:#6A1B9A;">${reanalise}</div>
-      <div style="font-size:10px;color:var(--ct);">Reanálise</div>
-    </div>
-    <div style="background:#FCFDFC;border-radius:8px;padding:10px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
-      <div style="font-size:22px;font-weight:800;color:var(--v);">${baixadas}${pctTxt}</div>
-      <div style="font-size:10px;color:var(--ct);">Baixadas</div>
-    </div>`
+  const conta = {}
+  PLAN_CARDS.forEach(c => { conta[c.chave] = pcs.filter(r => r.status === c.chave).length })
+
+  const sub = document.getElementById('planSubtitulo')
+  if(sub) sub.innerHTML = `<strong>${escHtml(alvo().nome || U.nome)}</strong> · `
+    + `${total} PC${total === 1 ? '' : 's'} sob sua responsabilidade`
+
+  resumo.innerHTML = PLAN_CARDS.map(c => `
+    <div style="background:${c.bg};border-radius:12px;padding:14px 12px;">
+      <div style="font-size:36px;font-weight:500;color:#fff;line-height:1;">${conta[c.chave]}</div>
+      <div style="font-size:12px;color:${c.fg};margin-top:6px;">${c.rotulo}</div>
+    </div>`).join('')
 }
 
 // Barra do painel: expandir todas, ordenação e os chips com contador.
