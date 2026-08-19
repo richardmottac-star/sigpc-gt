@@ -233,8 +233,8 @@ conf(/carregando…/.test(html) && /atualizado agora/.test(html) && /sem conexã
      'o indicador tem os tres estados');
 
 S('11d. O RELOGIO DE 60s PAUSA FORA DA ABA');
-conf(/setInterval\(\(\) => \{ if\(!document\.hidden\) carregarContadores\(\) \}, 60000\)/.test(html),
-     'bate a cada 60s, e so com a aba visivel');
+conf(/setInterval\(\(\) => \{ if\(!document\.hidden\) \{ carregarContadores\(\); carregarPainelDash\(\) \} \}, 60000\)/.test(html),
+     'bate a cada 60s, e so com a aba visivel — cards E os dois blocos');
 conf(/document\.addEventListener\('visibilitychange'/.test(html), 'e escuta a troca de aba');
 conf(/if\(document\.hidden\) \{ dashRelogioParar\(\); return \}/.test(html),
      'para ao esconder a aba — sem isso sao 51 abas batendo no Railway a toa');
@@ -352,6 +352,83 @@ conf(/function devPodeDecidir\(s\)/.test(html), 'o espelho da decisao existe');
 conf(/String\(U\.grupo \?\? ''\) === String\(s\.analista_grupo \?\? ''\) && String\(U\.grupo \?\? ''\) !== ''/
      .test(html), 'e ele exige o MESMO grupo — intacto');
 conf(/if\(proprio\) return false/.test(html), 'e o solicitante continua sem decidir o proprio');
+
+// ═════════════════════════════════════════════════════════════════════════════
+S('13. DASHBOARD — a faixa da FCEE e os dois blocos (18/08/2026)');
+
+// ⚠️ A faixa dizia "FCEE / Setorial FCEE": a sigla duas vezes, e nenhuma diz o que a
+// instituicao e. O quadrado branco existe porque o logo tem fundo claro e sumia no verde.
+conf(/Fundação Catarinense de Educação Especial/.test(html), 'o nome por extenso na faixa');
+conf(/assets\/logos\/fcee\.png/.test(html), 'com o logo da FCEE que ja existia no repositorio');
+conf(/width:56px;height:56px;\s*background:#fff;border-radius:12px/.test(html.replace(/\n\s*/g, ' ')),
+     'em quadrado branco de 56px, raio 12');
+conf(/font-size:18px;font-weight:500;color:#fff/.test(html), 'nome 18px peso 500 branco');
+conf(/font-size:12px;color:#9FE1CB/.test(html), 'e "Setorial" em 12px #9FE1CB');
+// A contagem de analistas e o indicador seguem na direita, do ciclo anterior.
+conf(/id="d-bnAnalistas"/.test(html) && /id="d-frescorTxt"/.test(html),
+     'a direita continua com analistas e indicador');
+
+S('13b. OS DOIS BOTOES REDUNDANTES SAIRAM');
+conf(!/>\s*SUA PRODUTIVIDADE\s*<\/button>/.test(html), 'o botao "SUA PRODUTIVIDADE" saiu');
+conf(!/Estoque de TRs\s*<\/button>/.test(html), 'e o "Estoque de TRs" tambem');
+// ⚠️ E O CSS DELES FOI JUNTO. `.btn-rap` sem nenhum elemento e' peso que ninguem revisa —
+// conferido: zero usos da classe no HTML depois da remocao.
+conf(!/^\.btn-rap\{/m.test(html), 'e a classe .btn-rap saiu do CSS');
+conf(!/class="btns-rap"/.test(html), 'sem nenhum elemento orfao usando a classe');
+conf(/id="dashPrecisa"/.test(html) && /id="dashCi"/.test(html), 'e os dois blocos ocuparam o lugar');
+// ⚠️ Lado a lado onde couber, empilhados em tela estreita.
+conf(/repeat\(auto-fit,minmax\(330px,1fr\)\)/.test(html), 'lado a lado, empilhando em tela estreita');
+
+S('13c. BLOCO A — PRECISA DE VOCE');
+conf(/const DASH_PRECISA = \[/.test(html), 'os quatro mini-cards numa lista so');
+for (const [ch, bg, num, lbl] of [['falta_ci', '#FAEEDA', '#633806', '#854F0B'],
+                                  ['dilig_vencendo', '#FCEBEB', '#791F1F', '#A32D2D'],
+                                  ['pedidos', '#EEEDFE', '#26215C', '#3C3489'],
+                                  ['ci_com_analista', '#E6F1FB', '#042C53', '#185FA5']])
+  conf(new RegExp(`chave: '${ch}'[^\\n]*bg: '${bg}', num: '${num}', lbl: '${lbl}'`).test(html),
+       `card ${ch}: ${bg} / ${num} / ${lbl}`);
+conf(/icone:/.test(html), 'cada um com icone');
+conf(/vai: 'irPlanilha\(\)'/.test(html) && /vai: 'irMeusPedidos\(\)'/.test(html),
+     'e todos clicaveis, levando ao filtro correspondente');
+// ⚠️ ZERO NAO SOME — vira cinza. Esconder faria o layout DANCAR a cada 60s.
+conf(/const DASH_NEUTRO = /.test(html), 'ha um estado neutro');
+conf(/const zero = n === 0/.test(html) && /\(n === null \|\| zero\) \? DASH_NEUTRO : c/.test(html),
+     'e o zero vira cinza em vez de sumir');
+
+S('13d. BLOCO B — SUAS PCs NO C.I.');
+conf(/Suas PCs no Controle Interno/.test(html), 'o bloco existe');
+for (const [rot, cor] of [['Aguardando análise', '#BA7517'], ['C.I. de acordo', '#3B6D11'],
+                          ['Voltou com ressalvas', '#A32D2D']])
+  conf(new RegExp(`rotulo: '${rot}'[^\\n]*cor: '${cor}'`).test(html), `barra "${rot}" em ${cor}`);
+// ⚠️ A proporcao e sobre o MAIOR, nao sobre a soma: 1 de 20 daria uma barra de 5% invisivel.
+conf(/const maior = Math\.max\(1, \.\.\.barras\.map/.test(html),
+     'a barra compara com o MAIOR, nao com a soma');
+conf(/A mais antiga está lá há/.test(html), 'a linha da mais antiga');
+conf(/Espera média do setorial/.test(html), 'e a espera media do setorial');
+conf(/Nenhuma PC sua está no Controle Interno agora/.test(html), 'com variante para o vazio');
+
+S('13e. A TELA DEGRADA SE A ROTA NAO ESTIVER NO AR');
+// ⚠️ O deploy do Railway estava atrasado quando isto foi escrito. Uma tela que quebra
+// enquanto o servidor nao sobe e, para quem abre, uma tela quebrada.
+conf(/DASH_PAINEL = null/.test(html), 'sem a rota, o painel fica null');
+conf(/n === null \? '—' : n/.test(html), 'os numeros viram travessao');
+conf(/dependem de uma atualização do servidor que ainda não subiu/.test(html),
+     'e o bloco explica por que');
+conf(/console\.warn\('painel do dashboard indisponivel/.test(html),
+     'a falha e registrada, nao engolida');
+// ⚠️ E nunca inventa zero: zero e uma AFIRMACAO.
+conf(/nunca inventam zero/.test(html), 'e esta escrito que nao se inventa zero');
+
+S('13f. DE ONDE VEM CADA NUMERO');
+conf(/prestacoes_contas\/painel\?/.test(html), 'cinco numeros vem da rota nova');
+// ⚠️ "pedidos aguardando" vem das DUAS filas, que ja sao recortadas pelo perfil no BANCO.
+// Traze-lo pela rota nova seria uma segunda definicao de "meus pedidos", sem a guarda.
+conf(/solicitacao_correcao\?usuario_id=\$\{id\}&status=pendente/.test(html),
+     'e "pedidos" vem da fila de correcao');
+conf(/solicitacao_devolucao\?usuario_id=\$\{id\}&status=pendente/.test(html),
+     'somada a de devolucao — as duas com o recorte do servidor');
+conf(/carregarPainelDash\(\)/.test(html), 'e o painel entra no ciclo de atualizacao');
+
 
 
 

@@ -194,12 +194,14 @@ console.log('\n═══ 3. PRODUTIVIDADE: DESCEU E FICOU ═══');
   // por outro caminho — a Produtividade tem botão no proprio Dashboard.
   conf(idsDe(analista).includes('prod'), 'PRODUTIVIDADE aparece para o analista');
   conf(SB_ITENS.find(i=>i.id==='prod').bloco === 'analista', 'e mora no bloco do analista');
-  // ⚠️ ESTE TESTE CASAVA A REDACAO — "Produtividade (NL)" — e quebrou quando o Richard
-  // renomeou o botao para "SUA PRODUTIVIDADE" em 16/08/2026, sem que nada tivesse sumido.
-  // O que ele quer provar e que o CAMINHO existe, nao como o botao se chama. O rotulo em si
-  // e conferido no `teste_front_faixa.js`, num lugar so.
-  conf(/onclick="irProd\(\)"[\s\S]{0,400}?<\/button>/.test(html),
-       'o botao rapido do Dashboard continua la, e o menu concorda com ele');
+  // ⚠️ ESTE TESTE JA MUDOU DUAS VEZES, e as duas pelo mesmo motivo: ele media o BOTAO, e o
+  // que importa e o CAMINHO.
+  //   16/08 — casava a redacao "Produtividade (NL)" e quebrou quando o Richard renomeou.
+  //   18/08 — casava o botao rapido do Dashboard, que o Richard REMOVEU junto com o
+  //           "Estoque de TRs": os dois repetiam a barra lateral em letra grande.
+  // Agora mede o que nao pode sumir: o item existe no menu do analista e aponta para irProd.
+  conf(SB_ITENS.find(i => i.id === 'prod')?.acao === 'irProd()',
+       'o item do menu leva a Produtividade — e agora ele e o unico caminho');
 }
 
 console.log('\n═══ 3b. RELATORIOS: VOLTOU PARA A COORDENACAO, COM GUARDA ═══');

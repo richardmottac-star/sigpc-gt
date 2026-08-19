@@ -108,11 +108,11 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .card.rv{border-top-color:var(--r);}
 .card-num{font-size:26px;font-weight:800;color:var(--te);}
 .card-lbl{font-size:11px;color:var(--ct);margin-top:3px;}
-.btns-rap{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.btn-rap{background:var(--v);color:#fff;border:none;border-radius:10px;padding:14px 18px;cursor:pointer;font-family:'Barlow',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:9px;transition:.15s;}
-.btn-rap.az{background:var(--az);}
-.btn-rap:hover{opacity:.9;transform:translateY(-1px);}
-.btn-rap svg{width:20px;height:20px;fill:#fff;}
+/* ⚠️ `.btns-rap` e `.btn-rap` FORAM REMOVIDOS em 18/08/2026, junto com os dois botões
+   rápidos do Dashboard ("Estoque de TRs" e "SUA PRODUTIVIDADE"). Conferido antes de apagar:
+   ZERO usos da classe no HTML depois da remoção. CSS que não estiliza nada é peso que
+   ninguém revisa — e este ainda tinha uma segunda regra `.btn-rap.az` no bloco de ajustes
+   lá embaixo, sobrescrevendo a primeira. */
 /* Manual do Sistema - Dashboard */
 .mn{margin-top:16px;background:#fff;border-radius:12px;box-shadow:var(--sombra);overflow:hidden;}
 .mn-top{background:linear-gradient(135deg,var(--v) 0%,var(--vm) 100%);color:#fff;padding:15px 20px;display:flex;align-items:center;gap:12px;}
@@ -747,8 +747,7 @@ input:focus, select:focus, textarea:focus { border-color: #00A05A; box-shadow: 0
 .bnum strong{color:#fff;}
 .bnum span{color:#C4E6D3;opacity:1;}
 
-/* 2) Botão "SUA PRODUTIVIDADE" igual ao "Estoque de TRs" (era "Produtividade (NL)") */
-.btn-rap.az{background:linear-gradient(180deg, #006B3C, #00512D);}
+/* 2) (a regra do botão "SUA PRODUTIVIDADE" saiu em 18/08/2026 — o botão não existe mais) */
 
 /* 3) Sidebar */
 .sb{background:#00512D;}
@@ -2856,6 +2855,132 @@ async function carregarContadores() {
 // `document.hidden` isso é uma batida por minuto por aba num Railway que já é o gargalo,
 // para uma tela que ninguém está olhando. Ao voltar para a aba, atualiza na hora — a espera
 // de até um minuto seria justamente no momento em que a pessoa olha.
+// ══════════════════════════════════════
+//  "PRECISA DE VOCÊ" E "SUAS PCs NO C.I."   (18/08/2026)
+// ══════════════════════════════════════
+// ⚠️ CINCO DOS SEIS NÚMEROS VÊM DE UMA ROTA NOVA (`GET /prestacoes_contas/painel`), e o
+// motivo de ela existir está no comentário dela: a espera MÉDIA do setorial precisa de todos
+// os analistas, e calcular isso no cliente significaria baixar o acervo inteiro — 14.658
+// linhas por abertura de Dashboard, 51 pessoas. É o problema dos 11 MB por tela, de novo.
+//
+// ⚠️ E A TELA DEGRADA SOZINHA SE A ROTA NÃO ESTIVER NO AR. O deploy do Railway estava
+// atrasado quando isto foi escrito, e uma tela que quebra enquanto o servidor não sobe é uma
+// tela quebrada — do ponto de vista de quem abre, não há diferença. Sem a rota, os cards
+// mostram "—" e o bloco explica; com ela, tudo aparece. Nada de zero inventado.
+
+const DASH_PRECISA = [
+  { chave: 'falta_ci',        rotulo: 'falta encaminhar ao C.I.', bg: '#FAEEDA', num: '#633806', lbl: '#854F0B',
+    icone: 'M12 1L3 5v2h18V5l-9-4zM4 9v9H2v2h20v-2h-2V9h-3v9h-3V9h-3v9H7V9H4z', vai: 'irPlanilha()' },
+  { chave: 'dilig_vencendo',  rotulo: 'diligências vencendo', bg: '#FCEBEB', num: '#791F1F', lbl: '#A32D2D',
+    icone: 'M12 2a9 9 0 100 18 9 9 0 000-18zm1 9.6l3.5 2-1 1.7L11 12.5V7h2v4.6zM4.5 2.5L1 5.4l1.3 1.5 3.5-2.9L4.5 2.5zm15 0l-1.3 1.5 3.5 2.9L23 5.4l-3.5-2.9z', vai: 'irPlanilha()' },
+  { chave: 'pedidos',         rotulo: 'pedidos aguardando', bg: '#EEEDFE', num: '#26215C', lbl: '#3C3489',
+    icone: 'M2.01 21L23 12 2.01 3 2 10l15 2-15 2z', vai: 'irMeusPedidos()' },
+  { chave: 'ci_com_analista', rotulo: 'C.I. devolveu com ressalvas', bg: '#E6F1FB', num: '#042C53', lbl: '#185FA5',
+    icone: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z', vai: 'irPlanilha()' },
+]
+
+// ⚠️ ZERO NÃO SOME — vira cinza neutro. Esconder o card faria o layout DANÇAR a cada
+// atualização de 60 s, e "não há nada aqui" é uma resposta tão útil quanto um número.
+const DASH_NEUTRO = { bg: '#F1F4F2', num: '#5F5E5A', lbl: '#8A9A90' }
+
+let DASH_PAINEL = null       // o que a rota devolveu; null = ainda não sei
+
+function renderDashPrecisa() {
+  const el = document.getElementById('dashPrecisa')
+  if(!el) return
+  const d = DASH_PAINEL
+  el.innerHTML = `
+    <div style="background:#FCFDFC;border-radius:12px;box-shadow:var(--sombra);padding:14px 15px;height:100%;">
+      <div style="font-size:13px;font-weight:700;color:var(--te);margin-bottom:11px;">Precisa de você</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;">
+        ${DASH_PRECISA.map(c => {
+          const n = d ? (d[c.chave] ?? 0) : null
+          const zero = n === 0
+          const cor = (n === null || zero) ? DASH_NEUTRO : c
+          return `<button onclick="${c.vai}" ${n === null ? 'disabled' : ''}
+            style="text-align:left;border:0;border-radius:10px;padding:11px 12px;background:${cor.bg};
+                   cursor:${n === null ? 'default' : 'pointer'};font-family:inherit;width:100%;">
+            <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:${cor.lbl};display:block;">
+              <path d="${c.icone}"/></svg>
+            <div style="font-size:26px;font-weight:500;color:${cor.num};line-height:1;margin-top:6px;">
+              ${n === null ? '—' : n}</div>
+            <div style="font-size:11.5px;color:${cor.lbl};margin-top:3px;line-height:1.3;">${c.rotulo}</div>
+          </button>`
+        }).join('')}
+      </div>
+      ${d ? '' : `<div style="font-size:11px;color:var(--ct);margin-top:9px;">
+        Estes números dependem de uma atualização do servidor que ainda não subiu.</div>`}
+    </div>`
+}
+
+function renderDashCi() {
+  const el = document.getElementById('dashCi')
+  if(!el) return
+  const d = DASH_PAINEL
+  const barras = [
+    { rotulo: 'Aguardando análise',  n: d?.ci_na_fila ?? 0,      cor: '#BA7517' },
+    { rotulo: 'C.I. de acordo',      n: d?.ci_encerrado ?? 0,    cor: '#3B6D11' },
+    { rotulo: 'Voltou com ressalvas', n: d?.ci_com_analista ?? 0, cor: '#A32D2D' },
+  ]
+  // ⚠️ A proporção é sobre o MAIOR, não sobre a soma: com 19 encerradas e 1 na fila, dividir
+  // pela soma daria uma barra de 5% que não se vê. O que a barra compara é entre si.
+  const maior = Math.max(1, ...barras.map(b => b.n))
+  el.innerHTML = `
+    <div style="background:#FCFDFC;border-radius:12px;box-shadow:var(--sombra);padding:14px 15px;height:100%;">
+      <div style="font-size:13px;font-weight:700;color:var(--te);margin-bottom:11px;">
+        Suas PCs no Controle Interno</div>
+      ${barras.map(b => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;">
+          <span style="flex:0 0 140px;font-size:12px;color:var(--ct);">${b.rotulo}</span>
+          <span style="flex:1;height:9px;background:var(--surface-1, #E4EAE6);border-radius:6px;overflow:hidden;">
+            <span style="display:block;height:100%;width:${d ? Math.round(b.n / maior * 100) : 0}%;
+              background:${b.cor};border-radius:6px;transition:width .8s cubic-bezier(.22,1,.36,1);"></span>
+          </span>
+          <span style="flex:0 0 auto;font-size:15px;font-weight:600;color:${b.cor};min-width:28px;text-align:right;">
+            ${d ? b.n : '—'}</span>
+        </div>`).join('')}
+      <div style="font-size:11.5px;color:var(--ct);margin-top:10px;line-height:1.45;">
+        ${!d ? 'Aguardando o servidor para calcular a espera.'
+             : (d.ci_mais_antigo_dias == null
+                ? 'Nenhuma PC sua está no Controle Interno agora.'
+                : `A mais antiga está lá há <b>${d.ci_mais_antigo_dias}</b> dia${d.ci_mais_antigo_dias === 1 ? '' : 's'}.`
+                  + (d.ci_espera_media_setorial != null
+                     ? ` Espera média do setorial: <b>${d.ci_espera_media_setorial}</b> dia${d.ci_espera_media_setorial === 1 ? '' : 's'}.`
+                     : ''))}
+      </div>
+    </div>`
+}
+
+/**
+ * Busca os números dos dois blocos.
+ *
+ * ⚠️ "pedidos aguardando" NÃO vem da rota nova, e é de propósito: as duas filas
+ * (`/solicitacao_correcao` e `/solicitacao_devolucao`) já são recortadas pelo perfil lido no
+ * BANCO, e trazer esse número por outro caminho seria uma segunda definição de "meus pedidos"
+ * — desta vez sem a guarda.
+ */
+async function carregarPainelDash() {
+  const sid = U.setorialFiltro
+  const id = alvo().id
+  try {
+    const p = new URLSearchParams({ analista_id: id })
+    if(sid) p.set('setorial_id', sid)
+    const [painel, cor, dev] = await Promise.all([
+      fetch(`${API_URL}/prestacoes_contas/painel?${p}`).then(r => r.json()),
+      fetch(`${API_URL}/solicitacao_correcao?usuario_id=${id}&status=pendente`).then(r => r.json()).catch(() => null),
+      fetch(`${API_URL}/solicitacao_devolucao?usuario_id=${id}&status=pendente`).then(r => r.json()).catch(() => null),
+    ])
+    if(painel.error || !painel.data) throw new Error(painel.error?.message || 'sem dados')
+    DASH_PAINEL = { ...painel.data,
+      pedidos: ((cor && cor.data) || []).length + ((dev && dev.data) || []).length }
+  } catch(e) {
+    // Sem a rota, os blocos dizem que não sabem — nunca inventam zero.
+    DASH_PAINEL = null
+    console.warn('painel do dashboard indisponivel:', e.message)
+  }
+  renderDashPrecisa(); renderDashCi()
+}
+
 let _dashTimer = null
 
 /**
@@ -2869,19 +2994,20 @@ let _dashTimer = null
  */
 function dashAtualizar() {
   if(typeof carregarContadores === 'function') carregarContadores()
+  if(typeof carregarPainelDash === 'function') carregarPainelDash()
 }
 
 function dashRelogioIniciar() {
   dashRelogioParar()
   if(document.hidden) return
-  _dashTimer = setInterval(() => { if(!document.hidden) carregarContadores() }, 60000)
+  _dashTimer = setInterval(() => { if(!document.hidden) { carregarContadores(); carregarPainelDash() } }, 60000)
 }
 function dashRelogioParar() { if(_dashTimer) { clearInterval(_dashTimer); _dashTimer = null } }
 
 document.addEventListener('visibilitychange', () => {
   if(document.hidden) { dashRelogioParar(); return }
   // Só faz sentido se o Dashboard estiver na tela — os cards só existem lá.
-  if(document.getElementById('dashCards')) { carregarContadores(); dashRelogioIniciar() }
+  if(document.getElementById('dashCards')) { carregarContadores(); carregarPainelDash(); dashRelogioIniciar() }
 })
 
 // ══════════════════════════════════════
@@ -2985,9 +3111,23 @@ function irDash() {
   ativarMenu('dash')
   document.getElementById('BODY').innerHTML = `
     <div class="banner">
-      <div>
-        <h2>${U.setorialAcesso==='ADMIN'?'Acesso Geral':U.setorialAcesso}</h2>
-        <p>${U.setorialAcesso==='ADMIN'?'Acesso Geral — Todas as Setoriais':'Setorial '+U.setorialAcesso}</p>
+      ${/* ⚠️ O NOME POR EXTENSO, e o logo (18/08/2026). A faixa dizia "FCEE / Setorial FCEE"
+            — a sigla duas vezes, e nenhuma das duas diz o que a instituição é. O quadrado
+            branco existe para a marca respirar: o logo da FCEE tem fundo claro e sumia
+            aplicado direto sobre o verde da faixa. */''}
+      <div style="display:flex;align-items:center;gap:14px;min-width:0;">
+        ${U.setorialAcesso==='ADMIN' ? '' : `<span style="flex:0 0 56px;width:56px;height:56px;
+          background:#fff;border-radius:12px;display:inline-flex;align-items:center;
+          justify-content:center;padding:7px;">
+          <img src="assets/logos/fcee.png" alt="FCEE"
+            style="max-width:100%;max-height:100%;object-fit:contain;"></span>`}
+        <div style="min-width:0;">
+          <h2 style="font-size:18px;font-weight:500;color:#fff;margin:0;line-height:1.25;">
+            ${U.setorialAcesso==='ADMIN' ? 'Acesso Geral — Todas as Setoriais'
+                                         : 'Fundação Catarinense de Educação Especial'}</h2>
+          <p style="font-size:12px;color:#9FE1CB;margin:2px 0 0;">
+            ${U.setorialAcesso==='ADMIN' ? 'Todas as setoriais' : 'Setorial'}</p>
+        </div>
       </div>
       ${/* ⚠️ OS QUATRO NÚMEROS SAÍRAM DAQUI em 18/08/2026 — decisão do Richard. A faixa
             mostrava exatamente os mesmos quatro que os cards logo abaixo: o mesmo dado, duas
@@ -3010,15 +3150,14 @@ function irDash() {
           "quantas eu baixei" é o que muda de manhã para a tarde; "quantas existem" é o pano
           de fundo. Posto em primeiro, era o número que o olho pegava. */''}
     <div class="cards4" id="dashCards"></div>
-    <div class="btns-rap">
-      <button class="btn-rap" onclick="irEst()">
-        <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
-        Estoque de TRs
-      </button>
-      <button class="btn-rap az" onclick="irProd()">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-        SUA PRODUTIVIDADE
-      </button>
+    ${/* ⚠️ OS DOIS BOTÕES RÁPIDOS SAÍRAM (18/08/2026). "Estoque de TRs" e "Sua produtividade"
+          repetiam, em letra grande, dois itens que a barra lateral já oferece — ocupavam a
+          dobra com atalhos, não com informação. O espaço virou os dois blocos abaixo, que
+          dizem o que fazer HOJE e onde o trabalho já entregue está parado.
+          O `btns-rap` continua no CSS: outras telas usam a classe. */''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px;margin-bottom:16px;">
+      <div id="dashPrecisa"></div>
+      <div id="dashCi"></div>
     </div>
     <div class="mn" id="manualCard">
       <div class="mn-top" onclick="manualCardTg(event)">
@@ -3141,6 +3280,7 @@ function irDash() {
   `
   // Carregar dados frescos e atualizar tela
   carregarContadores()
+  carregarPainelDash()
   // ⚠️ O relógio de 60s começa AQUI, e não no boot: ele só faz sentido com os cards na tela.
   // `dashRelogioIniciar` já para o anterior, então voltar ao Dashboard não empilha timers —
   // e é assim que uma pessoa que navega o dia inteiro não termina com dez relógios batendo.
@@ -6820,7 +6960,7 @@ async function irProd() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <!-- O "(NL)" saiu em 16/08/2026, por ordem do Richard. A unidade de produtividade e a
            PC baixada (CGE 727/2025), nao a NL — o rotulo antigo contradizia a regra do
-           sistema. No botao do Dashboard virou "SUA PRODUTIVIDADE"; aqui fica neutro, porque
+           sistema. (O botao rapido do Dashboard que dizia isso saiu em 18/08.) Aqui fica neutro, porque
            o coordenador e o superadmin veem a tela de todo mundo, nao a "sua". -->
       <div style="font-size:16px;font-weight:700;">Produtividade</div>
       <div style="display:flex;gap:6px;align-items:center;">

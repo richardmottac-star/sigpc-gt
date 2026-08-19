@@ -183,7 +183,17 @@ conf(/\.ft-lg img\{[^}]*opacity:\.7;/.test(html),
 conf(/\.ft-lg img\{[^}]*grayscale\(100%\)/.test(html) && /\.ft-lg:hover img\{filter:none/.test(html),
   'o cinza fica, e a cor volta no hover — sao quatro marcas de orgaos diferentes');
 
-conf(/>\s*SUA PRODUTIVIDADE\s*<\/button>/.test(html), 'o botao do Dashboard diz SUA PRODUTIVIDADE');
+// ⚠️ O BOTAO RAPIDO "SUA PRODUTIVIDADE" SAIU DO DASHBOARD em 18/08/2026 — decisao do
+// Richard. Ele, e o "Estoque de TRs" ao lado, repetiam em letra grande dois itens que a barra
+// lateral ja oferece: ocupavam a dobra com atalhos, nao com informacao. O espaco virou os
+// blocos "Precisa de voce" e "Suas PCs no Controle Interno".
+//
+// O que esta secao passa a proteger e o CAMINHO, nao o rotulo: a Produtividade continua
+// alcancavel pelo menu.
+conf(!/>\s*SUA PRODUTIVIDADE\s*<\/button>/.test(html),
+     'o botao rapido "SUA PRODUTIVIDADE" saiu do Dashboard');
+conf(!/Estoque de TRs\s*<\/button>/.test(html), 'e o "Estoque de TRs" saiu junto');
+conf(/id:'prod',\s*bloco:'analista'/.test(html), 'a Produtividade continua no menu do analista');
 // ⚠️ O "(NL)" saiu dos DOIS ROTULOS VISIVEIS. A unidade de produtividade e a PC baixada
 // (CGE 727/2025), nao a NL — o rotulo antigo contradizia a regra do sistema.
 //
