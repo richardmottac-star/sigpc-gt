@@ -359,9 +359,19 @@ S('13. DASHBOARD — a faixa da FCEE e os dois blocos (18/08/2026)');
 // ⚠️ A faixa dizia "FCEE / Setorial FCEE": a sigla duas vezes, e nenhuma diz o que a
 // instituicao e. O quadrado branco existe porque o logo tem fundo claro e sumia no verde.
 conf(/Fundação Catarinense de Educação Especial/.test(html), 'o nome por extenso na faixa');
-conf(/assets\/logos\/fcee\.png/.test(html), 'com o logo da FCEE que ja existia no repositorio');
-conf(/width:56px;height:56px;\s*background:#fff;border-radius:12px/.test(html.replace(/\n\s*/g, ' ')),
-     'em quadrado branco de 56px, raio 12');
+// ⚠️ A LOGO TROCOU EM 18/08/2026: entrou a `logo-fcee-branca.png`, branco puro com canal
+// alfa, e o quadrado branco de 56px SAIU junto. Ele so existia porque a `fcee.png` tem fundo
+// claro proprio e sumia sobre o verde; com a branca transparente a moldura deixou de ter
+// funcao e virava so uma caixa em volta da marca.
+conf(/assets\/logos\/logo-fcee-branca\.png/.test(html), 'a logo branca transparente na faixa');
+conf(/height:40px;width:auto/.test(html), 'com altura 40px e largura automatica');
+const bFaixa = html.slice(html.indexOf('class="banner"'), html.indexOf('banner-nums'));
+conf(!/width:56px;height:56px/.test(bFaixa), 'sem o quadrado branco de 56px');
+conf(!/border-radius:12px/.test(bFaixa), 'sem borda arredondada em volta da logo');
+conf(!/logos\/fcee\.png/.test(bFaixa), 'e a logo antiga saiu da faixa');
+// A `fcee.png` continua viva no rodape da governanca — nao ficou orfa.
+conf(/ft-lg"><img src="assets\/logos\/fcee\.png"/.test(html),
+     'a fcee.png segue no rodape da governanca — nao ficou orfa');
 conf(/font-size:18px;font-weight:500;color:#fff/.test(html), 'nome 18px peso 500 branco');
 conf(/font-size:12px;color:#9FE1CB/.test(html), 'e "Setorial" em 12px #9FE1CB');
 // A contagem de analistas e o indicador seguem na direita, do ciclo anterior.
