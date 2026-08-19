@@ -195,6 +195,65 @@ conf((filtros.match(/BTN_BUSCAR\('buscarPlan\(\)'\)/g) || []).length === 1,
 conf(!/class="btn-buscar" onclick="buscarPlan\(\)"/.test(html),
      'a copia escrita a mao saiu — ela era a sexta versao de um botao que ja tem dono');
 
+// ═════════════════════════════════════════════════════════════════════════════
+S('11. NUMEROS DO SETORIAL — a faixa e os quatro cards (18/08/2026)');
+
+// ⚠️ OS NUMEROS ESTAVAM DUPLICADOS: a faixa verde mostrava os MESMOS quatro dos cards logo
+// abaixo — o mesmo dado, duas vezes, na mesma dobra. Quem le dois numeros iguais em lugares
+// diferentes desconfia dos dois.
+for (const id of ['d-bnParcelas', 'd-bnLivres', 'd-bnAnalise', 'd-bnRepo'])
+  conf(!html.includes(id), `o numero ${id} saiu da faixa`);
+conf(/id="d-bnAnalistas"/.test(html), 'a faixa ficou com a contagem de analistas');
+conf(/id="d-frescorDot"/.test(html) && /id="d-frescorTxt"/.test(html),
+     'e com o indicador de atualizacao');
+
+S('11b. OS QUATRO CARDS, E O TOTAL POR ULTIMO');
+conf(/const DASH_CARDS = \[/.test(html), 'as cores moram numa lista so');
+for (const [ch, bg, fg] of [['baixadas', '#3B6D11', '#C0DD97'], ['analise', '#185FA5', '#B5D4F4'],
+                            ['livres', '#5F5E5A', '#D3D1C7'], ['total', '#0F6E56', '#9FE1CB']])
+  conf(new RegExp(`chave: '${ch}'[^\\n]*bg: '${bg}'[^\\n]*fg: '${fg}'`).test(html),
+       `card ${ch}: fundo ${bg}, rotulo ${fg}`);
+// ⚠️ O total e o DENOMINADOR, nao a noticia — por isso e o ultimo da lista.
+const ordemDash = ['baixadas', 'analise', 'livres', 'total'].map(c => html.indexOf(`chave: '${c}'`));
+conf(ordemDash.every((v, i) => i === 0 || v > ordemDash[i - 1]), 'e o total vem por ULTIMO');
+conf(/font-size:36px;font-weight:500;color:#fff;line-height:1/.test(html),
+     'mesma especificacao visual dos cards da Minha Planilha');
+
+S('11c. NUMEROS VIVOS');
+conf(/function dashShimmer\(\)/.test(html), 'ha shimmer enquanto busca');
+conf(/@keyframes dashShine/.test(html), 'com o keyframe no CSS — nao da para animar em style inline');
+conf(/function dashContarAte\(el, de, para\)/.test(html), 'o numero sobe contando');
+conf(/1 - Math\.pow\(1 - p, 3\)/.test(html), 'com easing (easeOutCubic)');
+conf(/dur = 700/.test(html), 'em ~700ms');
+// ⚠️ requestAnimationFrame, e nao setInterval: o rAF para sozinho com a aba escondida.
+conf(/requestAnimationFrame\(passo\)/.test(html), 'por requestAnimationFrame');
+conf(/else el\.textContent = para\.toLocaleString/.test(html),
+     'e o ultimo quadro crava o valor exato — easing chega perto, nao em cima');
+conf(/carregando…/.test(html) && /atualizado agora/.test(html) && /sem conexão/.test(html),
+     'o indicador tem os tres estados');
+
+S('11d. O RELOGIO DE 60s PAUSA FORA DA ABA');
+conf(/setInterval\(\(\) => \{ if\(!document\.hidden\) carregarContadores\(\) \}, 60000\)/.test(html),
+     'bate a cada 60s, e so com a aba visivel');
+conf(/document\.addEventListener\('visibilitychange'/.test(html), 'e escuta a troca de aba');
+conf(/if\(document\.hidden\) \{ dashRelogioParar\(\); return \}/.test(html),
+     'para ao esconder a aba — sem isso sao 51 abas batendo no Railway a toa');
+conf(/if\(id !== 'dash' && typeof dashRelogioParar/.test(html),
+     'e morre ao SAIR do Dashboard');
+
+S('11e. FALHA NAO ZERA O NUMERO');
+// ⚠️ Zero e uma AFIRMACAO. Dizer "0 PCs baixadas" porque a rede caiu e mentir com cara de dado.
+conf(/if\(el && DASH_ANIM\[c\.chave\] != null\) el\.textContent = DASH_ANIM/.test(html),
+     'no erro, o ultimo numero bom fica na tela');
+conf(/dashFrescor\('erro'\)/.test(html), 'e o indicador vai para "sem conexao"');
+conf(/if\(alvoVal == null\) return/.test(html), 'sem dado, o card nao e reescrito');
+
+S('11f. AS CINCO ACOES ATUALIZAM OS NUMEROS');
+conf(/function dashAtualizar\(\)/.test(html), 'ha uma porta so para atualizar');
+conf((html.match(/dashAtualizar\(\)/g) || []).length >= 6,
+     'e as cinco acoes a chamam (parecer, C.I., corrigir, puxar, cadastrar)');
+
+
 
 // ⚠️ O RESUMO FICA NO FIM DO ARQUIVO, e nao no meio. Em 18/08/2026 um bloco novo foi
 // acrescentado DEPOIS destas duas linhas: as assercoes rodavam, imprimiam OK, e nao

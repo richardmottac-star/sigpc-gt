@@ -94,6 +94,14 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .bnum strong{font-size:22px;font-weight:800;display:block;}
 .bnum span{font-size:9px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;}
 .cards4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+/* O brilho que desliza sobre a barra enquanto o número não chegou. Vive no CSS e não num
+   `style` inline porque `@keyframes` não existe em atributo — e é a única animação da tela. */
+@keyframes dashShine{0%{background-position:220% 0}100%{background-position:-120% 0}}
+/* ⚠️ Quem pediu menos movimento não recebe movimento. O shimmer vira uma barra parada, e o
+   contador cai no valor final — a informação é a mesma, sem a animação. */
+@media (prefers-reduced-motion: reduce){
+  [style*="dashShine"]{animation:none !important;}
+}
 .card{background:#FCFDFC;border-radius:10px;padding:14px 16px;border-top:3px solid var(--v);box-shadow:var(--sombra);}
 .card.az{border-top-color:var(--az);}
 .card.am{border-top-color:var(--am);}
@@ -2778,6 +2786,10 @@ function ativarMenu(id) {
   // A faixa de escopo 'inicial' só aparece no Dashboard. Fica aqui, e não espalhado em cada
   // `irX()`, porque TODA tela passa por `ativarMenu` — uma tela nova entra na regra sozinha.
   if(typeof faixaTela === 'function') faixaTela(id === 'dash' ? 'inicial' : 'outra')
+  // ⚠️ E o relógio dos números morre ao SAIR do Dashboard, pelo mesmo motivo de estar aqui:
+  // toda tela passa por aqui. Deixá-lo vivo faria a pessoa que abriu o Dashboard uma vez de
+  // manhã bater no Railway a cada minuto pelo resto do dia, de dentro da Minha Planilha.
+  if(id !== 'dash' && typeof dashRelogioParar === 'function') dashRelogioParar()
 }
 
 // ══════════════════════════════════════
@@ -2802,33 +2814,162 @@ async function carregarContadores() {
         .then(r=>r.json()).then(j=>j.count||0).catch(()=>0)
     }
 
-    const [total, analise, livres, baixadas] = await Promise.all([
+    // Enquanto não volta, os números viram shimmer e o indicador fica amarelo.
+    renderDashCards('carregando')
+    dashFrescor('carregando')
+
+    const [total, analise, livres, baixadas, analistas] = await Promise.all([
       contar(),
       contar({status:'analise'}),
       contar({status:'livre'}),
-      contar({baixada:'true'})
+      contar({baixada:'true'}),
+      // A contagem de analistas é da faixa, não dos cards — foi o que sobrou lá.
+      fetch(`${API_URL}/usuarios${sid ? '?setorial_id='+encodeURIComponent(sid) : ''}`)
+        .then(r=>r.json()).then(j=>(j.data||[]).filter(u=>u.perfil==='analista'&&u.ativo!==false).length)
+        .catch(()=>null)
     ])
 
     DASH = { total, analise, livres, baixadas }
+    const elAn = document.getElementById('d-bnAnalistas')
+    if(elAn && analistas != null) elAn.textContent = analistas
     setSt('ok','API Railway OK — '+DASH.total+' PCs carregadas')
-    // Sempre atualizar tela se elementos existirem
     renderDashNums()
+    dashFrescor('ok')
   } catch(e) {
+    // ⚠️ NÃO ZERA E NÃO APAGA. O último número bom fica na tela e o indicador diz "sem
+    // conexão". Zerar os cards numa falha de rede é o painel afirmando que o acervo sumiu —
+    // e quem abre a tela às 8h não tem como saber que foi a rede.
+    DASH_CARDS.forEach(c => {
+      const el = document.getElementById('dc-' + c.chave)
+      if(el && DASH_ANIM[c.chave] != null) el.textContent = DASH_ANIM[c.chave].toLocaleString('pt-BR')
+      else if(el) el.textContent = '—'
+    })
+    dashFrescor('erro')
     setSt('err','Erro: '+e.message)
   }
 }
 
-function renderDashNums() {
-  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val }
-  set('d-total', DASH.total)
-  set('d-analise', DASH.analise)
-  set('d-nlbx', DASH.baixadas)
-  set('d-dev', DASH.livres)
-  set('d-bnParcelas', DASH.total)
-  set('d-bnLivres', DASH.livres)
-  set('d-bnAnalise', DASH.analise)
-  set('d-bnRepo', DASH.baixadas)
+// ══════════════════════════════════════
+//  O RELÓGIO DOS NÚMEROS — 60s, e PAUSA fora da aba
+// ══════════════════════════════════════
+// ⚠️ A PAUSA NÃO É REFINAMENTO. São 51 pessoas com a aba aberta o dia inteiro; sem o
+// `document.hidden` isso é uma batida por minuto por aba num Railway que já é o gargalo,
+// para uma tela que ninguém está olhando. Ao voltar para a aba, atualiza na hora — a espera
+// de até um minuto seria justamente no momento em que a pessoa olha.
+let _dashTimer = null
+
+/**
+ * Chamada por TODA ação do analista que mexe nos números — baixar, encaminhar ao C.I.,
+ * corrigir situação, puxar do C.I. e cadastrar PC.
+ *
+ * ⚠️ Ela roda mesmo com o Dashboard fora da tela, e é de propósito: o analista age na Minha
+ * Planilha e volta ao Dashboard depois. Sem isto, ele voltaria e veria o número de ANTES da
+ * própria ação — que é o jeito mais rápido de alguém deixar de confiar no painel. O custo
+ * são cinco `COUNT` com `limit=1`, não o acervo.
+ */
+function dashAtualizar() {
+  if(typeof carregarContadores === 'function') carregarContadores()
 }
+
+function dashRelogioIniciar() {
+  dashRelogioParar()
+  if(document.hidden) return
+  _dashTimer = setInterval(() => { if(!document.hidden) carregarContadores() }, 60000)
+}
+function dashRelogioParar() { if(_dashTimer) { clearInterval(_dashTimer); _dashTimer = null } }
+
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) { dashRelogioParar(); return }
+  // Só faz sentido se o Dashboard estiver na tela — os cards só existem lá.
+  if(document.getElementById('dashCards')) { carregarContadores(); dashRelogioIniciar() }
+})
+
+// ══════════════════════════════════════
+//  OS NÚMEROS DO SETORIAL — cards sólidos e números vivos  (18/08/2026)
+// ══════════════════════════════════════
+// Mesma família visual dos cards da Minha Planilha: fundo sólido, raio 12, número 36/500
+// branco e rótulo 12 na cor clara. Duas telas com o mesmo tipo de número devem parecer a
+// mesma coisa — senão a pessoa acha que medem coisas diferentes.
+//
+// ⚠️ O TOTAL É O ÚLTIMO. Ver o comentário no `irDash`.
+const DASH_CARDS = [
+  { chave: 'baixadas', rotulo: 'PCs baixadas',  bg: '#3B6D11', fg: '#C0DD97' },
+  { chave: 'analise',  rotulo: 'Em análise',    bg: '#185FA5', fg: '#B5D4F4' },
+  { chave: 'livres',   rotulo: 'Livres',        bg: '#5F5E5A', fg: '#D3D1C7' },
+  { chave: 'total',    rotulo: 'Total de PCs',  bg: '#0F6E56', fg: '#9FE1CB' },
+]
+
+// ⚠️ NÃO ZERA NUNCA. `null` quer dizer "ainda não sei", e é o que faz o shimmer aparecer no
+// lugar do número. Zero é uma AFIRMAÇÃO — dizer "0 PCs baixadas" porque a rede caiu é mentir
+// com cara de dado, e num painel de produtividade isso assusta quem abriu a tela.
+let DASH_ANIM = {}          // chave -> valor mostrado agora (para animar a partir dele)
+
+function renderDashCards(estado) {
+  const cont = document.getElementById('dashCards')
+  if(!cont) return
+  if(!cont.dataset.montado) {
+    cont.innerHTML = DASH_CARDS.map(c => `
+      <div style="background:${c.bg};border-radius:12px;padding:14px 12px;">
+        <div id="dc-${c.chave}" style="font-size:36px;font-weight:500;color:#fff;line-height:1;
+             min-height:36px;">—</div>
+        <div style="font-size:12px;color:${c.fg};margin-top:6px;">${c.rotulo}</div>
+      </div>`).join('')
+    cont.dataset.montado = '1'
+  }
+  DASH_CARDS.forEach(c => {
+    const el = document.getElementById('dc-' + c.chave)
+    if(!el) return
+    if(estado === 'carregando') { el.innerHTML = dashShimmer(); return }
+    const alvoVal = DASH[c.chave]
+    if(alvoVal == null) return                    // sem dado: deixa o que estava
+    dashContarAte(el, DASH_ANIM[c.chave] ?? 0, alvoVal)
+    DASH_ANIM[c.chave] = alvoVal
+  })
+}
+
+/** A barra com brilho deslizante, no lugar do número enquanto a busca não volta. */
+function dashShimmer() {
+  return `<span style="display:block;height:30px;border-radius:7px;
+    background:linear-gradient(90deg,rgba(255,255,255,.13) 25%,rgba(255,255,255,.34) 50%,rgba(255,255,255,.13) 75%);
+    background-size:220% 100%;animation:dashShine 1.1s linear infinite;"></span>`
+}
+
+/**
+ * O número sobe contando até o valor, com easing, em ~700ms.
+ *
+ * ⚠️ `requestAnimationFrame`, e não `setInterval`: com a aba em segundo plano o rAF PARA
+ * sozinho, e um `setInterval` continuaria queimando quadros para uma tela que ninguém vê.
+ * ⚠️ E o último quadro crava o valor exato — o easing chega perto, não em cima, e um card
+ * que para em 3.872 quando o banco diz 3.873 é um defeito que ninguém consegue reproduzir.
+ */
+function dashContarAte(el, de, para) {
+  const ini = performance.now(), dur = 700
+  const passo = (t) => {
+    const p = Math.min(1, (t - ini) / dur)
+    const e = 1 - Math.pow(1 - p, 3)          // easeOutCubic
+    el.textContent = Math.round(de + (para - de) * e).toLocaleString('pt-BR')
+    if(p < 1) requestAnimationFrame(passo)
+    else el.textContent = para.toLocaleString('pt-BR')
+  }
+  requestAnimationFrame(passo)
+}
+
+/** O indicador da faixa: verde (atualizado), amarelo (carregando), cinza (sem conexão). */
+function dashFrescor(estado) {
+  const dot = document.getElementById('d-frescorDot')
+  const txt = document.getElementById('d-frescorTxt')
+  if(!dot || !txt) return
+  const mapa = {
+    carregando: ['#F5D06A', 'carregando…'],
+    ok:         ['#9FE1CB', 'atualizado agora'],
+    erro:       ['#B9BDBA', 'sem conexão'],
+  }
+  const m = mapa[estado] || mapa.ok
+  dot.style.background = m[0]
+  txt.textContent = m[1]
+}
+
+function renderDashNums() { renderDashCards('pronto') }
 
 function manualCardTg(ev) {
   var c = document.getElementById('manualCard')
@@ -2848,19 +2989,27 @@ function irDash() {
         <h2>${U.setorialAcesso==='ADMIN'?'Acesso Geral':U.setorialAcesso}</h2>
         <p>${U.setorialAcesso==='ADMIN'?'Acesso Geral — Todas as Setoriais':'Setorial '+U.setorialAcesso}</p>
       </div>
+      ${/* ⚠️ OS QUATRO NÚMEROS SAÍRAM DAQUI em 18/08/2026 — decisão do Richard. A faixa
+            mostrava exatamente os mesmos quatro que os cards logo abaixo: o mesmo dado, duas
+            vezes, na mesma dobra. Quem lê dois números iguais em telas diferentes desconfia
+            dos dois. Ficam o nome do setorial, quantos analistas e o indicador de
+            atualização — que é a única coisa que a faixa sabe e os cards não. */''}
       <div class="banner-nums">
-        <div class="bnum"><strong id="d-bnParcelas">—</strong><span>PCs</span></div>
-        <div class="bnum"><strong id="d-bnLivres">—</strong><span>Livres</span></div>
-        <div class="bnum"><strong id="d-bnAnalise">—</strong><span>Em Análise</span></div>
-        <div class="bnum"><strong id="d-bnRepo">—</strong><span>Baixadas</span></div>
+        <div class="bnum"><strong id="d-bnAnalistas">—</strong><span>Analistas</span></div>
+        <div class="bnum" style="text-align:right;">
+          <span id="d-frescor" style="display:inline-flex;align-items:center;gap:6px;font-size:10px;
+            text-transform:none;letter-spacing:0;opacity:1;">
+            <span id="d-frescorDot" style="width:8px;height:8px;border-radius:50%;background:#9FE1CB;
+              display:inline-block;"></span>
+            <span id="d-frescorTxt" style="color:#C4E6D3;">carregando…</span>
+          </span>
+        </div>
       </div>
     </div>
-    <div class="cards4">
-      <div class="card"><div class="card-num" id="d-total">—</div><div class="card-lbl">Total PCs</div></div>
-      <div class="card az"><div class="card-num" id="d-analise">—</div><div class="card-lbl">Em Análise</div></div>
-      <div class="card am"><div class="card-num" id="d-nlbx">—</div><div class="card-lbl">PCs baixadas</div></div>
-      <div class="card rv"><div class="card-num" id="d-dev">—</div><div class="card-lbl">Livres</div></div>
-    </div>
+    ${/* ⚠️ O TOTAL VAI POR ÚLTIMO — decisão do Richard. Ele é o denominador, não a notícia:
+          "quantas eu baixei" é o que muda de manhã para a tarde; "quantas existem" é o pano
+          de fundo. Posto em primeiro, era o número que o olho pegava. */''}
+    <div class="cards4" id="dashCards"></div>
     <div class="btns-rap">
       <button class="btn-rap" onclick="irEst()">
         <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
@@ -2992,6 +3141,10 @@ function irDash() {
   `
   // Carregar dados frescos e atualizar tela
   carregarContadores()
+  // ⚠️ O relógio de 60s começa AQUI, e não no boot: ele só faz sentido com os cards na tela.
+  // `dashRelogioIniciar` já para o anterior, então voltar ao Dashboard não empilha timers —
+  // e é assim que uma pessoa que navega o dia inteiro não termina com dez relógios batendo.
+  dashRelogioIniciar()
   // ⚠️ DE NOVO, E DEPOIS DO innerHTML. O `ativarMenu('dash')` la em cima ja chamou
   // `faixaTela('inicial')`, mas naquele instante o `#faixaBloco` ainda nao existia — o BODY
   // so foi reescrito agora. Sem esta linha o bloco nasce vazio e so aparece na recarga de 5
@@ -9835,7 +9988,7 @@ async function corSalvar() {
     if (j.error) throw new Error(j.error.message || j.error);
     toast(`✓ Situação corrigida em ${j.count} PC${j.count > 1 ? 's' : ''}.`
       + (j.data.desfez_baixa ? ' A baixa foi desfeita.' : ''), 'ok');
-    fm('moCorrigir'); buscarPlan(); carregarContadores && carregarContadores();
+    fm('moCorrigir'); buscarPlan(); dashAtualizar();
   } catch (e) { toast('Erro: ' + e.message, 'err'); }
   finally { bt.disabled = false; bt.textContent = '✓ Corrigir'; }
 }
@@ -9872,7 +10025,7 @@ async function pxSalvar() {
     const j = await r.json();
     if (j.error) throw new Error(j.error.message || j.error);
     toast(`✓ ${j.count} PC${j.count > 1 ? 's' : ''} fora do C.I. A baixa foi desfeita.`, 'ok');
-    fm('moPuxarCi'); buscarPlan();
+    fm('moPuxarCi'); buscarPlan(); dashAtualizar();
   } catch (e) { toast('Erro: ' + e.message, 'err'); }
   finally { bt.disabled = false; bt.textContent = '↩ Puxar de volta'; }
 }
@@ -9933,7 +10086,7 @@ async function pnSalvar() {
     const j = await r.json();
     if (j.error) throw new Error(j.error.message || j.error);
     toast(`✓ PC ${j.data.codigo_pc} cadastrada.`, 'ok');
-    fm('moPcNova'); buscarPlan();
+    fm('moPcNova'); buscarPlan(); dashAtualizar();
   } catch (e) {
     msg.textContent = e.message; msg.style.display = 'block';
   } finally { bt.disabled = false; bt.textContent = '✓ Cadastrar PC'; pnValidar(); }
@@ -10370,7 +10523,7 @@ async function pParSalvar() {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     toast(`Parecer registrado. ${j.count} PC${j.count>1?'s':''} baixada${j.count>1?'s':''}.`,'ok')
-    fm('moPPar'); carregarAlertasPrazo(); buscarPlan()
+    fm('moPPar'); carregarAlertasPrazo(); buscarPlan(); dashAtualizar()
   } catch(e) { toast('Erro: '+e.message,'err') }
   finally { bt.disabled = false }
 }
@@ -10522,7 +10675,7 @@ async function pEnviarCI(tr, num) {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     toast(`Parcial encaminhada ao CI (${j.count} PC${j.count>1?'s':''}).`,'ok')
-    buscarPlan()
+    buscarPlan(); dashAtualizar()
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
