@@ -6876,13 +6876,17 @@ async function prodCarregar() {
     const mapaStats = {}
     pcs.forEach(p => {
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0}
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0}
       const s = mapaStats[p.analista_id]
       s.total++
       if(p.status==='baixada') s.baixadas++
       else if(p.status==='analise') s.analise++
       else if(p.status==='diligencia') s.dilig++
       else if(p.status==='reanalise') s.reanalise++
+      // ⚠️ `enviado_ci` conta sobre as BAIXADAS, e por isso e' contado a' parte do `status`:
+      // uma PC baixada pode ou nao ter ido ao C.I., e e' essa diferenca que o "caminho das
+      // baixadas" mostra. Somar no mesmo `else if` esconderia justamente o passo que falta.
+      if(p.status==='baixada' && p.enviado_ci===true) s.noCi++
     })
 
     _prodDados = Object.entries(mapaStats).map(([analistaId, stats]) => {
@@ -6892,10 +6896,21 @@ async function prodCarregar() {
       const grupo = u.grupo ? parseInt(u.grupo) : null
       return {u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, ...stats, pct}
     }).filter(d => d.total > 0).filter(d => {
-      // Analista só vê o próprio card; coordenador só vê o grupo dele; superadmin vê tudo
+      // O analista vê só o próprio card. Coordenador e superadmin veem todos, e o filtro
+      // de grupo recorta.
+      //
+      // ⚠️ O COORDENADOR PASSOU A VER OS TRÊS GRUPOS em 18/08/2026 — decisão do Richard.
+      // Antes havia aqui um `&& String(d.grupo) !== String(U.grupo)` que o prendia ao próprio
+      // grupo e fazia a opção "Todos" do filtro não ter efeito nenhum para ele.
+      //
+      // ⚠️⚠️ ISTO LIBERA A VISÃO, E SÓ A VISÃO. Quem decide solicitação de correção e de
+      // devolução continua sendo o coordenador DO GRUPO do analista — a regra está em
+      // `lib/solicitacao-correcao.js:podeDecidir` e em `lib/devolucao-pedido.js:podeDecidir`,
+      // as duas no SERVIDOR, e nenhuma delas foi tocada. Ver um número não é poder mexer
+      // nele, e é justamente por a decisão morar no servidor que dá para afrouxar a tela sem
+      // afrouxar a permissão.
       if(verComoAtivo()) return d.u.id === alvo().id
-      if(U.perfil === 'analista') return d.u.id === U.id
-      if(U.perfil === 'coordenador' && String(d.grupo) !== String(U.grupo||'')) return false
+      if(perfilEfetivo(U) === 'analista') return d.u.id === U.id
       return !grupoF || String(d.grupo) === grupoF
     }).sort((a,b) => a.u.nome.localeCompare(b.u.nome))
 
@@ -6910,15 +6925,216 @@ async function prodCarregar() {
 
 function prodCorPct(pct) { return pct===null ? '#999' : pct>80?'#15803D':pct>=50?'#B45309':'#991B1B' }
 
+// ══════════════════════════════════════
+//  O CARD GRANDE DO ANALISTA  (18/08/2026)
+// ══════════════════════════════════════
+// O analista vê UM card só — o dele —, na largura toda. Coordenador e superadmin continuam
+// vendo a grade, e o clique num card abre este mesmo formato para aquela pessoa.
+//
+// ⚠️ POR QUE UM CARD SÓ, E GRANDE. O card pequeno tinha de caber num grid, então o número que
+// importa (baixadas), o que falta para a meta e o que trava o ciclo do C.I. disputavam 9px
+// cada. Aqui cada um tem o seu bloco, e a ordem é a da pergunta que o analista faz: como
+// estou na meta → o que fiz está fechado? → o que sobra na mesa.
+
+const PROD_SIT = [
+  { chave: 'analise',   rotulo: 'Em análise', bg: '#185FA5', fg: '#B5D4F4' },
+  { chave: 'dilig',     rotulo: 'Diligência', bg: '#BA7517', fg: '#FAC775' },
+  { chave: 'reanalise', rotulo: 'Reanálise',  bg: '#534AB7', fg: '#CECBF6' },
+  { chave: 'total',     rotulo: 'Total de PCs', bg: '#5F5E5A', fg: '#D3D1C7' },
+]
+
+const RAIO_ANEL = 52
+const VOLTA_ANEL = 2 * Math.PI * RAIO_ANEL      // 326.73
+
+/** As iniciais do círculo — no máximo duas, do primeiro e do último nome. */
+function prodIniciais(nome) {
+  const p = String(nome || '').trim().split(/\s+/).filter(Boolean)
+  if(!p.length) return '?'
+  return ((p[0][0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase()
+}
+
+function prodCardGrande(d) {
+  const { u, total, baixadas, analise, dilig, reanalise, meta, grupo, coord } = d
+  const noCi = d.noCi || 0
+  const faltaCi = Math.max(0, baixadas - noCi)
+  const pct = meta > 0 ? Math.round(baixadas / meta * 100) : null
+  const faltam = meta > 0 ? meta - baixadas : 0
+  const bateu = meta > 0 && baixadas >= meta
+  const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  // ⚠️ O anel nasce VAZIO (offset = volta inteira) e o CSS anima até o valor. Desenhar já no
+  // valor final e animar depois faria o anel piscar cheio antes de recuar.
+  const alvoOffset = VOLTA_ANEL * (1 - Math.min(1, (pct || 0) / 100))
+
+  const blocoCaminho = (n, rotulo, bg, fg) => `
+    <div style="flex:1;min-width:118px;background:${bg};color:${fg};border-radius:10px;padding:11px 12px;">
+      <div style="font-size:24px;font-weight:500;line-height:1;" data-conta="${n}">0</div>
+      <div style="font-size:11.5px;margin-top:4px;">${rotulo}</div>
+    </div>`
+  const seta = `<span style="color:#9AA8A0;font-size:17px;flex:0 0 auto;align-self:center;">→</span>`
+
+  return `
+  <div style="background:#FCFDFC;border-radius:14px;box-shadow:var(--sombra);overflow:hidden;">
+
+    <div style="background:#173404;padding:15px 18px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+      <span style="flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:#3B6D11;color:#EAF3DE;
+        display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;">
+        ${escHtml(prodIniciais(u.nome))}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:17px;font-weight:500;color:#fff;line-height:1.25;">${escHtml(u.nome)}</div>
+        <div style="font-size:12px;color:#C0DD97;margin-top:1px;">
+          Grupo ${grupo || '—'} · coordenação de ${escHtml(coord || '—')}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
+        <span style="width:7px;height:7px;border-radius:50%;background:#9FE1CB;display:inline-block;"></span>
+        <span style="font-size:11px;color:#C0DD97;">apurado às ${agora}</span>
+      </div>
+    </div>
+
+    <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;align-items:center;flex-wrap:wrap;">
+      <svg width="150" height="150" viewBox="0 0 150 150" style="flex:0 0 150px;">
+        <circle cx="75" cy="75" r="${RAIO_ANEL}" fill="none" stroke="var(--surface-1, #E4EAE6)" stroke-width="13"/>
+        <circle id="prodAnel" cx="75" cy="75" r="${RAIO_ANEL}" fill="none" stroke="#3B6D11" stroke-width="13"
+          stroke-linecap="round" transform="rotate(-90 75 75)"
+          stroke-dasharray="${VOLTA_ANEL.toFixed(2)}" stroke-dashoffset="${VOLTA_ANEL.toFixed(2)}"
+          style="transition:stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1);"
+          data-offset="${alvoOffset.toFixed(2)}"/>
+        <text x="75" y="72" text-anchor="middle" font-size="32" font-weight="500" fill="var(--te)"
+          id="prodAnelPct" font-family="Barlow,sans-serif">${pct === null ? '—' : '0%'}</text>
+        <text x="75" y="90" text-anchor="middle" font-size="11" fill="var(--ct)"
+          font-family="Barlow,sans-serif">da meta</text>
+      </svg>
+      <div style="flex:1;min-width:230px;">
+        <div style="font-size:13px;color:var(--te);font-weight:600;">Meta do período</div>
+        <div style="margin-top:5px;font-size:13px;color:var(--ct);">
+          <span style="font-size:30px;font-weight:500;color:#3B6D11;" data-conta="${baixadas}">0</span>
+          de ${meta || '—'} PCs baixadas</div>
+        ${meta > 0 ? (bateu
+          ? `<div style="margin-top:11px;background:#EAF3DE;color:#27500A;border-radius:8px;padding:9px 13px;font-size:12.5px;font-weight:700;">
+               ✓ Meta batida — ${baixadas - meta} PC${(baixadas - meta) === 1 ? '' : 's'} acima</div>`
+          : `<div style="margin-top:11px;background:#FAEEDA;color:#633806;border-radius:8px;padding:9px 13px;font-size:12.5px;font-weight:700;">
+               Faltam ${faltam} PC${faltam === 1 ? '' : 's'} para bater a meta</div>`)
+          : `<div style="margin-top:11px;background:#F1F4F2;color:var(--ct);border-radius:8px;padding:9px 13px;font-size:12.5px;">
+               Sem meta vigente cadastrada para este período.</div>`}
+        ${/* ⚠️ ESTE AVISO DESCEU DO TOPO DA TELA (18/08/2026). Ele explica por que o
+              percentual daqui não bate com o do relatório da CGE, e solto lá em cima ficava
+              longe do número que ele explica — ninguém lê ressalva a três blocos de
+              distância do dado. */''}
+        <div style="margin-top:9px;font-size:12px;color:var(--ct);line-height:1.45;">
+          Acumulado total de baixas desde o início do monitoramento, sem recorte de período.
+          O Quadro 2 do relatório CGE considera apenas as baixas dentro do período informado,
+          então os percentuais podem divergir.</div>
+      </div>
+    </div>
+
+    <div style="padding:15px 18px;border-bottom:1px solid var(--cl);">
+      <div style="font-size:13px;font-weight:600;color:var(--te);margin-bottom:10px;">
+        Caminho das ${baixadas} PC${baixadas === 1 ? '' : 's'} baixada${baixadas === 1 ? '' : 's'}</div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;">
+        ${blocoCaminho(baixadas, 'baixadas', '#EAF3DE', '#27500A')}
+        ${seta}
+        ${blocoCaminho(faltaCi, 'falta encaminhar ao C.I.', '#FAEEDA', '#633806')}
+        ${seta}
+        ${blocoCaminho(noCi, 'no Controle Interno', '#E6F1FB', '#0C447C')}
+      </div>
+      ${/* ⚠️ O encaminhamento ao C.I. é OBRIGATÓRIO (decisão do Richard, 13/08/2026). Esta
+            linha existe porque a baixa parece o fim e não é: o passo 3 de 3 fica aberto, e
+            sem dizer isso o número de "baixadas" vira uma conquista incompleta. */''}
+      <div style="margin-top:10px;font-size:11.5px;color:var(--ct);">
+        ${faltaCi > 0
+          ? `As ${faltaCi} que faltam encaminhar não fecham o ciclo — o passo 3 de 3 continua aberto.`
+          : 'Todas as baixadas já foram encaminhadas ao Controle Interno.'}</div>
+    </div>
+
+    <div style="padding:15px 18px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+        ${PROD_SIT.map(s => `
+          <div style="background:${s.bg};border-radius:12px;padding:14px 12px;">
+            <div style="font-size:36px;font-weight:500;color:#fff;line-height:1;"
+                 data-conta="${{ analise, dilig, reanalise, total }[s.chave]}">0</div>
+            <div style="font-size:12px;color:${s.fg};margin-top:6px;">${s.rotulo}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`
+}
+
+/**
+ * A cascata: meta primeiro, depois o caminho, depois a situação.
+ *
+ * ⚠️ A ORDEM NÃO É ENFEITE — ela é a ordem em que a pessoa lê. Subindo tudo de uma vez, o
+ * olho não sabe onde pousar; em cascata, o percentual da meta chega antes e os outros números
+ * chegam já como detalhe dele.
+ */
+function prodAnimar() {
+  const anel = document.getElementById('prodAnel')
+  if(anel) requestAnimationFrame(() => { anel.style.strokeDashoffset = anel.dataset.offset })
+
+  const pctEl = document.getElementById('prodAnelPct')
+  if(pctEl && pctEl.textContent !== '—') {
+    const alvoPct = Math.round(100 * (1 - parseFloat(anel.dataset.offset) / VOLTA_ANEL))
+    const ini = performance.now()
+    const passo = (t) => {
+      const p = Math.min(1, (t - ini) / 1100)
+      const e = 1 - Math.pow(1 - p, 3)
+      pctEl.textContent = Math.round(alvoPct * e) + '%'
+      if(p < 1) requestAnimationFrame(passo); else pctEl.textContent = alvoPct + '%'
+    }
+    requestAnimationFrame(passo)
+  }
+
+  // Os três grupos de números, em cascata. `dashContarAte` é a MESMA função do Dashboard —
+  // dois contadores diferentes na mesma tela envelheceriam em ritmos diferentes.
+  const alvos = [...document.querySelectorAll('[data-conta]')]
+  const meta = alvos.slice(0, 1), caminho = alvos.slice(1, 4), sit = alvos.slice(4)
+  const roda = (lista, atraso) => setTimeout(() => lista.forEach(el =>
+    dashContarAte(el, 0, parseInt(el.dataset.conta) || 0)), atraso)
+  roda(meta, 0); roda(caminho, 260); roda(sit, 520)
+}
+
+/** Abre o card grande de um analista — usado pelo clique do coordenador e do superadmin. */
+function prodAbrirCard(id) {
+  const d = (_prodDados || []).find(x => String(x.u.id) === String(id))
+  if(!d) { toast('Analista não encontrado nesta lista.', 'err'); return }
+  const cont = document.getElementById('prodCont')
+  if(!cont) return
+  cont.innerHTML = `
+    <button class="btn-acao" onclick="prodRender(_prodDados)"
+      style="background:#fff;color:var(--te);border:1.5px solid var(--cl);font-weight:700;margin-bottom:11px;">
+      ◀ Voltar à lista</button>
+    ${prodCardGrande(d)}`
+  prodAnimar()
+}
+
 function prodRender(dados) {
   const cont = document.getElementById('prodCont')
   if(!cont) return
+
+  // ⚠️ O ANALISTA VÊ UM CARD SÓ, E GRANDE (18/08/2026). Ele nunca teve mais de um card nesta
+  // tela — o filtro sempre devolveu só o dele —, mas o desenho era o de grade: um cartão
+  // estreito perdido num espaço vazio. Coordenador e superadmin seguem na grade, e o clique
+  // abre este mesmo formato.
+  //
+  // O carimbo do topo some aqui: o cabeçalho do card já diz "apurado às HH:MM", e a ressalva
+  // do Quadro 2 desceu para dentro do bloco da meta, ao lado do número que ela explica.
+  if(perfilEfetivo(U) === 'analista' || verComoAtivo()) {
+    const carimbo = document.getElementById('prodCarimbo')
+    if(carimbo) carimbo.style.display = 'none'
+    if(!dados.length) {
+      cont.innerHTML = `<div style="text-align:center;padding:34px;color:var(--ct);">
+        Nenhuma PC atribuída a você ainda.</div>`
+      return
+    }
+    cont.innerHTML = prodCardGrande(dados[0])
+    prodAnimar()
+    return
+  }
+
   if(_prodAba === 'cards') {
     cont.innerHTML = `<div class="prod-cards">${dados.map(d => {
       const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
       const cor = prodCorPct(pct)
       const pctTxt = pct===null ? '—' : pct+'%'
-      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="verProdDetalhe(${u.id},'${u.nome}')">
+      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="prodAbrirCard(${u.id})">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
           <div class="prod-nome">${u.nome}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
@@ -6942,7 +7158,7 @@ function prodRender(dados) {
       const pctTxt = pct===null ? '—' : pct+'%'
       return `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
         <td style="font-size:11px;color:var(--ct);text-align:center;">${i+1}</td>
-        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="verProdDetalhe(${u.id},'${u.nome}')">${u.nome}</td>
+        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="prodAbrirCard(${u.id})">${u.nome}</td>
         <td style="font-size:11px;text-align:center;">${grupo||'—'}</td>
         <td style="font-size:11px;">${coord}</td>
         <td style="font-size:12px;text-align:center;">${meta||'—'}</td>

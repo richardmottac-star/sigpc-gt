@@ -253,6 +253,107 @@ conf(/function dashAtualizar\(\)/.test(html), 'ha uma porta so para atualizar');
 conf((html.match(/dashAtualizar\(\)/g) || []).length >= 6,
      'e as cinco acoes a chamam (parecer, C.I., corrigir, puxar, cadastrar)');
 
+// ═════════════════════════════════════════════════════════════════════════════
+S('12. PRODUTIVIDADE — o card grande do analista (18/08/2026)');
+
+conf(/function prodCardGrande\(d\)/.test(html), 'o card grande existe');
+// O analista vê UM card só, na largura toda; coordenador e superadmin seguem na grade.
+conf(/if\(perfilEfetivo\(U\) === 'analista' \|\| verComoAtivo\(\)\) \{/.test(html),
+     'o analista cai no card grande');
+conf(/cont\.innerHTML = prodCardGrande\(dados\[0\]\)/.test(html), 'e vê so o dele');
+conf(/function prodAbrirCard\(id\)/.test(html), 'coordenador e superadmin abrem pelo clique');
+conf(/onclick="prodAbrirCard\(\$\{u\.id\}\)"/.test(html), 'o card pequeno leva ao grande');
+conf(/Voltar à lista/.test(html), 'e ha caminho de volta');
+
+S('12b. O CABECALHO');
+conf(/background:#173404/.test(html), 'fundo #173404');
+conf(/width:44px;height:44px;border-radius:50%;background:#3B6D11;color:#EAF3DE/.test(html),
+     'circulo de 44px com as iniciais');
+conf(/function prodIniciais\(nome\)/.test(html), 'e as iniciais saem do nome');
+conf(/font-size:17px;font-weight:500;color:#fff/.test(html), 'nome 17px peso 500 branco');
+conf(/Grupo \$\{grupo \|\| '—'\} · coordenação de/.test(html), 'grupo e coordenacao abaixo');
+conf(/apurado às \$\{agora\}/.test(html), 'e o "apurado as HH:MM" a direita');
+
+S('12c. O ANEL DA META');
+conf(/const RAIO_ANEL = 52/.test(html), 'raio 52');
+conf(/stroke-width="13"/.test(html), 'stroke-width 13');
+conf(/stroke-linecap="round"/.test(html), 'linecap round');
+conf(/stroke="var\(--surface-1, #E4EAE6\)"/.test(html), 'trilho var(--surface-1), com reserva');
+conf(/stroke="#3B6D11"/.test(html), 'preenchimento #3B6D11');
+conf(/transition:stroke-dashoffset 1\.1s cubic-bezier\(\.22,1,\.36,1\)/.test(html),
+     'anima o dashoffset em 1,1s com a curva pedida');
+// ⚠️ Nasce VAZIO e anima ate o valor: desenhar cheio e recuar faria o anel piscar.
+conf(/stroke-dashoffset="\$\{VOLTA_ANEL\.toFixed\(2\)\}"/.test(html),
+     'e nasce vazio — o CSS leva ate o alvo');
+conf(/font-size="32" font-weight="500"/.test(html), 'percentual 32px peso 500 no centro');
+conf(/da meta<\/text>/.test(html), 'com "da meta" abaixo');
+conf(/font-size:30px;font-weight:500;color:#3B6D11/.test(html), 'o N das baixadas em 30px #3B6D11');
+
+S('12d. META BATIDA OU FALTANDO');
+conf(/Faltam \$\{faltam\} PC/.test(html), 'faixa ambar quando falta');
+conf(/#FAEEDA;color:#633806/.test(html), 'nas cores ambar');
+conf(/Meta batida — \$\{baixadas - meta\} PC/.test(html), 'faixa verde quando bateu');
+conf(/#EAF3DE;color:#27500A/.test(html), 'nas cores verdes');
+// ⚠️ O aviso do Quadro 2 DESCEU do topo: ressalva longe do numero que ela explica nao e lida.
+conf(/Quadro 2 do relatório CGE/.test(html), 'o aviso da CGE esta no card');
+conf(/if\(carimbo\) carimbo\.style\.display = 'none'/.test(html),
+     'e o carimbo solto do topo some para o analista');
+
+S('12e. O CAMINHO DAS BAIXADAS');
+conf(/Caminho das \$\{baixadas\} PC/.test(html), 'o titulo conta as baixadas');
+conf(/#EAF3DE', '#27500A'\)/.test(html) || /'#EAF3DE', '#27500A'/.test(html), 'bloco 1 verde');
+conf(/'#FAEEDA', '#633806'/.test(html), 'bloco 2 ambar');
+conf(/'#E6F1FB', '#0C447C'/.test(html), 'bloco 3 azul');
+conf(/const seta =/.test(html), 'com seta entre eles');
+conf(/o passo 3 de 3 continua aberto/.test(html), 'a linha final quando falta encaminhar');
+conf(/Todas as baixadas já foram encaminhadas ao Controle Interno/.test(html),
+     'e a variante para zero');
+// ⚠️ enviado_ci e' contado A PARTE do status: PC baixada pode ou nao ter ido ao C.I.
+conf(/if\(p\.status==='baixada' && p\.enviado_ci===true\) s\.noCi\+\+/.test(html),
+     'o "no C.I." conta sobre as baixadas, fora do else-if do status');
+
+S('12f. SITUACAO E CASCATA');
+conf(/const PROD_SIT = \[/.test(html), 'as quatro situacoes numa lista so');
+for (const [ch, bg, fg] of [['analise', '#185FA5', '#B5D4F4'], ['dilig', '#BA7517', '#FAC775'],
+                            ['reanalise', '#534AB7', '#CECBF6'], ['total', '#5F5E5A', '#D3D1C7']])
+  conf(new RegExp(`chave: '${ch}'[^\\n]*bg: '${bg}'[^\\n]*fg: '${fg}'`).test(html),
+       `situacao ${ch}: ${bg} / ${fg}`);
+conf(/function prodAnimar\(\)/.test(html), 'ha a cascata');
+conf(/roda\(meta, 0\); roda\(caminho, 260\); roda\(sit, 520\)/.test(html),
+     'meta -> caminho -> situacao, nessa ordem');
+// ⚠️ O MESMO contador do Dashboard. Dois contadores na mesma tela envelheceriam diferente.
+conf(/dashContarAte\(el, 0, parseInt\(el\.dataset\.conta\)/.test(html),
+     'e reusa o dashContarAte do Dashboard');
+
+S('12g. ⚠️ O COORDENADOR VE OS TRES GRUPOS — MAS SO VE');
+// A trava de VISAO saiu da tela.
+conf(!/U\.perfil === 'coordenador' && String\(d\.grupo\) !== String\(U\.grupo/.test(html),
+     'a trava de grupo saiu do filtro da Produtividade');
+conf(/ISTO LIBERA A VISÃO, E SÓ A VISÃO/.test(html), 'e ficou escrito que e' + ' so a visao');
+// ⚠️⚠️ E A DECISAO NAO FOI TOCADA. A tela nao decide nada: quem decide e' o servidor, e a
+// regra continua sendo "coordenador DO GRUPO do analista". Se alguem afrouxar isso um dia,
+// e' aqui e nos testes do sigpc-api que tem de quebrar.
+// O bloco da Produtividade nao tem logica de decisao nenhuma — ele so filtra o que MOSTRAR.
+// ⚠️ SEM AS LINHAS DE COMENTARIO. O bloco CITA `podeDecidir` de proposito, para dizer que
+// nao a tocou — medir a palavra daria falso positivo justamente no comentario que explica a
+// regra. Mede-se o CODIGO. E o mesmo erro que ja aconteceu com `_planDados` nesta suite.
+const bProd = html.slice(html.indexOf('async function prodCarregar'),
+                         html.indexOf('function prodAbrirCard'))
+  .split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+conf(!/odeDecidir/.test(bProd), 'o bloco da Produtividade nao decide nada');
+conf(!/analista_grupo/.test(bProd), 'e nao encosta na chave que a decisao usa');
+
+// ⚠️⚠️ E O ESPELHO DA DECISAO NA FILA DE DEVOLUCAO CONTINUA PRESO AO GRUPO. Liberar a VISAO
+// da Produtividade nao podia afrouxar isto — se um dia alguem tirar a comparacao de grupo
+// daqui, um coordenador passa a decidir pedido de equipe que nao e a dele. A tranca de
+// verdade e a do servidor (lib/solicitacao-correcao.js e lib/devolucao-pedido.js), e esta
+// linha existe para o espelho da tela nao divergir dela em silencio.
+conf(/function devPodeDecidir\(s\)/.test(html), 'o espelho da decisao existe');
+conf(/String\(U\.grupo \?\? ''\) === String\(s\.analista_grupo \?\? ''\) && String\(U\.grupo \?\? ''\) !== ''/
+     .test(html), 'e ele exige o MESMO grupo — intacto');
+conf(/if\(proprio\) return false/.test(html), 'e o solicitante continua sem decidir o proprio');
+
+
 
 
 // ⚠️ O RESUMO FICA NO FIM DO ARQUIVO, e nao no meio. Em 18/08/2026 um bloco novo foi
