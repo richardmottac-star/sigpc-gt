@@ -177,11 +177,16 @@ conf(!/\.faixa-bloco\b/.test(html), 'o bloco parado saiu do CSS — nao ha marca
 
 console.log('\n═══ 10. AS LOGOS DA GOVERNANCA E O BOTAO DA PRODUTIVIDADE ═══');
 
-conf(/\.ft-lg img\{height:48px;/.test(html), 'as logos da governanca subiram para 48px');
-conf(/\.ft-lg img\{[^}]*opacity:\.7;/.test(html),
-  'e a opacidade subiu junto — logo maior e apagada so fica maior e apagada');
-conf(/\.ft-lg img\{[^}]*grayscale\(100%\)/.test(html) && /\.ft-lg:hover img\{filter:none/.test(html),
-  'o cinza fica, e a cor volta no hover — sao quatro marcas de orgaos diferentes');
+conf(/\.ft-lg img\{height:48px;/.test(html), 'as logos da governanca estao em 48px');
+// ⚠️ ESTA SECAO MUDOU DE LADO EM 18/08/2026 — decisao do Richard. Ate aqui ela EXIGIA o
+// `grayscale(100%)` com `opacity:.7`, revertidos no hover. O problema e que hover NAO EXISTE
+// em toque: no celular as quatro marcas ficavam em preto e branco e desbotadas para sempre.
+// E sao marcas de quatro orgaos diferentes — apaga-las nao era estetica, era descaracteriza-las.
+// Agora aparecem SEMPRE coloridas, como os arquivos de assets/logos.
+conf(!/\.ft-lg img\{[^}]*grayscale/.test(html), 'sem grayscale — as logos ficam coloridas');
+conf(!/\.ft-lg img\{[^}]*opacity/.test(html), 'e sem opacidade que as desbote');
+// E a regra de hover saiu junto: nao ha mais o que reverter.
+conf(!/\.ft-lg:hover img\{/.test(html), 'e a regra de hover foi removida, nao ha o que reverter');
 
 // ⚠️ O BOTAO RAPIDO "SUA PRODUTIVIDADE" SAIU DO DASHBOARD em 18/08/2026 — decisao do
 // Richard. Ele, e o "Estoque de TRs" ao lado, repetiam em letra grande dois itens que a barra

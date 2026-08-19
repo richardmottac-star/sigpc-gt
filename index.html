@@ -155,8 +155,13 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
    de .55 para .7 junto: uma logo maior e igualmente apagada so fica maior e apagada. O
    `grayscale` fica — sao quatro marcas de orgaos diferentes, e em cor elas brigariam entre si
    e com o verde do sistema; a cor volta no hover, uma de cada vez. */
-.ft-lg img{height:48px;width:auto;max-width:100%;object-fit:contain;filter:grayscale(100%);opacity:.7;transition:.18s;}
-.ft-lg:hover img{filter:none;opacity:1;}
+/* ⚠️ SEM `grayscale` E SEM `opacity` — decisão do Richard, 18/08/2026. As quatro logos
+   aparecem SEMPRE coloridas, como os arquivos de `assets/logos`.
+   O `filter:grayscale(100%)` com `opacity:.7` só se revertia no hover, e hover não existe em
+   toque: no celular as marcas ficavam em preto e branco e desbotadas, para sempre. E são
+   marcas de quatro órgãos diferentes — apagá-las não era estética, era descaracterizá-las.
+   A regra de hover saiu junto: não há mais o que reverter. */
+.ft-lg img{height:48px;width:auto;max-width:100%;object-fit:contain;transition:.18s;}
 .ft-lg span{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ct);}
 .gov-ft-legal{margin-top:12px;padding-top:10px;border-top:1px solid var(--cl);text-align:center;font-size:10px;color:var(--ct);line-height:1.5;}
 @media(max-width:820px){.gov-ft-grid{grid-template-columns:repeat(2,1fr);}.ft-lg+.ft-lg::before{display:none;}}
