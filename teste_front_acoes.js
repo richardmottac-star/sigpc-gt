@@ -612,6 +612,86 @@ conf(/function ciSelToggle\(codigoPc, chave\)/.test(html), 'com selecao por PC')
 conf(/function ciMarcarTodas\(chave\)/.test(html), 'e "marcar todas"');
 conf(/de \$\{g\.pcs\.length\} PC/.test(html), 'o cartao mostra quantas estao selecionadas');
 
+// ═════════════════════════════════════════════════════════════════════════════
+S('18. AGIR PELA CONTA DE — a busca quebrada (19/08/2026)');
+
+// ⚠️ O DEFEITO, e por que ele era invisivel:
+//     termoBusca(u.nome).includes(b) || soDigitos(u.cpf).includes(soDigitos(b))
+// Digitando um NOME, soDigitos(b) vira string VAZIA — e "11122233344".includes("") e TRUE.
+// O segundo lado do OU passava para TODO MUNDO, e a lista voltava inteira. Buscar "zzzzz"
+// devolvia os 46. So funcionava por CPF, e por acidente.
+conf(/const bDig = soDigitos\(bruto\)/.test(html), 'os digitos do termo sao extraidos a parte');
+conf(/return !!bDig && soDigitos\(u\.cpf\)\.includes\(bDig\)/.test(html),
+     'e o CPF so e comparado quando ha digitos — o conserto');
+// ⚠️ SEM AS LINHAS DE COMENTARIO: o codigo CITA a comparacao velha de proposito, para
+// registrar o defeito. Medir a string crua da falso positivo no comentario que a explica —
+// e' o terceiro caso deste padrao nesta suite (ver `_planDados` e `podeDecidir`).
+const vcSoCodigo = html.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+conf(!/soDigitos\(u\.cpf\)\.includes\(soDigitos\(b\)\)/.test(vcSoCodigo),
+     'a comparacao velha, que casava com tudo, sumiu do codigo');
+// Sem acento e sem maiuscula: `termoBusca` ja fazia isso, e continua no caminho do nome.
+conf(/termoBusca\(u\.nome\|\|''\)\.includes\(b\)/.test(html), 'nome continua sem acento e sem caixa');
+
+S('18b. O CABECALHO E OS FILTROS');
+conf(/border-radius:11px;background:#3C3489/.test(html.replace(/\n\s*/g, ' ')),
+     'olho em quadrado #3C3489');
+conf(/fill:#CECBF6/.test(html), 'com o icone em #CECBF6');
+conf(/O trabalho fica <strong>no nome dela<\/strong>/.test(html),
+     'e o texto mantem a garantia em destaque');
+conf(/id="vcOrdem"/.test(html), 'ordenar por');
+for (const o of ['Menor produtividade', 'Mais PCs paradas', 'Sem acesso há mais tempo'])
+  conf(html.includes(o), `opcao "${o}"`);
+conf(/id="vcSit"/.test(html), 'filtro de situacao');
+conf(/surface-2/.test(html), 'a linha de filtros em bloco var(--surface-2)');
+
+S('18c. OS CHIPS');
+conf(/function verComoChip\(c\)/.test(html), 'os chips filtram');
+conf(/mk\('todos','Todos',cont\.todos\)/.test(html), 'chip Todos');
+conf(/#FCEBEB','#A32D2D'\)/.test(html), 'chip "Com pendencia" em vermelho');
+conf(/#E1F5EE','#0F6E56'\)/.test(html), 'chip "Online" em verde');
+// ⚠️ Os contadores contam sobre a lista JA filtrada por busca e situacao — senao o numero
+// do chip nao bateria com o que ele mostra ao ser clicado.
+conf(/todos: lista\.length/.test(html), 'e contam sobre a lista ja filtrada');
+
+S('18d. A LINHA DO ANALISTA');
+conf(/function vcLinha\(u\)/.test(html), 'a linha existe');
+conf(/flex:0 0 34px;width:34px;height:34px;border-radius:50%/.test(html), 'avatar de 34px');
+conf(/width:10px;height:10px;border-radius:50%;background:#0F6E56/.test(html),
+     'bolinha verde de 10px quando online');
+conf(/font-size:13px;font-weight:500/.test(html), 'nome 13px peso 500');
+conf(/flex:0 0 130px/.test(html), 'coluna de meta com 130px');
+conf(/p <= 30 \? '#BA7517' : p <= 70 \? '#639922' : '#3B6D11'/.test(html),
+     'a barra muda de cor por faixa');
+conf(/height:5px/.test(html), 'com 5px de altura');
+conf(/faltam ir ao C\.I\./.test(html) && /vencidas/.test(html), 'etiquetas de pendencia real');
+conf(/em análise/.test(html) && /no C\.I\./.test(html), 'e as informativas');
+conf(/meta batida/.test(html), 'e "meta batida" para quem bateu');
+conf(/background:#3C3489;color:#fff/.test(html), 'botao em #3C3489');
+conf(/Agir por \$\{vcPronome\(u\)\}/.test(html), 'com "Agir por ela/ele"');
+// ⚠️ Nao ha coluna `genero` em usuarios — deduzir do nome erraria em nome ambiguo.
+conf(/O CADASTRO NÃO GUARDA GÊNERO/.test(html), 'e o porque do padrao esta escrito');
+
+S('18e. OS ESTADOS DA LINHA');
+conf(/border-left:3px solid #A32D2D/.test(html), 'com pendencia: borda esquerda vermelha');
+conf(/temPend \? '0 var\(--radius, 10px\) var\(--radius, 10px\) 0'/.test(html),
+     'e o raio muda para 0 nesse lado');
+conf(/ferias \? 'opacity:\.7;' : ''/.test(html), 'ferias: opacidade .7');
+conf(/etiq\('férias', '#EEEDFE', '#3C3489'\)/.test(html), 'e etiqueta ao lado do nome');
+
+S('18f. DE ONDE VEM CADA DADO');
+// ⚠️ FERIAS SAEM DA MESMA FONTE DA TELA "Ferias e Afastamentos" — decisao do Richard. Uma
+// segunda fonte divergiria da primeira no dia em que alguem corrigisse uma data so de um lado.
+conf(/API_URL\}\/afastamentos/.test(html), 'ferias vem de /afastamentos, a mesma tela de Ferias');
+conf(/function vcFerias\(u\)/.test(html), 'com o afastamento em curso por data civil');
+conf(/painel_equipe/.test(html), 'os numeros vem da rota nova painel_equipe');
+conf(/metas_analistas\?vigente=true/.test(html), 'a meta vem das metas vigentes');
+// ⚠️ Online REUSA `_online`, que vem da rota onde a regra mora: "ativo ha menos de 30 min E
+// nao encerrou a sessao depois". Recalcular por ultimo_acesso repetiria so a metade facil.
+conf(/function estaOnline\(u\)/.test(html), 'e online reusa a lista do servidor');
+conf(/_online[\s\S]{0,120}some\(o => String\(o\.id\) === String\(u\.id\)\)/.test(html),
+     'sem recalcular por ultimo_acesso');
+
+
 
 
 

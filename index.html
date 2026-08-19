@@ -1988,27 +1988,67 @@ async function irVerComo() {
   if(U.perfil !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
   ativarMenu('vercomo')
   document.getElementById('BODY').innerHTML = `
-    <div style="max-width:720px;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="#8A6100"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-        <div style="font-size:16px;font-weight:800;">Agir pela conta de um analista</div>
+    <div style="display:flex;align-items:flex-start;gap:13px;margin-bottom:13px;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#3C3489;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#CECBF6;">
+          <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span>
+      <div style="min-width:0;">
+        <div style="font-size:16px;font-weight:700;">Agir pela conta de um analista</div>
+        <div style="font-size:12px;color:var(--ct);line-height:1.5;margin-top:2px;">
+          ${/* ⚠️ O <strong> em "no nome dela" NÃO é enfeite: é a garantia que a tela precisa
+                dar ANTES de alguém entrar no modo. Há teste que falha se ele sumir — e ele
+                sumiu, ao compactar este texto em duas linhas. */''}
+          Você vê as telas com os dados da pessoa <strong>e trabalha por ela</strong>.
+          O trabalho fica <strong>no nome dela</strong>; você fica registrado como quem executou.<br>
+          Continuam fora: estornar, devolver TR, pedir devolução e decidir no C.I. — são decisões
+          <em>sobre</em> o trabalho dela, não o trabalho dela.
+        </div>
       </div>
-      <div style="font-size:11.5px;color:var(--ct);margin-bottom:14px;">
-        Você vê as telas com os dados da pessoa <strong>e trabalha por ela</strong>.
-        O trabalho fica <strong>no nome dela</strong>; você fica registrado como quem executou.
-        <br>Continuam fora: estornar, devolver TR, pedir devolução e decidir no C.I. — são
-        decisões <em>sobre</em> o trabalho dela, não o trabalho dela.
-      </div>
-      <input type="text" id="vcBusca" placeholder="Buscar por nome ou CPF" oninput="verComoRender()"
-        style="width:100%;max-width:360px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 11px;font-size:12.5px;font-family:Barlow,sans-serif;margin-bottom:12px;">
-      <div id="vcLista"><div class="loading"><div class="spin"></div>Carregando...</div></div>
-    </div>`
+    </div>
+
+    <div style="background:var(--surface-2, #F7FAF8);border-radius:var(--radius, 10px);
+         padding:11px 13px;margin-bottom:11px;display:flex;gap:11px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="fg" style="flex:1;min-width:220px;max-width:340px;"><label>Buscar</label>
+        <input type="text" id="vcBusca" placeholder="Nome ou CPF" oninput="verComoRender()"></div>
+      <div class="fg"><label>Ordenar por</label>
+        <select id="vcOrdem" onchange="verComoRender()">
+          <option value="nome">Nome</option>
+          <option value="prod">Menor produtividade</option>
+          <option value="paradas">Mais PCs paradas</option>
+          <option value="acesso">Sem acesso há mais tempo</option>
+        </select></div>
+      <div class="fg"><label>Situação</label>
+        <select id="vcSit" onchange="verComoRender()">
+          <option value="ativos">Ativos</option>
+          <option value="ferias">Em férias</option>
+          <option value="todos">Todos</option>
+        </select></div>
+    </div>
+
+    <div id="vcChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div id="vcLista"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
   try {
+    const sid = U.setorialFiltro
     const p = new URLSearchParams({ ativo:'true' })
-    if(U.setorialFiltro) p.set('setorial_id', U.setorialFiltro)
-    const j = await (await fetch(`${API_URL}/usuarios?${p}`)).json()
-    _vcUsuarios = (j.data||[]).filter(verComoPodeVer)
-    const pcs = await (await fetch(`${API_URL}/prestacoes_contas/produtividade?corte=${new Date().toISOString().slice(0,10)}`)).json()
+    if(sid) p.set('setorial_id', sid)
+    const q = sid ? `?setorial_id=${encodeURIComponent(sid)}` : ''
+    // ⚠️ TUDO NUMA IDA SÓ. Antes a tela buscava a produtividade GERAL do acervo (um número
+    // do setor inteiro) e nem a usava — ficava num `const` que ninguém lia.
+    const [ju, jp, jm, ja] = await Promise.all([
+      fetch(`${API_URL}/usuarios?${p}`).then(r=>r.json()),
+      fetch(`${API_URL}/prestacoes_contas/painel_equipe${q}`).then(r=>r.json()).catch(()=>null),
+      fetch(`${API_URL}/metas_analistas?vigente=true${sid?'&setorial_id='+encodeURIComponent(sid):''}`).then(r=>r.json()).catch(()=>null),
+      // ⚠️ FÉRIAS VÊM DA MESMA FONTE DA TELA "Férias e Afastamentos" — decisão do Richard.
+      // Uma segunda fonte para "quem está de férias" divergiria da primeira no dia em que
+      // alguém corrigisse uma data só de um lado.
+      fetch(`${API_URL}/afastamentos${q ? q+'&limit=999' : '?limit=999'}`).then(r=>r.json()).catch(()=>null),
+    ])
+    _vcUsuarios = (ju.data||[]).filter(verComoPodeVer)
+    _vcNums = (jp && jp.data) || {}
+    _vcMetas = {}
+    ;((jm && jm.data) || []).forEach(m => { _vcMetas[m.analista_id] = (_vcMetas[m.analista_id]||0) + (parseInt(m.meta)||0) })
+    _vcAfast = (ja && ja.data) || []
     verComoRender()
   } catch(e) {
     document.getElementById('vcLista').innerHTML = `<div style="color:var(--r);padding:12px;">Erro: ${escHtml(e.message)}</div>`
@@ -2016,26 +2056,226 @@ async function irVerComo() {
 }
 
 let _vcUsuarios = []
+let _vcNums = {}
+let _vcMetas = {}
+let _vcAfast = []
+let _vcChip = 'todos'
+
+function verComoChip(c) { _vcChip = c; verComoRender() }
+
+/**
+ * O afastamento em curso de alguém, ou null.
+ *
+ * ⚠️ MESMA FONTE DA TELA DE FÉRIAS (`GET /afastamentos`), e a comparação é por DATA CIVIL,
+ * com as pontas incluídas: quem entra de férias hoje já está de férias hoje.
+ */
+function vcFerias(u) {
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  return _vcAfast.find(a => String(a.analista_id) === String(u.id)
+    && String(a.data_inicio||'').slice(0,10) <= hoje
+    && String(a.data_fim||'').slice(0,10) >= hoje) || null
+}
+
+/** Dias desde o último acesso; null quando nunca entrou. */
+function vcDiasSemAcesso(u) {
+  if(!u.ultimo_acesso) return null
+  return Math.floor((Date.now() - new Date(u.ultimo_acesso).getTime()) / 86400000)
+}
 
 function verComoRender() {
   const el = document.getElementById('vcLista')
   if(!el) return
-  const b = termoBusca(document.getElementById('vcBusca')?.value || '')
-  const lista = b
-    ? _vcUsuarios.filter(u => termoBusca(u.nome||'').includes(b) || soDigitos(u.cpf).includes(soDigitos(b)))
-    : _vcUsuarios
-  if(!lista.length) { el.innerHTML = '<div style="padding:14px;color:var(--ct);font-size:12px;">Ninguém encontrado.</div>'; return }
-  el.innerHTML = `<div style="background:#FCFDFC;border:1.5px solid var(--cb);border-radius:9px;overflow:hidden;">
-    ${lista.map(u => `
-      <div onclick="verComoEntrar('${u.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid var(--cl);cursor:pointer;">
-        ${onlineAvatar(u)}
-        <div style="min-width:0;">
-          <div style="font-size:12.5px;font-weight:700;">${escHtml(u.nome||'—')}</div>
-          <div style="font-size:10.5px;color:var(--ct);">${escHtml(perfilLabel(u.perfil)||'')}${u.grupo?` · Grupo ${escHtml(String(u.grupo))}`:''}</div>
-        </div>
-        <span style="margin-left:auto;font-size:11px;color:var(--v);font-weight:700;">ver como →</span>
-      </div>`).join('')}
+
+  // ══════════════════════════════════════
+  //  ⚠️ O CONSERTO DA BUSCA (19/08/2026)
+  // ══════════════════════════════════════
+  // A busca NÃO FILTRAVA NADA, e a causa era uma linha só:
+  //
+  //     termoBusca(u.nome).includes(b) || soDigitos(u.cpf).includes(soDigitos(b))
+  //
+  // Digitando um NOME, `soDigitos(b)` vira string VAZIA — e em JavaScript
+  // `"11122233344".includes("")` é **true**. O segundo lado do OU passava para todo mundo, e
+  // a lista voltava inteira. Buscar "zzzzz" devolvia os 46. Só funcionava por CPF, e por
+  // acidente: ali `soDigitos(b)` não era vazio.
+  //
+  // A correção é comparar CPF só quando há dígitos no que foi digitado.
+  const bruto = document.getElementById('vcBusca')?.value || ''
+  const b = termoBusca(bruto)
+  const bDig = soDigitos(bruto)
+  const casa = (u) => {
+    if(!b) return true
+    if(termoBusca(u.nome||'').includes(b)) return true
+    // ⚠️ `bDig &&` é o conserto. Sem ele, todo termo sem dígito casa com todo CPF.
+    return !!bDig && soDigitos(u.cpf).includes(bDig)
+  }
+
+  const sit = document.getElementById('vcSit')?.value || 'ativos'
+  const ordem = document.getElementById('vcOrdem')?.value || 'nome'
+
+  const pend = (u) => {
+    const n = _vcNums[u.id] || {}
+    return (n.falta_ci || 0) + (n.vencidas || 0)
+  }
+
+  let lista = _vcUsuarios.filter(casa).filter(u => {
+    const f = vcFerias(u)
+    if(sit === 'ferias') return !!f
+    if(sit === 'ativos') return !f
+    return true
+  })
+
+  // Os chips contam sobre a lista JÁ filtrada por busca e situação — senão o número do chip
+  // não bateria com o que ele mostra ao ser clicado.
+  const cont = {
+    todos: lista.length,
+    g1: lista.filter(u => String(u.grupo) === '1').length,
+    g2: lista.filter(u => String(u.grupo) === '2').length,
+    g3: lista.filter(u => String(u.grupo) === '3').length,
+    pend: lista.filter(u => pend(u) > 0).length,
+    online: lista.filter(u => estaOnline(u)).length,
+  }
+  const chips = document.getElementById('vcChips')
+  if(chips) {
+    const mk = (id, rot, n, bg, fg) => {
+      const on = _vcChip === id
+      return `<button onclick="verComoChip('${id}')" style="border:1.5px solid ${on?(fg||'#173404'):'var(--cl)'};
+        background:${on?(fg||'#173404'):(bg||'#fff')};color:${on?'#fff':(fg||'var(--ct)')};
+        border-radius:20px;padding:6px 13px;font-size:12px;font-weight:${on?'800':'600'};
+        font-family:inherit;cursor:pointer;">${rot} · ${n}</button>`
+    }
+    chips.innerHTML =
+      mk('todos','Todos',cont.todos) +
+      mk('g1','Grupo 1',cont.g1) + mk('g2','Grupo 2',cont.g2) + mk('g3','Grupo 3',cont.g3) +
+      mk('pend','Com pendência',cont.pend,'#FCEBEB','#A32D2D') +
+      mk('online','Online',cont.online,'#E1F5EE','#0F6E56')
+  }
+
+  if(_vcChip === 'g1' || _vcChip === 'g2' || _vcChip === 'g3')
+    lista = lista.filter(u => String(u.grupo) === _vcChip.slice(1))
+  else if(_vcChip === 'pend') lista = lista.filter(u => pend(u) > 0)
+  else if(_vcChip === 'online') lista = lista.filter(u => estaOnline(u))
+
+  const pct = (u) => {
+    const m = _vcMetas[u.id] || 0
+    return m > 0 ? Math.round(((_vcNums[u.id]||{}).baixadas || 0) / m * 100) : null
+  }
+  lista.sort((a,c) => {
+    if(ordem === 'prod') return (pct(a) ?? 9999) - (pct(c) ?? 9999)
+    if(ordem === 'paradas') return ((_vcNums[c.id]||{}).analise||0) - ((_vcNums[a.id]||{}).analise||0)
+    if(ordem === 'acesso') return (vcDiasSemAcesso(c) ?? 99999) - (vcDiasSemAcesso(a) ?? 99999)
+    return String(a.nome||'').localeCompare(String(c.nome||''))
+  })
+
+  if(!lista.length) {
+    el.innerHTML = `<div style="padding:18px;color:var(--ct);font-size:12.5px;text-align:center;">
+      ${b ? `Ninguém encontrado para "${escHtml(bruto)}".` : 'Ninguém neste filtro.'}</div>`
+    return
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;gap:11px;padding:0 15px 6px;font-size:10.5px;text-transform:uppercase;
+         letter-spacing:.06em;color:#9AA8A0;font-weight:700;">
+      <span style="flex:2;min-width:0;">Analista</span>
+      <span style="flex:0 0 130px;">Meta</span>
+      <span style="flex:1;min-width:0;">Pendências</span>
+      <span style="flex:0 0 120px;"></span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${lista.map(vcLinha).join('')}
+    </div>`
+}
+
+function vcLinha(u) {
+  const n = _vcNums[u.id] || {}
+  const meta = _vcMetas[u.id] || 0
+  const bx = n.baixadas || 0
+  const p = meta > 0 ? Math.round(bx / meta * 100) : null
+  const ferias = vcFerias(u)
+  const online = estaOnline(u)
+  const dias = vcDiasSemAcesso(u)
+  const temPend = (n.falta_ci || 0) + (n.vencidas || 0) > 0
+
+  // ⚠️ A COR DA BARRA É POR FAIXA, e o corte é do Richard: até 30 âmbar, 31–70 verde-claro,
+  // acima verde. Uma barra de cor única mostraria o tamanho e esconderia o julgamento.
+  const corBarra = p == null ? '#C4CCC7' : p <= 30 ? '#BA7517' : p <= 70 ? '#639922' : '#3B6D11'
+
+  const etiq = (txt, bg, fg) => `<span style="background:${bg};color:${fg};font-size:10.5px;
+    font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;">${txt}</span>`
+
+  const tags = []
+  // Pendências REAIS primeiro — são o motivo de a linha ganhar a borda vermelha.
+  if(n.falta_ci) tags.push(etiq(`${n.falta_ci} faltam ir ao C.I.`, '#FCEBEB', '#A32D2D'))
+  if(n.vencidas) tags.push(etiq(`${n.vencidas} vencidas`, '#FCEBEB', '#A32D2D'))
+  if(n.analise) tags.push(etiq(`${n.analise} em análise`, '#E6F1FB', '#0C447C'))
+  if(n.no_ci) tags.push(etiq(`${n.no_ci} no C.I.`, '#E6F1FB', '#0C447C'))
+  if(p != null && p >= 100) tags.push(etiq('meta batida', '#EAF3DE', '#27500A'))
+
+  const sub = ferias
+    ? `retorna em ${String(ferias.data_fim||'').slice(0,10).split('-').reverse().slice(0,2).join('/')}`
+    : online ? 'online agora'
+    : dias == null ? 'nunca acessou'
+    : `último acesso há ${dias} dia${dias === 1 ? '' : 's'}`
+
+  return `
+  <div style="background:var(--surface-2, #F7FAF8);border-radius:${temPend ? '0 var(--radius, 10px) var(--radius, 10px) 0' : 'var(--radius, 10px)'};
+       ${temPend ? 'border-left:3px solid #A32D2D;' : ''}
+       ${ferias ? 'opacity:.7;' : ''}
+       padding:10px 15px;display:flex;gap:11px;align-items:center;flex-wrap:wrap;">
+
+    <div style="flex:2;min-width:170px;display:flex;align-items:center;gap:10px;">
+      <span style="position:relative;flex:0 0 34px;width:34px;height:34px;border-radius:50%;
+        background:#EEEDFE;color:#3C3489;display:inline-flex;align-items:center;justify-content:center;
+        font-size:12.5px;font-weight:700;">${escHtml(prodIniciais(u.nome))}
+        ${online ? `<span title="Online agora" style="position:absolute;right:-1px;bottom:-1px;
+          width:10px;height:10px;border-radius:50%;background:#0F6E56;border:2px solid #fff;"></span>` : ''}</span>
+      <div style="min-width:0;">
+        <div style="font-size:13px;font-weight:500;color:var(--te);line-height:1.3;">
+          ${escHtml(u.nome||'—')}
+          ${ferias ? etiq('férias', '#EEEDFE', '#3C3489') : ''}</div>
+        <div style="font-size:11px;color:var(--ct);">
+          ${u.grupo ? `Grupo ${escHtml(String(u.grupo))} · ` : ''}${sub}</div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 130px;">
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--ct);">
+        <span><b style="color:var(--te);">${bx}</b> / ${meta || '—'}</span>
+        <span style="color:${corBarra};font-weight:700;">${p == null ? '—' : p + '%'}</span>
+      </div>
+      <div style="height:5px;background:var(--cl);border-radius:4px;margin-top:4px;overflow:hidden;">
+        <div style="height:100%;width:${Math.min(100, p || 0)}%;background:${corBarra};border-radius:4px;"></div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:150px;display:flex;gap:5px;flex-wrap:wrap;">
+      ${tags.length ? tags.join('') : `<span style="font-size:11px;color:#9AA8A0;">nada pendente</span>`}
+    </div>
+
+    <button class="btn-acao" onclick="verComoEntrar('${u.id}')"
+      style="flex:0 0 120px;background:#3C3489;color:#fff;border-color:#3C3489;font-weight:700;">
+      Agir por ${vcPronome(u)}</button>
   </div>`
+}
+
+// ⚠️ O CADASTRO NÃO GUARDA GÊNERO — conferido: não existe coluna `genero` em `usuarios`.
+// O Richard pediu os dois rótulos ("Agir por ela" / "Agir por ele"), então o padrão é "ela"
+// e a função já lê o campo no dia em que ele existir. Deduzir do primeiro nome seria pior
+// que o padrão: erra em nome ambíguo e em nome estrangeiro, e erra na cara da pessoa.
+function vcPronome(u) {
+  const g = String(u?.genero || '').trim().toLowerCase()
+  return (g === 'm' || g === 'masculino') ? 'ele' : 'ela'
+}
+
+/**
+ * Está online agora?
+ *
+ * ⚠️ REUSA `_online`, que vem de `GET /usuarios/online` — a rota onde a regra mora desde
+ * 12/08: "esteve ativo há menos de 30 min E não encerrou a sessão depois disso". Recalcular
+ * aqui por `ultimo_acesso` repetiria só a metade fácil: quem clicou em Sair continuaria
+ * aparecendo online por meia hora, que é exatamente o defeito que aquela rota corrigiu.
+ */
+function estaOnline(u) {
+  return (typeof _online !== 'undefined' ? _online : []).some(o => String(o.id) === String(u.id))
 }
 
 function verComoEntrar(id) {
