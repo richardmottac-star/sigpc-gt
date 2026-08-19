@@ -184,9 +184,23 @@ conf(/Ver as \$\{contagem\.vencida365\}/.test(html), 'e o botao que leva ao filt
 conf(/Nenhuma PC vence nos próximos 30 dias/.test(html),
      'faixa 2: aparece TAMBEM no zero — o zero e' + ' uma boa noticia, e some se nao for dita');
 // ⚠️ O botao nao monta consulta propria: mexe no MESMO <select> e chama o MESMO buscarPlan.
-conf(/function planFiltrarPrazo\(valor\)/.test(html), 'o filtro passa por uma funcao so');
-conf(/sel\.value = valor[\s\S]{0,80}buscarPlan\(\)/.test(html),
+conf(/async function planFiltrarPrazo\(valor\)/.test(html), 'o filtro passa por uma funcao so');
+conf(/sel\.value = valor[\s\S]{0,400}await buscarPlan\(\)/.test(html),
      'que usa o select da tela, e nao uma segunda definicao de "vencida"');
+// ⚠️ COM `await`: sem esperar, o scrollIntoView rodava sobre a lista ANTIGA e mirava uma
+// altura que ia mudar meio segundo depois.
+conf(/await buscarPlan\(\)[\s\S]{0,320}scrollIntoView/.test(html), 'e so rola DEPOIS de buscar');
+
+// ⚠️ O BOTAO DA FAIXA VERMELHA APLICA O RECORTE QUE ELE PROMETE. Ate 19/08/2026 a faixa
+// contava "vencidas ha MAIS DE UM ANO" e o clique filtrava `venc` — "todas as vencidas",
+// outro conjunto. Filtrava mesmo (56 TRs -> 31 no acervo do Richard), mas o resultado nunca
+// correspondia ao numero do botao, e nao havia como conferir se tinha funcionado.
+conf(/function planIrParaVencidas\(\) \{ planFiltrarPrazo\('venc365'\) \}/.test(html),
+     'o botao do passivo aplica venc365, e nao venc');
+conf(/<option value="venc365">/.test(html), 'a opcao existe no select');
+// A conta e a MESMA da rota alertas_prazo no servidor (dias > 365).
+conf(/prazo === 'venc365' && !\(pa\.maxDias > 365\)/.test(html),
+     'e usa a mesma conta do servidor: mais de 365 dias');
 
 S('10d. UM BOTAO BUSCAR SO');
 const filtros = html.slice(html.indexOf('id="plBusca"'), html.indexOf('btn-limpar" onclick="limparPlan'));

@@ -9646,6 +9646,11 @@ async function irPlanilha() {
         <select id="plPrazo">
           <option value="">Todos os prazos</option>
           <option value="venc">Vencidas</option>
+          ${/* ⚠️ ESTA OPÇÃO NASCEU EM 19/08/2026 porque o botão da faixa vermelha precisava
+                dela. A faixa conta "vencidas há MAIS DE UM ANO" e o botão aplicava `venc`,
+                que é "todas as vencidas" — outro conjunto. Ele filtrava de verdade, mas
+                nunca no recorte que tinha acabado de prometer. */''}
+          <option value="venc365">Vencidas há mais de 1 ano</option>
           <option value="30d">A vencer em 30 dias</option>
         </select>
       </div>
@@ -9768,24 +9773,38 @@ function renderAlertasPrazo(alertas) {
     </div>`)
 
   cont.innerHTML = faixas.join('')
-  // Guardado para o botão: o filtro "venc" da tela cobre TODAS as vencidas, não só as de
-  // mais de um ano — é o que o `<select>` oferece, e inventar um filtro novo aqui criaria
-  // uma terceira definição de "vencida".
+  // ⚠️ ESTE COMENTÁRIO DIZIA O CONTRÁRIO ATÉ 19/08/2026, e a decisão que ele registrava era
+  // a errada: "o filtro `venc` cobre TODAS as vencidas, e inventar um filtro novo criaria uma
+  // terceira definição de vencida". O problema é que a faixa promete um recorte específico —
+  // mais de um ano — e entregar um conjunto maior não é economia de conceito, é o botão
+  // mentindo. O `<select>` ganhou a opção `venc365`, com a MESMA conta do servidor.
   cont.dataset.vencidas = String(vencidas)
 }
 
-/** Aplica o filtro de vencidas e rola até a lista. */
-function planIrParaVencidas() { planFiltrarPrazo('venc') }
+/**
+ * O botão da faixa vermelha: aplica o recorte do PASSIVO — vencidas há mais de um ano.
+ *
+ * ⚠️ ATÉ 19/08/2026 ELE APLICAVA `venc`, e não `venc365`. A faixa contava uma coisa ("182
+ * com prazo vencido há mais de um ano") e o clique filtrava outra ("todas as vencidas"). Não
+ * era inerte — filtrava mesmo, e no acervo do Richard levava 56 TRs para 31 —, mas o
+ * resultado nunca correspondia ao número do botão, e não havia como conferir se tinha
+ * funcionado. Um filtro que entrega um conjunto diferente do que prometeu é, para quem
+ * clica, indistinguível de um filtro que não fez nada.
+ */
+function planIrParaVencidas() { planFiltrarPrazo('venc365') }
 /** Aplica o filtro das que vencem em 30 dias e rola até a lista. */
 function planIrPara30d() { planFiltrarPrazo('30d') }
 
 // ⚠️ O botão NÃO monta uma consulta própria: ele mexe no MESMO `<select>` de prazo que a
 // pessoa usaria à mão e chama o MESMO `buscarPlan()`. Uma segunda porta para o mesmo filtro
 // divergiria da primeira — e a tela ficaria com dois conceitos de "vencida".
-function planFiltrarPrazo(valor) {
+async function planFiltrarPrazo(valor) {
   const sel = document.getElementById('plPrazo')
   if(sel) sel.value = valor
-  buscarPlan()
+  // ⚠️ COM `await`. `buscarPlan` é assíncrona: sem esperar, o `scrollIntoView` rodava sobre a
+  // lista ANTIGA e mirava uma altura que ia mudar meio segundo depois — a página parava num
+  // ponto qualquer, e a rolagem parecia não ter acontecido.
+  await buscarPlan()
   const alvoEl = document.getElementById('planBarra') || document.getElementById('planConteudo')
   if(alvoEl) alvoEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -9928,6 +9947,10 @@ async function buscarPlan() {
         if(sit && sit !== '__baixadas' && (pa.baixada || pa.situacao_atual !== sit)) return false
         // Mesmas faixas da cor e do balão — ver `prazoFaixa`.
         if(prazo === 'venc' && prazoFaixa(pa.maxDias) !== 'vencida') return false
+        // ⚠️ O RECORTE DA FAIXA VERMELHA: mais de 365 dias. É a mesma conta que a rota
+        // `alertas_prazo` faz no servidor (`dias > 365`) — se as duas divergirem, o botão
+        // volta a prometer um número e a entregar outro.
+        if(prazo === 'venc365' && !(pa.maxDias > 365)) return false
         if(prazo === '30d'  && prazoFaixa(pa.maxDias) !== 'avencer') return false
         return true
       })})).filter(t => t.parciais.length)
