@@ -12719,27 +12719,39 @@ async function irCI() {
   ativarMenu('ci')
   const papel = U.perfil === 'controle_interno' ? 'C.I.' : perfilLabel(U.perfil)
   document.getElementById('BODY').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;gap:9px;">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#1A4E8A"><path d="${CI_ESCUDO}"/></svg>
-        <div>
-          <div style="font-size:16px;font-weight:800;">Controle interno</div>
-          <div style="font-size:11px;color:var(--ct);">Encaminhamentos dos analistas — mais antigos primeiro</div>
-        </div>
-      </div>
-      <div style="font-size:12px;color:var(--ct);text-align:right;">
-        <strong style="color:var(--te);">${escHtml(U.nome||'')}</strong> · ${escHtml(papel)}
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:13px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#0F6E56;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff;"><path d="${CI_ESCUDO}"/></svg></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:700;">Controle interno</div>
+        <div style="font-size:11.5px;color:var(--ct);" id="ciSub">
+          <strong>${escHtml(U.nome||'')}</strong></div>
       </div>
     </div>
 
+    ${/* ⚠️ OS QUATRO NÚMEROS SÃO DA FILA INTEIRA, e não do filtro. Se caíssem com a busca, o
+          técnico digitaria o nome de uma analista e leria "2 PCs na fila" como se o serviço
+          do setor tivesse acabado. */''}
+    <div id="ciPainel" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:13px;"></div>
+
     <div id="ciAbas" style="display:flex;gap:2px;border-bottom:2px solid var(--cb);margin-bottom:12px;"></div>
 
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <input type="text" id="ciBusca" placeholder="TR, entidade, analista ou PC"
-        style="flex:1;min-width:260px;max-width:520px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 11px;font-size:12.5px;font-family:Barlow,sans-serif;"
-        oninput="ciBuscarInput(this.value)" onkeydown="if(event.key==='Enter')ciBuscarAgora()">
-      ${BTN_BUSCAR('ciBuscarAgora()')}
-      <button class="btn-limpar" onclick="ciLimparBusca()">✕ Limpar</button>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="fg" style="flex:1;min-width:230px;max-width:430px;"><label>Buscar</label>
+        <input type="text" id="ciBusca" placeholder="TR, entidade, analista ou PC"
+          oninput="ciBuscarInput(this.value)" onkeydown="if(event.key==='Enter')ciBuscarAgora()"></div>
+      <div class="fg"><label>Analista</label>
+        <select id="ciFiltroAnalista" onchange="ciFiltroAnalistaMudou(this.value)">
+          <option value="">Todas</option></select></div>
+      <div class="fg"><label>Tempo de espera</label>
+        <select id="ciFiltroOrdem" onchange="ciOrdemMudou(this.value)">
+          <option value="antigas">Mais antigas primeiro</option>
+          <option value="recentes">Mais recentes primeiro</option></select></div>
+      ${/* ⚠️ UM "Buscar" SÓ. O "Limpar" saiu junto: com os dois selects aplicando sozinhos ao
+            mudar, o que restava para ele limpar era o campo de texto — e apagar texto é o que
+            a tecla de apagar faz. */''}
+      <div style="display:flex;align-items:flex-end;">${BTN_BUSCAR('ciBuscarAgora()')}</div>
       <div style="margin-left:auto;font-size:11.5px;color:var(--ct);" id="ciContagem"></div>
     </div>
 
@@ -12767,6 +12779,40 @@ function ciAbasRender() {
 
 function ciAba(id) { _ciAba = id; _ciAberto = null; ciCarregar() }
 
+// ── Os dois filtros novos (18/08/2026) ──────────────────────────────────────
+let _ciAnalista = ''
+let _ciOrdem = 'antigas'
+function ciFiltroAnalistaMudou(v) { _ciAnalista = v; _ciAberto = null; ciRender() }
+function ciOrdemMudou(v) { _ciOrdem = v; _ciAberto = null; ciRender() }
+
+/**
+ * O subtítulo e a lista de analistas do filtro.
+ *
+ * ⚠️ AS ANALISTAS SAEM DA PRÓPRIA FILA, e não do cadastro de usuários. Listar as 46 faria o
+ * técnico rolar um select cheio de nomes que não têm nada na fila — e escolher um deles
+ * devolveria uma tela vazia sem dizer por quê.
+ */
+async function ciCabecalho() {
+  const sub = document.getElementById('ciSub')
+  const sel = document.getElementById('ciFiltroAnalista')
+  if (sel) {
+    const mapa = new Map()
+    _ciDados.forEach(p => { if (p.analista_id) mapa.set(String(p.analista_id), p.analista_nome_completo || p.analista_nome) })
+    const atual = _ciAnalista
+    sel.innerHTML = '<option value="">Todas</option>'
+      + [...mapa.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .map(([id, nome]) => `<option value="${escHtml(id)}" ${atual === id ? 'selected' : ''}>${escHtml(nome || 'id ' + id)}</option>`).join('')
+  }
+  if (sub && !sub.dataset.tecnicos) {
+    try {
+      const j = await (await fetch(`${API_URL}/usuarios`)).json()
+      const n = (j.data || []).filter(u => u.perfil === 'controle_interno' && u.ativo !== false).length
+      sub.dataset.tecnicos = String(n)
+      sub.innerHTML = `<strong>${escHtml(U.nome || '')}</strong> · ${n} técnico${n === 1 ? '' : 's'} na equipe`
+    } catch (e) { /* sem a contagem o subtítulo fica só com o nome — não é motivo de erro */ }
+  }
+}
+
 async function ciCarregar() {
   const cont = document.getElementById('ciCont')
   if(!cont) return
@@ -12781,6 +12827,7 @@ async function ciCarregar() {
     _ciDados = j.data || []
     _ciCont = j.contagens || _ciCont
     ciAbasRender()
+    ciCabecalho()
     ciRender()
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
@@ -12812,102 +12859,245 @@ function ciDias(dt) {
   return Math.floor((Date.now() - new Date(dt).getTime()) / 86400000)
 }
 
-function ciRender() {
-  const cont = document.getElementById('ciCont')
-  if(!cont) return
-  const grupos = ciGrupos()
-
-  const cnt = document.getElementById('ciContagem')
-  if(cnt) cnt.textContent = grupos.length
-    ? `${grupos.length} encaminhamento${grupos.length>1?'s':''} · ${grupos.reduce((s,g)=>s+g.pcs.length,0)} PCs`
-    : ''
-
-  if(!grupos.length) {
-    const vazio = { na_fila:'Nenhum encaminhamento na fila.',
-                    com_analista:'Nenhuma PC aguardando resposta de analista.',
-                    encerrado:'Nenhum encaminhamento encerrado ainda.' }
-    cont.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);">${
-      _ciBusca.trim() ? 'Nenhum resultado para a busca.' : vazio[_ciAba]}</div>`
-    return
-  }
-
-  const cab = `
-    <div style="display:flex;align-items:center;gap:11px;padding:7px 14px;background:#F1F5F3;border-radius:7px;
-                font-size:10.5px;font-weight:800;color:var(--ct);text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px;">
-      <span style="width:9px;"></span>
-      <span style="min-width:210px;">TR / parcela</span>
-      <span style="width:64px;">PCs</span>
-      <span style="margin-left:auto;display:flex;align-items:center;gap:14px;">
-        <span style="width:150px;">Analista</span>
-        <span style="width:74px;">Enviado</span>
-        <span style="width:74px;text-align:right;">${_ciAba==='encerrado'?'Encerrado':'Espera'}</span>
-      </span>
-    </div>`
-
-  cont.innerHTML = cab + grupos.map(g => {
-    const aberto = _ciAberto === g.chave
-    const dias = ciDias(g.dt_envio_ci)
-    return `
-    <div style="background:#FCFDFC;border:1.5px solid ${aberto?'var(--v)':'var(--cb)'};border-radius:9px;margin-bottom:9px;box-shadow:var(--sombra);overflow:hidden;">
-      <div onclick="ciAbrir('${escHtml(g.chave)}')" style="display:flex;align-items:center;gap:11px;padding:11px 14px;cursor:pointer;flex-wrap:wrap;">
-        <span style="font-size:11px;color:var(--ct);width:9px;">${aberto?'▾':'▸'}</span>
-        <div style="min-width:210px;">
-          <div style="font-size:12.5px;font-weight:800;">${escHtml(g.tr)} · Parcela ${escHtml(String(g.parcial_num))}</div>
-          <div style="font-size:11px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:330px;" title="${escHtml(g.entidade||'')}">${escHtml(g.entidade||'—')}</div>
-        </div>
-        <span style="width:64px;font-size:11px;font-weight:700;color:var(--te);">${g.pcs.length} PC${g.pcs.length>1?'s':''}</span>
-        ${g.msgs?`<span style="font-size:11px;color:var(--ct);" title="${g.msgs} mensagem(ns)">💬</span>`:''}
-        ${g.rodada>1?`<span style="font-size:10px;font-weight:700;color:#8A6100;">rodada ${g.rodada}</span>`:''}
-        <span style="margin-left:auto;display:flex;align-items:center;gap:14px;">
-          <span style="width:150px;font-size:11.5px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(g.analista_nome||'—')}</span>
-          <span style="width:74px;font-size:11.5px;color:var(--ct);">${g.dt_envio_ci?new Date(g.dt_envio_ci).toLocaleDateString('pt-BR'):'—'}</span>
-          <span style="width:74px;text-align:right;">${_ciAba==='encerrado'
-            ? `<span style="font-size:11px;color:var(--v);font-weight:700;">✓ ${g.encerrado_em?new Date(g.encerrado_em).toLocaleDateString('pt-BR'):''}</span>`
-            : `<span style="display:inline-block;background:#FFF3D6;color:#8A6100;border:1px solid #F0DDB0;border-radius:20px;
-                 padding:2px 9px;font-size:11px;font-weight:800;white-space:nowrap;">${dias} d</span>`}</span>
-        </span>
-      </div>
-      ${aberto?ciPainel(g):''}
-    </div>`
-  }).join('')
+// ⚠️ A ETIQUETA DE ESPERA, POR FAIXA (18/08/2026). O número sozinho não diz se 22 dias é
+// muito: é a cor que transforma o dado em prioridade. Até 15 verde, 16–30 âmbar, acima
+// vermelho — os cortes são do Richard.
+function ciFaixaEspera(dias) {
+  if (dias == null) return { bg: '#F1F4F2', fg: '#5F5E5A', txt: 'sem data de envio' }
+  if (dias <= 15) return { bg: '#EAF3DE', fg: '#27500A', txt: `${dias} dia${dias === 1 ? '' : 's'} na fila` }
+  if (dias <= 30) return { bg: '#FAEEDA', fg: '#854F0B', txt: `${dias} dias na fila` }
+  return { bg: '#FCEBEB', fg: '#A32D2D', txt: `${dias} dias na fila` }
 }
 
-/** O painel aberto: as PCs marcáveis, a conversa uma vez só, e as duas decisões. */
-function ciPainel(g) {
-  const podeDecidir = _ciAba === 'na_fila'
-  const marcados = g.pcs.filter(p => _ciSel.has(p.codigo_pc)).length
+const CI_CARDS = [
+  { chave: 'fila',   rotulo: 'PCs na fila',          bg: '#BA7517', fg: '#FAC775' },
+  { chave: 'espera', rotulo: 'dias de espera média', bg: '#A32D2D', fg: '#F7C1C1' },
+  { chave: 'encam',  rotulo: 'encaminhamentos',      bg: '#185FA5', fg: '#B5D4F4' },
+  { chave: 'encerr', rotulo: 'já encerradas',        bg: '#3B6D11', fg: '#C0DD97' },
+]
+
+/**
+ * O painel de carga do topo — quatro números sobre a fila INTEIRA, não sobre o filtro.
+ *
+ * ⚠️ SOBRE A FILA INTEIRA, e é de propósito: são os números de carga do setor. Se caíssem com
+ * a busca, o técnico digitaria o nome de uma analista e leria "2 PCs na fila" como se o
+ * serviço tivesse acabado.
+ *
+ * ⚠️ `dias_espera` VEM DO SERVIDOR. Calcular no cliente usaria o relógio da máquina, e o
+ * prazo aqui é data civil brasileira — a mesma razão de `HOJE_BR` existir no `lib/datas.js`.
+ */
+function ciPainelCarga() {
+  const el = document.getElementById('ciPainel')
+  if (!el) return
+  const naFila = _ciAba === 'na_fila' ? _ciDados : []
+  const esperas = naFila.map(p => p.dias_espera).filter(d => d != null)
+  const media = esperas.length ? Math.round(esperas.reduce((s, d) => s + d, 0) / esperas.length) : 0
+  const encam = new Set(naFila.map(p => `${p.tr}|${p.parcial_num}`)).size
+  const v = {
+    fila: _ciCont.na_fila || naFila.length,
+    espera: media,
+    encam,
+    encerr: _ciCont.encerrado || 0,
+  }
+  el.innerHTML = CI_CARDS.map(c => `
+    <div style="background:${c.bg};border-radius:12px;padding:13px 12px;">
+      <div style="font-size:30px;font-weight:500;color:#fff;line-height:1;">${v[c.chave]}</div>
+      <div style="font-size:11.5px;color:${c.fg};margin-top:5px;">${c.rotulo}</div>
+    </div>`).join('')
+}
+
+/**
+ * A lista, AGRUPADA POR TR.
+ *
+ * ⚠️ ANTES A MESMA TR APARECIA OITO VEZES SEGUIDAS, com a mesma entidade e a mesma analista
+ * repetidas em cada linha — o agrupamento era por (TR, parcela), que é a unidade de DECISÃO,
+ * não a de leitura. Agora a TR é o cabeçalho e as parcelas vivem dentro dela.
+ *
+ * ⚠️ A PRIMEIRA PARCELA VEM ABERTA. Um grupo todo fechado obrigaria dois cliques para a ação
+ * mais comum — decidir a que está esperando há mais tempo, que é justamente a primeira.
+ */
+function ciRender() {
+  const cont = document.getElementById('ciCont')
+  if (!cont) return
+  ciPainelCarga()
+
+  const grupos = ciGruposTR()
+  const cnt = document.getElementById('ciContagem')
+  const totPc = grupos.reduce((s, g) => s + g.parcelas.reduce((t, p) => t + p.pcs.length, 0), 0)
+  if (cnt) cnt.textContent = grupos.length
+    ? `${grupos.length} TR${grupos.length > 1 ? 's' : ''} · ${totPc} PC${totPc > 1 ? 's' : ''}`
+    : ''
+
+  if (!grupos.length) {
+    const vazio = { na_fila: 'Nenhum encaminhamento na fila.',
+                    com_analista: 'Nenhuma PC aguardando resposta de analista.',
+                    encerrado: 'Nenhum encaminhamento encerrado ainda.' }
+    cont.innerHTML = `<div style="text-align:center;padding:30px;color:var(--ct);">${
+      _ciBusca.trim() || _ciAnalista ? 'Nenhum resultado para este filtro.' : vazio[_ciAba]}</div>`
+    return
+  }
+  cont.innerHTML = grupos.map(ciGrupoTR).join('')
+}
+
+/** Agrupa por TR e, dentro dela, por parcela. A parcela continua sendo a unidade de decisão. */
+function ciGruposTR() {
+  const b = prepararBusca(_ciBusca)
+  let lista = b.q ? _ciDados.filter(p => casaBusca(p, b)) : _ciDados
+  if (_ciAnalista) lista = lista.filter(p => String(p.analista_id) === String(_ciAnalista))
+
+  const trs = new Map()
+  lista.forEach(p => {
+    if (!trs.has(p.tr)) trs.set(p.tr, {
+      tr: p.tr, entidade: p.entidade,
+      analista_nome: p.analista_nome_completo || p.analista_nome,
+      parcelas: new Map(),
+    })
+    const t = trs.get(p.tr)
+    const k = `${p.tr}|${p.parcial_num}`
+    if (!t.parcelas.has(k)) t.parcelas.set(k, {
+      chave: k, tr: p.tr, parcial_num: p.parcial_num, entidade: p.entidade,
+      analista_nome: p.analista_nome_completo || p.analista_nome, analista_id: p.analista_id,
+      dt_envio_ci: p.dt_envio_ci, dias_espera: p.dias_espera, rodada: p.ci_rodada,
+      encerrado_em: p.ci_encerrado_em, encerrado_por: p.encerrado_por_nome,
+      parecer_tipo: p.parecer_tipo, parecer_texto: p.parecer_texto,
+      data_baixa: p.data_baixa, msgs: 0, pcs: [],
+    })
+    const g = t.parcelas.get(k)
+    g.pcs.push(p)
+    g.msgs = Math.max(g.msgs, p.msgs || 0)
+  })
+
+  const arr = [...trs.values()].map(t => ({ ...t, parcelas: [...t.parcelas.values()] }))
+  // A ordenação por espera é do filtro; dentro da TR, a mais antiga primeiro sempre.
+  const dir = _ciOrdem === 'recentes' ? -1 : 1
+  arr.forEach(t => t.parcelas.sort((a, b2) => dir * ((b2.dias_espera ?? -1) - (a.dias_espera ?? -1)) * -1))
+  arr.sort((a, b2) => {
+    const ma = Math.max(...a.parcelas.map(p => p.dias_espera ?? 0))
+    const mb = Math.max(...b2.parcelas.map(p => p.dias_espera ?? 0))
+    return dir * (mb - ma)
+  })
+  return arr
+}
+
+function ciGrupoTR(t) {
+  const nPc = t.parcelas.reduce((s, p) => s + p.pcs.length, 0)
+  // ⚠️ A PRIMEIRA VEM ABERTA — a menos que o técnico tenha aberto outra à mão.
+  const abertaNesta = t.parcelas.find(p => p.chave === _ciAberto)
+  const aberta = abertaNesta || t.parcelas[0]
   return `
-  <div style="border-top:1px solid var(--cl);padding:13px 14px;background:#FAFCFB;">
-    ${podeDecidir?`
-    <div style="font-size:11.5px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      Aplicar a estas PCs
-      <span style="font-weight:600;color:var(--ct);" id="ciMarcadasTxt">— ${marcados} de ${g.pcs.length} marcada${g.pcs.length>1?'s':''}</span>
-      <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);font-size:10px;" onclick="ciMarcarTodas('${escHtml(g.chave)}')">marcar todas</button>
-    </div>`:`
-    <div style="font-size:11.5px;font-weight:800;margin-bottom:8px;">PCs deste encaminhamento</div>`}
+  <div style="background:#FCFDFC;border-radius:12px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:12px;">
+    <div style="background:#EAF3DE;padding:11px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#3B6D11;flex:0 0 auto;">
+        <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z"/></svg>
+      <div style="min-width:0;">
+        <div style="font-size:14px;font-weight:500;color:#173404;line-height:1.25;">${escHtml(t.tr)}</div>
+        <div style="font-size:11.5px;color:#3B6D11;">${escHtml(t.entidade || '—')}</div>
+      </div>
+      <div style="margin-left:auto;text-align:right;font-size:11.5px;color:#3B6D11;">
+        ${t.parcelas.length} parcela${t.parcelas.length > 1 ? 's' : ''} na fila · ${escHtml(t.analista_nome || '—')}
+      </div>
+    </div>
+    ${t.parcelas.map(p => p.chave === aberta.chave ? ciParcelaAberta(p) : ciParcelaLinha(p)).join('')}
+  </div>`
+}
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:6px 14px;margin-bottom:13px;">
-      ${g.pcs.map(p => `
-        <label style="display:flex;align-items:center;gap:7px;font-size:12px;font-variant-numeric:tabular-nums;${podeDecidir?'cursor:pointer;':''}">
-          ${podeDecidir?`<input type="checkbox" ${_ciSel.has(p.codigo_pc)?'checked':''} onclick="ciSelToggle('${escHtml(p.codigo_pc)}','${escHtml(g.chave)}')" style="cursor:pointer;">`:'<span style="color:var(--cb);">·</span>'}
-          ${escHtml(p.codigo_pc)}
-        </label>`).join('')}
+/** A parcela fechada: uma linha fina, clicável. */
+function ciParcelaLinha(p) {
+  const f = ciFaixaEspera(p.dias_espera)
+  const valor = p.pcs.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0)
+  return `
+  <div onclick="ciAbrir('${escHtml(p.chave)}')" style="display:flex;align-items:center;gap:10px;
+       padding:9px 15px;border-top:1px solid var(--cl);cursor:pointer;flex-wrap:wrap;font-size:12px;"
+       onmouseover="this.style.background='#F7FAF8'" onmouseout="this.style.background='none'">
+    <span style="background:#EAF3DE;color:#27500A;font-size:11px;font-weight:700;padding:3px 9px;
+      border-radius:6px;white-space:nowrap;">Parcela ${escHtml(String(p.parcial_num))}</span>
+    <span style="color:var(--ct);">${p.pcs.length} PC${p.pcs.length > 1 ? 's' : ''}</span>
+    <span style="color:var(--te);font-variant-numeric:tabular-nums;">${planMoeda(valor)}</span>
+    <span style="color:var(--ct);">${escHtml(p.parecer_tipo || 'sem parecer')}</span>
+    <span style="margin-left:auto;background:${f.bg};color:${f.fg};font-size:10.5px;font-weight:700;
+      padding:3px 9px;border-radius:20px;white-space:nowrap;">${f.txt}</span>
+  </div>`
+}
+
+/** A parcela aberta: o cartão de decisão. */
+function ciParcelaAberta(g) {
+  const f = ciFaixaEspera(g.dias_espera)
+  const valor = g.pcs.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0)
+  const p0 = g.pcs[0] || {}
+  const podeDecidir = _ciAba === 'na_fila'
+  const marcados = g.pcs.filter(x => _ciSel.has(x.codigo_pc)).length
+
+  const dado = (rot, val) => `
+    <div style="min-width:0;">
+      <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;">${rot}</div>
+      <div style="font-size:12.5px;color:var(--te);word-break:break-word;">${val}</div>
+    </div>`
+
+  return `
+  <div style="border-top:1px solid var(--cl);padding:13px 15px;background:#fff;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px;">
+      <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;
+        border-radius:6px;white-space:nowrap;">PARCELA ${escHtml(String(g.parcial_num))}</span>
+      <span style="font-size:12.5px;color:var(--ct);">
+        <b style="color:var(--te);">${g.pcs.length} PC${g.pcs.length > 1 ? 's' : ''}</b> · ${planMoeda(valor)}</span>
+      ${g.parecer_tipo ? `<span style="background:#EAF3DE;color:#27500A;font-size:10.5px;font-weight:700;
+        padding:3px 9px;border-radius:20px;">${escHtml(g.parecer_tipo)}</span>` : ''}
+      <span style="margin-left:auto;background:${f.bg};color:${f.fg};font-size:11px;font-weight:700;
+        padding:4px 11px;border-radius:20px;white-space:nowrap;">${f.txt}</span>
     </div>
 
-    <div style="font-size:11.5px;font-weight:800;margin-bottom:6px;">Conversa</div>
-    <div id="ciConversa" style="background:#fff;border:1.5px solid var(--cb);border-radius:8px;padding:11px 13px;margin-bottom:12px;max-height:340px;overflow-y:auto;">${ciConversaHtml()}</div>
-
-    ${podeDecidir?`
-    <textarea id="ciTexto" rows="3" placeholder="Escreva aqui — obrigatório para devolver com ressalvas"
-      style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px;font-size:12.5px;font-family:Barlow,sans-serif;resize:vertical;margin-bottom:10px;"></textarea>
-    <div style="display:flex;gap:9px;flex-wrap:wrap;">
-      <button class="btn-acao" id="ciBtnAcordo" style="background:var(--v);color:#fff;font-weight:800;padding:9px 16px;font-size:12.5px;"
-        onclick="ciDecidir('de_acordo','${escHtml(g.chave)}')">✓ C.I. de acordo — ${marcados}</button>
-      <button class="btn-acao" id="ciBtnRessalva" style="background:#8A6100;color:#fff;font-weight:800;padding:9px 16px;font-size:12.5px;"
-        onclick="ciDecidir('ressalva','${escHtml(g.chave)}')">↩ C.I. com ressalvas — ${marcados}</button>
+    <div style="background:#F7FAF8;border-radius:9px;padding:11px 13px;margin-bottom:11px;
+         display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;">
+      ${dado('Código da PC', escHtml(p0.codigo_pc || '—'))}
+      ${dado('Processo SGPe', procHtml(p0.processo_pc, p0.codigo_pc))}
+      ${dado('Nota de liquidação', escHtml(p0.codigo_nl || '—'))}
+      ${/* ⚠️ A DATA DA BAIXA vinha faltando na consulta da fila até 18/08/2026 — a coluna
+            sempre existiu. Sem ela o técnico não sabia se estava vendo trabalho de ontem ou
+            de junho. */''}
+      ${dado('Baixada em', g.data_baixa ? planDataTs(g.data_baixa) : '—')}
     </div>
-    <div style="font-size:11px;color:var(--ct);margin-top:8px;">Em qualquer das duas, a baixa do analista permanece.</div>
-    `:''}
+
+    <div style="background:#FAEEDA;border-left:3px solid #BA7517;border-radius:0 8px 8px 0;
+         padding:10px 13px;margin-bottom:11px;">
+      <div style="font-size:11px;color:#854F0B;font-weight:700;">
+        Parecer da analista ${escHtml(g.analista_nome || '—')}</div>
+      ${/* ⚠️ O TEXTO do parecer é RARO: 26 de 958 na fila de hoje. Quando não há, o bloco diz
+            que não há — em vez de ficar vazio e parecer defeito da tela. O `parecer_tipo`
+            aparece de todo jeito, porque ele sempre existe. */''}
+      <div style="font-size:13px;color:#633806;margin-top:3px;line-height:1.45;">
+        ${g.parecer_texto ? escHtml(g.parecer_texto)
+          : `<span style="opacity:.8;">${escHtml(g.parecer_tipo || 'Sem parecer registrado')} — a analista não escreveu observação.</span>`}
+      </div>
+    </div>
+
+    ${podeDecidir ? `
+      <div class="mc-campo" style="margin-bottom:9px;">
+        <label style="font-size:11.5px;">Sua manifestação — obrigatória para devolver com ressalvas</label>
+        <textarea id="ciTexto" rows="3" oninput="ciAtualizarBotoes('${escHtml(g.chave)}')"
+          style="resize:vertical;" placeholder="O que precisa ser verificado..."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-acao" id="ciBtnAcordo" onclick="ciDecidir('de_acordo','${escHtml(g.chave)}')"
+          style="background:#3B6D11;color:#fff;border-color:#3B6D11;font-weight:800;padding:8px 15px;">
+          ✓ C.I. de acordo</button>
+        <button class="btn-acao" id="ciBtnRessalva" onclick="ciDecidir('ressalva','${escHtml(g.chave)}')"
+          style="background:#BA7517;color:#fff;border-color:#BA7517;font-weight:800;padding:8px 15px;">
+          ↩ Devolver com ressalvas</button>
+        <span style="font-size:11px;color:var(--ct);margin-left:auto;" id="ciSelInfo">
+          ${marcados} de ${g.pcs.length} PC${g.pcs.length > 1 ? 's' : ''} selecionada${marcados === 1 ? '' : 's'}</span>
+        <button class="btn-acao" onclick="ciMarcarTodas('${escHtml(g.chave)}')"
+          style="background:#fff;color:var(--ct);border:1.5px solid var(--cl);">Marcar todas</button>
+      </div>
+      ${/* ⚠️ AS DUAS LINHAS EXISTEM PORQUE OS BOTÕES NÃO SE EXPLICAM. "De acordo" e "Devolver"
+            são irreversíveis para quem clica, e a diferença entre eles — o que acontece com a
+            BAIXA da analista — é a dúvida que trava o técnico. Ver `lib/ci.js`: a baixa não é
+            tocada em nenhum dos dois caminhos. */''}
+      <div style="margin-top:9px;font-size:11.5px;color:var(--ct);line-height:1.6;">
+        <div><b style="color:#3B6D11;">De acordo</b> — encerra o ciclo. A parcela sai da fila e vai para Encerradas.</div>
+        <div><b style="color:#BA7517;">Com ressalvas</b> — volta para a analista corrigir. A baixa dela permanece.</div>
+      </div>` : ''}
+
+    ${ciConversaHtml()}
   </div>`
 }
 
@@ -13050,11 +13240,10 @@ function ciBuscarInput(v) {
   _ciBuscaTimer = setTimeout(() => ciRender(), 300)
 }
 function ciBuscarAgora() { clearTimeout(_ciBuscaTimer); ciRender() }
-function ciLimparBusca() {
-  _ciBusca = ''
-  const el = document.getElementById('ciBusca'); if(el) el.value = ''
-  ciRender()
-}
+// ⚠️ `ciLimparBusca` FOI REMOVIDA em 18/08/2026, e não comentada — código que ninguém chama
+// é código que ninguém revisa. O botão "✕ Limpar" saiu da linha de filtros junto com o
+// segundo "Buscar": com os dois selects aplicando sozinhos ao mudar, o que restava para o
+// Limpar limpar era o campo de texto — e apagar texto é o que a tecla de apagar faz.
 
 /**
  * Encaminha a PARCELA ao Controle Interno, do detalhe da TR.
