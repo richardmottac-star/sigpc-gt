@@ -1994,7 +1994,7 @@ async function irVerComo() {
         <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#CECBF6;">
           <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span>
       <div style="min-width:0;">
-        <div style="font-size:16px;font-weight:700;">Agir pela conta de um analista</div>
+        <div style="font-size:18px;font-weight:700;">Agir pela conta de um analista</div>
         <div style="font-size:12px;color:var(--ct);line-height:1.5;margin-top:2px;">
           ${/* ⚠️ O <strong> em "no nome dela" NÃO é enfeite: é a garantia que a tela precisa
                 dar ANTES de alguém entrar no modo. Há teste que falha se ele sumir — e ele
@@ -2140,7 +2140,7 @@ function verComoRender() {
       const on = _vcChip === id
       return `<button onclick="verComoChip('${id}')" style="border:1.5px solid ${on?(fg||'#173404'):'var(--cl)'};
         background:${on?(fg||'#173404'):(bg||'#fff')};color:${on?'#fff':(fg||'var(--ct)')};
-        border-radius:20px;padding:6px 13px;font-size:12px;font-weight:${on?'800':'600'};
+        border-radius:20px;padding:7px 15px;font-size:13px;font-weight:${on?'800':'600'};
         font-family:inherit;cursor:pointer;">${rot} · ${n}</button>`
     }
     chips.innerHTML =
@@ -2172,20 +2172,23 @@ function verComoRender() {
     return
   }
 
+  // ⚠️ A TABELA É UM BLOCO SÓ, com `overflow:hidden` — é o que faz a faixa verde do cabeçalho
+  // e a primeira linha zebrada respeitarem o raio de 12px. Sem ele, o canto do cabeçalho fica
+  // quadrado por cima do arredondado.
   el.innerHTML = `
-    <div style="display:flex;gap:11px;padding:0 15px 6px;font-size:10.5px;text-transform:uppercase;
-         letter-spacing:.06em;color:#9AA8A0;font-weight:700;">
-      <span style="flex:2;min-width:0;">Analista</span>
-      <span style="flex:0 0 130px;">Meta</span>
-      <span style="flex:1;min-width:0;">Pendências</span>
-      <span style="flex:0 0 120px;"></span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      ${lista.map(vcLinha).join('')}
+    <div style="border-radius:12px;overflow:hidden;">
+      <div style="background:#173404;display:flex;gap:11px;padding:9px 15px;font-size:11.5px;
+           text-transform:uppercase;letter-spacing:.06em;color:#C0DD97;font-weight:700;">
+        <span style="flex:2;min-width:0;">Analista</span>
+        <span style="flex:0 0 130px;">Meta</span>
+        <span style="flex:1;min-width:0;">Pendências</span>
+        <span style="flex:0 0 130px;"></span>
+      </div>
+      ${lista.map((u, i) => vcLinha(u, i)).join('')}
     </div>`
 }
 
-function vcLinha(u) {
+function vcLinha(u, i) {
   const n = _vcNums[u.id] || {}
   const meta = _vcMetas[u.id] || 0
   const bx = n.baixadas || 0
@@ -2199,8 +2202,8 @@ function vcLinha(u) {
   // acima verde. Uma barra de cor única mostraria o tamanho e esconderia o julgamento.
   const corBarra = p == null ? '#C4CCC7' : p <= 30 ? '#BA7517' : p <= 70 ? '#639922' : '#3B6D11'
 
-  const etiq = (txt, bg, fg) => `<span style="background:${bg};color:${fg};font-size:10.5px;
-    font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;">${txt}</span>`
+  const etiq = (txt, bg, fg) => `<span style="background:${bg};color:${fg};font-size:12px;
+    font-weight:700;padding:4px 11px;border-radius:20px;white-space:nowrap;">${txt}</span>`
 
   const tags = []
   // Pendências REAIS primeiro — são o motivo de a linha ganhar a borda vermelha.
@@ -2216,43 +2219,59 @@ function vcLinha(u) {
     : dias == null ? 'nunca acessou'
     : `último acesso há ${dias} dia${dias === 1 ? '' : 's'}`
 
+  // ⚠️ ZEBRA POR ÍNDICE, e não `:nth-child` — as linhas são montadas por `map` num template,
+  // não há folha de estilo para elas. Ímpares em `--surface-2`, pares no verde bem claro.
+  const fundo = (i % 2 === 0) ? 'var(--surface-2, #F7FAF8)' : '#F2F8EC'
+
+  // ⚠️ A FOTO, QUANDO HÁ. `foto_base64` já vem em `GET /usuarios` e a tela não a usava —
+  // `onlineAvatar` usa desde sempre, e aqui só as iniciais apareciam. Quem não tem foto
+  // continua nas iniciais sobre o roxo, que é o que distingue as pessoas na lista.
+  const avatar = u.foto_base64
+    ? `<img src="${u.foto_base64}" alt="" style="width:44px;height:44px;border-radius:50%;
+         object-fit:cover;display:block;">`
+    : `<span style="width:44px;height:44px;border-radius:50%;background:#EEEDFE;color:#3C3489;
+         display:inline-flex;align-items:center;justify-content:center;font-size:15px;
+         font-weight:700;">${escHtml(prodIniciais(u.nome))}</span>`
+
   return `
-  <div style="background:var(--surface-2, #F7FAF8);border-radius:${temPend ? '0 var(--radius, 10px) var(--radius, 10px) 0' : 'var(--radius, 10px)'};
+  <div style="background:${fundo};
        ${temPend ? 'border-left:3px solid #A32D2D;' : ''}
        ${ferias ? 'opacity:.7;' : ''}
-       padding:10px 15px;display:flex;gap:11px;align-items:center;flex-wrap:wrap;">
+       border-bottom:0.5px solid var(--cl);
+       padding:11px 15px;display:flex;gap:11px;align-items:center;flex-wrap:wrap;">
 
-    <div style="flex:2;min-width:170px;display:flex;align-items:center;gap:10px;">
-      <span style="position:relative;flex:0 0 34px;width:34px;height:34px;border-radius:50%;
-        background:#EEEDFE;color:#3C3489;display:inline-flex;align-items:center;justify-content:center;
-        font-size:12.5px;font-weight:700;">${escHtml(prodIniciais(u.nome))}
+    <div style="flex:2;min-width:170px;display:flex;align-items:center;gap:11px;">
+      <span style="position:relative;flex:0 0 44px;width:44px;height:44px;display:inline-block;">
+        ${avatar}
         ${online ? `<span title="Online agora" style="position:absolute;right:-1px;bottom:-1px;
           width:10px;height:10px;border-radius:50%;background:#0F6E56;border:2px solid #fff;"></span>` : ''}</span>
       <div style="min-width:0;">
-        <div style="font-size:13px;font-weight:500;color:var(--te);line-height:1.3;">
+        <div style="font-size:15px;font-weight:500;color:var(--te);line-height:1.3;">
           ${escHtml(u.nome||'—')}
           ${ferias ? etiq('férias', '#EEEDFE', '#3C3489') : ''}</div>
-        <div style="font-size:11px;color:var(--ct);">
+        <div style="font-size:12px;color:var(--ct);">
           ${u.grupo ? `Grupo ${escHtml(String(u.grupo))} · ` : ''}${sub}</div>
       </div>
     </div>
 
     <div style="flex:0 0 130px;">
-      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--ct);">
-        <span><b style="color:var(--te);">${bx}</b> / ${meta || '—'}</span>
-        <span style="color:${corBarra};font-weight:700;">${p == null ? '—' : p + '%'}</span>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span><b style="font-size:14px;font-weight:500;color:var(--te);">${bx}</b><span
+          style="font-size:12px;color:var(--ct);"> / ${meta || '—'}</span></span>
+        <span style="color:${corBarra};font-weight:500;font-size:13px;">${p == null ? '—' : p + '%'}</span>
       </div>
-      <div style="height:5px;background:var(--cl);border-radius:4px;margin-top:4px;overflow:hidden;">
+      <div style="height:7px;background:var(--cl);border-radius:4px;margin-top:5px;overflow:hidden;">
         <div style="height:100%;width:${Math.min(100, p || 0)}%;background:${corBarra};border-radius:4px;"></div>
       </div>
     </div>
 
-    <div style="flex:1;min-width:150px;display:flex;gap:5px;flex-wrap:wrap;">
-      ${tags.length ? tags.join('') : `<span style="font-size:11px;color:#9AA8A0;">nada pendente</span>`}
+    <div style="flex:1;min-width:150px;display:flex;gap:6px;flex-wrap:wrap;">
+      ${tags.length ? tags.join('') : `<span style="font-size:12px;color:#9AA8A0;">nada pendente</span>`}
     </div>
 
     <button class="btn-acao" onclick="verComoEntrar('${u.id}')"
-      style="flex:0 0 120px;background:#3C3489;color:#fff;border-color:#3C3489;font-weight:700;">
+      style="flex:0 0 130px;background:#3C3489;color:#fff;border-color:#3C3489;font-weight:700;
+             font-size:13px;padding:9px;">
       Agir por ${vcPronome(u)}</button>
   </div>`
 }

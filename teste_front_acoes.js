@@ -654,27 +654,58 @@ conf(/#E1F5EE','#0F6E56'\)/.test(html), 'chip "Online" em verde');
 conf(/todos: lista\.length/.test(html), 'e contam sobre a lista ja filtrada');
 
 S('18d. A LINHA DO ANALISTA');
-conf(/function vcLinha\(u\)/.test(html), 'a linha existe');
-conf(/flex:0 0 34px;width:34px;height:34px;border-radius:50%/.test(html), 'avatar de 34px');
+conf(/function vcLinha\(u, i\)/.test(html), 'a linha existe, e recebe o indice para a zebra');
+// ⚠️ TAMANHOS SUBIRAM em 19/08/2026 — a tela tinha ficado pequena demais para ser lida.
+conf(/flex:0 0 44px;width:44px;height:44px/.test(html), 'avatar de 44px');
+// ⚠️ A FOTO passou a ser usada: `foto_base64` JA vinha em GET /usuarios e a tela so mostrava
+// as iniciais — o `onlineAvatar` usa desde sempre. Quem nao tem continua nas iniciais.
+conf(/u\.foto_base64/.test(html), 'com a foto de quem tem uma cadastrada');
+conf(/object-fit:cover/.test(html), 'cortada em circulo');
+conf(/prodIniciais\(u\.nome\)/.test(html), 'e as iniciais para quem nao tem');
 conf(/width:10px;height:10px;border-radius:50%;background:#0F6E56/.test(html),
      'bolinha verde de 10px quando online');
-conf(/font-size:13px;font-weight:500/.test(html), 'nome 13px peso 500');
+conf(/font-size:15px;font-weight:500;color:var\(--te\)/.test(html), 'nome 15px peso 500');
+conf(/font-size:12px;color:var\(--ct\);">\s*\$\{u\.grupo/.test(html), 'contexto abaixo em 12px');
 conf(/flex:0 0 130px/.test(html), 'coluna de meta com 130px');
 conf(/p <= 30 \? '#BA7517' : p <= 70 \? '#639922' : '#3B6D11'/.test(html),
      'a barra muda de cor por faixa');
-conf(/height:5px/.test(html), 'com 5px de altura');
+conf(/height:7px;background:var\(--cl\)/.test(html), 'barra com 7px de altura');
+conf(/font-size:14px;font-weight:500;color:var\(--te\);">\$\{bx\}/.test(html),
+     'numero da meta em 14px peso 500');
+conf(/font-size:12px;color:var\(--ct\);"> \/ \$\{meta/.test(html), 'o "/ meta" em 12px cinza');
+conf(/font-weight:500;font-size:13px;">\$\{p == null/.test(html), 'e o percentual em 13px peso 500');
+conf(/font-size:12px;\s*font-weight:700;padding:4px 11px/.test(html),
+     'etiquetas em 12px com padding 4px 11px');
 conf(/faltam ir ao C\.I\./.test(html) && /vencidas/.test(html), 'etiquetas de pendencia real');
 conf(/em análise/.test(html) && /no C\.I\./.test(html), 'e as informativas');
 conf(/meta batida/.test(html), 'e "meta batida" para quem bateu');
-conf(/background:#3C3489;color:#fff/.test(html), 'botao em #3C3489');
+conf(/flex:0 0 130px;background:#3C3489;color:#fff/.test(html), 'botao #3C3489 com 130px');
+conf(/font-size:13px;padding:9px;/.test(html), 'fonte 13px e padding 9px');
+
+S('18d-2. ZEBRA, DIVISORIA E CABECALHO DE COLUNA');
+// ⚠️ Zebra por INDICE, e nao `:nth-child` — as linhas saem de um `map` num template literal,
+// nao ha folha de estilo para elas.
+conf(/const fundo = \(i % 2 === 0\)/.test(html), 'linhas alternadas por indice');
+conf(/#F2F8EC/.test(html), 'as pares no verde bem claro');
+conf(/border-bottom:0\.5px solid var\(--cl\)/.test(html), 'com divisoria de 0.5px entre todas');
+conf(/background:#173404;display:flex;gap:11px;padding:9px 15px/.test(html),
+     'cabecalho de coluna em faixa #173404');
+conf(/color:#C0DD97;font-weight:700/.test(html), 'com os rotulos em #C0DD97');
+conf(/font-size:11\.5px;\s*text-transform:uppercase/.test(html), 'em 11.5px maiusculo');
+// ⚠️ O `overflow:hidden` e o que faz a faixa e a primeira linha respeitarem o raio.
+conf(/border-radius:12px;overflow:hidden/.test(html), 'e a tabela com raio 12 e overflow hidden');
 conf(/Agir por \$\{vcPronome\(u\)\}/.test(html), 'com "Agir por ela/ele"');
 // ⚠️ Nao ha coluna `genero` em usuarios — deduzir do nome erraria em nome ambiguo.
 conf(/O CADASTRO NÃO GUARDA GÊNERO/.test(html), 'e o porque do padrao esta escrito');
 
 S('18e. OS ESTADOS DA LINHA');
 conf(/border-left:3px solid #A32D2D/.test(html), 'com pendencia: borda esquerda vermelha');
-conf(/temPend \? '0 var\(--radius, 10px\) var\(--radius, 10px\) 0'/.test(html),
-     'e o raio muda para 0 nesse lado');
+// ⚠️ O RAIO POR LINHA SAIU EM 19/08/2026, e nao por descuido: com a zebra e o cabecalho em
+// faixa, as linhas deixaram de ser cartoes separados e viraram uma tabela continua. O raio
+// agora e do CONTEINER (12px + overflow:hidden), e um raio por linha dentro dele nao apareceria
+// — ou pior, cortaria a barra vermelha da pendencia no meio.
+conf(!/temPend \? '0 var\(--radius/.test(html), 'o raio por linha saiu — a tabela e continua');
+conf(/border-radius:12px;overflow:hidden/.test(html), 'e o raio e do conteiner');
 conf(/ferias \? 'opacity:\.7;' : ''/.test(html), 'ferias: opacidade .7');
 conf(/etiq\('férias', '#EEEDFE', '#3C3489'\)/.test(html), 'e etiqueta ao lado do nome');
 
