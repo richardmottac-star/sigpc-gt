@@ -1238,18 +1238,44 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
 <!-- ══ MODAL REPO ══ -->
 <div class="mo" id="moRepo">
   <div class="mc">
-    <div class="mch v"><h3>➕ Adicionar ao Repositório</h3><button class="mcx" onclick="fm('moRepo')">✕</button></div>
+    <div class="mch v"><h3 id="moRepoT">➕ Adicionar ao Repositório</h3><button class="mcx" onclick="fm('moRepo')">✕</button></div>
     <div class="mcb">
       <div class="mc-campo"><label>Título *</label><input type="text" id="rTit"></div>
       <div class="mc-campo"><label>Descrição</label><textarea id="rDesc" rows="2"></textarea></div>
-      <div class="mc-campo"><label>URL / Link</label><input type="url" id="rUrl"></div>
-      <div class="mc-campo"><label>Categoria</label>
-        <input type="text" id="rCat" list="rCatList" placeholder="Digite ou selecione...">
-        <datalist id="rCatList"></datalist>
+      <div class="mc-campo"><label>URL / Link *</label><input type="url" id="rUrl"></div>
+      <!-- ⚠️ A categoria virou SELECT em 18/08/2026. Era campo de texto com `datalist`, e
+           `datalist` só SUGERE: quem digitasse "Relatorios" sem acento criava uma categoria
+           nova, silenciosa, com um item só. Categoria nova agora tem porta própria — o chip
+           "+ Nova categoria", que também escolhe a cor. -->
+      <div class="mc-campo"><label>Categoria</label><select id="rCat"></select></div>
+      <div class="mc-campo">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="rFix" style="width:auto;margin:0;">
+          Fixar no topo da categoria</label>
       </div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moRepo')">Cancelar</button>
-        <button class="mcok" onclick="salvarRepo()">✓ Adicionar</button>
+        <button class="mcok" onclick="salvarRepo()">✓ Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="moRepoCat">
+  <div class="mc">
+    <div class="mch v"><h3>🏷 Nova categoria</h3><button class="mcx" onclick="fm('moRepoCat')">✕</button></div>
+    <div class="mcb">
+      <div class="mc-campo"><label>Nome da categoria *</label><input type="text" id="rcNome" placeholder="Ex.: Manuais"></div>
+      <div class="mc-campo"><label>Cor</label>
+        <!-- ⚠️ PALETA FECHADA, e não um seletor livre de cor. As TRÊS cores de uma categoria
+             (barra, fundo claro e texto) têm de combinar entre si para o cartão continuar
+             legível; um seletor livre deixaria alguém escolher amarelo-claro para o texto
+             sobre fundo branco, e o servidor só sabe recusar hexadecimal inválido. -->
+        <div id="rcPaleta" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;"></div>
+      </div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moRepoCat')">Cancelar</button>
+        <button class="mcok" onclick="salvarRepoCategoria()">✓ Criar categoria</button>
       </div>
     </div>
   </div>
@@ -2356,7 +2382,12 @@ const SB_ITENS = [
   { id:'prod',  bloco:'analista', rotulo:'Produtividade',  acao:'irProd()',      pode:naoEhCI,
     icone:'M3.5 18.5l6-6 4 4L22 6.9l-1.4-1.4-7.1 8.1-4-4L2 17l1.5 1.5z' },
 
-  { id:'repo',  bloco:'analista', rotulo:'Repositório',    acao:'irRepo()',      pode:naoEhCI,
+  // ⚠️ O CONTROLE INTERNO PASSOU A VER O REPOSITÓRIO em 18/08/2026 — decisão do Richard:
+  // "Analista e Controle Interno só visualizam". Era `naoEhCI`, com a tela recusando na
+  // entrada. O repositório é material de consulta (orientações, modelos, legislação), não
+  // acervo de PC — e o técnico do C.I. precisa dele tanto quanto o analista. Ele continua
+  // sem os botões de ação, e a trava de escrita é do SERVIDOR.
+  { id:'repo',  bloco:'analista', rotulo:'Repositório',    acao:'irRepo()',      pode:()=>true,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
   // A tela recusa quem não for analista, coordenador ou superadmin — a mesma regra, aqui.
   // ⚠️ SÓ SUPERADMIN, desde 18/08/2026 — decisão do Richard. Era
@@ -7626,84 +7657,467 @@ async function boardCarregar() {
 }
 
 // ══════════════════════════════════════
-//  REPOSITÓRIO
+//  REPOSITÓRIO — a lista e o visualizador   (18/08/2026)
 // ══════════════════════════════════════
-async function irRepo() {
-  // O tecnico do C.I. nao trabalha o acervo. Tirar do menu sem por a guarda deixaria
-  // a tela alcancavel por quem soubesse o caminho — a licao do Relatorios, em 12/08.
-  if(U.perfil === 'controle_interno') { toast('Esta tela nao faz parte do Controle Interno.','err'); return }
-  ativarMenu('repo')
-  const podeAdd = U.perfil==='superadmin'||U.perfil==='coordenador'
-  document.getElementById('BODY').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:16px;font-weight:700;">Repositório</div>
-      ${podeAdd?'<button class="btn-buscar" onclick="repoAbrirModal()">+ Adicionar</button>':''}
-    </div>
-    <div class="repo-grid" id="repoGrid"><div class="loading"><div class="spin"></div>Carregando...</div></div>
-  `
-  try {
-    let repoQ = db.from('repositorio').select('*').order('id')
-    if(U.setorialFiltro) repoQ = repoQ.eq('setorial_id', U.setorialFiltro)
-    const { data, error } = await repoQ
-    if(error) throw error
-    _repoCategorias = [...new Set((data||[]).map(r=>r.categoria).filter(Boolean))]
-    document.getElementById('repoGrid').innerHTML = !data||!data.length
-      ? '<p style="color:var(--ct);">Nenhum item no repositório.</p>'
-      : data.map(r=>`<div class="repo-card">
-          <span class="repo-tipo">${r.categoria||'—'}</span>
-          <h4>${r.nome||'—'}</h4>
-          <p>${r.descricao||''}</p>
-          ${r.url?`<a href="${r.url}" target="_blank">🔗 Acessar link</a>`:''}
-          ${podeAdd?`<button class="repo-del" title="Excluir" onclick="repoExcluir(${r.id},'${(r.nome||'').replace(/'/g,"\\'")}')">🗑️</button>`:''}
-        </div>`).join('')
-  } catch(e) { document.getElementById('repoGrid').innerHTML=`<p style="color:var(--r);">Erro: ${e.message}</p>` }
+// ⚠️ QUEM MEXE: superadmin e coordenador. Analista e Controle Interno só leem, e os botões
+// de ação nem são desenhados para eles. Mas esconder botão NÃO é a trava — a tranca está no
+// servidor (`barrouRepositorio`), que lê o perfil no BANCO pelo `usuario_id`. Até 18/08 o
+// `POST /repositorio` não conferia nada: qualquer um acrescentava item ao repositório de
+// todo mundo.
+
+let _repoItens = []
+let _repoCats = []
+let _repoFiltro = ''        // '' = Tudo
+let _repoBusca = ''
+
+const REPO_SEM_CAT = 'Sem categoria'
+const REPO_CAT_PADRAO = { nome: REPO_SEM_CAT, cor: '#5F5E5A', cor_bg: '#F1F4F2', cor_txt: '#4A4A46' }
+
+/** A categoria de um item — nula ou vazia caem em "Sem categoria", nunca somem. */
+function repoCatDe(item) {
+  const nome = (item?.categoria || '').trim() || REPO_SEM_CAT
+  return _repoCats.find(c => c.nome.toLowerCase() === nome.toLowerCase())
+      || { ...REPO_CAT_PADRAO, nome }
 }
 
-let _repoCategorias = []
+// ⚠️ O TIPO SAI DA URL, E POR DOMÍNIO+CAMINHO — não por tentativa e erro. É a mesma decisão
+// do visualizador: o navegador não avisa de forma confiável o que um site permite.
+const REPO_TIPOS = {
+  doc:    { rot: 'Documento', d: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
+  sheet:  { rot: 'Planilha',  d: 'M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 16H5v-4h6v4zm0-6H5V9h6v4zm8 6h-6v-4h6v4zm0-6h-6V9h6v4z' },
+  slide:  { rot: 'Apresentação', d: 'M2 3h20v2H2V3zm2 4h16v10H4V7zm7 12h2v2h4v2H7v-2h4v-2z' },
+  pdf:    { rot: 'PDF',       d: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v2H8v-2zm0 4h5v2H8v-2z' },
+  pasta:  { rot: 'Pasta',     d: 'M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z' },
+  link:   { rot: 'Link',      d: 'M3.9 12a5 5 0 015-5h3v1.9h-3a3.1 3.1 0 000 6.2h3V17h-3a5 5 0 01-5-5zm5.1 1h6v-2H9v2zm7-6h-3v1.9h3a3.1 3.1 0 010 6.2h-3V17h3a5 5 0 000-10z' },
+}
 
-function repoAbrirModal() {
-  const sugeridas = ['Relatórios','Documentos','Outros']
-  const todas = [...new Set([..._repoCategorias, ...sugeridas])].sort()
-  document.getElementById('rCatList').innerHTML = todas.map(c=>`<option value="${c}">`).join('')
-  document.getElementById('rTit').value = ''
-  document.getElementById('rDesc').value = ''
-  document.getElementById('rUrl').value = ''
-  document.getElementById('rCat').value = ''
+function repoTipoDe(url) {
+  const u = String(url || '')
+  if (/docs\.google\.com\/document/i.test(u)) return 'doc'
+  if (/docs\.google\.com\/spreadsheets/i.test(u)) return 'sheet'
+  if (/docs\.google\.com\/presentation/i.test(u)) return 'slide'
+  if (/drive\.google\.com\/drive\/folders/i.test(u)) return 'pasta'
+  if (/\.pdf(\?|#|$)/i.test(u)) return 'pdf'
+  if (/drive\.google\.com/i.test(u)) return 'pdf'   // arquivo solto no Drive
+  return 'link'
+}
+
+/**
+ * O link é do Google Drive?
+ *
+ * ⚠️ POR DOMÍNIO, e nunca por tentativa e erro com iframe — decisão do Richard, 18/08/2026.
+ * Um site que recusa ser embutido responde com cabeçalho (`X-Frame-Options` /
+ * `frame-ancestors`), e o navegador NÃO entrega esse erro ao JavaScript da página que
+ * embute: o `onload` do iframe dispara igual, e o `onerror` não vem. Testar seria ficar com
+ * um retângulo em branco sem saber por quê.
+ */
+function repoEhDrive(url) {
+  try {
+    const h = new URL(String(url)).hostname.toLowerCase()
+    return h === 'drive.google.com' || h === 'docs.google.com'
+  } catch (e) { return false }
+}
+
+/** O domínio do link, para a tela de bloqueio dizer de quem é a recusa. */
+function repoDominio(url) {
+  try { return new URL(String(url)).hostname.replace(/^www\./, '') } catch (e) { return '—' }
+}
+
+/**
+ * Converte o link do Drive para o endereço de VISUALIZAÇÃO.
+ *
+ * ⚠️ `/edit` num iframe abre o editor — que pede login, ocupa a área com barra de
+ * ferramentas e, para quem não tem permissão de escrita, mostra um aviso em vez do
+ * documento. `/preview` é a versão de leitura, e é a que cabe aqui.
+ */
+function repoDriveEmbed(url) {
+  const u = String(url || '')
+  let m
+  if ((m = u.match(/(docs\.google\.com\/(?:document|spreadsheets|presentation)\/d\/[^/?#]+)/i)))
+    return `https://${m[1].replace(/^https?:\/\//, '')}/preview`
+  if ((m = u.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i)))
+    return `https://drive.google.com/file/d/${m[1]}/preview`
+  if ((m = u.match(/drive\.google\.com\/drive\/folders\/([^/?#]+)/i)))
+    return `https://drive.google.com/embeddedfolderview?id=${m[1]}#grid`
+  if ((m = u.match(/[?&]id=([^&#]+)/i)) && /drive\.google\.com/i.test(u))
+    return `https://drive.google.com/file/d/${m[1]}/preview`
+  return u
+}
+
+function repoPodeEditar() {
+  const pe = perfilEfetivo(U)
+  return pe === 'superadmin' || pe === 'coordenador'
+}
+
+// ══════════════════════════════════════
+//  TELA 1 — A LISTA
+// ══════════════════════════════════════
+async function irRepo() {
+  ativarMenu('repo')
+  const pode = repoPodeEditar()
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#0F6E56;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff;">
+          <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z"/></svg></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:700;">Repositório</div>
+        <div style="font-size:11.5px;color:var(--ct);" id="repoSub">carregando…</div>
+      </div>
+      <input type="text" id="repoBusca" placeholder="Buscar no repositório…"
+        oninput="repoBuscar(this.value)" value="${escHtml(_repoBusca)}"
+        style="border:1.5px solid var(--cb);border-radius:7px;padding:7px 11px;font-size:12.5px;
+               font-family:Barlow,sans-serif;min-width:210px;">
+      ${pode ? `<button class="btn-acao" onclick="repoAbrirItem()"
+        style="background:var(--v);color:#fff;border-color:var(--v);font-weight:800;
+               font-size:12.5px;padding:8px 15px;">+ Adicionar</button>` : ''}
+    </div>
+    <div id="repoChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;"></div>
+    <div id="repoLista"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await repoCarregar()
+}
+
+async function repoCarregar() {
+  try {
+    const sid = U.setorialFiltro
+    const q = sid ? `?setorial_id=${encodeURIComponent(sid)}` : ''
+    const [ji, jc] = await Promise.all([
+      fetch(`${API_URL}/repositorio${q}`).then(r => r.json()),
+      fetch(`${API_URL}/repositorio/categorias${q}`).then(r => r.json()),
+    ])
+    if (ji.error) throw new Error(ji.error.message || ji.error)
+    _repoItens = ji.data || []
+    _repoCats = (jc && jc.data) || []
+    // Sem a tabela de categorias (servidor velho), a tela ainda funciona: cada nome vira uma
+    // categoria cinza. Melhor um repositório sem cor do que um repositório em branco.
+    if (!_repoCats.length) {
+      const nomes = [...new Set(_repoItens.map(i => (i.categoria || '').trim() || REPO_SEM_CAT))]
+      _repoCats = nomes.map((n, i) => ({ ...REPO_CAT_PADRAO, nome: n, ordem: i }))
+    }
+    repoRender()
+  } catch (e) {
+    document.getElementById('repoLista').innerHTML =
+      `<p style="color:var(--r);padding:16px;">Erro ao carregar: ${escHtml(e.message)}</p>`
+  }
+}
+
+function repoBuscar(v) { _repoBusca = v; repoRender() }
+function repoFiltrar(cat) { _repoFiltro = cat; repoRender() }
+
+function repoVisiveis() {
+  const b = _repoBusca.trim().toLowerCase()
+  return _repoItens.filter(i => {
+    if (_repoFiltro && repoCatDe(i).nome.toLowerCase() !== _repoFiltro.toLowerCase()) return false
+    if (!b) return true
+    return [i.nome, i.descricao, i.categoria].some(x => String(x || '').toLowerCase().includes(b))
+  })
+}
+
+function repoRender() {
+  const sub = document.getElementById('repoSub')
+  // ⚠️ O subtítulo conta as categorias COM ITEM, não as sete da tabela: dizer "7 categorias"
+  // com cinco vazias faz o número descrever o cadastro, não o que a pessoa vê.
+  const comItem = new Set(_repoItens.map(i => repoCatDe(i).nome))
+  if (sub) sub.textContent = `${_repoItens.length} ${_repoItens.length === 1 ? 'item' : 'itens'}`
+    + ` · ${comItem.size} ${comItem.size === 1 ? 'categoria' : 'categorias'}`
+
+  // ── os chips ──────────────────────────────────────────────────────────────
+  const chips = document.getElementById('repoChips')
+  if (chips) {
+    const conta = (nome) => _repoItens.filter(i => repoCatDe(i).nome === nome).length
+    const tudoOn = !_repoFiltro
+    chips.innerHTML = `
+      <button onclick="repoFiltrar('')" style="border:1.5px solid ${tudoOn ? '#173404' : 'var(--cl)'};
+        background:${tudoOn ? '#173404' : '#fff'};color:${tudoOn ? '#fff' : 'var(--ct)'};
+        border-radius:20px;padding:6px 14px;font-size:12px;font-weight:${tudoOn ? '800' : '600'};
+        font-family:inherit;cursor:pointer;">Tudo (${_repoItens.length})</button>
+      ${_repoCats.map(c => {
+        const n = conta(c.nome)
+        const on = _repoFiltro.toLowerCase() === c.nome.toLowerCase()
+        return `<button onclick="repoFiltrar('${escHtml(c.nome)}')"
+          style="border:1.5px solid ${on ? c.cor : 'var(--cl)'};background:${on ? c.cor : c.cor_bg};
+            color:${on ? '#fff' : c.cor_txt};border-radius:20px;padding:6px 14px;font-size:12px;
+            font-weight:${on ? '800' : '600'};font-family:inherit;cursor:pointer;">
+          ${escHtml(c.nome)} (${n})</button>`
+      }).join('')}
+      ${repoPodeEditar() ? `<button onclick="repoAbrirCategoria()"
+        style="border:1.5px dashed var(--cl);background:#fff;color:var(--ct);border-radius:20px;
+          padding:6px 14px;font-size:12px;font-family:inherit;cursor:pointer;">+ Nova categoria</button>` : ''}`
+  }
+
+  // ── os itens, agrupados por categoria ─────────────────────────────────────
+  const cont = document.getElementById('repoLista')
+  if (!cont) return
+  const vis = repoVisiveis()
+  if (!vis.length) {
+    cont.innerHTML = `<div style="text-align:center;padding:34px;color:var(--ct);">
+      ${_repoItens.length ? 'Nenhum item neste filtro.' : 'Nenhum item no repositório ainda.'}</div>`
+    return
+  }
+  // A ordem dos grupos é a das categorias; dentro do grupo, FIXADOS PRIMEIRO.
+  const grupos = _repoCats
+    .map(c => ({ c, itens: vis.filter(i => repoCatDe(i).nome === c.nome) }))
+    .filter(g => g.itens.length)
+  grupos.forEach(g => g.itens.sort((a, b) =>
+    (b.fixado === true) - (a.fixado === true)
+    || (a.ordem ?? 9999) - (b.ordem ?? 9999)
+    || String(a.nome || '').localeCompare(String(b.nome || ''))))
+
+  cont.innerHTML = grupos.map(g => `
+    <div style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+        <span style="width:11px;height:11px;border-radius:3px;background:${g.c.cor};
+          display:inline-block;flex:0 0 auto;"></span>
+        <span style="font-size:13px;font-weight:700;color:var(--te);">${escHtml(g.c.nome)}</span>
+        <span style="font-size:11.5px;color:var(--ct);">${g.itens.length}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">
+        ${g.itens.map(i => repoCartao(i, g.c)).join('')}
+      </div>
+    </div>`).join('')
+}
+
+function repoCartao(i, c) {
+  const t = REPO_TIPOS[repoTipoDe(i.url)] || REPO_TIPOS.link
+  const pode = repoPodeEditar()
+  const quando = i.criado_em ? new Date(i.criado_em).toLocaleDateString('pt-BR') : '—'
+  return `
+  <div style="position:relative;background:#FCFDFC;border-left:3px solid ${c.cor};
+       border-radius:0 12px 12px 0;box-shadow:var(--sombra);padding:13px 14px;
+       display:flex;flex-direction:column;gap:8px;">
+    ${/* ⚠️ SVG, NÃO O EMOJI 📌. O emoji é vermelho em todos os sistemas e não aceita cor —
+          o Richard pediu o alfinete em ÂMBAR, e é a mesma razão pela qual `planAlfinete` já
+          usa SVG na Minha Planilha. Há teste que falha se um 📌 for renderizado. */''}
+    ${i.fixado === true ? `<span title="Fixado no topo da categoria"
+       style="position:absolute;top:9px;right:11px;line-height:0;">
+       <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#BA7517;">
+         <path d="M16 9V4h1a1 1 0 000-2H7a1 1 0 000 2h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg></span>` : ''}
+    <span style="flex:0 0 32px;width:32px;height:32px;border-radius:8px;background:${c.cor_bg};
+      display:inline-flex;align-items:center;justify-content:center;" title="${t.rot}">
+      <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:${c.cor_txt};"><path d="${t.d}"/></svg></span>
+    <div style="font-size:13.5px;font-weight:500;line-height:1.3;color:var(--te);
+      ${i.fixado === true ? 'padding-right:18px;' : ''}">${escHtml(i.nome || '—')}</div>
+    ${i.descricao ? `<div style="font-size:12px;color:var(--ct);line-height:1.4;">${escHtml(i.descricao)}</div>` : ''}
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:4px;">
+      <button class="btn-acao" onclick="irRepoVer(${i.id})"
+        style="background:${c.cor};color:#fff;border-color:${c.cor};font-weight:700;">Abrir</button>
+      ${pode ? `<button class="btn-acao" title="Editar" onclick="repoAbrirItem(${i.id})"
+        style="background:#fff;color:var(--ct);border:1.5px solid var(--cl);">✎</button>
+      <button class="btn-acao" title="Excluir" onclick="repoExcluir(${i.id})"
+        style="background:#fff;color:var(--r);border:1.5px solid var(--cl);">🗑</button>` : ''}
+      <span style="margin-left:auto;font-size:10.5px;color:#9AA8A0;text-align:right;">
+        ${escHtml(i.adicionado_por || '—')} · ${quando}</span>
+    </div>
+  </div>`
+}
+
+// ══════════════════════════════════════
+//  TELA 2 — O VISUALIZADOR
+// ══════════════════════════════════════
+// ⚠️ SUBSTITUI A TELA 1 NA ÁREA DE CONTEÚDO, e não é modal nem aba nova — o menu lateral
+// continua à vista. Decisão do Richard, 18/08/2026.
+async function irRepoVer(id) {
+  if (!_repoItens.length) await repoCarregar()
+  const it = _repoItens.find(x => String(x.id) === String(id))
+  if (!it) { toast('Item não encontrado.', 'err'); return }
+  ativarMenu('repo')
+  const c = repoCatDe(it)
+  const quando = it.criado_em ? new Date(it.criado_em).toLocaleDateString('pt-BR') : '—'
+  const pode = repoPodeEditar()
+
+  document.getElementById('BODY').innerHTML = `
+    <div style="background:#173404;border-radius:12px 12px 0 0;padding:13px 16px;
+         display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+      <button class="btn-acao" onclick="irRepo()"
+        style="background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.25);
+               font-weight:700;">◀ Repositório</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:500;color:#fff;line-height:1.3;">${escHtml(it.nome || '—')}</div>
+        <div style="font-size:11.5px;color:#C0DD97;margin-top:1px;">
+          ${escHtml(c.nome)} · ${escHtml(it.adicionado_por || '—')} · ${quando}</div>
+      </div>
+      ${pode ? `<button class="btn-acao" onclick="repoAbrirItem(${it.id})"
+        style="background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.25);
+               font-weight:700;">Editar</button>` : ''}
+      <a class="btn-acao" href="${escHtml(it.url || '#')}" target="_blank" rel="noopener"
+        style="background:#fff;color:#173404;border-color:#fff;font-weight:800;text-decoration:none;">
+        Nova aba</a>
+    </div>
+    <div style="display:flex;gap:0;align-items:stretch;min-height:70vh;">
+      <div style="flex:0 0 190px;background:#FCFDFC;border-right:1px solid var(--cl);
+           padding:11px 0;overflow-y:auto;max-height:78vh;">${repoIndice(it.id)}</div>
+      <div style="flex:1;min-width:0;background:#F7FAF8;" id="repoVisor">${repoVisor(it)}</div>
+    </div>`
+}
+
+/** A coluna da esquerda: todos os itens, agrupados, com o atual destacado. */
+function repoIndice(atualId) {
+  return _repoCats.map(c => {
+    const itens = _repoItens.filter(i => repoCatDe(i).nome === c.nome)
+    if (!itens.length) return ''
+    return `
+      <div style="padding:7px 12px 4px;font-size:9.5px;font-weight:800;text-transform:uppercase;
+        letter-spacing:.06em;color:#9AA8A0;">${escHtml(c.nome)}</div>
+      ${itens.map(i => {
+        const on = String(i.id) === String(atualId)
+        return `<button onclick="irRepoVer(${i.id})"
+          style="display:block;width:100%;text-align:left;border:0;background:${on ? c.cor_bg : 'none'};
+            border-left:3px solid ${on ? c.cor : 'transparent'};padding:7px 12px;font-size:12px;
+            font-family:inherit;color:${on ? c.cor_txt : 'var(--te)'};cursor:pointer;
+            font-weight:${on ? '700' : '400'};line-height:1.35;"
+          onmouseover="if(!this.style.borderLeftColor.includes('rgb'))this.style.background='#F5F9F7'"
+          onmouseout="this.style.background='${on ? c.cor_bg : 'transparent'}'">
+          ${escHtml(i.nome || '—')}</button>`
+      }).join('')}`
+  }).join('')
+}
+
+/**
+ * A área do documento — dois estados, e só dois.
+ *
+ * ⚠️ DRIVE PELO DOMÍNIO, E NADA DE TENTATIVA E ERRO. Ver `repoEhDrive`: o navegador não
+ * entrega ao JavaScript o erro de um site que recusa ser embutido. Tentar e "ver no que dá"
+ * deixaria o analista olhando um retângulo branco sem explicação — que é exatamente o que a
+ * tela de bloqueio existe para evitar.
+ */
+function repoVisor(it) {
+  if (repoEhDrive(it.url)) {
+    return `<iframe src="${escHtml(repoDriveEmbed(it.url))}" title="${escHtml(it.nome || '')}"
+      style="width:100%;height:78vh;border:0;display:block;" allow="autoplay"></iframe>`
+  }
+  return `
+    <div style="display:flex;align-items:center;justify-content:center;height:78vh;padding:26px;">
+      <div style="max-width:430px;text-align:center;">
+        <div style="width:56px;height:56px;border-radius:14px;background:#EAF1F9;margin:0 auto 15px;
+          display:flex;align-items:center;justify-content:center;">
+          <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:#1A4E8A;">
+            <path d="M18 8h-1V6a5 5 0 00-10 0v2H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V10a2 2 0 00-2-2zm-6 9a2 2 0 110-4 2 2 0 010 4zM9 8V6a3 3 0 016 0v2H9z"/></svg>
+        </div>
+        <div style="font-size:15px;font-weight:600;color:var(--te);margin-bottom:7px;">
+          Este site não permite exibição dentro do SIGPC</div>
+        ${/* ⚠️ A frase seguinte existe para a pessoa NÃO achar que o repositório quebrou. O
+              bloqueio é do site de origem, e o texto diz isso com todas as letras. */''}
+        <div style="font-size:12.5px;color:var(--ct);line-height:1.55;margin-bottom:16px;">
+          É uma configuração de segurança do próprio site de origem, que recusa ser aberto
+          dentro de outra página. Não é erro do repositório, e o link continua válido.</div>
+        <a class="btn-acao" href="${escHtml(it.url || '#')}" target="_blank" rel="noopener"
+          style="background:#1A4E8A;color:#fff;border-color:#1A4E8A;font-weight:800;
+                 text-decoration:none;padding:9px 17px;font-size:13px;">Abrir em nova aba</a>
+        <div style="font-size:11.5px;color:#9AA8A0;margin-top:11px;">${escHtml(repoDominio(it.url))}</div>
+      </div>
+    </div>`
+}
+
+// ══════════════════════════════════════
+//  OS MODAIS — só para quem pode
+// ══════════════════════════════════════
+let _repoEditId = null
+
+function repoAbrirItem(id) {
+  if (!repoPodeEditar()) { toast('Apenas coordenador ou o técnico do sistema alteram o repositório.', 'err'); return }
+  _repoEditId = id ?? null
+  const it = id ? _repoItens.find(x => String(x.id) === String(id)) : null
+  document.getElementById('moRepoT').textContent = it ? '✎ Editar item' : '➕ Adicionar ao Repositório'
+  document.getElementById('rTit').value = it?.nome || ''
+  document.getElementById('rDesc').value = it?.descricao || ''
+  document.getElementById('rUrl').value = it?.url || ''
+  document.getElementById('rFix').checked = it?.fixado === true
+  document.getElementById('rCat').innerHTML = _repoCats
+    .map(c => `<option ${((it?.categoria || REPO_SEM_CAT) === c.nome) ? 'selected' : ''}>${escHtml(c.nome)}</option>`).join('')
   document.getElementById('moRepo').classList.add('open')
 }
 
 async function salvarRepo() {
-  const tit = document.getElementById('rTit').value.trim()
-  if(!tit) { toast('Informe o título.','err'); return }
-  const cat = document.getElementById('rCat').value.trim() || 'Outros'
+  const nome = document.getElementById('rTit').value.trim()
+  const url = document.getElementById('rUrl').value.trim()
+  if (!nome) { toast('Informe o título.', 'err'); return }
+  if (!url) { toast('Informe o link.', 'err'); return }
+  const corpo = {
+    nome, url,
+    descricao: document.getElementById('rDesc').value.trim() || null,
+    categoria: document.getElementById('rCat').value,
+    fixado: document.getElementById('rFix').checked,
+    usuario_id: U.id,
+  }
   try {
-    const { error } = await db.from('repositorio').insert({
-      nome:tit, descricao:document.getElementById('rDesc').value.trim(),
-      url:document.getElementById('rUrl').value.trim(),
-      categoria:cat,
-      setorial_id:U.setorial_id, adicionado_por:U.nome
-    })
-    if(error) throw error
-    fm('moRepo'); toast('Adicionado com sucesso!','ok'); irRepo()
-  } catch(e) { toast('Erro: '+e.message,'err') }
+    let r
+    if (_repoEditId) {
+      r = await fetch(`${API_URL}/repositorio/${_repoEditId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
+    } else {
+      r = await fetch(`${API_URL}/repositorio`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...corpo, setorial_id: U.setorialFiltro || 'FCEE', adicionado_por: U.nome }) })
+    }
+    const j = await r.json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    fm('moRepo'); toast(_repoEditId ? 'Item atualizado.' : 'Item adicionado.', 'ok')
+    await repoCarregar()
+  } catch (e) { toast('Erro: ' + e.message, 'err') }
 }
 
-async function repoExcluir(id, nome) {
-  if(!await moConfirm(`Excluir "${nome}" do repositório?`, {
+// A paleta do "+ Nova categoria" — as mesmas famílias das cinco iniciais, para uma categoria
+// nova não destoar do resto da tela.
+const REPO_PALETA = [
+  { cor: '#185FA5', cor_bg: '#E6F1FB', cor_txt: '#0C447C' },
+  { cor: '#BA7517', cor_bg: '#FAEEDA', cor_txt: '#633806' },
+  { cor: '#3B6D11', cor_bg: '#EAF3DE', cor_txt: '#27500A' },
+  { cor: '#534AB7', cor_bg: '#EEEDFE', cor_txt: '#3C3489' },
+  { cor: '#D4537E', cor_bg: '#FBEAF0', cor_txt: '#993556' },
+  { cor: '#0F6E56', cor_bg: '#E3F3EE', cor_txt: '#0A4A3A' },
+  { cor: '#A32D2D', cor_bg: '#FCEBEB', cor_txt: '#791F1F' },
+  { cor: '#5F5E5A', cor_bg: '#F1F4F2', cor_txt: '#4A4A46' },
+]
+let _repoCorSel = 0
+
+function repoAbrirCategoria() {
+  if (!repoPodeEditar()) { toast('Apenas coordenador ou o técnico do sistema criam categorias.', 'err'); return }
+  _repoCorSel = 0
+  document.getElementById('rcNome').value = ''
+  repoPintarPaleta()
+  document.getElementById('moRepoCat').classList.add('open')
+}
+
+function repoPintarPaleta() {
+  document.getElementById('rcPaleta').innerHTML = REPO_PALETA.map((p, i) => `
+    <button onclick="_repoCorSel=${i};repoPintarPaleta()" title="Cor ${i + 1}"
+      style="width:34px;height:34px;border-radius:9px;background:${p.cor};cursor:pointer;
+        border:3px solid ${i === _repoCorSel ? 'var(--te)' : 'transparent'};"></button>`).join('')
+}
+
+async function salvarRepoCategoria() {
+  const nome = document.getElementById('rcNome').value.trim()
+  if (!nome) { toast('Informe o nome da categoria.', 'err'); return }
+  try {
+    const r = await fetch(`${API_URL}/repositorio/categorias`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, ...REPO_PALETA[_repoCorSel], usuario_id: U.id }) })
+    const j = await r.json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    fm('moRepoCat'); toast('Categoria criada.', 'ok')
+    await repoCarregar()
+  } catch (e) { toast('Erro: ' + e.message, 'err') }
+}
+
+async function repoExcluir(id) {
+  const it = _repoItens.find(x => String(x.id) === String(id))
+  if (!await moConfirm(`Excluir "${it?.nome || 'este item'}" do repositório?`, {
     titulo: 'Excluir do repositório', perigo: true, okTexto: 'Excluir', cancelarTexto: 'Voltar',
-    detalhe: 'O arquivo deixa de estar disponível para toda a equipe. Não pode ser desfeito.',
+    detalhe: 'O item deixa de estar disponível para toda a equipe. Não pode ser desfeito.',
   })) return
   try {
+    // ⚠️ `usuario_id`, e NÃO `perfil`. A rota lê o perfil no BANCO desde 14/08; a tela
+    // continuava mandando `perfil: U.perfil`, que a rota ignora — e o `lerUsuario(undefined)`
+    // devolvia null, então TODA exclusão levava 403. Estava quebrado e ninguém tinha reparado.
     const r = await fetch(`${API_URL}/repositorio/${id}`, {
-      method: 'DELETE',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ perfil: U.perfil })
-    })
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_id: U.id }) })
     const j = await r.json()
-    if(j.error) throw new Error(j.error.message || j.error)
-    toast('Item excluído.','ok')
-    await irRepo()
-  } catch(e) { toast('Erro: '+e.message,'err') }
+    if (j.error) throw new Error(j.error.message || j.error)
+    toast('Item excluído.', 'ok')
+    await repoCarregar()
+  } catch (e) { toast('Erro: ' + e.message, 'err') }
 }
 
 // ══════════════════════════════════════

@@ -439,6 +439,104 @@ conf(/solicitacao_devolucao\?usuario_id=\$\{id\}&status=pendente/.test(html),
      'somada a de devolucao — as duas com o recorte do servidor');
 conf(/carregarPainelDash\(\)/.test(html), 'e o painel entra no ciclo de atualizacao');
 
+// ═════════════════════════════════════════════════════════════════════════════
+S('14. REPOSITORIO — a lista (18/08/2026)');
+
+conf(/border-radius:11px;background:#0F6E56/.test(html.replace(/\n\s*/g, ' ')),
+     'cabecalho com o quadrado #0F6E56');
+conf(/id="repoSub"/.test(html) && /categoria' : 'categorias'/.test(html),
+     'subtitulo com itens e categorias');
+conf(/id="repoBusca"/.test(html), 'campo de busca');
+conf(/\+ Adicionar<\/button>/.test(html), 'e o botao verde Adicionar');
+
+S('14b. OS CHIPS');
+conf(/Tudo \(\$\{_repoItens\.length\}\)/.test(html), 'chip "Tudo" com contador');
+conf(/background:\$\{tudoOn \? '#173404'/.test(html), 'ativo por padrao em #173404');
+conf(/border:1\.5px dashed var\(--cl\)/.test(html), 'chip tracejado de nova categoria');
+conf(/function repoAbrirCategoria\(\)/.test(html), 'que abre o modal');
+conf(/id="rcPaleta"/.test(html), 'com paleta de cores');
+// ⚠️ PALETA FECHADA: as TRES cores de uma categoria tem de combinar entre si.
+conf(/const REPO_PALETA = \[/.test(html), 'e a paleta e fechada, nao seletor livre');
+
+S('14c. OS CARTOES');
+conf(/grid-template-columns:repeat\(auto-fill,minmax\(230px,1fr\)\);gap:10px/.test(html),
+     'grid minmax(230px,1fr) gap 10');
+conf(/border-left:3px solid \$\{c\.cor\}/.test(html), 'borda esquerda de 3px na cor');
+conf(/border-radius:0 12px 12px 0/.test(html), 'raio 0 12 12 0');
+conf(/width:32px;height:32px;border-radius:8px;background:\$\{c\.cor_bg\}/.test(html),
+     'icone em quadrado 32px no fundo claro');
+conf(/font-size:13\.5px;font-weight:500/.test(html), 'titulo 13.5px peso 500');
+conf(/font-size:10\.5px;color:#9AA8A0/.test(html), 'rodape com quem adicionou e data em 10.5px');
+// ⚠️ O ALFINETE E SVG. O emoji 📌 e vermelho em todo sistema e nao aceita cor — o Richard
+// pediu AMBAR. E a mesma razao pela qual `planAlfinete` ja e SVG, e ha teste no painel que
+// falha se um 📌 for renderizado.
+conf(/fill:#BA7517/.test(html), 'alfinete ambar');
+conf(!/>📌</.test(html), 'e em SVG, nao emoji');
+// Fixados primeiro DENTRO da categoria.
+conf(/\(b\.fixado === true\) - \(a\.fixado === true\)/.test(html), 'fixados aparecem primeiro');
+
+S('14d. O TIPO SAI DA URL');
+conf(/function repoTipoDe\(url\)/.test(html), 'ha deteccao de tipo');
+for (const [re, rot] of [[/docs\\\.google\\\.com\\\/document/, 'Docs'],
+                         [/docs\\\.google\\\.com\\\/spreadsheets/, 'Sheets'],
+                         [/drive\\\.google\\\.com\\\/drive\\\/folders/, 'pasta'],
+                         [/\\\.pdf/, 'PDF']])
+  conf(re.test(html), `reconhece ${rot}`);
+conf(/REPO_TIPOS/.test(html), 'e os icones moram numa lista so');
+
+S('14e. NUNCA ESCONDIDO — "Sem categoria"');
+// ⚠️ 2 dos 4 itens estao com categoria NULA no banco. O Richard pediu que aparecessem numa
+// categoria cinza, nunca escondidos — e o dado NAO foi reescrito.
+conf(/const REPO_SEM_CAT = 'Sem categoria'/.test(html), 'ha a categoria neutra');
+conf(/\(item\?\.categoria \|\| ''\)\.trim\(\) \|\| REPO_SEM_CAT/.test(html),
+     'nulo e vazio caem nela');
+conf(/#5F5E5A/.test(html), 'em cinza');
+
+S('15. REPOSITORIO — o visualizador');
+conf(/async function irRepoVer\(id\)/.test(html), 'a tela existe');
+// ⚠️ SUBSTITUI a area de conteudo — nao e modal nem aba nova.
+conf(/irRepoVer[\s\S]{0,600}getElementById\('BODY'\)\.innerHTML/.test(html),
+     'e substitui o BODY, nao abre modal');
+conf(/ativarMenu\('repo'\)[\s\S]{0,900}◀ Repositório/.test(html),
+     'com o menu lateral vivo e o botao de volta');
+conf(/flex:0 0 190px/.test(html), 'coluna esquerda de 190px');
+conf(/function repoIndice\(atualId\)/.test(html), 'com o indice de todos os itens');
+conf(/border-left:3px solid \$\{on \? c\.cor : 'transparent'\}/.test(html),
+     'e o atual destacado com borda colorida');
+
+S('15b. OS DOIS ESTADOS DO DOCUMENTO');
+conf(/function repoEhDrive\(url\)/.test(html), 'ha deteccao de Drive');
+// ⚠️ POR DOMINIO, e nunca por tentativa e erro: o navegador NAO entrega ao JavaScript o erro
+// de um site que recusa ser embutido. O onload dispara igual e o onerror nao vem.
+conf(/new URL\(String\(url\)\)\.hostname/.test(html), 'pelo DOMINIO do link');
+conf(/h === 'drive\.google\.com' \|\| h === 'docs\.google\.com'/.test(html), 'drive e docs');
+conf(/function repoDriveEmbed\(url\)/.test(html), 'e converte para o endereco de visualizacao');
+conf(/\/preview/.test(html), 'usando /preview, nao /edit');
+conf(/embeddedfolderview/.test(html), 'e a visao propria de pasta');
+conf(/<iframe src="\$\{escHtml\(repoDriveEmbed/.test(html), 'o Drive vai para iframe');
+// A tela de bloqueio.
+conf(/Este site não permite exibição dentro do SIGPC/.test(html), 'e o resto cai no bloqueio');
+conf(/Não é erro do repositório/.test(html),
+     'que diz que a recusa e do site de origem, nao defeito do repositorio');
+conf(/Abrir em nova aba/.test(html), 'com botao azul de nova aba');
+conf(/function repoDominio\(url\)/.test(html), 'e o dominio embaixo, em cinza');
+
+S('16. REPOSITORIO — permissoes');
+conf(/function repoPodeEditar\(\)/.test(html), 'ha uma porta so para "pode mexer"');
+conf(/pe === 'superadmin' \|\| pe === 'coordenador'/.test(html), 'superadmin e coordenador');
+// ⚠️ perfilEfetivo, e nao U.perfil: no papel analista o superadmin tambem perde os botoes.
+conf(/const pe = perfilEfetivo\(U\)[\s\S]{0,120}pe === 'superadmin'/.test(html),
+     'pelo perfilEfetivo, nao pelo perfil do cadastro');
+conf(/\$\{pode \? `<button class="btn-acao" title="Editar"/.test(html),
+     'e os botoes nem sao desenhados para quem nao pode');
+// ⚠️ E A TELA NAO E A TRAVA. A tranca esta no servidor.
+conf(/esconder botão NÃO é a trava|Esconder botão na tela|esconder botão nunca foi a trava/i.test(html),
+     'com o aviso de que esconder botao nao e a trava');
+// O DELETE mandava `perfil`, que a rota ignora desde 14/08 — toda exclusao levava 403.
+conf(/JSON\.stringify\(\{ usuario_id: U\.id \}\)/.test(html),
+     'o excluir manda usuario_id, e nao mais perfil');
+
+
 
 
 

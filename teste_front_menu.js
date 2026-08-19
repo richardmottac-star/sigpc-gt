@@ -83,7 +83,11 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
     est:['analista','coordenador','superadmin'],
     plan:['analista','coordenador','superadmin'],
     prod:['analista','coordenador','superadmin'],
-    repo:['analista','coordenador','superadmin'],
+    // ⚠️ O C.I. ENTROU EM 18/08/2026 (decisao do Richard): "Analista e Controle Interno so
+    // visualizam". O repositorio e material de CONSULTA, nao acervo de PC — e a guarda da
+    // tela saiu junto, porque agora nao ha quem recusar. Quem MEXE e outra pergunta, e a
+    // resposta esta no servidor (barrouRepositorio).
+    repo:'todos',
     meuspedidos:['analista','coordenador','superadmin'],
     // irRel GANHOU guarda em 12/08: a tela e de coordenacao, e antes abria para qualquer um.
     rel:['coordenador','superadmin'],
@@ -246,15 +250,23 @@ console.log('\n═══ 6. CONTROLE INTERNO ═══');
   // irCI aceita superadmin, coordenador e controle_interno.
   conf(idsDe(ci).includes('ci'), 'quem E do controle interno ve o item');
   conf(blocosDe(ci)[0] === 'analista', 'e no primeiro bloco — para ele e a tela de trabalho');
-  // O menu do tecnico do C.I. e curto de proposito: ele nao assume TR nem baixa PC.
-  conf(JSON.stringify(idsDe(ci)) === '["dash","perfil","ci"]',
-       'e ve SO Dashboard, Meu Perfil e Controle Interno', JSON.stringify(idsDe(ci)));
-  // E as cinco telas do acervo recusam o perfil, nao so somem do menu.
-  ['irEst','irPlanilha','irProd','irRepo','irMeusPedidos'].forEach(fn => {
+  // ⚠️ O REPOSITORIO ENTROU NO MENU DO C.I. em 18/08/2026 — decisao do Richard: "Analista e
+  // Controle Interno so visualizam". O repositorio e material de CONSULTA (orientacoes,
+  // modelos, legislacao), nao acervo de PC: o tecnico do C.I. precisa dele tanto quanto o
+  // analista. As outras quatro telas do acervo continuam recusando o perfil.
+  conf(JSON.stringify(idsDe(ci)) === '["dash","repo","perfil","ci"]',
+       'e ve Dashboard, Repositorio, Meu Perfil e Controle Interno', JSON.stringify(idsDe(ci)));
+  // E as QUATRO telas do acervo recusam o perfil, nao so somem do menu.
+  ['irEst','irPlanilha','irProd','irMeusPedidos'].forEach(fn => {
     const i = html.indexOf(`function ${fn}(`);
     const bloco = html.slice(i, i + 700);
     conf(/U\.perfil === 'controle_interno'/.test(bloco), `${fn} recusa o controle_interno`);
   });
+  // ⚠️ E o repositorio NAO recusa mais — mas tambem nao deixa ele MEXER: os botoes saem pelo
+  // `repoPodeEditar`, e a tranca de verdade e a do servidor (`barrouRepositorio`).
+  conf(!/U\.perfil === 'controle_interno'/.test(html.slice(html.indexOf('async function irRepo('),
+       html.indexOf('async function irRepo(') + 700)), 'irRepo NAO recusa mais o controle_interno');
+  conf(/function repoPodeEditar\(\)/.test(html), 'e quem pode MEXER sai do repoPodeEditar');
   conf(idsDe(coord).includes('ci'), 'coordenador tambem ve');
   conf(!idsDe(analista).includes('ci'), 'analista comum NAO ve');
   // Dois itens com o mesmo id, mas em blocos que nunca coexistem: o perfil e um so.
