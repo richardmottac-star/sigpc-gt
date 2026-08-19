@@ -22,8 +22,20 @@ const S = (t) => console.log(`\n═══ ${t} ═══`);
 S('1. O MENU EXISTE, E QUEM DECIDE E O SERVIDOR');
 
 conf(/function pBotaoAcoes\(pa, tr\)/.test(html), 'o botao unico existe');
-conf(/⋯ Ações<\/button>/.test(html), 'e ele se chama "Ações"');
-conf(/async function acAbrir\(ev, codigoPc, tr\)/.test(html), 'o menu abre por codigo_pc');
+// ⚠️ Os tres pontinhos sairam do rotulo em 18/08/2026 — decisao do Richard. Ficou "Ações ▾".
+conf(/Ações ▾<\/button>/.test(html), 'e ele se chama "Ações ▾"');
+conf(!/⋯ Ações/.test(html), 'sem os tres pontinhos no rotulo');
+// ⚠️ O NUMERO DA PARCIAL PASSOU A VIAJAR JUNTO. A versao anterior o procurava numa varredura
+// de `_planDados` — variavel que NAO EXISTE (a real e `window._planDadosCache`) —, e ler
+// identificador nao declarado lanca ReferenceError. O `|| []` nao protegia, porque o erro
+// acontece ANTES do `||`. Isso cortava TRES itens do menu de uma vez, em silencio: Ver
+// parecer, Encaminhar ao C.I. e Historico, os tres que passavam por aquela funcao.
+conf(/async function acAbrir\(ev, codigoPc, tr, parcialNum\)/.test(html),
+     'o menu abre por codigo_pc E recebe o numero da parcial do proprio cartao');
+// ⚠️ Mede o PADRAO que quebrava, nao o nome: `(_planDados || [])`. Procurar so pelo nome
+// daria falso positivo em qualquer comentario que conte esta historia — e este arquivo conta.
+conf(!/\(_planDados \|\| \[\]\)/.test(html), 'a varredura da variavel inexistente sumiu');
+conf(!/function _acParcialDe/.test(html), 'e a funcao que a fazia foi removida');
 conf(/\/parcela\/acoes\?codigo_pc=/.test(html), 'e pergunta ao SERVIDOR o que pode');
 
 // ⚠️ A tela NAO pode repetir a regra de permissao — foi assim que o mapa de nomes curtos
@@ -48,10 +60,15 @@ conf(/Solicitar correção da situação/.test(html), 'corrigir vira "Solicitar 
 conf(/Solicitar volta do C\.I\./.test(html), 'puxar vira "Solicitar volta do C.I."');
 conf(/scAbrir\(\$\{pc\},'corrigir_situacao'\)/.test(html), 'e o clique abre o pedido');
 conf(/scAbrir\(\$\{pc\},'puxar_ci'\)/.test(html), 'nos dois casos');
-// Armadilha 15: todo item desabilitado carrega o motivo no title.
-conf(/title="\$\{escHtml\(dica \|\| rotulo\)\}"/.test(html), 'todo item leva o motivo no title');
-conf(/Correção já pedida/.test(html) && /Volta do C\.I\. já pedida/.test(html),
-     'pedido pendente aparece como tal, e nao repete o convite');
+// Armadilha 15: todo item desabilitado carrega o motivo — agora no title E na segunda linha.
+conf(/title="\$\{escHtml\(motivo \|\| rotulo\)\}"/.test(html), 'todo item leva o motivo no title');
+// ⚠️ O MOTIVO SAIU DO TEXTO SOLTO DA LINHA e virou letra pequena SOB O ROTULO — pedido do
+// Richard, 18/08/2026. Item cinza sem explicacao e o que faz a pessoa procurar o botao que
+// sumiu; o motivo tem de estar onde o item esta.
+conf(/!ativo && motivo \? `<span style="display:block;font-size:10\.5px/.test(html),
+     'e o item indisponivel mostra o motivo embaixo do rotulo, em letra pequena');
+conf(/Já existe um pedido pendente com o coordenador/.test(html),
+     'pedido pendente aparece como motivo, e o item nao repete o convite');
 
 S('4. O MENU FECHA — clique fora E Esc');
 conf(/function acCliqueFora/.test(html), 'fecha clicando fora');
@@ -114,8 +131,11 @@ S('9. O QUE NAO PODE REGREDIR');
 // ⚠️ O botao do C.I. na linha da parcial foi a correcao de 13/08 que devolveu caminho a
 // 2.181 parciais. Ele esta TAMBEM no menu, mas nao pode SAIR da linha.
 const bRP = html.slice(html.indexOf('function renderPlan(rows) {'), html.indexOf('function renderPlan(rows) {') + 9000);
-conf((bRP.match(/pBotaoCI\(pa, chave\)/g) || []).length === 2,
-     'o botao do C.I. continua nos DOIS ramos da linha da parcial');
+// ⚠️ A DECISAO MUDOU EM 18/08/2026: o C.I. saiu da linha e foi para o menu, EM DESTAQUE.
+// O que esta secao protege continua sendo o mesmo — que ele nao suma SEM SUBSTITUTO, que foi
+// o defeito de 13/08 (2.181 parciais baixadas sem caminho para o C.I.).
+conf(!/pBotaoCI/.test(bRP), 'o botao solto do C.I. saiu da linha');
+conf(/acItem\('Encaminhar ao C\.I\.', '🏛'/.test(html), 'e o C.I. virou item do menu');
 conf((bRP.match(/pBotaoAcoes\(pa, r\.tr\)/g) || []).length === 2,
      'e o menu de acoes tambem');
 conf(/'Encaminhar ao C\.I\.', '🏛'/.test(html), 'e o C.I. tambem esta DENTRO do menu');

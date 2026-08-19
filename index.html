@@ -9443,25 +9443,18 @@ function pFaixaPasso(pa) {
   </div>`
 }
 
-/**
- * O botão do C.I., com o motivo AO LADO quando não dá para clicar.
- *
- * Some no passo 3 — já foi encaminhada, e o bloco do C.I. logo abaixo conta o resto.
- */
-function pBotaoCI(pa, chave) {
-  if(pPasso(pa) === 3) return ''
-  const pode = !!pa.parecer_tipo
-  // ⚠️ O encaminhamento ao C.I. é OBRIGATÓRIO, não opcional (Richard, 13/08/2026). O texto
-  // dizia "opcional — a parcial já está baixada" e convidava a parar na baixa. A baixa é o
-  // passo do parecer; o C.I. é o passo seguinte, e a parcial não está pronta sem ele.
-  const nota = pode
-    ? (pa.baixada ? 'encaminhe ao Controle Interno' : '')
-    : 'exige parecer registrado'
-  return `${nota?`<span style="font-size:11px;color:var(--ct);">${nota}</span>`:''}
-    <button class="btn-acao" style="font-weight:800;background:${pode?'#1A4E8A':'#E4EAE6'};color:${pode?'#fff':'#9AA8A0'};${pode?'box-shadow:0 1px 4px rgba(0,0,0,.15);':'cursor:not-allowed;border:1.5px solid #D0DDD5;'}"
-      ${pode?`onclick="pEnviarCI(${chave})"`:'disabled'}
-      title="${pode?'Encaminhar a parcial ao Controle Interno':'Registre o parecer antes de encaminhar ao Controle Interno'}">🏛 Encaminhar ao CI</button>`
-}
+// ⚠️ `pBotaoCI` FOI REMOVIDA em 18/08/2026, e não comentada — código que ninguém chama é
+// código que ninguém revisa (é a mesma regra que tirou o bloco de voz do `avisar.ps1`).
+//
+// O botão do C.I. saiu da linha da parcial e virou item do menu "Ações ▾", no grupo "Fluxo da
+// análise", EM DESTAQUE — negrito e ícone azul. A regra dele não se perdeu: quem decide se
+// ele pode ser clicado agora é o SERVIDOR, em `GET /parcela/acoes` (`baixada === true &&
+// enviado_ci !== true`), e o motivo da recusa aparece em letra pequena embaixo do rótulo,
+// em vez do texto solto que ficava ao lado do botão.
+//
+// ⚠️ E ele continua OBRIGATÓRIO (decisão do Richard, 13/08/2026). Foi escondê-lo SEM
+// substituto que deixou 2.181 parciais baixadas sem caminho para o C.I.; aqui há
+// substituto, e ele é o primeiro grupo do menu.
 
 // ══════════════════════════════════════
 //  O BOTÃO "AÇÕES" — as quatro frentes de 18/08/2026
@@ -9489,17 +9482,52 @@ function acCliqueFora(e) { if (_acAberto && !_acAberto.contains(e.target)) acFec
 // abriu sem querer no meio de um formulário.
 function acEsc(e) { if (e.key === 'Escape') acFechar(); }
 
-function acItem(rotulo, icone, acao, ativo, dica) {
-  const cor = ativo ? 'var(--te)' : '#9AA8A0';
-  return `<button role="menuitem" onclick="acFechar();${acao}"
-    ${ativo ? '' : 'disabled'}
-    title="${escHtml(dica || rotulo)}"
-    style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;
-           border:0;padding:9px 14px;font-size:12.5px;font-family:inherit;color:${cor};
-           cursor:${ativo ? 'pointer' : 'not-allowed'};white-space:nowrap;"
-    onmouseover="if(!this.disabled)this.style.background='#F2FAF5'"
+// As seis famílias de cor do menu, por GRUPO — especificação do Richard, 18/08/2026.
+// Cada uma é o par (cor do ícone, fundo claro da mesma família): o quadradinho fica legível
+// nos dois temas e o item cinza continua parecendo cinza sem virar borrão.
+const AC_CORES = {
+  azul:     { fg: '#1A4E8A', bg: '#EAF1F9' },
+  verde:    { fg: '#1B7A3E', bg: '#EAF7EF' },
+  ambar:    { fg: '#8A6100', bg: '#FFF3CD' },
+  vermelho: { fg: '#C62828', bg: '#FFEBEE' },
+  roxo:     { fg: '#6B3FA0', bg: '#F0E9F8' },
+  cinza:    { fg: '#5B6B62', bg: '#F1F4F2' },
+};
+
+/** O título de um grupo — letra pequena, maiúscula, sem peso visual de item. */
+function acGrupo(titulo) {
+  return `<div style="padding:9px 14px 4px;font-size:9.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.07em;color:#9AA8A0;">${escHtml(titulo)}</div>`;
+}
+
+/**
+ * Um item do menu.
+ *
+ * ⚠️ O ITEM INDISPONÍVEL CONTINUA NA LISTA, em cinza, com o MOTIVO em letra pequena embaixo
+ * do rótulo — e não num texto solto na linha da parcial, como era até 18/08/2026. É a
+ * armadilha 15 levada a sério: o que a pessoa não pode fazer tem de dizer POR QUE ali mesmo,
+ * senão ela procura o botão que sumiu.
+ *
+ * @param cor    chave de AC_CORES. Item inativo ignora a cor e vai para o cinza.
+ * @param motivo o texto pequeno da segunda linha, quando inativo.
+ */
+function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
+  const c = ativo ? (AC_CORES[cor] || AC_CORES.cinza) : AC_CORES.cinza;
+  const corTexto = ativo ? 'var(--te)' : '#9AA8A0';
+  return `<button role="menuitem" ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
+    title="${escHtml(motivo || rotulo)}"
+    style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;background:none;
+           border:0;padding:11px 14px;font-size:13.5px;font-family:inherit;color:${corTexto};
+           cursor:${ativo ? 'pointer' : 'not-allowed'};"
+    onmouseover="if(!this.disabled)this.style.background='#F5F9F7'"
     onmouseout="this.style.background='none'">
-    <span style="width:16px;display:inline-block;">${icone}</span>${escHtml(rotulo)}</button>`;
+    <span style="flex:0 0 28px;width:28px;height:28px;border-radius:7px;background:${c.bg};
+      color:${c.fg};display:inline-flex;align-items:center;justify-content:center;
+      font-size:14px;line-height:1;">${icone}</span>
+    <span style="flex:1;min-width:0;">
+      <span style="display:block;font-weight:${destaque && ativo ? '800' : '600'};line-height:1.35;">${escHtml(rotulo)}</span>
+      ${!ativo && motivo ? `<span style="display:block;font-size:10.5px;color:#9AA8A0;line-height:1.35;margin-top:1px;white-space:normal;">${escHtml(motivo)}</span>` : ''}
+    </span></button>`;
 }
 
 /**
@@ -9509,7 +9537,7 @@ function acItem(rotulo, icone, acao, ativo, dica) {
  * PC — a tela não manda `tr` nem `parcial_num`, e é isso que impede a final de arrastar a
  * parcial 1 junto nos 5 casos em que as duas dividem o mesmo número.
  */
-async function acAbrir(ev, codigoPc, tr) {
+async function acAbrir(ev, codigoPc, tr, parcialNum) {
   ev.stopPropagation();
   const jaEra = _acAberto && _acAberto.dataset.pc === codigoPc;
   acFechar();
@@ -9539,50 +9567,74 @@ async function acAbrir(ev, codigoPc, tr) {
     _acDados = d;
 
     const pc = `'${escHtml(codigoPc)}'`;
+    const nm = `'${escHtml(String(parcialNum ?? ''))}'`;
+    const semNum = !String(parcialNum ?? '').trim();
     const linhas = [];
 
-    linhas.push(acItem('Ver parecer', '📄', `pVerParecerPc(${pc})`, !!d.baixada,
-      d.baixada ? 'Ver o parecer registrado' : 'A parcial ainda não tem parecer'));
+    // ── GRUPO 1: FLUXO DA ANÁLISE (azul e verde) ────────────────────────────
+    // ⚠️ Os três botões que ficavam soltos na linha vivem AQUI desde 18/08/2026 — decisão do
+    // Richard. A linha da parcial passou a ter um botão só.
+    linhas.push(acGrupo('Fluxo da análise'));
 
-    linhas.push(acItem('Encaminhar ao C.I.', '🏛', `pEnviarCiPc(${pc})`,
-      d.baixada === true && d.enviado_ci !== true,
-      d.enviado_ci ? 'Já está no Controle Interno'
-        : (d.baixada ? 'Encaminhar ao Controle Interno' : 'Registre o parecer antes')));
+    linhas.push(acItem('Salvar situação', '🔄', `pAbrirSitPc(${nm})`,
+      !d.baixada && !semNum, 'azul',
+      semNum ? 'Esta parcial não tem número — não é possível registrar'
+             : (d.baixada ? 'A parcial já está baixada' : null)));
 
-    // ── A: corrigir situação ────────────────────────────────────────────────
+    linhas.push(acItem('Registrar parecer', '📝', `pAbrirParPc(${nm})`,
+      !d.baixada && !semNum, 'verde',
+      semNum ? 'Esta parcial não tem número — não é possível registrar'
+             : (d.baixada ? 'A parcial já está baixada' : null)));
+
+    linhas.push(acItem('Ver parecer', '📄', `pVerParecerPc(${nm})`, !!d.baixada, 'verde',
+      d.baixada ? null : 'A parcial ainda não tem parecer registrado'));
+
+    // ⚠️ EM DESTAQUE, e é de propósito. O encaminhamento ao C.I. é OBRIGATÓRIO (decisão do
+    // Richard, 13/08/2026), e esconder este botão foi o defeito que deixou 2.181 parciais
+    // baixadas sem caminho para o C.I. Ele saiu da linha em 18/08 — mas entra aqui em negrito.
+    linhas.push(acItem('Encaminhar ao C.I.', '🏛', `pEnviarCiPc(${nm})`,
+      d.baixada === true && d.enviado_ci !== true && !semNum, 'azul',
+      semNum ? 'Esta parcial não tem número'
+             : (d.enviado_ci ? 'Já está no Controle Interno'
+                             : (d.baixada ? null : 'Registre o parecer antes de encaminhar')),
+      true));
+
+    // ── GRUPO 2: CORREÇÕES (âmbar e vermelho) ───────────────────────────────
+    linhas.push(acGrupo('Correções'));
+
     const c = d.corrigir_situacao || {};
     if (c.pendente)
-      linhas.push(acItem('Correção já pedida', '⏳', '', false,
+      linhas.push(acItem('Corrigir situação', '⏳', '', false, 'ambar',
         'Já existe um pedido pendente com o coordenador'));
     else if (c.pode)
-      linhas.push(acItem('Corrigir situação', '✎', `corAbrir(${pc})`, true,
-        'Mudar a situação desta parcial'));
+      linhas.push(acItem('Corrigir situação', '✎', `corAbrir(${pc})`, true, 'ambar'));
     else
       linhas.push(acItem('Solicitar correção da situação', '📨',
-        `scAbrir(${pc},'corrigir_situacao')`, c.viaSolicitacao, c.motivo));
+        `scAbrir(${pc},'corrigir_situacao')`, c.viaSolicitacao, 'ambar',
+        c.viaSolicitacao ? null : c.motivo));
 
-    // ── B: puxar do C.I. ────────────────────────────────────────────────────
     const p = d.puxar_ci || {};
-    if (d.enviado_ci) {
-      if (p.pendente)
-        linhas.push(acItem('Volta do C.I. já pedida', '⏳', '', false,
-          'Já existe um pedido pendente com o coordenador'));
-      else if (p.pode)
-        linhas.push(acItem('Puxar de volta do C.I.', '↩', `pxAbrir(${pc})`, true,
-          'Desfaz o encaminhamento — e desfaz a baixa'));
-      else
-        linhas.push(acItem('Solicitar volta do C.I.', '📨', `scAbrir(${pc},'puxar_ci')`,
-          p.viaSolicitacao, p.motivo));
-    } else {
-      linhas.push(acItem('Puxar de volta do C.I.', '↩', '', false,
+    if (!d.enviado_ci)
+      linhas.push(acItem('Puxar de volta do C.I.', '↩', '', false, 'vermelho',
         'Esta parcial não está no Controle Interno'));
-    }
+    else if (p.pendente)
+      linhas.push(acItem('Puxar de volta do C.I.', '⏳', '', false, 'vermelho',
+        'Já existe um pedido pendente com o coordenador'));
+    else if (p.pode)
+      linhas.push(acItem('Puxar de volta do C.I.', '↩', `pxAbrir(${pc})`, true, 'vermelho'));
+    else
+      linhas.push(acItem('Solicitar volta do C.I.', '📨', `scAbrir(${pc},'puxar_ci')`,
+        p.viaSolicitacao, 'vermelho', p.viaSolicitacao ? null : p.motivo));
 
-    linhas.push(`<div style="height:1px;background:var(--cl);margin:5px 0;"></div>`);
-    linhas.push(acItem('Cadastrar PC nesta TR', '➕', `pnAbrir('${escHtml(tr)}')`, !!d.cadastrar_pc,
-      d.cadastrar_pc ? 'Criar uma PC nova nesta TR' : 'Esta TR não está com você'));
-    linhas.push(acItem('Histórico da parcial', '🕘', `pHistoricoPc(${pc})`, true,
-      'Ver tudo o que foi feito nesta parcial'));
+    // ── GRUPO 3: CONSULTA E CADASTRO (roxo e cinza) ─────────────────────────
+    linhas.push(acGrupo('Consulta e cadastro'));
+
+    linhas.push(acItem('Cadastrar PC nesta TR', '➕', `pnAbrir('${escHtml(tr)}')`,
+      !!d.cadastrar_pc, 'roxo',
+      d.cadastrar_pc ? null : 'Esta TR não está com você'));
+
+    // O histórico abre SEMPRE — com ou sem parecer. Ver `pHistoricoPc`.
+    linhas.push(acItem('Histórico da parcial', '🕘', `pHistoricoPc(${nm})`, true, 'cinza'));
 
     cx.innerHTML = linhas.join('');
   } catch (e) {
@@ -9595,30 +9647,84 @@ async function acAbrir(ev, codigoPc, tr) {
 let _acDados = null;      // o que o servidor disse sobre a PC aberta agora
 let _acPc = null;         // a codigo_pc em foco nos modais
 
-// ── Pontes para o que já existia, agora entrando por codigo_pc ───────────────
-// As telas antigas chamam por (tr, parcial_num). Estas pontes leem os dois da resposta do
-// servidor, que veio da própria linha — a tela continua sem usar parcial_num como chave.
-function pVerParecerPc(codigoPc) {
+// ── Pontes para as telas que já existiam ─────────────────────────────────────
+//
+// ⚠️ O NÚMERO DA PARCIAL VEM DO PRÓPRIO CARTÃO, carregado por `acAbrir` — NÃO se procura
+// mais em lugar nenhum. A primeira versão (18/08) varria uma variável de cache que
+// **não existe**: a real é `window._planDadosCache`. Ler identificador não declarado lança
+// `ReferenceError`, e o `|| []` não protege porque o erro acontece ANTES do `||`. O efeito
+// foi silencioso e cortou TRÊS itens do menu de uma vez — Ver parecer, Encaminhar ao C.I. e
+// Histórico —, porque os três passavam por essa função.
+//
+// A lição não é "usar o nome certo": é que a tela não deve PROCURAR um dado que ela já tem
+// na mão quando desenha a linha. `pBotaoAcoes` recebe `pa`, `pa.num` está ali, e agora ele
+// viaja junto com a `codigo_pc`.
+//
+// ⚠️ A identidade continua sendo `codigo_pc` — é ela que vai nas rotas de escrita. O
+// `parcial_num` só recorta a CONSULTA do histórico e abre os modais antigos.
+function pVerParecerPc(num) { if (_acDados) pVerParecer(_acDados.tr, num); }
+function pEnviarCiPc(num)   { if (_acDados) pEnviarCI(_acDados.tr, num); }
+function pAbrirSitPc(num)   { if (_acDados) pAbrirSit(_acDados.tr, num); }
+function pAbrirParPc(num)   { if (_acDados) pAbrirPar(_acDados.tr, num); }
+
+/**
+ * O HISTÓRICO DA PARCIAL — abre SEMPRE, com ou sem parecer.
+ *
+ * ⚠️ NÃO É MAIS `pVerParecer`. Aquele modal é o do PARECER: o cabeçalho dele abre com
+ * "Parecer: —" e "Baixada em: —" numa parcial que nunca foi baixada, e o título diz
+ * "Ver parecer". Quem clica em "Histórico" e recebe uma tela de parecer vazia conclui que
+ * não há histórico — quando pode haver oito linhas de situação e diligência logo abaixo.
+ *
+ * A consulta é a MESMA (`GET /parcela/historico`); o que muda é o que a tela promete.
+ */
+async function pHistoricoPc(num) {
   const d = _acDados; if (!d) return;
-  pVerParecer(d.tr, _acParcialDe(codigoPc));
+  const tr = d.tr;
+  document.getElementById('moNLT').textContent =
+    `Histórico — ${String(num || '').trim() ? 'Parcial ' + num : 'TR'} ${tr}`;
+  document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>';
+  document.getElementById('moNL').classList.add('open');
+  try {
+    const q = { tr, setorial_id: U.setorialFiltro || 'FCEE' };
+    // Sem número de parcial a rota devolve a TR inteira — e isso é melhor que não devolver
+    // nada: há parcial sem número no acervo, e ela também tem trilha.
+    if (String(num || '').trim()) q.parcial_num = num;
+    const j = await (await fetch(`${API_URL}/parcela/historico?${new URLSearchParams(q)}`)).json();
+    if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+    const linhas = (j.data || []).map(h => `
+      <div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--cb);font-size:11.5px;">
+        <span style="font-weight:700;white-space:nowrap;">${AC_EV_LABEL[h.evento] || escHtml(h.evento)}</span>
+        <div style="flex:1;min-width:0;">
+          <div>${h.valor_anterior ? escHtml(h.valor_anterior) + ' → ' : ''}<b>${escHtml(h.valor_novo || '—')}</b></div>
+          ${h.observacao ? `<div style="color:var(--ct);font-size:10.5px;white-space:normal;">${escHtml(h.observacao)}</div>` : ''}
+          ${h.parcial_num ? `<div style="color:#9AA8A0;font-size:10px;">parcial ${escHtml(String(h.parcial_num))}</div>` : ''}
+        </div>
+        <span style="color:var(--ct);font-size:10px;white-space:nowrap;">${new Date(h.criado_em).toLocaleString('pt-BR')}</span>
+      </div>`).join('')
+      || `<div style="color:var(--ct);font-size:12px;padding:14px 0;text-align:center;">
+            Nenhum registro no histórico desta parcial ainda.<br>
+            <span style="font-size:10.5px;">As ações feitas pelo sistema a partir de 12/08/2026 aparecem aqui.</span>
+          </div>`;
+    document.getElementById('moNLB').innerHTML =
+      `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ct);margin-bottom:6px;">
+         Histórico da parcial · ${(j.data || []).length} registro${(j.data || []).length === 1 ? '' : 's'}</div>${linhas}`;
+  } catch (e) {
+    document.getElementById('moNLB').innerHTML =
+      `<div style="color:var(--r);padding:16px;">Erro ao carregar o histórico: ${escHtml(e.message)}</div>`;
+  }
 }
-function pEnviarCiPc(codigoPc) {
-  const d = _acDados; if (!d) return;
-  pEnviarCI(d.tr, _acParcialDe(codigoPc));
-}
-// O histórico e o parecer moram no MESMO modal (`pVerParecer` já lista `parcela_historico`).
-// Duas telas para a mesma consulta divergiriam na primeira vez que um evento novo entrasse —
-// e hoje entraram cinco.
-function pHistoricoPc(codigoPc) {
-  const d = _acDados; if (!d) return;
-  pVerParecer(d.tr, _acParcialDe(codigoPc));
-}
-// A parcial da PC sai do agrupamento já carregado na tela — nunca de um palpite.
-function _acParcialDe(codigoPc) {
-  for (const r of (_planDados || [])) for (const pa of (r.parciais || []))
-    if ((pa.pcs || []).some(x => x.codigo_pc === codigoPc)) return String(pa.num);
-  return '';
-}
+
+// ⚠️ UMA fonte de rótulos, usada pelo histórico E pelo modal do parecer. Duas listas
+// divergiriam no primeiro evento novo — e em 18/08 entraram cinco de uma vez.
+const AC_EV_LABEL = {
+  parecer:'📝 Parecer', situacao:'🔄 Situação', ci:'🏛 Controle Interno', estorno:'↩ Estorno',
+  migracao_ci:'⚙ Migração CI', correcao_situacao:'✎ Correção de situação',
+  puxar_ci:'↩ Puxada de volta do C.I.', pc_nova:'➕ PC cadastrada',
+  solicitacao_correcao:'📨 Correção solicitada', correcao_negada:'✕ Correção negada',
+  assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
+  resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC',
+  processo_mae:'✎ Processo mãe',
+};
 
 // ══════════════════════════════════════
 //  A — CORRIGIR SITUAÇÃO
@@ -9845,10 +9951,13 @@ async function scEnviar() {
 function pBotaoAcoes(pa, tr) {
   const pc = (pa.pcs && pa.pcs[0] && pa.pcs[0].codigo_pc) || '';
   if (!pc) return '';
-  return `<button class="btn-acao" onclick="acAbrir(event,'${escHtml(pc)}','${escHtml(tr)}')"
-    title="Ações desta parcial — ver parecer, C.I., corrigir situação, cadastrar PC e histórico"
+  // ⚠️ O NÚMERO DA PARCIAL VIAJA JUNTO, e sai de `pa.num` — o mesmo objeto que desenhou a
+  // linha. A versão de 18/08 procurava esse número numa varredura que quebrava por causa de
+  // uma variável inexistente; procurar o que já se tem na mão foi o erro, não o nome errado.
+  return `<button class="btn-acao" onclick="acAbrir(event,'${escHtml(pc)}','${escHtml(tr)}','${escHtml(String(pa.num))}')"
+    title="Ações desta parcial — situação, parecer, C.I., correções, cadastro e histórico"
     style="background:var(--v);color:#fff;border-color:var(--v);font-weight:800;font-size:11.5px;
-           padding:6px 14px;box-shadow:0 1px 4px rgba(0,0,0,.15);">⋯ Ações</button>`;
+           padding:6px 14px;box-shadow:0 1px 4px rgba(0,0,0,.15);">Ações ▾</button>`;
 }
 
 function renderPlan(rows) {
@@ -9893,17 +10002,16 @@ function renderPlan(rows) {
                     sem explicação (armadilha 15). */''}
               ${pBotaoAcoes(pa, r.tr)}
               ${/* ⚠️ SÓ SUPERADMIN (18/08/2026). O coordenador saiu daqui: o "Corrigir
-                    situação" do menu ⋯ Ações desfaz a mesma baixa, com motivo obrigatório,
+                    situação" do menu "Ações ▾" desfaz a mesma baixa, com motivo obrigatório,
                     destino escolhido e linha em `parcela_historico` — o estorno não deixa
                     trilha nenhuma. E o coordenador continua decidindo os pedidos da fila de
                     Correções, que executam pelo caminho com rastro. */''}
               ${perfilEfetivo(U)==='superadmin'?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
-              ${/* ⚠️ O BOTÃO DO C.I. FICA À VISTA, e NÃO só dentro do menu — é desvio
-                    deliberado do "substituir os botões soltos". Encaminhar ao C.I. é
-                    OBRIGATÓRIO (decisão do Richard, 13/08/2026), e foi exatamente esconder
-                    este botão que deixou 2.181 parciais baixadas sem caminho para o C.I.
-                    Ele está TAMBÉM no menu; aqui continua sendo o passo 3 visível. */''}
-              ${semNum ? '' : pBotaoCI(pa, chave)}
+              ${/* ⚠️ O BOTÃO DO C.I. SAIU DA LINHA em 18/08/2026 — a decisão mudou. Ele está
+                    no menu, no grupo "Fluxo da análise", EM DESTAQUE: negrito e ícone azul.
+                    Continua obrigatório; o que mudou é onde ele mora. Foi escondê-lo SEM
+                    substituto que deixou 2.181 parciais sem caminho em 13/08 — aqui há
+                    substituto, e ele é o primeiro grupo do menu. */''}
             </span>
           </div>
           ${pFaixaPasso(pa)}
@@ -9941,14 +10049,15 @@ function renderPlan(rows) {
           <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSitOuNova(pa)}
             ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-            ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : `
-            <button class="btn-acao" style="background:#fff;color:var(--az);border:2px solid var(--az);font-weight:800;" onclick="pAbrirSit(${chave})">Salvar situação</button>
-            <button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.15);" onclick="pAbrirPar(${chave})">Registrar parecer · ${pa.qtd} PC${pa.qtd>1?'s':''}</button>
-            ${/* Na parcial ABERTA os botões do fluxo normal ficam: são o caminho de todo dia,
-                  e escondê-los atrás do menu custaria um clique em cada análise. O menu
-                  carrega o que é exceção — corrigir, puxar, cadastrar, histórico. */''}
+            ${/* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
+                  "Registrar parecer" e "Encaminhar ao C.I." saíram da linha e viraram os
+                  três primeiros itens do grupo "Fluxo da análise" do menu. A linha ganhou o
+                  espaço de volta, e o menu passou a ser o lugar ÚNICO onde se pergunta
+                  "o que dá para fazer aqui?".
+                  O aviso de "sem nº de parcial" continua fora do menu: ele explica por que
+                  metade dos itens vai aparecer cinza, e serve antes de a pessoa clicar. */''}
+            ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : ''}
             ${pBotaoAcoes(pa, r.tr)}
-            ${pBotaoCI(pa, chave)}`}
           </span>
         </div>
         ${pFaixaPasso(pa)}
@@ -13795,7 +13904,7 @@ async function irEstornar() {
   // ⚠️ `perfilEfetivo`, não `U.perfil` — no papel analista o superadmin não entra aqui.
   // E esconder o item do menu NÃO é a guarda: quem souber o caminho chama `irEstornar()`
   // pelo console. A tranca de verdade é a da rota, que lê o perfil no BANCO.
-  if(perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito ao técnico do sistema. Use "Corrigir situação" no menu ⋯ Ações.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito ao técnico do sistema. Use "Corrigir situação" no menu "Ações ▾".','err'); return }
   ativarMenu('estornar')
   const souAnalista = U.perfil === 'analista'
   const souSuper = U.perfil === 'superadmin'

@@ -186,15 +186,27 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   // escopado ao cabecalho do painel: `rgba(255,255,255,.16)` tambem e usado pelo botao do
   // menu superior (.btn-guia), que nao tem nada a ver com isto.
   conf(!/rgba\(255,255,255,\.16\)/.test(cab), 'o fundo apagado do botao saiu do cabecalho da TR');
-  // ⚠️ A janela terminava em 'Encaminhar ao CI' e ficou NEGATIVA em 13/08: o botao do C.I.
-  // saiu do HTML do cartao e virou `pBotaoCI`, declarada ANTES de renderPlan. Fechar a janela
-  // na chamada mantem os tres botoes de acao juntos, que e o que a secao mede.
-  const acoes = html.slice(html.indexOf('pAbrirSit(${chave})') - 300,
-                           html.indexOf('${pBotaoCI(pa, chave)}`}') + 40);
-  const bCI = html.slice(html.indexOf('function pBotaoCI(pa, chave) {'), html.indexOf('function renderPlan(rows) {'));
-  conf((acoes.match(/font-weight:800/g) || []).length >= 2 && /font-weight:800/.test(bCI),
-       'os 3 botoes da area expandida ganharam peso');
-  conf(/border:2px solid var\(--az\)/.test(acoes), 'o contorno do "Salvar situação" engrossou');
+  // ⚠️ ESTA SECAO MEDIA OS TRES BOTOES SOLTOS DA LINHA DA PARCIAL. Em 18/08/2026 eles
+  // deixaram de existir: "Salvar situacao", "Registrar parecer" e "Encaminhar ao C.I."
+  // viraram itens do menu "Acoes ▾", e a linha ficou com UM botao so.
+  //
+  // A pergunta que a secao fazia — "a area expandida tem botoes com peso visual, e nao
+  // links apagados?" — continua valendo; o que mudou e ONDE olhar. Agora se mede o botao
+  // unico e os itens do menu, que sao o que a pessoa ve.
+  const acoes = html.slice(html.indexOf('function pBotaoAcoes(pa, tr) {'),
+                           html.indexOf('function pBotaoAcoes(pa, tr) {') + 900);
+  conf(/font-weight:800/.test(acoes), 'o botao "Acoes" da linha tem peso 800');
+  conf(/background:var\(--v\);color:#fff/.test(acoes),
+       'e e verde solido com texto branco — o mesmo peso do antigo "Registrar parecer"');
+  conf(/Ações ▾/.test(acoes) && !/⋯/.test(acoes),
+       'o rotulo e "Acoes ▾", sem os tres pontinhos');
+
+  // Os itens do menu: fonte e respiro maiores, como o Richard pediu ao levar tudo para la.
+  const item = html.slice(html.indexOf('function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {'),
+                          html.indexOf('function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {') + 1600);
+  conf(/font-size:13\.5px/.test(item), 'os itens do menu estao em 13.5px');
+  conf(/padding:11px 14px/.test(item), 'com padding 11px 14px');
+  conf(/width:28px;height:28px/.test(item), 'e o icone num quadradinho de 28px');
 
   // 2. TR baixada recua
   // a regra saiu do render e virou `planTrConcluida` em 10/08, para o botao e o inicio da

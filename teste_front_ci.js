@@ -55,7 +55,10 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(html.slice(ini, fim), ctx);
-const { pPasso, pDiasNoCi, pFaixaPasso, pBotaoCI, planSemCi } = ctx;
+// ⚠️ `pBotaoCI` saiu daqui em 18/08/2026: a funcao foi REMOVIDA do index.html quando o
+// botao do C.I. virou item do menu "Acoes". Extrair uma funcao que nao existe mais devolve
+// `undefined`, e o teste morria com "pBotaoCI is not a function" antes da primeira secao.
+const { pPasso, pDiasNoCi, pFaixaPasso, planSemCi } = ctx;
 
 let ok = 0, falhou = 0;
 const conf = (passou, rotulo, detalhe) => {
@@ -139,51 +142,66 @@ console.log('\n═══ 2. A FAIXA DIZ O QUE FALTA ═══');
   conf(!/baixada em/.test(f2e), 'estorno: sem data de baixa, o trecho sai em vez de virar "—"');
 }
 
-console.log('\n═══ 3. O BOTAO DO C.I. — E ESTE O CONSERTO ═══');
+console.log('\n═══ 3. O C.I. MUDOU DE LUGAR — DA LINHA PARA O MENU (18/08/2026) ═══');
 {
-  const b1 = pBotaoCI(SEM_PARECER, "'2020TR000612','1'");
-  conf(/disabled/.test(b1), 'passo 1: o botao fica desabilitado — a trava do servidor e a mesma');
-  // ⚠️ NUNCA CINZA MUDO. O motivo tem de estar AO LADO, em texto, nao so no title.
-  conf(/exige parecer registrado/.test(b1), 'e o motivo vem AO LADO: "exige parecer registrado"');
-  conf(b1.indexOf('exige parecer registrado') < b1.indexOf('<button'),
-       'o texto vem ANTES do botao — le-se o motivo antes de tentar clicar');
+  // ⚠️ A DECISAO MUDOU, e este bloco mudou junto. Ate 17/08 o botao do C.I. ficava SOLTO na
+  // linha da parcial, e esta secao media o HTML dele (`pBotaoCI`). Em 18/08 o Richard levou
+  // TODOS os botoes da linha para o menu "Acoes ▾": a linha ficou com um botao so.
+  //
+  // ⚠️ O QUE NAO MUDOU E O QUE ESTA SECAO PROTEGE: encaminhar ao C.I. e OBRIGATORIO, e
+  // esconde-lo SEM SUBSTITUTO foi o defeito de 13/08 que deixou 2.181 parciais baixadas sem
+  // caminho para o C.I. Agora ha substituto — o primeiro grupo do menu —, e ele entra EM
+  // DESTAQUE. E isso que se mede aqui.
+  conf(!/function pBotaoCI/.test(html),
+       'pBotaoCI foi REMOVIDA, nao comentada — codigo que ninguem chama ninguem revisa');
+  conf(/pBotaoCI` FOI REMOVIDA/.test(html),
+       'e ficou o comentario dizendo para onde o botao foi');
 
-  const b2 = pBotaoCI(BAIXADA, "'2020TR000612','1'");
-  conf(!/disabled/.test(b2), 'passo 2: O BOTAO ACENDE — e o ramo que nao desenhava botao nenhum');
-  conf(/onclick="pEnviarCI\('2020TR000612','1'\)"/.test(b2), 'e chama o pEnviarCI da parcela');
-  // ⚠️ O C.I. e OBRIGATORIO. O texto anterior dizia "opcional" e convidava a parar na baixa.
-  conf(/encaminhe ao Controle Interno/.test(b2), 'com o chamado "encaminhe ao Controle Interno"');
-  conf(!/opcional/.test(b2), 'e sem a palavra "opcional" — o encaminhamento nao e escolha');
-  conf(/#1A4E8A/.test(b2), 'no azul do Controle Interno');
+  const iMenu = html.indexOf("linhas.push(acGrupo('Fluxo da análise'))");
+  const bMenu = html.slice(iMenu, iMenu + 2600);
+  conf(iMenu > 0, 'o menu tem o grupo "Fluxo da analise"');
+  conf(/acItem\('Encaminhar ao C\.I\.', '🏛'/.test(bMenu), 'e o C.I. e um item dele');
+  conf(/pEnviarCiPc\(\$\{nm\}\)/.test(bMenu), 'que chama o pEnviarCI da parcela');
+  const bCI = bMenu.slice(bMenu.indexOf("'Encaminhar ao C.I.'"));
+  conf(/'azul'/.test(bCI), 'com o icone AZUL do Controle Interno');
+  // O ultimo argumento do acItem e o `destaque`, que poe o rotulo em negrito. Ele fecha em
+  // `true))` — o primeiro parentese e do acItem, o segundo do linhas.push.
+  conf(/\btrue\)\)/.test(bCI.slice(0, 420)),
+       'e EM DESTAQUE — foi o que o Richard pediu ao tira-lo da linha');
 
-  conf(pBotaoCI(NO_CI, "'x','1'") === '', 'passo 3: o botao SOME — ja foi encaminhada');
-
-  // O estorno acende sem dizer "ja esta baixada", porque nao esta.
-  const b2e = pBotaoCI({ parecer_tipo: 'Parecer Regular', baixada: false, enviado_ci: false }, "'x','1'");
-  conf(!/disabled/.test(b2e) && !/já está baixada/.test(b2e),
-       'estorno: acende, mas nao afirma uma baixa que nao existe');
+  // ⚠️ A REGRA DE QUANDO ELE ACENDE SAIU DA TELA e foi para o servidor.
+  conf(/d\.baixada === true && d\.enviado_ci !== true/.test(bMenu),
+       'a condicao le o que o SERVIDOR disse (baixada e nao encaminhada)');
+  conf(/Registre o parecer antes de encaminhar/.test(bMenu),
+       'e o motivo da recusa continua escrito — agora sob o rotulo, nao ao lado');
+  conf(/Já está no Controle Interno/.test(bMenu), 'no passo 3 o motivo e "ja esta no C.I."');
+  conf(!/opcional/.test(bMenu), 'e sem a palavra "opcional" — o encaminhamento nao e escolha');
 }
 
-console.log('\n═══ 4. OS DOIS RAMOS DO CARTAO USAM OS MESMOS AUXILIARES ═══');
+console.log('\n═══ 4. A LINHA DA PARCIAL FICOU COM UM BOTAO SO ═══');
 {
-  // ⚠️ Era exatamente aqui que o defeito morava: o ramo verde nao chamava o botao. Se um dia
-  // alguem duplicar a regra em vez de chamar o auxiliar, os dois ramos voltam a divergir.
   const iRP = html.indexOf('function renderPlan(rows) {');
   const bRP = html.slice(iRP, iRP + 9000);
 
   conf((bRP.match(/\$\{pFaixaPasso\(pa\)\}/g) || []).length === 2,
        'a faixa aparece nos DOIS ramos — baixada e em aberto');
-  conf((bRP.match(/pBotaoCI\(pa, chave\)/g) || []).length === 2,
-       'e o botao do C.I. tambem — era so no ramo em aberto');
+  // ⚠️ O menu e que agora aparece nos dois ramos. Se um dia so um deles o desenhar, volta o
+  // defeito de 13/08 por outro caminho: metade das parciais sem acao nenhuma.
+  conf((bRP.match(/pBotaoAcoes\(pa, r\.tr\)/g) || []).length === 2,
+       'e o menu de acoes tambem — nos DOIS ramos');
+  conf(!/pBotaoCI\(pa, chave\)/.test(bRP), 'o botao solto do C.I. saiu da linha');
+  conf(!/pAbrirSit\(\$\{chave\}\)/.test(bRP), 'o "Salvar situacao" solto saiu da linha');
+  conf(!/pAbrirPar\(\$\{chave\}\)/.test(bRP), 'o "Registrar parecer" solto saiu da linha');
+  conf((html.match(/🏛 Encaminhar ao CI<\/button>/g) || []).length === 0,
+       'nao ha mais botao solto "Encaminhar ao CI" no arquivo');
 
-  // A regra saiu de dentro do HTML: nao ha mais um `podeCI` solto no cartao.
-  conf(!/const podeCI = /.test(html), 'o `podeCI` inline sumiu — a regra mora no pBotaoCI');
-  conf((html.match(/🏛 Encaminhar ao CI<\/button>/g) || []).length === 1,
-       'ha UM unico botao "Encaminhar ao CI" no arquivo');
+  // A regra nunca voltou para dentro do HTML do cartao.
+  conf(!/const podeCI = /.test(html), 'o `podeCI` inline continua fora do cartao');
 
-  // Sem numero de parcial nao ha acao nenhuma — nem no ramo verde.
-  conf(/\$\{semNum \? '' : pBotaoCI\(pa, chave\)\}/.test(bRP),
-       'sem no de parcial, o botao nao aparece nem na baixada');
+  // ⚠️ O aviso de "sem no de parcial" FICA fora do menu: ele explica, antes do clique, por
+  // que metade dos itens vai aparecer cinza.
+  conf(/sem nº de parcial — não é possível registrar/.test(bRP),
+       'sem no de parcial, o aviso continua na linha');
 
   // A data do envio precisa CHEGAR na parcial, senao a faixa 3 nasce sem "desde".
   conf(/dt_envio_ci:\s*pa\.pcs\.find\(x=>x\.dt_envio_ci\)\?\.dt_envio_ci \|\| null/.test(html),
@@ -258,14 +276,20 @@ console.log('\n═══ 5. A CONFIRMACAO RESPONDE "VOU PERDER A BAIXA?" ══�
 
 console.log('\n═══ 6. A TRAVA DO SERVIDOR NAO FOI TOCADA ═══');
 {
-  // A decisao do Richard em 13/08: parecer previo CONTINUA exigido. A tela deixou de
-  // esconder o botao; a regra de quem pode encaminhar segue igual, e no servidor.
-  const iB = html.indexOf('function pBotaoCI(pa, chave) {');
-  const bB = html.slice(iB, iB + 1200);
-  conf(/const pode = !!pa\.parecer_tipo/.test(bB),
-       'a tela continua exigindo parecer para acender o botao');
-  conf(/Registre o parecer antes de encaminhar ao Controle Interno/.test(bB),
-       'e o title continua dizendo isso');
+  // A decisao do Richard em 13/08: parecer previo CONTINUA exigido. Em 18/08 o botao mudou
+  // de lugar (linha -> menu) e a REGRA mudou de dono: quem decide se ele acende passou a ser
+  // `GET /parcela/acoes`, no servidor. A tela so desenha o que ele responde.
+  //
+  // ⚠️ E isso e mais forte que antes, nao mais fraco: enquanto a condicao morava aqui, ela
+  // era uma SEGUNDA copia da regra do servidor, e duas copias divergem.
+  const iMenu = html.indexOf("linhas.push(acGrupo('Fluxo da análise'))");
+  const bMenu = html.slice(iMenu, iMenu + 2600);
+  conf(/d\.baixada === true && d\.enviado_ci !== true/.test(bMenu),
+       'a tela le a condicao do servidor, e nao recalcula parecer_tipo por conta propria');
+  conf(!/const pode = !!pa\.parecer_tipo/.test(html),
+       'a copia local da regra sumiu junto com o botao solto');
+  conf(/Registre o parecer antes de encaminhar/.test(bMenu),
+       'e o motivo continua escrito para quem nao pode clicar');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
