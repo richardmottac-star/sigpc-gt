@@ -3170,8 +3170,15 @@ const DASH_PRECISA = [
     icone: 'M12 2a9 9 0 100 18 9 9 0 000-18zm1 9.6l3.5 2-1 1.7L11 12.5V7h2v4.6zM4.5 2.5L1 5.4l1.3 1.5 3.5-2.9L4.5 2.5zm15 0l-1.3 1.5 3.5 2.9L23 5.4l-3.5-2.9z', vai: 'irPlanilha()' },
   { chave: 'pedidos',         rotulo: 'pedidos aguardando', bg: '#EEEDFE', num: '#26215C', lbl: '#3C3489',
     icone: 'M2.01 21L23 12 2.01 3 2 10l15 2-15 2z', vai: 'irMeusPedidos()' },
+  // ⚠️ ESTE CARD LEVA AO FILTRO, e não só à tela (24/08/2026). O chip `ressalva` testa o
+  // MESMO `ci_situacao = 'com_analista'` que a rota conta para desenhar o número — se o card
+  // dissesse 3 e a lista mostrasse tudo, o número viraria enfeite.
+  //
+  // ⚠️ O número é de PCs e o chip filtra TRs, então a lista pode ter menos linhas que o card.
+  // Não é divergência: são unidades diferentes, e a parcela devolvida tem 7 PCs em um caso
+  // real. Quem conta PC é o card; quem lista trabalho é a planilha.
   { chave: 'ci_com_analista', rotulo: 'C.I. devolveu com ressalvas', bg: '#E6F1FB', num: '#042C53', lbl: '#185FA5',
-    icone: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z', vai: 'irPlanilha()' },
+    icone: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z', vai: "irPlanilha(null,null,'ressalva')" },
 ]
 
 // ⚠️ ZERO NÃO SOME — vira cinza neutro. Esconder o card faria o layout DANÇAR a cada
@@ -6077,9 +6084,16 @@ async function sinoClicar(id, link) {
     } catch(e) { /* a próxima carga corrige */ }
   }
   const el = document.getElementById('sinoPainel'); if(el) el.remove()
-  if(link === '#estoque')         irEst()
-  else if(link === '#planilha')   irPlanilha()
-  else if(link === '#aprovacoes') irAprovacoes()
+  // ⚠️ O LINK PODE CARREGAR UM DESTINO: `#planilha:{tr}:{parcial}` (24/08/2026).
+  //
+  // O `startsWith` é o que mantém as notificações ANTIGAS funcionando: as que já estão no
+  // banco têm `link = '#planilha'` puro, e continuam abrindo a tela sem alvo. Comparar por
+  // igualdade, como era, faria a notificação nova não navegar para lugar nenhum — o clique
+  // aceito que não responde, que é a armadilha 15.
+  const alvoPlan = String(link || '').split(':')
+  if(link === '#estoque')                    irEst()
+  else if(alvoPlan[0] === '#planilha')       irPlanilha(alvoPlan[1] || null, alvoPlan[2] || null)
+  else if(link === '#aprovacoes')            irAprovacoes()
 }
 
 async function sinoMarcarTodas() {
@@ -9599,10 +9613,19 @@ function planStatusPredominante(statuses) {
   })[0]
 }
 
-async function irPlanilha() {
+// ⚠️ OS TRÊS ARGUMENTOS SÃO TODOS OPCIONAIS, e o menu continua chamando `irPlanilha()` sem
+// nenhum (24/08/2026). Eles existem para quem chega com destino: a notificação do C.I. abre a
+// parcela que voltou, e o card do Dashboard abre já filtrado.
+//   trAlvo/parcialAlvo — expande a TR e rola até a parcela
+//   chipAlvo           — acende um dos PLAN_CHIPS antes de pintar
+async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
   // O tecnico do C.I. nao trabalha o acervo. Tirar do menu sem por a guarda deixaria
   // a tela alcancavel por quem soubesse o caminho — a licao do Relatorios, em 12/08.
   if(U.perfil === 'controle_interno') { toast('Esta tela nao faz parte do Controle Interno.','err'); return }
+  // O alvo é lido pelo `buscarPlan`, DEPOIS de os dados chegarem — antes disso não há TR
+  // nenhuma no cache para expandir. É consumido uma vez e apagado: senão toda repintada
+  // posterior arrastaria a rolagem de volta para a mesma parcela.
+  _planAlvo = (trAlvo || parcialAlvo || chipAlvo) ? { tr: trAlvo, parcial: parcialAlvo, chip: chipAlvo } : null
   ativarMenu('plan')
   document.getElementById('BODY').innerHTML = `
     ${/* ⚠️ A ORDEM DO TOPO MUDOU EM 18/08/2026 — decisão do Richard: título, NÚMEROS, e só
@@ -9975,6 +9998,7 @@ async function buscarPlan() {
 
     window._planDadosCache = trs
     planAplicar()
+    planIrAoAlvo()
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
@@ -9991,6 +10015,71 @@ let _planPrefs  = {}   // tr -> {fixada, expandida}
 let _planAnots  = {}   // tr -> [anotacao]
 let _planChip   = ''   // filtro rápido ativo
 let _planOrdem  = 'analise'
+// Quem chegou com destino: {tr, parcial, chip}. Posto por `irPlanilha`, gasto por
+// `planIrAoAlvo` na primeira pintura e apagado ali mesmo.
+let _planAlvo   = null
+
+/**
+ * Leva a tela até o que a pessoa veio ver — a parcela da notificação, ou o filtro do card.
+ *
+ * ⚠️ RODA DEPOIS DE `planAplicar`, e não dentro de `irPlanilha`. `buscarPlan` é assíncrona:
+ * chamado antes dos dados chegarem, isto miraria uma lista que ainda não existe. É a mesma
+ * lição do `planFiltrarPrazo`, que precisou de `await` pelo mesmo motivo.
+ *
+ * ⚠️ E O ALVO É CONSUMIDO UMA VEZ. Sem apagar, cada repintada — expandir outra TR, trocar de
+ * ordem, o recarregamento de 60 s — arrastaria a rolagem de volta, e a tela brigaria com quem
+ * está usando ela.
+ */
+function planIrAoAlvo() {
+  const alvo = _planAlvo
+  if(!alvo) return
+  _planAlvo = null
+
+  if(alvo.chip && PLAN_CHIPS.some(c => c.id === alvo.chip)) {
+    _planChip = alvo.chip
+    window._planPag = 0
+    planAplicar()
+  }
+
+  if(!alvo.tr) {
+    document.getElementById('planBarra')?.scrollIntoView({ behavior:'smooth', block:'start' })
+    return
+  }
+
+  // A TR pode estar recolhida, e pode estar em outra página: sem as duas coisas resolvidas o
+  // âncora não existe no DOM e a rolagem não acha nada.
+  const lista = window._planDadosCache || []
+  const item = lista.find(t => t.tr === alvo.tr)
+  if(!item) { toast(`A TR ${alvo.tr} não está na sua planilha.`,'err'); return }
+  if(!item.expandida) { item.expandida = true; planSalvarPref(item.tr, { expandida: true }) }
+
+  const ordenada = planOrdenar(_planChip ? lista.filter(PLAN_CHIPS.find(c=>c.id===_planChip).teste) : lista)
+  const pos = ordenada.findIndex(t => t.tr === alvo.tr)
+  if(pos >= 0) window._planPag = Math.floor(pos / PP)
+  planAplicar()
+
+  // O `requestAnimationFrame` espera o navegador desenhar o que `planAplicar` acabou de
+  // escrever no innerHTML — sem ele o `getElementById` procura num DOM que ainda é o antigo.
+  requestAnimationFrame(() => {
+    const el = document.getElementById(planAncora(alvo.tr, alvo.parcial))
+              || document.getElementById(planAncora(alvo.tr, null))
+    if(el) {
+      el.scrollIntoView({ behavior:'smooth', block:'center' })
+      // Um piscar de 2 s: com a TR aberta e 11 parciais na tela, "rolou até lá" não é
+      // suficiente para a pessoa saber QUAL delas o C.I. devolveu.
+      el.style.transition = 'background-color .4s'
+      const antes = el.style.backgroundColor
+      el.style.backgroundColor = '#FFF3CD'
+      setTimeout(() => { el.style.backgroundColor = antes }, 2000)
+    }
+  })
+}
+
+/** O id do âncora de uma parcela na tela. Um lugar só, usado por quem desenha e por quem rola. */
+function planAncora(tr, parcial) {
+  const limpo = (s) => String(s ?? '').replace(/[^A-Za-z0-9]/g, '_')
+  return parcial == null ? `pa-${limpo(tr)}` : `pa-${limpo(tr)}-${limpo(parcial)}`
+}
 
 async function planCarregarPrefs() {
   _planPrefs = {}
@@ -10038,6 +10127,16 @@ const PLAN_CHIPS = [
   // um campo pré-calculado, para não existir uma segunda definição capaz de divergir.
   { id:'naoini',    rotulo:'Não iniciadas',        teste: t => t.baixadasQtd === 0 && t.situacoes.length === 0 },
   { id:'anotacao',  rotulo:'Com anotação',         teste: t => t.anotacoes.length > 0 },
+  // ⚠️ O CHIP É O DESTINO DO CARD "C.I. devolveu com ressalvas" do Dashboard (24/08/2026).
+  // Até aqui aquele card abria a Minha Planilha inteira, sem recorte: mostrava um número e
+  // levava a uma lista onde ele não aparecia — um filtro que entrega conjunto diferente do
+  // que promete é, para quem clica, igual a um filtro que não fez nada.
+  //
+  // ⚠️ TESTA `ci_situacao`, NÃO `enviado_ci`. As duas colunas respondem perguntas diferentes:
+  // `enviado_ci` diz "foi ao C.I." e sustenta a baixa; `ci_situacao` diz ONDE está no ciclo.
+  // E `com_analista` é o mesmo valor que o `GET /prestacoes_contas/painel` conta para desenhar
+  // o número do card — chip e card leem o mesmo campo, e por isso não podem divergir.
+  { id:'ressalva',  rotulo:'C.I. devolveu',       teste: t => t.parciais.some(pa => pa.ci_situacao === 'com_analista') },
 ]
 
 // ── Ordenações ──────────────────────────────────────────────────────────────
@@ -11244,9 +11343,13 @@ function renderPlan(rows) {
       const chave = `'${escHtml(r.tr)}','${escHtml(String(pa.num))}'`
       const semNum = pa.num === '—'
 
+      // ⚠️ O ÂNCORA VAI NOS DOIS RAMOS. A parcela que volta do C.I. está SEMPRE baixada — a
+      // baixa não é cancelada em nenhum caminho do ciclo —, então ela cai no ramo verde de
+      // baixo. Pôr o id só no outro ramo faria a notificação do C.I. rolar para lugar nenhum,
+      // justamente no caso que ela existe para atender.
       // ── parcial ja baixada: verde, so leitura
       if(pa.baixada) {
-        return `<div style="border-bottom:1px solid var(--cl);">
+        return `<div id="${planAncora(r.tr, pa.num)}" style="border-bottom:1px solid var(--cl);">
           <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#F2FAF5;flex-wrap:wrap;">
             ${/* ⚠️ A CAIXA SÓ EXISTE NO PASSO 2. No passo 1 não há o que encaminhar (o servidor
                   recusa com 'CI exige parecer prévio') e no passo 3 já foi. Caixa desabilitada
@@ -11308,7 +11411,7 @@ function renderPlan(rows) {
                  onclick="pRespondeu(${chave})" title="Registrar que a entidade respondeu — a parcial continua em Diligência">✉ Entidade respondeu</button>` : '')}
         </div>` : ''
 
-      return `<div style="border-bottom:1px solid var(--cl);">
+      return `<div id="${planAncora(r.tr, pa.num)}" style="border-bottom:1px solid var(--cl);">
         <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#FAFCFB;flex-wrap:wrap;">
           <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
           <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSitOuNova(pa)}
@@ -11364,7 +11467,7 @@ function renderPlan(rows) {
     const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
     const pilula    = baixadaTr ? 'background:var(--cl);color:var(--ct);' : 'background:rgba(255,255,255,.18);'
 
-    return `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:${r.expandida?'13px':'7px'};${r.fixada?'border-left:4px solid var(--az);':''}">
+    return `<div id="${planAncora(r.tr, null)}" style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:${r.expandida?'13px':'7px'};${r.fixada?'border-left:4px solid var(--az);':''}">
       <div onclick="planToggle('${escHtml(r.tr)}')" title="${r.expandida?'Recolher':'Ver as parciais desta TR'}"
         style="background:${fundoCab};color:${corCab};padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;${baixadaTr?'border-bottom:1px solid var(--cb);':''}">
 

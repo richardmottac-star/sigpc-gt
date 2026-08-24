@@ -247,8 +247,12 @@ console.log('\n═══ 4c. A ETIQUETA "SEM C.I." NA LISTA ═══');
   conf(planSemCi({ parciais: [{ parecer_tipo: 'Parecer Regular', baixada: false, enviado_ci: false }] }) === 0,
        'estorno nao entra na conta — a baixa dele foi desfeita');
 
+  // ⚠️ A JANELA FECHA NA PROXIMA FUNCAO, e nao num numero. Era `iRP + 12000` e quebrou em
+  // 24/08, quando os ancoras das parciais entraram no `renderPlan` e empurraram a etiqueta
+  // para fora do corte: as duas checagens abaixo acusaram falha que era do TESTE, nao da tela.
+  // Janela por tamanho mede o tamanho do arquivo; esta mede a funcao.
   const iRP = html.indexOf('function renderPlan(rows) {');
-  const bRP = html.slice(iRP, iRP + 12000);
+  const bRP = html.slice(iRP, html.indexOf('\nfunction planRenderPag(', iRP));
   conf(/const semCi\s+= planSemCi\(r\)/.test(bRP), 'o cartao calcula a etiqueta pela funcao unica');
   conf(/🏛 \$\{semCi\} sem C\.I\./.test(bRP), 'e desenha "N sem C.I."');
   // ⚠️ Principalmente na concluida: o cabecalho verde diz "✓ concluida" e a pessoa passa
@@ -290,6 +294,65 @@ console.log('\n═══ 6. A TRAVA DO SERVIDOR NAO FOI TOCADA ═══');
        'a copia local da regra sumiu junto com o botao solto');
   conf(/Registre o parecer antes de encaminhar/.test(bMenu),
        'e o motivo continua escrito para quem nao pode clicar');
+}
+
+console.log('\n═══ O RETORNO DO C.I. CHEGA NA TELA (24/08/2026) ═══');
+{
+  // ⚠️ O DEFEITO: o analista encaminha, a parcela some da vista dele, e quando volta ele nao
+  // fica sabendo. O servidor passou a notificar as DUAS decisoes com um link que carrega
+  // destino; aqui se prova o outro lado — que a tela sabe ler esse destino.
+
+  // ── o clique do sino
+  const iSino = html.indexOf('async function sinoClicar');
+  const sino = html.slice(iSino, html.indexOf('irAprovacoes()', iSino) + 40);
+  conf(iSino > 0, 'sinoClicar foi localizada');
+  conf(/alvoPlan\[0\] === '#planilha'/.test(sino),
+       'o link do sino e lido por PREFIXO, e nao por igualdade');
+  // ⚠️ A igualdade quebraria as notificacoes JA GRAVADAS, que tem `link = '#planilha'` puro:
+  // o clique seria aceito e nao levaria a lugar nenhum — a armadilha 15.
+  conf(!/link === '#planilha'\)\s+irPlanilha\(\)/.test(sino), 'a comparacao por igualdade saiu');
+  conf(/irPlanilha\(alvoPlan\[1\] \|\| null, alvoPlan\[2\] \|\| null\)/.test(sino),
+       'e TR e parcela viajam para a Minha Planilha');
+
+  // ── a planilha aceita destino sem quebrar quem chama sem nada
+  conf(/async function irPlanilha\(trAlvo, parcialAlvo, chipAlvo\)/.test(html),
+       'irPlanilha aceita os tres alvos');
+  conf(/function planIrAoAlvo\(\)/.test(html), 'planIrAoAlvo existe');
+  // ⚠️ DEPOIS de planAplicar, nunca dentro de irPlanilha: `buscarPlan` e assincrona, e mirar
+  // antes dos dados chegarem rola sobre uma lista que ainda nao existe.
+  const iBusca = html.indexOf('window._planDadosCache = trs');
+  conf(/planAplicar\(\)[\s\S]{0,30}planIrAoAlvo\(\)/.test(html.slice(iBusca, iBusca + 120)),
+       'e roda DEPOIS de planAplicar, com os dados ja no cache');
+  conf(/_planAlvo = null/.test(html), 'o alvo e consumido uma vez e apagado');
+
+  // ── o ancora existe nos DOIS ramos da parcela
+  conf(/function planAncora\(tr, parcial\)/.test(html), 'ha uma funcao unica para o id do ancora');
+  const ancoras = (html.match(/id="\$\{planAncora\(r\.tr, pa\.num\)\}"/g) || []).length;
+  // ⚠️ A parcela que volta do C.I. esta SEMPRE baixada — a baixa nao e cancelada em nenhum
+  // caminho do ciclo. Ela cai no ramo verde; o ancora so no outro ramo nao serviria de nada.
+  conf(ancoras === 2, 'o ancora da parcela esta nos dois ramos, baixada e em aberto', String(ancoras));
+  conf(/id="\$\{planAncora\(r\.tr, null\)\}"/.test(html), 'e a TR tambem tem ancora, como reserva');
+}
+
+console.log('\n═══ O CARD "C.I. DEVOLVEU" LEVA AO FILTRO ═══');
+{
+  // ⚠️ O card ja contava certo; o que faltava era o destino. Ele abria a Minha Planilha
+  // inteira — um numero que leva a uma lista onde ele nao aparece e, para quem clica,
+  // indistinguivel de um filtro que nao fez nada.
+  const iCard = html.indexOf("chave: 'ci_com_analista'");
+  const card = html.slice(iCard, iCard + 400);
+  conf(iCard > 0, 'o card ci_com_analista existe no Dashboard');
+  conf(/vai: "irPlanilha\(null,null,'ressalva'\)"/.test(card), 'e agora abre a planilha JA FILTRADA');
+
+  const iChip = html.indexOf("id:'ressalva'");
+  const chip = html.slice(iChip, iChip + 200);
+  conf(iChip > 0, 'o chip ressalva existe');
+  // ⚠️ CARD E CHIP LEEM O MESMO CAMPO. O card conta `ci_situacao = 'com_analista'` no
+  // servidor; o chip testa o mesmo valor na tela. Se um olhasse `enviado_ci` — que responde
+  // outra pergunta — os dois numeros divergiriam sem erro nenhum.
+  conf(/pa\.ci_situacao === 'com_analista'/.test(chip),
+       'e testa ci_situacao = com_analista, o mesmo que a rota do painel conta');
+  conf(!/enviado_ci/.test(chip), 'e NAO usa enviado_ci, que responde outra pergunta');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

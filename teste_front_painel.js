@@ -44,6 +44,9 @@ const conf = (passou, rotulo, detalhe) => {
 const tr = (o) => Object.assign({
   tr: '2022TR000001', pendentes: 0, fixada: false, expandida: false,
   anotacoes: [], baixadasQtd: 0, total_pcs: 1, piorDias: null, situacoes: [],
+  // `parciais` entrou com o chip do C.I., em 24/08: sem a lista vazia por padrao, os testes
+  // dos outros cinco chips passariam a estourar no `.some` do sexto.
+  parciais: [],
 }, o);
 const tick = () => new Promise(r => setTimeout(r, 0));   // deixa o microtask do fetch rodar
 
@@ -91,11 +94,13 @@ console.log('\n═══ 3. ALFINETE — vem antes de QUALQUER ordenacao ══�
   }
 }
 
-console.log('\n═══ 4. OS CINCO CHIPS ═══');
+console.log('\n═══ 4. OS SEIS CHIPS ═══');
 {
-  conf(PLAN_CHIPS.length === 5, 'sao 5 chips', String(PLAN_CHIPS.length));
+  // O sexto entrou em 24/08/2026: e o destino do card "C.I. devolveu com ressalvas" do
+  // Dashboard, que ate entao abria a planilha inteira, sem recorte nenhum.
+  conf(PLAN_CHIPS.length === 6, 'sao 6 chips', String(PLAN_CHIPS.length));
   conf(PLAN_CHIPS.map(c=>c.rotulo).join(' · ') ===
-       'Prazo vencido · Aguardando diligência · Em análise · Não iniciadas · Com anotação',
+       'Prazo vencido · Aguardando diligência · Em análise · Não iniciadas · Com anotação · C.I. devolveu',
        'na ordem pedida', PLAN_CHIPS.map(c=>c.rotulo).join(' · '));
 
   const acha = (id) => PLAN_CHIPS.find(c => c.id === id).teste;
@@ -110,6 +115,17 @@ console.log('\n═══ 4. OS CINCO CHIPS ═══');
   conf(acha('naoini')(tr({ baixadasQtd:0, situacoes:['Em análise'] })) === false, 'com situacao nao e "nao iniciada"');
   conf(acha('anotacao')(tr({ anotacoes:[{texto:'x'}] })) === true, 'Com anotação');
   conf(acha('anotacao')(tr({ anotacoes:[] })) === false, 'sem anotação nao entra');
+
+  // ── o chip do retorno do C.I.
+  const comCi = (s) => tr({ parciais: [{ ci_situacao: s }] });
+  conf(acha('ressalva')(comCi('com_analista')) === true, 'C.I. devolveu: com_analista entra');
+  conf(acha('ressalva')(comCi('na_fila')) === false, 'ainda NA FILA do C.I. nao entra — nao voltou');
+  conf(acha('ressalva')(comCi('encerrado')) === false, 'encerrada no C.I. nao entra — nao ha o que fazer');
+  conf(acha('ressalva')(comCi(null)) === false, 'quem nunca foi ao C.I. nao entra');
+  conf(acha('ressalva')(tr({ parciais: [] })) === false, 'TR sem parcial nenhuma nao estoura');
+  // ⚠️ UMA parcial devolvida basta: a TR aparece na lista mesmo com as outras dez encerradas.
+  conf(acha('ressalva')(tr({ parciais: [{ci_situacao:'encerrado'},{ci_situacao:'com_analista'}] })) === true,
+       'uma parcial devolvida ja traz a TR');
 }
 
 console.log('\n═══ 5. O CHIP ACESO APAGA AO SER CLICADO DE NOVO ═══');
