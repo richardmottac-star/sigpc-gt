@@ -293,10 +293,16 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
     const bloco = html.slice(i, i + 500);
     conf(i > 0 && /if\(verComoAtivo\(\)\)/.test(bloco), `${fn} continua RECUSANDO (${rot})`);
   });
-  // Sao exatamente quatro, e nao "pelo menos quatro": uma quinta que aparecesse seria uma
-  // acao de trabalho que ficou travada por engano.
-  conf((html.match(/if\(verComoAtivo\(\)\) \{ toast\(/g) || []).length === 4,
-       'as travas que sobraram sao QUATRO, nem mais nem menos');
+  // ⚠️ SAO CINCO, E A QUINTA E NOMEADA. Contar sem nomear era a versao anterior desta linha,
+  // e ela nao distinguia a trava certa da trava por engano — que e a coisa que ela existe
+  // para pegar. As quatro primeiras sao acoes de TRABALHO que continuam sendo do dono; a
+  // quinta, de 24/08, e o `sinoMarcarTodas`, que NAO e acao de trabalho: e a garantia de que
+  // ler o sino de outro no modo nunca marca a notificacao dele como lida.
+  const travas = (html.match(/if\(verComoAtivo\(\)\) \{ toast\(/g) || []).length;
+  conf(travas === 5, 'as travas sao CINCO, nem mais nem menos', String(travas));
+  const iMT = html.indexOf('async function sinoMarcarTodas');
+  conf(/if\(verComoAtivo\(\)\) \{ toast\(/.test(html.slice(iMT, iMT + 700)),
+       'e a quinta e o sinoMarcarTodas — leitura do sino nunca marca o aviso de outro');
   // E o texto delas nao diz mais "modo leitura" — o modo escreve.
   conf(!/Modo leitura: /.test(html), 'nenhuma trava diz mais "Modo leitura:"');
 
@@ -405,6 +411,63 @@ console.log('\n═══ 9. LISTA DE ONLINE ═══');
   conf(bloco.indexOf('usuarios/logout') < bloco.indexOf('U = null'),
        'sair() avisa o servidor ANTES de limpar U');
   conf(/\.catch\(\(\) => \{\}\)/.test(bloco), 'e nao trava se a rede falhar');
+}
+
+console.log('\n═══ O SINO NO MODO: LE do alvo(), ESCREVE no U.id (24/08/2026) ═══');
+{
+  // ⚠️ O DEFEITO QUE ISTO FECHA: o sino era a UNICA parte da tela que ignorava o `alvo()`.
+  // O Richard entrou pela conta da Sandra — que tinha 7 avisos de diligencia vencendo no
+  // dia — e leu "Nada novo por aqui", porque o sino buscava as DELE.
+
+  // ── as duas LEITURAS seguem o alvo()
+  const leituras = (html.match(/\/notificacao\?destinatario_id=\$\{alvo\(\)\.id\}/g) || []).length;
+  conf(leituras === 2, 'as DUAS leituras de notificacao usam alvo().id', String(leituras));
+  conf(!/\/notificacao\?destinatario_id=\$\{U\.id\}/.test(html),
+       'e nenhuma leitura de notificacao usa U.id');
+
+  // ── as duas ESCRITAS continuam no U.id
+  const escritas = (html.match(/destinatario_id: U\.id/g) || []).length;
+  conf(escritas === 2, 'marcar-uma e marcar-todas continuam com U.id', String(escritas));
+  conf(!/destinatario_id: alvo\(\)/.test(html), 'e NENHUMA escrita usa o alvo()');
+
+  // ⚠️ O MOTIVO DA ASSIMETRIA, escrito no codigo para nao se perder: notificacao lida e
+  // apagada 15 dias depois pelo `limparLidas`. Marcar a de outro a faria sumir antes de a
+  // pessoa ver — e no caso da Sandra o prazo das 7 vencia naquele mesmo dia.
+  conf(/limparLidas|apagada 15 dias|15 dias depois da leitura/.test(html),
+       'o porque da assimetria esta escrito junto da regra');
+
+  // ── o clique so marca o que e SEU, e a condicao e a POSSE, nao o modo ligado
+  const iC = html.indexOf('async function sinoClicar');
+  const clicar = html.slice(iC, html.indexOf('const el = document.getElementById(\'sinoPainel\')', iC));
+  conf(/Number\(n\.destinatario_id\) === Number\(U\.id\)/.test(clicar),
+       'sinoClicar so marca quando a notificacao e do usuario logado');
+  conf(/if\(n && !n\.lida_em && meu\)/.test(clicar), 'e a remocao otimista entra na mesma condicao');
+  // Sem isso o item sumiria da tela, o contador cairia, o PATCH casaria ZERO linhas (o WHERE
+  // tem destinatario_id) e a carga de 60s traria tudo de volta — a tela piscando uma mentira.
+  conf(!/^\s*_notifs = _notifs\.filter\(x => x\.id !== id\)\s*$/m.test(clicar.split('if(n && !n.lida_em && meu)')[0] || ''),
+       'e nao ha remocao otimista fora dela');
+
+  // ── marcar-todas tem trava propria, alem de sumir da tela
+  const iM = html.indexOf('async function sinoMarcarTodas');
+  const todas = html.slice(iM, iM + 700);
+  conf(/if\(verComoAtivo\(\)\)/.test(todas), 'sinoMarcarTodas recusa no modo, mesmo chamada de fora');
+  conf(/_notifNaoLidas && !repres/.test(html), 'e o link "marcar todas" nem aparece no modo');
+
+  // ── o rotulo, para ninguem ler aviso alheio achando que e seu
+  conf(/notificações de <b>\$\{escHtml\(alvo\(\)\.nome/.test(html), 'o painel diz de quem sao as notificacoes');
+  conf(/só leitura, não são marcadas como lidas/.test(html), 'e avisa que e so leitura');
+
+  // ⚠️ ENTRAR E SAIR RECARREGAM O SINO. O timer so passa de 60 em 60 s: sem isto, entrar na
+  // conta de alguem deixaria o sino com os avisos do dono ANTERIOR, sob o rotulo do novo.
+  const iE = html.indexOf('function verComoEntrar');
+  conf(/sinoCarregar\(\)/.test(html.slice(iE, html.indexOf('function verComoSair'))),
+       'verComoEntrar recarrega o sino');
+  const iS = html.indexOf('function verComoSair');
+  const sair = html.slice(iS, iS + 700);
+  conf(/sinoCarregar\(\)/.test(sair), 'verComoSair tambem');
+  // ⚠️ ANTES do `silencioso`: a saida silenciosa tambem troca o dono do sino.
+  conf(sair.indexOf('sinoCarregar()') < sair.indexOf('if(silencioso) return'),
+       'e a recarga vem ANTES do atalho silencioso');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);

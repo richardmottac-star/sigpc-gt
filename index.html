@@ -2307,6 +2307,10 @@ function verComoEntrar(id) {
   renderSB()
   irDash()
   carregarContadores()
+  // ⚠️ O SINO PRECISA SER RECARREGADO AQUI. Desde 24/08 ele lê pelo `alvo()`, e o timer só
+  // passa de 60 em 60 segundos: sem esta chamada, entrar na conta de alguém deixaria o sino
+  // mostrando os avisos do dono ANTERIOR por até um minuto — com o rótulo do novo em cima.
+  sinoCarregar()
   toast(`Agindo pela conta de ${u.nome}. O trabalho fica no nome dele, e você fica registrado como executor.`,'ok')
 }
 
@@ -2315,6 +2319,10 @@ function verComoSair(silencioso) {
   _verComo = null
   verComoFaixa()
   const f = document.getElementById('verComoFaixa'); if(f) f.remove()
+  // ⚠️ ANTES do `silencioso`: a saída silenciosa também troca o dono do sino, e deixá-la de
+  // fora faria o sino continuar exibindo os avisos de outra pessoa depois de você já ter
+  // voltado à sua conta — o pior dos dois estados, porque nada na tela avisaria.
+  sinoCarregar()
   if(silencioso) return
   renderSB()
   irDash()
@@ -5992,7 +6000,18 @@ async function sinoCarregar() {
   try {
     // Só as NÃO LIDAS. A lida sai da vista na hora em que é marcada — antes ela apenas
     // mudava de cor e continuava ocupando o sino para sempre, que era a reclamação.
-    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=15&apenas_nao_lidas=1`)).json()
+    // ⚠️ A LEITURA SEGUE O `alvo()`, A ESCRITA NÃO (24/08/2026, decisão do Richard).
+    //
+    // Agindo pela conta de outro analista, o sino mostra as notificações DELE — é o mesmo
+    // que a Minha Planilha, os contadores e as ações já faziam; o sino era a única parte da
+    // tela que ignorava o `alvo()`. Foi assim que o Richard entrou pela conta da Sandra, que
+    // tinha 7 avisos de diligência vencendo no dia, e leu "Nada novo por aqui".
+    //
+    // ⚠️ MARCAR COMO LIDA CONTINUA SENDO DO USUÁRIO LOGADO, e isso não é assimetria por
+    // descuido: notificação lida é apagada 15 dias depois da leitura (`limparLidas`). Se o
+    // Richard marcasse as 7 da Sandra, elas sumiriam antes de ela ver — e o prazo das 7
+    // vencia naquele mesmo dia. Ver `sinoClicar` e `sinoMarcarTodas`.
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&limite=15&apenas_nao_lidas=1`)).json()
     _notifs = j.data || []
     _notifNaoLidas = j.nao_lidas || 0
   } catch(e) {
@@ -6040,10 +6059,22 @@ function sinoAbrir(ev) {
 function sinoRender() {
   const p = document.getElementById('sinoPainel')
   if(!p) return
-  const cab = `<div style="display:flex;align-items:center;padding:11px 13px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:#fff;">
-      <b style="font-size:12.5px;">Notificações</b>
-      ${_notifNaoLidas ? `<a href="javascript:void(0)" onclick="sinoMarcarTodas()"
-        style="margin-left:auto;font-size:10.5px;color:var(--v);font-weight:700;text-decoration:none;">marcar todas como lidas</a>` : ''}
+  // ⚠️ DE QUEM SÃO ESTAS NOTIFICAÇÕES. No modo "agir pela conta de", a lista é de OUTRA
+  // pessoa — e uma lista de avisos alheios sem dizer de quem é pior do que não mostrá-la:
+  // quem lê acha que é sua e age sobre o prazo errado.
+  const repres = verComoAtivo()
+  const cab = `<div style="padding:11px 13px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:#fff;">
+      <div style="display:flex;align-items:center;">
+        <b style="font-size:12.5px;">Notificações</b>
+        ${/* ⚠️ "marcar todas" SOME no modo, e não fica cinza: ela marcaria as SUAS, que não
+              são as que estão na tela. Um link que aceita clique e muda algo invisível é a
+              armadilha 15 — e aqui ainda mentiria sobre o que fez. */''}
+        ${_notifNaoLidas && !repres ? `<a href="javascript:void(0)" onclick="sinoMarcarTodas()"
+          style="margin-left:auto;font-size:10.5px;color:var(--v);font-weight:700;text-decoration:none;">marcar todas como lidas</a>` : ''}
+      </div>
+      ${repres ? `<div style="margin-top:5px;font-size:10.5px;color:#1A4E8A;background:#EAF1F9;
+          border:1px solid #B9D3EC;border-radius:6px;padding:4px 8px;line-height:1.35;">
+          👁 notificações de <b>${escHtml(alvo().nome || '')}</b> — só leitura, não são marcadas como lidas</div>` : ''}
     </div>`
 
   // "ver todas" aparece SEMPRE, inclusive com o sino vazio — é o único caminho para o que já
@@ -6081,7 +6112,16 @@ function sinoRender() {
 // Separar em dois cliques deixaria o sino cheio de coisa já resolvida.
 async function sinoClicar(id, link) {
   const n = _notifs.find(x => x.id === id)
-  if(n && !n.lida_em) {
+  // ⚠️ SÓ SE MARCA O QUE É SEU. A condição é a POSSE da notificação, e não o modo ligado:
+  // `destinatario_id === U.id` responde a pergunta certa em qualquer caminho, inclusive num
+  // que ainda não existe. Agindo pela conta de outro, o clique navega e não marca nada.
+  //
+  // ⚠️ E NÃO HÁ REMOÇÃO OTIMISTA NESSE CASO. Ela existe para o dono: tira da frente o que
+  // ele acabou de ler. Aplicada ao aviso alheio, o item sumiria da tela, o contador cairia,
+  // o `PATCH` casaria ZERO linhas no servidor (o `WHERE` tem `destinatario_id`) e a carga de
+  // 60 s traria tudo de volta — a tela piscando uma mentira.
+  const meu = n && Number(n.destinatario_id) === Number(U.id)
+  if(n && !n.lida_em && meu) {
     // Sai da lista NA HORA, não só muda de cor. A marcação é otimista: o contador cai no
     // clique e o servidor é avisado depois. Se a rede falhar, a carga de 60s traz de volta —
     // esperar o servidor para tirar da vista daria sensação de travado.
@@ -6108,6 +6148,10 @@ async function sinoClicar(id, link) {
 }
 
 async function sinoMarcarTodas() {
+  // ⚠️ SEMPRE `U.id`, NUNCA o `alvo()`. O link nem aparece no modo (ver `sinoRender`), mas a
+  // trava fica aqui também: a função é chamável de fora, e marcar as notificações de outro
+  // as apagaria em 15 dias sem que a pessoa tivesse visto nenhuma.
+  if(verComoAtivo()) { toast('No modo "agir pela conta de" o sino é só leitura.','err'); return }
   try {
     await fetch(`${API_URL}/notificacao/marcar_todas`, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -6142,7 +6186,8 @@ async function irNotificacoes() {
 
 async function notifCarregarTudo() {
   try {
-    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${U.id}&limite=200`)).json()
+    // Mesma regra do sino: a tela "ver todas" é LEITURA, então segue o `alvo()`.
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&limite=200`)).json()
     _notifTudo = j.data || []
     notifRenderTudo()
   } catch(e) {
