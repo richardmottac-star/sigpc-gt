@@ -12820,10 +12820,28 @@ function admRenderPendentes() {
               ${u.pcs ? ` &nbsp;|&nbsp; <strong style="color:var(--v);">já tem ${u.pcs} PC${u.pcs!==1?'s':''} e ${u.baixas} baixa${u.baixas!==1?'s':''}</strong>` : ''}</div>
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${dupl ? `<button class="btn-acao" style="background:#991B1B;color:#fff;font-weight:700;" onclick="admMesclar('${u.id}','${dupl.usuario.id}')">⇄ Mesclar no cadastro existente</button>` : ''}
-          <button class="btn-acao btn-ass" onclick="admAbrirAprovar('${u.id}')">✓ Aprovar</button>
-          <button class="btn-acao btn-dev" onclick="admRejeitar('${u.id}')">✕ Rejeitar</button>
+        <!-- ⚠️ CADA BOTÃO DIZ O QUE FAZ, LOGO ABAIXO DELE (24/08/2026).
+             Os três nomes não contam a diferença: "Aprovar" soa como o caminho normal e é o
+             que CRIA a conta duplicada; "Mesclar" soa técnico e é o certo quando há aviso; e
+             "Rejeitar" parece marcar como recusado, quando APAGA a solicitação.
+             ⚠️ E a hierarquia muda com o aviso: com duplicidade o Mesclar é o botão cheio e o
+             Aprovar vira secundário — hoje aprovar por engano é o erro caro, e dois botões
+             igualmente chamativos deixam a escolha para o acaso. -->
+        <div style="display:flex;flex-direction:column;gap:7px;max-width:330px;min-width:250px;">
+          ${dupl ? `<div>
+            <button class="btn-acao" style="background:#991B1B;color:#fff;font-weight:700;width:100%;" onclick="admMesclar('${u.id}','${dupl.usuario.id}')">⇄ Mesclar no cadastro existente</button>
+            <div style="font-size:10px;line-height:1.35;color:var(--ct);margin-top:3px;">Mantém a conta antiga com as PCs e o histórico. O cadastro novo é descartado, mas a senha escolhida agora passa a valer.</div>
+          </div>` : ''}
+          <div>
+            <button class="btn-acao ${dupl ? '' : 'btn-ass'}" style="width:100%;${dupl ? 'background:#fff;color:var(--ct);border:1.5px solid var(--cb);font-weight:600;' : ''}" onclick="admAbrirAprovar('${u.id}')">✓ Aprovar</button>
+            <div style="font-size:10px;line-height:1.35;color:${dupl?'#991B1B':'var(--ct)'};margin-top:3px;">${dupl
+              ? 'Cria uma segunda conta separada. As PCs continuam na conta antiga.'
+              : 'Libera o acesso. A pessoa passa a entrar com o CPF e a senha que cadastrou.'}</div>
+          </div>
+          <div>
+            <button class="btn-acao btn-dev" style="width:100%;" onclick="admRejeitar('${u.id}')">✕ Rejeitar</button>
+            <div style="font-size:10px;line-height:1.35;color:var(--ct);margin-top:3px;">Apaga a solicitação, e só ela — nenhuma conta, PC ou baixa é tocada. A pessoa pode se cadastrar de novo.</div>
+          </div>
         </div>
       </div>
     </div>`
@@ -12895,17 +12913,28 @@ async function admMesclar(idNovo, idExistente) {
   if(!velho.cpf && novo.cpf)           copiar.push(`CPF ${novo.cpf}`)
   if(!velho.email && novo.email)       copiar.push(`e-mail ${novo.email}`)
   if(!velho.telefone && novo.telefone) copiar.push(`telefone ${novo.telefone}`)
+  // ⚠️ A SENHA VAI SEMPRE, e o modal tem de dizer isso (24/08/2026). Ela é a única coisa que a
+  // pessoa acabou de escolher e é a que ela lembra — antes morria no DELETE e ninguém avisava.
+  // Dizer isto aqui também é o aviso de que mesclar o par errado ENTREGA ACESSO, não só dado.
+  // (Não se testa o hash da senha aqui: ele NUNCA chega à tela — `auth.semSegredo` o tira de
+  // toda resposta, e um `if` sobre um campo sempre indefinido é uma condição que mente. Quem
+  // veio pelo Primeiro Acesso escolheu senha; se não houver, o servidor recusa a cópia sozinho
+  // e devolve o motivo em `nao_copiado`.)
+  copiar.push('a senha que ela escolheu no Primeiro Acesso')
+  // O nome completo é decisão do servidor: só entra se não mudar o nome curto que as PCs já
+  // usam. A tela não tem como saber — por isso "se couber", e o resultado vem na resposta.
+  copiar.push(`o nome completo "${novo.nome}", se isso não mudar o nome que as PCs já usam`)
 
   if(!await moConfirm(`Mesclar em ${velho.nome} (id ${velho.id})?`, {
     titulo: 'Mesclar cadastros', perigo: true,
     detalhe:
       `FICA: id ${velho.id} — ${velho.nome}, grupo ${velho.grupo||'—'}, ` +
       `com ${velho.pcs} PC${velho.pcs!==1?'s':''} e ${velho.baixas} baixa${velho.baixas!==1?'s':''}.\n\n` +
-      (copiar.length
-        ? `COPIA para ele: ${copiar.join(' · ')}.\n\n`
-        : 'NADA a copiar — o cadastro antigo já tem CPF, e-mail e telefone.\n\n') +
+      `COPIA para ele: ${copiar.join(' · ')}.\n\n` +
       `EXCLUI: id ${novo.id} — ${novo.nome}, com ${novo.pcs||0} PC.\n\n` +
-      'A exclusão não tem volta. O histórico de trabalho fica todo no cadastro que fica.',
+      'A exclusão não tem volta. O histórico de trabalho fica todo no cadastro que fica — e, ' +
+      `depois disto, quem souber a senha de ${novo.nome} entra na conta id ${velho.id}. ` +
+      'Confira que são a mesma pessoa.',
     okTexto: 'Mesclar e excluir', cancelarTexto: 'Voltar',
   })) return
 
@@ -12917,7 +12946,12 @@ async function admMesclar(idNovo, idExistente) {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const n = Object.keys(j.data.copiado||{}).length
-    toast(`Mesclado em ${velho.nome}${n?` — ${n} campo${n>1?'s':''} copiado${n>1?'s':''}`:''}.`,'ok')
+    // ⚠️ O que o servidor RECUSOU copiar aparece aqui. O caso previsto é o nome completo, que
+    // só entra quando não muda o nome curto que as PCs já usam — recusa silenciosa deixaria o
+    // superadmin achando que o cadastro ficou completo quando não ficou.
+    const rec = Object.values(j.data.nao_copiado||{})
+    toast(`Mesclado em ${velho.nome}${n?` — ${n} campo${n>1?'s':''} copiado${n>1?'s':''}`:''}.` +
+          (rec.length ? ` Não copiado: ${rec.join(' · ')}` : ''), 'ok')
     await admCarregarPendentes()
     await adminCarregar()
   } catch(e) { toast('Erro: '+e.message,'err') }
