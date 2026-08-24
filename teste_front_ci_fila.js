@@ -134,8 +134,16 @@ console.log('\n═══ 3. O BOTAO DE CADA ESTADO ═══');
 
 console.log('\n═══ 4. A TELA E O CAMINHO ═══');
 {
-  // ⚠️ O MENU ABRE A FILA, e a decisao e aberta A PARTIR dela.
-  conf(/rotulo:'Controle Interno', acao:'irCIFila\(\)'/.test(html), 'o menu do C.I. abre a fila de trabalho');
+  // ⚠️ SAO DOIS ITENS DE MENU COM O MESMO ROTULO, e OS DOIS tem de abrir a Fila:
+  //   bloco 'analista'    → os tres tecnicos do C.I.
+  //   bloco 'coordenacao' → coordenador e superadmin
+  // Em 24/08 so o primeiro foi trocado, e o superadmin continuou caindo na tela antiga sem
+  // entender por que: a Fila estava publicada e nao havia porta para ele. Esta CONTAGEM e a
+  // trava — se um dia alguem trocar so um dos dois, ela quebra.
+  const itensCi = (html.match(/rotulo:'Controle Interno', acao:'irCIFila\(\)'/g) || []).length;
+  conf(itensCi === 2, 'os DOIS itens de menu do C.I. abrem a fila de trabalho', String(itensCi));
+  conf(!/rotulo:'Controle Interno', acao:'irCI\(\)'/.test(html),
+       'e nenhum item de menu abre a tela de decisao direto');
   conf(/async function irCIFila\(\)/.test(html), 'irCIFila existe');
   conf(/async function irCI\(trAlvo\)/.test(html), 'e irCI aceita a TR de destino');
   conf(/function ciFilaAbrir\(tr\) \{ irCI\(tr\) \}/.test(html), 'a fila abre a decisao com a TR');
