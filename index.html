@@ -2670,7 +2670,10 @@ const SB_ITENS = [
   // Para quem É do Controle Interno, esta é a tela de trabalho — fica no primeiro bloco.
   // Coordenador e superadmin também entram, e para eles o item aparece em Coordenação.
   // Os dois nunca coexistem (o perfil é um só), então o id `mi-ci` não duplica.
-  { id:'ci',    bloco:'analista', rotulo:'Controle Interno', acao:'irCI()',
+  // ⚠️ O MENU ABRE A FILA DE TRABALHO, e não mais a tela de decisão (24/08/2026). A decisão
+  // continua existindo e é aberta A PARTIR da fila, já recortada numa TR — abrir direto na
+  // lista inteira era o que fazia dois técnicos caírem na mesma TR sem saber.
+  { id:'ci',    bloco:'analista', rotulo:'Controle Interno', acao:'irCIFila()',
     pode:(u)=>u.perfil === 'controle_interno',
     icone:'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-4-4 1.41-1.41L11 12.17l4.59-4.59L17 9l-6 6z' },
 
@@ -9814,9 +9817,23 @@ function renderAlertasPrazo(alertas) {
  * funcionado. Um filtro que entrega um conjunto diferente do que prometeu é, para quem
  * clica, indistinguível de um filtro que não fez nada.
  */
-function planIrParaVencidas() { planFiltrarPrazo('venc365') }
+function planIrParaVencidas() { return planFiltrarPrazo('venc365') }
 /** Aplica o filtro das que vencem em 30 dias e rola até a lista. */
-function planIrPara30d() { planFiltrarPrazo('30d') }
+function planIrPara30d() { return planFiltrarPrazo('30d') }
+
+/**
+ * Tira o recorte de prazo e de situação, e devolve a lista inteira.
+ *
+ * ⚠️ Mexe nos MESMOS dois `<select>` que a pessoa usaria à mão e chama o MESMO `buscarPlan`.
+ * Um caminho próprio de "limpar" seria uma segunda definição de "sem filtro", e um dia
+ * divergiria do que os selects mostram.
+ */
+async function planLimparRecorte() {
+  const p = document.getElementById('plPrazo'); if(p) p.value = ''
+  const s = document.getElementById('plSit');   if(s) s.value = ''
+  window._planPag = 0
+  await buscarPlan()
+}
 
 // ⚠️ O botão NÃO monta uma consulta própria: ele mexe no MESMO `<select>` de prazo que a
 // pessoa usaria à mão e chama o MESMO `buscarPlan()`. Uma segunda porta para o mesmo filtro
@@ -9824,11 +9841,18 @@ function planIrPara30d() { planFiltrarPrazo('30d') }
 async function planFiltrarPrazo(valor) {
   const sel = document.getElementById('plPrazo')
   if(sel) sel.value = valor
+  // ⚠️ A PÁGINA VOLTA PARA A PRIMEIRA. Sem isto, quem estava na página 3 continuava na 3
+  // depois de filtrar: a lista mudava e a pessoa caía no MEIO do resultado novo, sem ver o
+  // topo dele. `planAplicar` só corrige o estouro (página além do fim), não este caso.
+  window._planPag = 0
   // ⚠️ COM `await`. `buscarPlan` é assíncrona: sem esperar, o `scrollIntoView` rodava sobre a
   // lista ANTIGA e mirava uma altura que ia mudar meio segundo depois — a página parava num
   // ponto qualquer, e a rolagem parecia não ter acontecido.
   await buscarPlan()
-  const alvoEl = document.getElementById('planBarra') || document.getElementById('planConteudo')
+  // ⚠️ ROLA ATÉ A LISTA, e não até a barra. `planBarra` fica ACIMA do conteúdo e, com a
+  // página já no topo, parar nele não move nada — e um clique que não move a tela é
+  // indistinguível de um clique que não fez nada.
+  const alvoEl = document.getElementById('planConteudo') || document.getElementById('planBarra')
   if(alvoEl) alvoEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
@@ -9962,6 +9986,11 @@ async function buscarPlan() {
         pendentes: parciais.filter(p=>!p.baixada).reduce((s,p)=>s+p.qtd,0)
       }
     })
+
+    // ⚠️ O TOTAL ANTES DO CORTE, guardado para a etiqueta de recorte poder dizer "9 de 54".
+    // Sem ele a etiqueta mostraria só o número filtrado, que é justamente o que a pessoa não
+    // consegue conferir — ela precisa dos dois lados para saber que o filtro pegou.
+    window._planTrsTotal = trs.length
 
     // Filtros de parcial: escondem as parciais que nao casam, e o TR se ficar vazio
     if(sit || prazo) {
@@ -10473,7 +10502,33 @@ function planRenderBarra(todas) {
   const opcoes = Object.entries(PLAN_ORDENS)
     .map(([k,o]) => `<option value="${k}"${_planOrdem===k?' selected':''}>${o.rotulo}</option>`).join('')
 
-  barra.innerHTML = `
+  // ⚠️ O RECORTE ATIVO PRECISA APARECER — foi isto que fez o botão "Ver as N" parecer morto.
+  //
+  // Medido em 24/08/2026: o clique FUNCIONA. Ele troca o `<select>`, refaz a busca e corta a
+  // lista (num teste com 3 TRs, 500/100/-10 dias, sobra 1). O que não acontecia era a tela
+  // DIZER isso: os quatro cards de 36px e o subtítulo "N PCs sob sua responsabilidade" são
+  // pintados por `renderPlanResumo` ANTES do corte e nunca repintados, a faixa vermelha
+  // continua com o mesmo número, e a rolagem parava numa barra que já estava à vista.
+  // Quem olha o topo da tela — que é onde está o botão — não via nada mudar.
+  //
+  // Os cards continuam sendo o TOTAL de propósito: eles respondem "quanto eu tenho", não
+  // "quanto o filtro trouxe". Quem responde o recorte é esta etiqueta, ao lado da lista.
+  const PRAZO_ROTULO = { venc:'Vencidas', venc365:'Vencidas há mais de 1 ano', '30d':'A vencer em 30 dias' }
+  const prazoAtivo = document.getElementById('plPrazo')?.value || ''
+  const sitAtiva   = document.getElementById('plSit')?.value || ''
+  const recorte = (prazoAtivo || sitAtiva) ? `
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#EAF1F9;border:1.5px solid #B9D3EC;
+                border-radius:8px;padding:8px 12px;margin-bottom:11px;">
+      <span style="font-size:13px;line-height:1;">🔎</span>
+      <div style="font-size:12px;color:#1A4E8A;">
+        Mostrando só <b>${escHtml(PRAZO_ROTULO[prazoAtivo] || sitAtiva || 'um recorte')}</b> —
+        <b>${todas.length}</b> TR${todas.length===1?'':'s'} de ${(window._planTrsTotal ?? todas.length)}.
+      </div>
+      <button class="btn-acao" onclick="planLimparRecorte()" style="margin-left:auto;background:#fff;color:#1A4E8A;
+        border:1.5px solid #B9D3EC;font-weight:700;font-size:11px;padding:4px 11px;">Limpar</button>
+    </div>` : ''
+
+  barra.innerHTML = recorte + `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
       <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
         onclick="planTodas(${abertas ? 'false' : 'true'})">
@@ -11088,6 +11143,10 @@ const AC_EV_LABEL = {
   assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
   resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC',
   processo_mae:'✎ Processo mãe',
+  // ⚠️ A FILA DE TRABALHO DO C.I. (24/08/2026). Rótulo próprio para não se confundir com o
+  // `assumir_tr`, que é a analista assumindo a TR para ANALISAR — outra coisa, outra pessoa.
+  ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
+  ci_passou:'🏛 C.I. passou a demanda',
 };
 
 // ══════════════════════════════════════
@@ -11883,7 +11942,10 @@ async function pVerParecer(tr, num) {
       correcao_situacao:'✎ Correção de situação', puxar_ci:'↩ Puxada de volta do C.I.',
       pc_nova:'➕ PC cadastrada', solicitacao_correcao:'📨 Correção solicitada',
       correcao_negada:'✕ Correção negada', assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
-      resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC', processo_mae:'✎ Processo mãe'}
+      resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC', processo_mae:'✎ Processo mãe',
+      // Os três da fila de trabalho do C.I. — ver AC_EV_LABEL, que é a outra cópia deste mapa.
+      ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
+      ci_passou:'🏛 C.I. passou a demanda'}
     const hist = (j.data||[]).map(h => `
       <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--cb);font-size:11px;">
         <span style="font-weight:700;white-space:nowrap;">${evLabel[h.evento]||escHtml(h.evento)}</span>
@@ -13138,7 +13200,303 @@ let _ciAberto = null        // chave 'tr|parcela' do encaminhamento aberto
 let _ciMsgs = []
 let _ciSel = new Set()      // codigo_pc marcados dentro do encaminhamento aberto
 
-async function irCI() {
+// ══════════════════════════════════════════════════════════════════════════════
+//  FILA DE TRABALHO DO C.I.  (24/08/2026) — a tela inicial do Controle Interno
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ O PROBLEMA QUE ELA RESOLVE: os três técnicos olhavam a MESMA fila — 214 TRs, 1.144 PCs
+// medidos em 24/08 — e nada dizia quem estava com o quê. Dois podiam abrir a mesma TR ao
+// mesmo tempo; ou nenhum abrir, cada um supondo que o outro já tinha pegado.
+//
+// A unidade aqui é a TR, e não a parcela: é a TR que a pessoa abre e analisa.
+
+let _ciFila = []            // as linhas que o servidor mandou
+let _ciFilaResumo = null    // chips + distribuição da equipe
+let _ciFilaTecnicos = []
+let _ciFilaChip = 'todas'
+
+// ⚠️ A COR SAI DA POSIÇÃO, NUNCA DO NOME. Fixar "azul = Marcia" quebraria no dia em que a
+// equipe mudasse — e ela já mudou uma vez. O quarto é o cinza do "sem responsável", que não
+// é uma pessoa e por isso não entra no rodízio.
+const CI_CORES = ['#185FA5', '#534AB7', '#BA7517']
+const CI_CINZA = '#7A8A80'
+const ciCorTecnico = (id) => {
+  const i = _ciFilaTecnicos.findIndex(t => String(t.id) === String(id))
+  return i < 0 ? CI_CINZA : CI_CORES[i % CI_CORES.length]
+}
+const ciIniciais = (nome) => String(nome||'?').trim().split(/\s+/).slice(0,2).map(n=>n[0]||'').join('').toUpperCase()
+
+const CI_FILA_CHIPS = [
+  { id:'todas',  rot:'Todas',           chave:'todas'  },
+  { id:'livres', rot:'Livres',          chave:'livres' },
+  { id:'minhas', rot:'Minhas',          chave:'minhas' },
+  { id:'outros', rot:'Com outros',      chave:'outros' },
+  { id:'mais30', rot:'Mais de 30 dias', chave:'mais30' },
+]
+
+// As três faixas de espera, com as cores da especificação. As BORDAS ficam no servidor
+// (`lib/ci-fila.js`), e a tela só pinta o que veio — duas contas para a mesma faixa
+// divergiriam, e a etiqueta diria uma coisa enquanto o chip contaria outra.
+const CI_ESPERA = {
+  ok:      { bg:'#EAF3DE', fg:'#27500A' },
+  atencao: { bg:'#FAEEDA', fg:'#854F0B' },
+  critica: { bg:'#FCEBEB', fg:'#A32D2D' },
+}
+
+async function irCIFila() {
+  if(U.perfil !== 'superadmin' && U.perfil !== 'coordenador' && U.perfil !== 'controle_interno') { toast('Acesso restrito.','err'); return }
+  ativarMenu('ci')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:15px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#0F6E56;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff;"><path d="M3 5h2v2H3V5zm0 6h2v2H3v-2zm0 6h2v2H3v-2zM7 5h14v2H7V5zm0 6h14v2H7v-2zm0 6h14v2H7v-2z"/></svg></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:700;">Fila de trabalho</div>
+        <div style="font-size:11.5px;color:var(--ct);" id="ciFilaSub">Carregando...</div>
+      </div>
+    </div>
+    <div id="ciFilaEquipe" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:14px;"></div>
+    <div id="ciFilaChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px;"></div>
+    <div id="ciFilaCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await ciFilaCarregar()
+}
+
+async function ciFilaCarregar() {
+  try {
+    const r = await fetch(`${API_URL}/ci/fila_trabalho?usuario_id=${U.id}`)
+    // ⚠️ SEM `sgpeAbsorver` DE PROPÓSITO: esta lista não desenha processo SGPe nenhum — ela
+    // mostra TR, entidade, volume, analista, espera e responsável. Absorver o mapa de links
+    // numa tela que não os usa engorda a conta de "telas que desenham SGPe" e faz o teste do
+    // `teste_front_links` cobrar um link que não existe aqui.
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _ciFila = j.data || []
+    _ciFilaResumo = j.resumo || null
+    _ciFilaTecnicos = j.tecnicos || []
+    ciFilaRender()
+  } catch(e) {
+    const c = document.getElementById('ciFilaCont')
+    if(c) c.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${escHtml(e.message)}</div>`
+  }
+}
+
+function ciFilaVisiveis() {
+  const eu = U.id
+  const f = {
+    todas:  () => true,
+    livres: (l) => !l.tecnico_id,
+    minhas: (l) => String(l.tecnico_id) === String(eu),
+    outros: (l) => l.tecnico_id && String(l.tecnico_id) !== String(eu),
+    mais30: (l) => l.faixa_espera === 'critica',
+  }[_ciFilaChip] || (() => true)
+  return _ciFila.filter(f)
+}
+
+function ciFilaRender() {
+  const sub = document.getElementById('ciFilaSub')
+  const r = _ciFilaResumo
+  if(sub && r) sub.innerHTML =
+    `<b>${r.total_trs}</b> TR${r.total_trs===1?'':'s'} · <b>${r.total_pcs}</b> PC${r.total_pcs===1?'':'s'} aguardando o Controle Interno`
+
+  // ── distribuição da equipe
+  const eq = document.getElementById('ciFilaEquipe')
+  if(eq && r) eq.innerHTML = r.equipe.map(c => {
+    const cor = c.tecnico_id ? ciCorTecnico(c.tecnico_id) : CI_CINZA
+    return `<div style="background:var(--surface-1,#FCFDFC);border-radius:11px;box-shadow:var(--sombra);
+                 border-left:4px solid ${cor};padding:12px 14px;display:flex;align-items:center;gap:11px;">
+      <span style="flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:${cor};color:#fff;
+                   display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;">
+        ${c.tecnico_id ? escHtml(ciIniciais(c.nome)) : '—'}</span>
+      <div style="min-width:0;">
+        <div style="font-size:24px;font-weight:500;line-height:1;color:var(--te);">${c.trs}</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+             title="${escHtml(c.nome)} — ${c.pcs} PC${c.pcs===1?'':'s'}">${escHtml(c.nome)}</div>
+      </div></div>`
+  }).join('')
+
+  // ── chips. "Todas" nasce aceso e a tela SEMPRE abre nele: decisão do Richard — abrir em
+  // "Minhas" esconderia as TRs sem responsável, e ninguém veria as paradas.
+  const ch = document.getElementById('ciFilaChips')
+  if(ch && r) ch.innerHTML = CI_FILA_CHIPS.map(c => {
+    const n = r.chips[c.chave] ?? 0
+    const on = _ciFilaChip === c.id
+    return `<button onclick="ciFilaChip('${c.id}')"
+      style="border:1.5px solid ${on?'#0F6E56':'var(--cb)'};background:${on?'#0F6E56':'#fff'};
+             color:${on?'#fff':(n?'var(--te)':'var(--ct)')};border-radius:20px;padding:5px 13px;font-size:11.5px;
+             font-weight:700;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;${n?'':'opacity:.55;'}">
+      ${c.rot}<span style="background:${on?'rgba(255,255,255,.25)':'var(--cl)'};color:${on?'#fff':'var(--ct)'};
+        border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;">${n}</span></button>`
+  }).join('')
+
+  // ── a lista
+  const cont = document.getElementById('ciFilaCont')
+  if(!cont) return
+  const linhas = ciFilaVisiveis()
+  if(!linhas.length) {
+    cont.innerHTML = `<div style="text-align:center;padding:26px;color:var(--ct);font-size:13px;">
+      Nada neste recorte.</div>`
+    return
+  }
+  const cab = `
+    <div style="display:flex;align-items:center;gap:10px;background:#173404;color:#C0DD97;
+                padding:8px 14px;border-radius:8px 8px 0 0;font-size:10.5px;font-weight:800;
+                text-transform:uppercase;letter-spacing:.4px;">
+      <div style="flex:2;min-width:0;">TR e entidade</div>
+      <div style="flex:0 0 110px;">Volume</div>
+      <div style="flex:0 0 110px;">Analista</div>
+      <div style="flex:0 0 95px;">Espera</div>
+      <div style="flex:0 0 135px;">Responsável</div>
+      <div style="flex:0 0 105px;"></div>
+    </div>`
+  cont.innerHTML = cab + `<div style="border-radius:0 0 8px 8px;overflow:hidden;">` +
+    linhas.map((l, i) => ciFilaLinha(l, i)).join('') + `</div>`
+}
+
+function ciFilaLinha(l, i) {
+  const meu = String(l.tecnico_id) === String(U.id)
+  const cor = l.tecnico_id ? ciCorTecnico(l.tecnico_id) : null
+  const esp = CI_ESPERA[l.faixa_espera] || { bg:'var(--cl)', fg:'var(--ct)' }
+  const dias = l.dias_espera === null || l.dias_espera === undefined ? '—'
+             : `${l.dias_espera} dia${l.dias_espera===1?'':'s'}`
+  // Zebra: ímpares var(--surface-2), pares o verde muito claro.
+  const fundo = (i % 2 === 0) ? 'var(--surface-2,#F7F9F7)' : '#F2F8EC'
+
+  // ⚠️ O BOTÃO NASCE CONFORME O ESTADO, e o desabilitado leva o motivo no `title` — nunca um
+  // botão que aceita clique e não responde (armadilha 15).
+  const botao = !l.tecnico_id
+    ? `<button class="btn-acao" style="background:#0F6E56;color:#fff;border-color:#0F6E56;font-weight:700;width:100%;"
+         onclick="event.stopPropagation();ciFilaAssumir('${escHtml(l.tr)}')">Assumir</button>`
+    : meu
+      ? `<button class="btn-acao" style="background:#fff;color:var(--te);border:1.5px solid var(--cb);font-weight:700;width:100%;"
+           onclick="event.stopPropagation();ciFilaAbrir('${escHtml(l.tr)}')">Abrir</button>`
+      : `<button class="btn-acao" disabled title="${escHtml(l.tecnico_nome||'outro técnico')} assumiu esta TR. Para trabalhar nela, peça que ela passe a demanda."
+           style="background:var(--cl);color:var(--ct);border:1px solid var(--bd);cursor:not-allowed;width:100%;
+                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Com ${escHtml((l.tecnico_nome||'').split(' ')[0])}</button>`
+
+  return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${fundo};
+               border-bottom:1px solid var(--cl);${cor?`border-left:3px solid ${cor};`:'border-left:3px solid transparent;'}">
+    <div style="flex:2;min-width:0;">
+      <div style="font-size:13.5px;font-weight:500;color:var(--te);">${escHtml(l.tr||'—')}</div>
+      <div style="font-size:11.5px;color:var(--ct);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+           title="${escHtml(l.entidade||'')}">${escHtml(l.entidade||'—')}</div>
+    </div>
+    <div style="flex:0 0 110px;font-size:11.5px;color:var(--ct);">
+      ${l.parcelas} parcela${l.parcelas===1?'':'s'}<br>${l.pcs} PC${l.pcs===1?'':'s'}</div>
+    <div style="flex:0 0 110px;font-size:11.5px;color:var(--te);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+         title="${escHtml(l.analista_nome||'')}">${escHtml(l.analista_nome||'—')}</div>
+    <div style="flex:0 0 95px;">
+      <span style="display:inline-block;background:${esp.bg};color:${esp.fg};font-size:10.5px;font-weight:800;
+                   padding:3px 9px;border-radius:20px;white-space:nowrap;">${dias}</span></div>
+    <div style="flex:0 0 135px;display:flex;align-items:center;gap:7px;min-width:0;">
+      ${l.tecnico_id
+        ? `<span style="flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:${cor};color:#fff;
+                 display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;">
+             ${escHtml(ciIniciais(l.tecnico_nome))}</span>
+           <span style="font-size:11.5px;color:var(--te);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                 title="${escHtml(l.tecnico_nome||'')}">${escHtml((l.tecnico_nome||'').split(' ')[0])}</span>`
+        : `<span style="font-size:12px;color:var(--ct);">—</span>`}</div>
+    <div style="flex:0 0 105px;">${botao}</div>
+  </div>`
+}
+
+function ciFilaChip(id) { _ciFilaChip = id; ciFilaRender() }
+
+async function ciFilaAssumir(tr) {
+  const l = _ciFila.find(x => x.tr === tr)
+  if(!l) return
+  // Assumir NÃO pede motivo — é o ato normal, e exigir justificativa para trabalhar seria
+  // atrito sem resposta a dar. A confirmação existe só para não assumir por clique errado.
+  if(!await moConfirm(`Assumir a TR ${tr}?`, {
+    titulo: 'Assumir demanda',
+    detalhe: `${l.parcelas} parcela${l.parcelas>1?'s':''} · ${l.pcs} PC${l.pcs>1?'s':''} · ${l.entidade||'entidade não informada'}.\n\n` +
+             `Encaminhada por ${l.analista_nome||'—'}, esperando há ${l.dias_espera ?? '—'} dia(s).\n\n` +
+             'Ela passa a aparecer como sua para os outros técnicos. Dá para devolver à fila depois.',
+    okTexto: 'Assumir', cancelarTexto: 'Voltar',
+  })) return
+  try {
+    const r = await fetch(`${API_URL}/ci/tr/assumir`, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, usuario_id: U.id, setorial_id: l.setorial_id || 'FCEE' }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`TR ${tr} é sua.`,'ok')
+    await ciFilaCarregar()
+  } catch(e) { toast('Erro: '+e.message,'err'); await ciFilaCarregar() }
+}
+
+/** Abre a TELA DE DECISÃO com o recorte desta TR. */
+function ciFilaAbrir(tr) { irCI(tr) }
+
+// ── Devolver à fila e passar a outro ────────────────────────────────────────
+// ⚠️ AS DUAS EXIGEM MOTIVO, mínimo de 10 caracteres, e quem confere é o SERVIDOR
+// (`ciFila.validarMotivo`). A tela só desabilita o botão antes da hora, para o motivo do
+// bloqueio ficar visível em vez de virar um erro depois do clique.
+let _ciAcaoTr = null
+
+function ciAbrirDevolver(tr) {
+  _ciAcaoTr = tr
+  document.getElementById('ciDevMotivo').value = ''
+  document.getElementById('ciDevTr').textContent = tr
+  ciDevChecar()
+  document.getElementById('moCiDevolver').classList.add('open')
+}
+function ciDevChecar() {
+  const v = (document.getElementById('ciDevMotivo')?.value || '').trim()
+  const b = document.getElementById('ciDevBtn')
+  if(!b) return
+  b.disabled = v.length < 10
+  b.title = v.length < 10 ? `Faltam ${10 - v.length} caractere(s) — o motivo fica no histórico da TR.` : ''
+}
+async function ciDevConfirmar() {
+  const motivo = (document.getElementById('ciDevMotivo').value || '').trim()
+  const b = document.getElementById('ciDevBtn'); b.disabled = true; b.textContent = 'Devolvendo...'
+  try {
+    const r = await fetch(`${API_URL}/ci/tr/devolver`, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr: _ciAcaoTr, usuario_id: U.id, motivo }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    fm('moCiDevolver'); toast(`TR ${_ciAcaoTr} voltou para a fila.`,'ok')
+    irCIFila()
+  } catch(e) { toast('Erro: '+e.message,'err'); b.disabled = false; b.textContent = 'Devolver à fila' }
+}
+
+function ciAbrirPassar(tr) {
+  _ciAcaoTr = tr
+  document.getElementById('ciPassTr').textContent = tr
+  document.getElementById('ciPassMotivo').value = ''
+  // ⚠️ A LISTA SÃO OS OUTROS TÉCNICOS — o próprio não entra: para ficar com a TR existe o
+  // Assumir, e oferecer "passar para mim mesmo" seria um caminho que o servidor recusa.
+  const sel = document.getElementById('ciPassDestino')
+  sel.innerHTML = '<option value="">Escolha o técnico</option>' +
+    _ciFilaTecnicos.filter(t => String(t.id) !== String(U.id))
+      .map(t => `<option value="${t.id}">${escHtml(t.nome)}</option>`).join('')
+  ciPassChecar()
+  document.getElementById('moCiPassar').classList.add('open')
+}
+function ciPassChecar() {
+  const v = (document.getElementById('ciPassMotivo')?.value || '').trim()
+  const d = document.getElementById('ciPassDestino')?.value || ''
+  const b = document.getElementById('ciPassBtn')
+  if(!b) return
+  b.disabled = v.length < 10 || !d
+  b.title = !d ? 'Escolha para quem vai a demanda.'
+          : v.length < 10 ? `Faltam ${10 - v.length} caractere(s) — o motivo fica no histórico da TR.` : ''
+}
+async function ciPassConfirmar() {
+  const motivo = (document.getElementById('ciPassMotivo').value || '').trim()
+  const destino_id = document.getElementById('ciPassDestino').value
+  const b = document.getElementById('ciPassBtn'); b.disabled = true; b.textContent = 'Passando...'
+  try {
+    const r = await fetch(`${API_URL}/ci/tr/passar`, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr: _ciAcaoTr, usuario_id: U.id, destino_id, motivo }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    fm('moCiPassar'); toast(`TR ${_ciAcaoTr} agora é de ${j.data.agora_com}.`,'ok')
+    irCIFila()
+  } catch(e) { toast('Erro: '+e.message,'err'); b.disabled = false; b.textContent = 'Passar a demanda' }
+}
+
+async function irCI(trAlvo) {
   if(U.perfil !== 'superadmin' && U.perfil !== 'coordenador' && U.perfil !== 'controle_interno') { toast('Acesso restrito.','err'); return }
   ativarMenu('ci')
   const papel = U.perfil === 'controle_interno' ? 'C.I.' : perfilLabel(U.perfil)
@@ -13153,6 +13511,11 @@ async function irCI() {
           <strong>${escHtml(U.nome||'')}</strong></div>
       </div>
     </div>
+
+    ${/* ⚠️ A FAIXA DA TR SÓ EXISTE QUANDO SE CHEGA PELA FILA (24/08/2026). Sem `trAlvo` esta
+          continua sendo a tela de sempre, com a fila inteira — é assim que o coordenador e o
+          superadmin entram, e nada muda para eles. */''}
+    <div id="ciFaixaTr"></div>
 
     ${/* ⚠️ OS QUATRO NÚMEROS SÃO DA FILA INTEIRA, e não do filtro. Se caíssem com a busca, o
           técnico digitaria o nome de uma analista e leria "2 PCs na fila" como se o serviço
@@ -13180,8 +13543,93 @@ async function irCI() {
     </div>
 
     <div id="ciCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>
+
+    ${/* ⚠️ OS DOIS MODAIS VIVEM AQUI, na tela de decisão, porque é dela que as duas ações
+          saem. O botão de confirmar NASCE DESABILITADO e só acende quando o motivo tem os 10
+          caracteres — armadilha 15: botão que aceita clique e não responde é pior que botão
+          cinza, e o motivo do bloqueio fica no `title`. Quem confere de verdade é o
+          servidor; isto aqui é só para o erro não chegar depois do clique. */''}
+    <div class="mo" id="moCiDevolver">
+      <div class="mc" style="width:430px;">
+        <div class="mch v"><h3>Devolver à fila</h3><button class="mcx" onclick="fm('moCiDevolver')">✕</button></div>
+        <div class="mcb">
+          <div class="mci">A TR <b id="ciDevTr"></b> volta a ficar <b>livre</b> para qualquer técnico do C.I.
+            O motivo fica no histórico da TR.</div>
+          <div class="mc-campo"><label>Motivo (mínimo 10 caracteres)</label>
+            <textarea id="ciDevMotivo" rows="3" oninput="ciDevChecar()"
+              placeholder="Por que esta demanda volta para a fila?"></textarea></div>
+          <div class="mcbt">
+            <button class="mccn" onclick="fm('moCiDevolver')">Cancelar</button>
+            <button class="mcok" id="ciDevBtn" disabled onclick="ciDevConfirmar()">Devolver à fila</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo" id="moCiPassar">
+      <div class="mc" style="width:430px;">
+        <div class="mch v"><h3>Passar a outro</h3><button class="mcx" onclick="fm('moCiPassar')">✕</button></div>
+        <div class="mcb">
+          <div class="mci">A TR <b id="ciPassTr"></b> passa a ser de outro técnico do Controle Interno,
+            que é avisado no sino. O motivo fica no histórico da TR.</div>
+          <div class="mc-campo"><label>Para quem</label>
+            <select id="ciPassDestino" onchange="ciPassChecar()"><option value="">Escolha o técnico</option></select></div>
+          <div class="mc-campo"><label>Motivo (mínimo 10 caracteres)</label>
+            <textarea id="ciPassMotivo" rows="3" oninput="ciPassChecar()"
+              placeholder="Por que esta demanda passa para outra pessoa?"></textarea></div>
+          <div class="mcbt">
+            <button class="mccn" onclick="fm('moCiPassar')">Cancelar</button>
+            <button class="mcok" id="ciPassBtn" disabled onclick="ciPassConfirmar()">Passar a demanda</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `
+  // ⚠️ CHEGANDO PELA FILA, a tela abre RECORTADA na TR — e o recorte é o MESMO campo de busca
+  // que o técnico usaria à mão. Uma segunda porta para o mesmo filtro divergiria da primeira.
+  if(trAlvo) {
+    _ciBusca = trAlvo
+    const cb = document.getElementById('ciBusca'); if(cb) cb.value = trAlvo
+    ciFaixaTrRender(trAlvo)
+  }
   await ciCarregar()
+}
+
+/**
+ * A faixa verde no topo da tela de decisão: de onde veio, o que é, e as duas saídas.
+ *
+ * ⚠️ ELA PRECISA DA FILA CARREGADA para saber quem é o responsável e desde quando. Se a
+ * pessoa chegou aqui direto (recarregou a página), a fila é buscada agora — sem isso a faixa
+ * apareceria sem os botões e a TR ficaria sem saída visível.
+ */
+async function ciFaixaTrRender(tr) {
+  const el = document.getElementById('ciFaixaTr')
+  if(!el) return
+  if(!_ciFila.length) { try { await ciFilaCarregar() } catch(e) { /* a faixa degrada sozinha */ } }
+  const l = _ciFila.find(x => x.tr === tr)
+  const meu = l && String(l.tecnico_id) === String(U.id)
+  const desde = meu && l.assumida_em ? planDataTs(l.assumida_em) : null
+  el.innerHTML = `
+    <div style="background:#0F6E56;color:#fff;border-radius:10px;padding:11px 15px;margin-bottom:13px;
+                display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+      <button class="btn-acao" onclick="irCIFila()"
+        style="background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.35);font-weight:700;">◀ Fila</button>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-size:14px;font-weight:700;">${escHtml(tr)}${l&&l.entidade?` · <span style="font-weight:500;opacity:.92;">${escHtml(l.entidade)}</span>`:''}</div>
+        <div style="font-size:11px;opacity:.88;margin-top:2px;">
+          ${l ? `${l.parcelas} parcela${l.parcelas===1?'':'s'} · ${l.pcs} PC${l.pcs===1?'':'s'} · enviada por ${escHtml(l.analista_nome||'—')}`
+              : 'Esta TR não está na fila do Controle Interno.'}</div>
+      </div>
+      ${desde ? `<span style="background:rgba(255,255,255,.18);border-radius:20px;padding:4px 11px;
+                   font-size:10.5px;font-weight:800;white-space:nowrap;">com você desde ${desde}</span>` : ''}
+      ${l && l.tecnico_id ? `
+        <div style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button class="btn-acao" onclick="ciAbrirDevolver('${escHtml(tr)}')"
+            style="background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.35);font-weight:700;">↩ Devolver à fila</button>
+          <button class="btn-acao" onclick="ciAbrirPassar('${escHtml(tr)}')"
+            style="background:#fff;color:#0F6E56;border:1.5px solid #fff;font-weight:700;">⇄ Passar a outro</button>
+        </div>` : ''}
+    </div>`
 }
 
 function ciAbasRender() {

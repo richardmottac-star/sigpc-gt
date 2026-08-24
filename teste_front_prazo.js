@@ -183,5 +183,55 @@ console.log('\n═══ 9. AS FAIXAS SAO UMA SO — cor, balao e filtro ══�
   conf(/prazoDias\(x\.dt_limite_pc\)/.test(html), 'o resumo da parcial usa prazoDias');
 }
 
+console.log('\n═══ O BOTAO "VER AS N" DA FAIXA VERMELHA (24/08/2026) ═══');
+{
+  // ⚠️ O DEFEITO NAO ERA O FILTRO — ele funciona. Medido num DOM de mentira com 3 TRs
+  // (500, 100 e -10 dias): o clique troca o `<select>`, refaz a busca e sobra 1 TR.
+  // O que faltava era a tela DIZER isso. Os quatro cards de 36px e o subtitulo saem de
+  // `renderPlanResumo`, que roda ANTES do corte e nunca e repintado; a faixa vermelha
+  // continua com o mesmo numero; e a rolagem parava em `planBarra`, que ja estava a vista.
+  // Quem olha o topo da tela — que e onde esta o botao — nao via nada mudar.
+
+  // ── o botao devolve a promessa: quem espera por ele para de medir a lista antiga
+  conf(/function planIrParaVencidas\(\) \{ return planFiltrarPrazo\('venc365'\) \}/.test(html),
+       'planIrParaVencidas DEVOLVE a promessa de planFiltrarPrazo');
+  conf(/function planIrPara30d\(\) \{ return planFiltrarPrazo\('30d'\) \}/.test(html),
+       'e planIrPara30d tambem');
+
+  // ⚠️ A janela fecha em `alvoEl.scrollIntoView`, a CHAMADA, e nao na palavra solta: o
+  // comentario acima do `await` cita "scrollIntoView" em prosa, e ancorar nele cortava a
+  // funcao antes do `await buscarPlan()`. Ancora que casa com prosa mede a prosa.
+  const iF = html.indexOf('async function planFiltrarPrazo');
+  const bloco = html.slice(iF, html.indexOf('\n}', html.indexOf('alvoEl.scrollIntoView', iF)));
+  // ⚠️ A PAGINA VOLTA PARA A PRIMEIRA. Sem isto, quem estava na pagina 3 caia no MEIO do
+  // resultado novo. `planAplicar` so corrige o estouro, nao este caso.
+  conf(/window\._planPag = 0/.test(bloco), 'o filtro devolve a lista para a primeira pagina');
+  // ⚠️ ROLA ATE A LISTA. `planBarra` fica ACIMA do conteudo: com a pagina no topo, parar
+  // nele nao move nada — e clique que nao move a tela e igual a clique que nao fez nada.
+  conf(/getElementById\('planConteudo'\) \|\| document\.getElementById\('planBarra'\)/.test(bloco),
+       'e rola ate a LISTA, nao ate a barra que ja estava a vista');
+  // Mesma armadilha da janela: comparar com a palavra solta mede o COMENTARIO, que fala do
+  // scrollIntoView antes de o `await` aparecer. A comparacao e com a chamada.
+  conf(bloco.indexOf('await buscarPlan()') < bloco.indexOf('alvoEl.scrollIntoView'),
+       'a rolagem vem DEPOIS da busca, sobre a lista nova');
+
+  // ── a etiqueta que torna o recorte visivel
+  conf(/Mostrando só <b>/.test(html), 'a barra mostra o recorte ativo');
+  conf(/window\._planTrsTotal/.test(html), 'e diz "N de M" — sem o total nao da para conferir');
+  conf(/async function planLimparRecorte\(\)/.test(html), 'e ha como limpar o recorte');
+  const iL = html.indexOf('async function planLimparRecorte');
+  const bL = html.slice(iL, iL + 400);
+  // ⚠️ Limpar mexe nos MESMOS selects e chama o MESMO buscarPlan. Um caminho proprio seria
+  // uma segunda definicao de "sem filtro", e um dia divergiria do que os selects mostram.
+  conf(/getElementById\('plPrazo'\)/.test(bL) && /getElementById\('plSit'\)/.test(bL),
+       'limpar zera os dois selects de verdade');
+  conf(/await buscarPlan\(\)/.test(bL), 'e refaz a busca pelo caminho normal');
+
+  // ── os cards continuam sendo o TOTAL, de proposito
+  const iR = html.indexOf('function renderPlanResumo');
+  conf(/sob sua responsabilidade/.test(html.slice(iR, iR + 700)),
+       'o subtitulo continua falando do acervo inteiro, nao do recorte');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);

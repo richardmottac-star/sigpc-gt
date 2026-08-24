@@ -185,17 +185,23 @@ conf(/Nenhuma PC vence nos próximos 30 dias/.test(html),
      'faixa 2: aparece TAMBEM no zero — o zero e' + ' uma boa noticia, e some se nao for dita');
 // ⚠️ O botao nao monta consulta propria: mexe no MESMO <select> e chama o MESMO buscarPlan.
 conf(/async function planFiltrarPrazo\(valor\)/.test(html), 'o filtro passa por uma funcao so');
-conf(/sel\.value = valor[\s\S]{0,400}await buscarPlan\(\)/.test(html),
+// A janela era de 400 e estourou em 24/08, quando o `window._planPag = 0` e o comentario
+// dele entraram entre as duas linhas. Janela por tamanho mede o tamanho do comentario.
+conf(/sel\.value = valor[\s\S]{0,900}await buscarPlan\(\)/.test(html),
      'que usa o select da tela, e nao uma segunda definicao de "vencida"');
 // ⚠️ COM `await`: sem esperar, o scrollIntoView rodava sobre a lista ANTIGA e mirava uma
 // altura que ia mudar meio segundo depois.
-conf(/await buscarPlan\(\)[\s\S]{0,320}scrollIntoView/.test(html), 'e so rola DEPOIS de buscar');
+// ⚠️ E A ANCORA E `alvoEl.scrollIntoView`, A CHAMADA: o comentario acima do `await` cita
+// "scrollIntoView" em prosa, e casar com a palavra solta media o comentario, nao o codigo.
+conf(/await buscarPlan\(\)[\s\S]{0,700}alvoEl\.scrollIntoView/.test(html), 'e so rola DEPOIS de buscar');
 
 // ⚠️ O BOTAO DA FAIXA VERMELHA APLICA O RECORTE QUE ELE PROMETE. Ate 19/08/2026 a faixa
 // contava "vencidas ha MAIS DE UM ANO" e o clique filtrava `venc` — "todas as vencidas",
 // outro conjunto. Filtrava mesmo (56 TRs -> 31 no acervo do Richard), mas o resultado nunca
 // correspondia ao numero do botao, e nao havia como conferir se tinha funcionado.
-conf(/function planIrParaVencidas\(\) \{ planFiltrarPrazo\('venc365'\) \}/.test(html),
+// O `return` entrou em 24/08: sem ele a funcao nao devolve a promessa, e quem espera por ela
+// mede a lista ANTIGA — foi o que fez um teste de bancada "reproduzir" um defeito que nao havia.
+conf(/function planIrParaVencidas\(\) \{ return planFiltrarPrazo\('venc365'\) \}/.test(html),
      'o botao do passivo aplica venc365, e nao venc');
 conf(/<option value="venc365">/.test(html), 'a opcao existe no select');
 // A conta e a MESMA da rota alertas_prazo no servidor (dias > 365).
