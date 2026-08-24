@@ -6011,7 +6011,16 @@ async function sinoCarregar() {
     // descuido: notificação lida é apagada 15 dias depois da leitura (`limparLidas`). Se o
     // Richard marcasse as 7 da Sandra, elas sumiriam antes de ela ver — e o prazo das 7
     // vencia naquele mesmo dia. Ver `sinoClicar` e `sinoMarcarTodas`.
-    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&limite=15&apenas_nao_lidas=1`)).json()
+    // ⚠️ DOIS IDS, E ELES SÃO DIFERENTES DE PROPÓSITO:
+    //   destinatario_id = DE QUEM são os avisos  → `alvo()`
+    //   usuario_id      = QUEM está pedindo      → `U`
+    // O servidor confere o segundo contra o perfil lido do BANCO (`notif.podeLer`). Mandar o
+    // `alvo()` nos dois seria dizer ao servidor que a Sandra está pedindo — e aí a conferência
+    // passaria a aprovar a si mesma.
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&usuario_id=${U.id}&limite=15&apenas_nao_lidas=1`)).json()
+    // ⚠️ Recusa NÃO pode virar "Nada novo por aqui". Sem esta linha, um 403 zeraria a lista e
+    // o contador em silêncio, e a tela diria que não há avisos quando o que houve foi um não.
+    if(j.error) return
     _notifs = j.data || []
     _notifNaoLidas = j.nao_lidas || 0
   } catch(e) {
@@ -6186,8 +6195,10 @@ async function irNotificacoes() {
 
 async function notifCarregarTudo() {
   try {
-    // Mesma regra do sino: a tela "ver todas" é LEITURA, então segue o `alvo()`.
-    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&limite=200`)).json()
+    // Mesma regra do sino: a tela "ver todas" é LEITURA, então segue o `alvo()` — e manda o
+    // `usuario_id` de quem pede, que é o que o servidor confere.
+    const j = await (await fetch(`${API_URL}/notificacao?destinatario_id=${alvo().id}&usuario_id=${U.id}&limite=200`)).json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     _notifTudo = j.data || []
     notifRenderTudo()
   } catch(e) {

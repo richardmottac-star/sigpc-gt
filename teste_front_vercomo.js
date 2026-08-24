@@ -419,11 +419,27 @@ console.log('\n═══ O SINO NO MODO: LE do alvo(), ESCREVE no U.id (24/08/20
   // O Richard entrou pela conta da Sandra — que tinha 7 avisos de diligencia vencendo no
   // dia — e leu "Nada novo por aqui", porque o sino buscava as DELE.
 
-  // ── as duas LEITURAS seguem o alvo()
+  // ── as duas LEITURAS seguem o alvo(), e mandam QUEM PEDE junto
   const leituras = (html.match(/\/notificacao\?destinatario_id=\$\{alvo\(\)\.id\}/g) || []).length;
   conf(leituras === 2, 'as DUAS leituras de notificacao usam alvo().id', String(leituras));
   conf(!/\/notificacao\?destinatario_id=\$\{U\.id\}/.test(html),
        'e nenhuma leitura de notificacao usa U.id');
+  // ⚠️ OS DOIS IDS SAO DIFERENTES DE PROPOSITO: `destinatario_id` diz DE QUEM sao os avisos,
+  // `usuario_id` diz QUEM esta pedindo. O servidor confere o segundo contra o perfil lido do
+  // BANCO. Mandar o `alvo()` nos dois seria dizer que a Sandra esta pedindo — e a conferencia
+  // passaria a aprovar a si mesma, que e o mesmo buraco com outro nome.
+  const comQuem = (html.match(/destinatario_id=\$\{alvo\(\)\.id\}&usuario_id=\$\{U\.id\}/g) || []).length;
+  conf(comQuem === 2, 'as duas mandam usuario_id = U.id junto', String(comQuem));
+  conf(!/usuario_id=\$\{alvo\(\)\.id\}/.test(html), 'e NENHUMA manda o alvo() como quem pede');
+  // ⚠️ Recusa nao pode virar "Nada novo por aqui": sem esta guarda, um 403 zeraria a lista e
+  // o contador em silencio, e a tela diria que nao ha avisos quando o que houve foi um nao.
+  // ⚠️ A janela fecha na ATRIBUICAO, e nao num numero: com os comentarios da regra a funcao
+  // passou de 1.600 caracteres e a checagem acusou falha que era do teste. Janela por tamanho
+  // mede o tamanho do comentario.
+  const iS2 = html.indexOf('async function sinoCarregar');
+  const carregar = html.slice(iS2, html.indexOf('_notifs = j.data || []', iS2));
+  conf(/if\(j\.error\) return/.test(carregar),
+       'e um erro do servidor nao zera o sino em silencio');
 
   // ── as duas ESCRITAS continuam no U.id
   const escritas = (html.match(/destinatario_id: U\.id/g) || []).length;
