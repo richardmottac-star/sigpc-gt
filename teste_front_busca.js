@@ -235,46 +235,39 @@ console.log('\n═══ 4d. fetchListaCompleta — teto de limit nao trunca em 
   }).catch(e => conf(false, 'erro no teste de fetchListaCompleta', e.message));
 }
 
-console.log('\n═══ 4e. CONTROLE INTERNO — busca nova ═══');
+console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR (25/08/2026) ═══');
 {
-  // Em 12/08 `ciDadosFiltrados` virou `ciGrupos`: a fila passou a agrupar por encaminhamento
-  // (TR + parcela), porque `POST /parcela/ci` manda a parcela inteira e uma delas tem 7 PCs.
-  // A busca continua sendo a mesma — o que mudou e a unidade devolvida.
-  const iniC = html.indexOf('function ciGrupos()');
-  const fimC = html.indexOf('function ciDias(', iniC);
-  if (iniC < 0 || fimC < 0) {
-    conf(false, 'nao achei ciGrupos no index.html');
-  } else {
-    const dados = [
-      { tr: '2020TR000657', processo_pc: 'SCC9692/2020', processo_mae: 'SCC2070/2020',
-        entidade: 'APAE DE SAO JOSE', codigo_nl: '2020NL007584', codigo_pc: '2020PC000520' },
-      { tr: '2019TR000111', processo_pc: 'FCEE111/2019', processo_mae: 'FCEE1/2019',
-        entidade: 'APAE DE ICARA', codigo_nl: '2019NL000222', codigo_pc: '2019PC000333' },
-    ];
-    let pintou = null;
-    const ctxC = {
-      console, setTimeout, clearTimeout,
-      _ciDados: dados, _ciBusca: '',
-      termoBusca: ctx.termoBusca, casaBusca: ctx.casaBusca, prepararBusca: ctx.prepararBusca,
-      ciRender: (v) => { pintou = v; },
-      document: { getElementById: () => null },
-    };
-    vm.createContext(ctxC);
-    vm.runInContext(html.slice(iniC, fimC), ctxC);
+  // ⚠️ A TELA DO C.I. NAO FILTRA MAIS NO NAVEGADOR. Ate 25/08 ela baixava o ciclo inteiro de
+  // uma situacao — 1.737 PCs numa resposta — e `ciGrupos()` recortava aqui. Sao 2.928 PCs no
+  // ciclo, e essa era a sexta tela a repetir o problema listado nas Pendencias do CLAUDE.md.
+  //
+  // O recorte agora e feito no banco, e a tela manda o que o usuario escolheu.
+  conf(!/function ciGrupos\(\)/.test(html), 'ciGrupos saiu — a tela nao agrupa nem filtra localmente');
+  conf(/API_URL\}\/ci\/fila\?\$\{p\}/.test(html), 'a lista vem filtrada do servidor');
+  conf(/new URLSearchParams\(\{ usuario_id: U\.id, chip: _ciChip \}\)/.test(html),
+       'com o recorte do chip e quem esta pedindo');
 
-    const filtrar = (t) => { vm.runInContext(`_ciBusca = ${JSON.stringify(t)}`, ctxC); return ctxC.ciGrupos().length; };
-    conf(filtrar('') === 2, 'sem termo devolve tudo');
-    conf(filtrar('000657') === 1, 'acha por pedaco da TR');
-    conf(filtrar('9692') === 1, 'acha por SGPe da PC');
-    conf(filtrar('SCC2070') === 1, 'acha por SGPe mae');
-    conf(filtrar('São José') === 1, 'acha por entidade COM acento');
-    conf(filtrar('007584') === 1, 'acha por NL');
-    conf(filtrar('PC000520') === 1, 'acha por codigo da PC');
-    conf(filtrar('APAE') === 2, 'termo comum acha as duas');
-    conf(filtrar('zzz') === 0, 'inexistente nao acha');
-    // `_ciDados` tem de continuar completo — a devolucao procura a PC nele.
-    conf(vm.runInContext('_ciDados.length', ctxC) === 2, '_ciDados continua completo apos filtrar');
-  }
+  // ⚠️ OS DOIS BLOCOS DE BUSCA SAO EXCLUDENTES, e a decisao e do Richard: usar um limpa o
+  // outro. Combina-los devolveria vazio silencioso toda vez que o processo digitado nao fosse
+  // o da entidade digitada — e a pessoa leria "nao existe" para uma PC que existe.
+  const sg = (html.match(/function ciBuscarSgpe\(\)[\s\S]*?\n\}/) || [''])[0];
+  const ge = (html.match(/function ciBuscarGeral\(\)[\s\S]*?\n\}/) || [''])[0];
+  conf(sg.length > 0 && ge.length > 0, 'os dois blocos tem cada um a sua funcao');
+  conf(/_ciGeral = \{ q:'', analista_id:'', espera:'' \}/.test(sg), 'buscar por processo limpa o bloco de baixo');
+  conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| 'SCC', num:'', ano:'' \}/.test(ge),
+       'e buscar na fila limpa o numero e o ano do processo');
+  conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um dos dois modos vale por vez');
+
+  // ⚠️ OS TRES CAMPOS DO SGPe SAO OBRIGATORIOS, e o botao so acende com os tres. Buscar so
+  // pelo numero devolveria o SCC 7537 de sete anos diferentes — armadilha 19 como interface.
+  const ch = (html.match(/function ciSgpeMudou\(\)[\s\S]*?\n\}/) || [''])[0];
+  conf(/bt\.disabled = falta\.length > 0/.test(ch), 'o botao do processo nasce cinza');
+  conf(/bt\.title = falta\.length \? `Informe \$\{falta\.join\(', '\)\}/.test(ch),
+       'e o cinza DIZ o que falta, no title (armadilha 15)');
+  for (const c of ['a sigla', 'o número', 'o ano'])
+    conf(ch.includes(`'${c}'`), `falta "${c}" quando o campo esta vazio`);
+  // A sigla nasce preenchida com SCC — o caso comum — e continua editavel.
+  conf(/id="ciSgSigla" value="SCC"/.test(html), 'a sigla nasce SCC, e o campo continua editavel');
 }
 
 console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
@@ -325,10 +318,15 @@ console.log('\n═══ 4g. BOTAO BUSCAR EM TODAS AS TELAS ═══');
 {
   // O botao nasceu so no Estoque de TRs; as outras buscavam apenas ao digitar, e quem
   // procurava o botao achava que a tela nao tinha busca.
+  // ⚠️ O C.I. SAIU DAQUI EM 25/08/2026, e nao por descuido: a tela nova tem DOIS blocos de
+  // busca independentes, cada um com o seu Buscar, e o de cima so acende com os tres campos
+  // do processo preenchidos. O botao compartilhado tem um so, e sempre aceso.
   const usos = (html.match(/\$\{BTN_BUSCAR\('/g) || []).length;
-  conf(usos === 6, `${usos} telas com o botao Buscar (esperado 6)`);
+  conf(usos === 5, `${usos} telas com o botao Buscar compartilhado (esperado 5)`);
+  conf(/onclick="ciBuscarSgpe\(\)"/.test(html) && /onclick="ciBuscarGeral\(\)"/.test(html),
+       'e o C.I. tem os seus dois, um por bloco');
 
-  for (const acao of ['buscar()', 'buscarPlan()', 'adminFiltrar()', 'ciBuscarAgora()', 'estBuscarAgora()', 'estLogBuscarAgora()']) {
+  for (const acao of ['buscar()', 'buscarPlan()', 'adminFiltrar()', 'estBuscarAgora()', 'estLogBuscarAgora()']) {
     conf(html.includes(`\${BTN_BUSCAR('${acao}')}`), `botao chamando ${acao}`);
   }
 
@@ -337,14 +335,19 @@ console.log('\n═══ 4g. BOTAO BUSCAR EM TODAS AS TELAS ═══');
 
   // As tres telas com debounce precisam de um "aplicar agora" que cancele o timer — senao o
   // clique no botao pintaria, e 150ms depois o debounce pintaria de novo.
-  for (const fn of ['ciBuscarAgora', 'estBuscarAgora', 'estLogBuscarAgora']) {
+  for (const fn of ['estBuscarAgora', 'estLogBuscarAgora']) {
     const corpo = (html.match(new RegExp(`function ${fn}\\(\\)[\\s\\S]*?\\n\\}`)) || [''])[0];
     conf(/clearTimeout/.test(corpo), `${fn} cancela o debounce pendente`, corpo.trim().slice(0, 60));
   }
 
   // A busca ao digitar continua existindo em todas.
-  for (const id of ['ciBusca', 'estBusca', 'admBusca', 'estLogBusca']) {
+  for (const id of ['estBusca', 'admBusca', 'estLogBusca']) {
     conf(new RegExp(`id="${id}"[^>]*oninput=`).test(html), `${id} mantem a busca ao digitar`);
+  }
+  // ⚠️ NO C.I. A BUSCA E NO ENTER OU NO BOTAO, nunca ao digitar. Cada tecla dispararia uma
+  // consulta ao banco sobre 2.928 PCs — e o bloco do processo so faz sentido completo.
+  for (const id of ['ciQ', 'ciSgNum', 'ciSgAno']) {
+    conf(new RegExp(`id="${id}"[^>]*onkeydown=`).test(html), `${id} busca no Enter, nao ao digitar`);
   }
   for (const id of ['fBusca', 'plBusca']) {
     conf(new RegExp(`id="${id}"[^>]*onkeydown=`).test(html), `${id} mantem a busca no Enter`);

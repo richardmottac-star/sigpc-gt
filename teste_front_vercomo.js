@@ -280,7 +280,8 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
     ['pEstornar',       'estornar — decisão de coordenação'],
     ['abrirDevM',       'devolver TR — decisão de coordenação'],
     ['abrirPedidoDev',  'solicitar devolução — o pedido é dele, não seu'],
-    ['ciDecidir',       'decidir no C.I. — é do técnico, não do analista'],
+    // ⚠️ ERA `ciDecidir` ate 25/08/2026, quando a tela do C.I. voltou a ser POR PC.
+    ['ciConfirmar',     'decidir no C.I. — é do técnico, não do analista'],
   ];
 
   LIBERADAS.forEach(([fn, rot]) => {

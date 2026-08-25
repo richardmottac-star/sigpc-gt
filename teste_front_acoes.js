@@ -557,80 +557,44 @@ conf(/JSON\.stringify\(\{ usuario_id: U\.id \}\)/.test(html),
      'o excluir manda usuario_id, e nao mais perfil');
 
 // ═════════════════════════════════════════════════════════════════════════════
-S('17. CONTROLE INTERNO — o painel de carga (18/08/2026)');
+S('17. CONTROLE INTERNO — a tela mudou de unidade (25/08/2026)');
 
-conf(/border-radius:11px;background:#0F6E56/.test(html.replace(/\n\s*/g, ' ')),
-     'cabecalho com o escudo em quadrado #0F6E56');
-conf(/técnico\$\{n === 1 \? '' : 's'\} na equipe/.test(html), 'subtitulo com os tecnicos da equipe');
-// ⚠️ A contagem sai do cadastro, mas as ANALISTAS do filtro saem da propria fila.
-conf(/perfil === 'controle_interno' && u\.ativo !== false/.test(html),
-     'e conta so os tecnicos ativos');
-conf(/const CI_CARDS = \[/.test(html), 'os quatro cards numa lista so');
-for (const [ch, bg, fg] of [['fila', '#BA7517', '#FAC775'], ['espera', '#A32D2D', '#F7C1C1'],
-                            ['encam', '#185FA5', '#B5D4F4'], ['encerr', '#3B6D11', '#C0DD97']])
-  conf(new RegExp(`chave: '${ch}'[^\\n]*bg: '${bg}', fg: '${fg}'`).test(html),
-       `card ${ch}: ${bg} / ${fg}`);
-conf(/font-size:30px;font-weight:500;color:#fff/.test(html), 'numero 30px peso 500 branco');
-conf(/font-size:11\.5px;color:\$\{c\.fg\}/.test(html), 'rotulo 11.5px na cor clara');
-// ⚠️ Os numeros sao da FILA INTEIRA, nao do filtro.
-conf(/OS QUATRO NÚMEROS SÃO DA FILA INTEIRA/.test(html),
-     'e sao da fila inteira, nao do filtro');
+// ⚠️ AS SEÇÕES 17 A 17e MUDARAM DE ARQUIVO, e não sumiram. Elas cobriam o painel por TR de
+// 18/08 — cabeçalho, cards, filtros, agrupamento por TR e o cartão de decisão da PARCELA.
+// Em 25/08 o Richard trocou a unidade: o Controle Interno trabalha por PC, e a tela inteira
+// foi reescrita. As checagens equivalentes vivem agora em `teste_front_ci_fila.js`, que é a
+// suíte da tela do C.I.
+//
+// O que fica aqui são as três garantias que ATRAVESSAM a mudança — as que valeriam qualquer
+// que fosse a unidade, e que por isso não podem morar só na suíte da tela nova.
 
-S('17b. OS FILTROS');
-conf(/id="ciFiltroAnalista"/.test(html), 'filtro por analista');
-conf(/id="ciFiltroOrdem"/.test(html), 'filtro por tempo de espera');
-conf(/Mais antigas primeiro/.test(html) && /Mais recentes primeiro/.test(html), 'nas duas direcoes');
-// ⚠️ As analistas saem da FILA, nao do cadastro: listar as 46 encheria o select de nomes que
-// nao tem nada na fila, e escolher um devolveria tela vazia sem dizer por que.
-conf(/_ciDados\.forEach\(p => \{ if \(p\.analista_id\) mapa\.set/.test(html),
-     'e a lista de analistas sai da propria fila');
-conf((html.match(/BTN_BUSCAR\('ciBuscarAgora\(\)'\)/g) || []).length === 1, 'um botao Buscar so');
-conf(!/function ciLimparBusca/.test(html), 'e o Limpar orfao foi removido');
+// ⚠️ O AGRUPAMENTO POR TR SAIU INTEIRO. Enquanto `ciGrupos` existisse, a tela teria duas
+// respostas para "qual é a unidade do C.I." — e um dia alguém chamaria a errada.
+conf(!/function ciGrupos\(\)/.test(html), 'o agrupamento por TR saiu do index.html');
+conf(!/irCIFila\(\)/.test(html), 'e a Fila de trabalho por TR tambem');
+conf(!html.includes('${API_URL}' + '/ci/tr/'), 'nenhuma CHAMADA as rotas por TR sobrou');
 
-S('17c. AGRUPAMENTO POR TR');
-// ⚠️ Antes a mesma TR aparecia oito vezes seguidas: o agrupamento era por (TR, parcela), que
-// e a unidade de DECISAO, nao a de leitura.
-conf(/function ciGruposTR\(\)/.test(html), 'agrupa por TR');
-conf(/function ciGrupoTR\(t\)/.test(html), 'com cabecalho de grupo');
-conf(/background:#EAF3DE;padding:11px 15px/.test(html), 'no fundo #EAF3DE');
-conf(/font-size:14px;font-weight:500;color:#173404/.test(html), 'TR em 14px peso 500 #173404');
-conf(/font-size:11\.5px;color:#3B6D11/.test(html), 'entidade em 11.5px #3B6D11');
-conf(/parcela\$\{t\.parcelas\.length > 1 \? 's' : ''\} na fila/.test(html),
-     'e a direita as parcelas e a analista');
-// A primeira aberta, as demais em linha fina.
-conf(/const aberta = abertaNesta \|\| t\.parcelas\[0\]/.test(html), 'a primeira parcela vem aberta');
-conf(/function ciParcelaLinha\(p\)/.test(html), 'as demais em linha fina');
-conf(/onclick="ciAbrir\('\$\{escHtml\(p\.chave\)\}'\)"/.test(html), 'clicavel para expandir');
+// ⚠️ A BAIXA NUNCA É TOCADA PELA TELA. É a regra que o ciclo do C.I. inteiro protege, e ela
+// não depende de a unidade ser a TR ou a PC: nem a decisão, nem a devolução à fila, nem o
+// passar a outro mexem em `baixada`, `data_baixa` ou `enviado_ci`.
+{
+  const ini = html.indexOf('//  CONTROLE INTERNO — POR PC');
+  const fim = html.indexOf('Encaminha a PARCELA ao Controle Interno, do detalhe da TR.');
+  conf(ini > 0 && fim > ini, 'o bloco do C.I. foi localizado');
+  const bloco = html.slice(ini, fim).split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  // ⚠️ LER `data_baixa` PARA MOSTRAR "Baixada em" É O CONTRÁRIO DE tocar nela — o técnico
+  // precisa saber quando a analista baixou. O que não pode existir é a tela MANDANDO qualquer
+  // uma das três de volta ao servidor, que é o que este recorte procura.
+  const enviado = (bloco.match(/body: JSON.stringify([^)]*)/g) || []).join(' | ');
+  conf(!/baixada|data_baixa|enviado_ci/.test(enviado),
+       'a tela do C.I. nunca ENVIA baixada, data_baixa nem enviado_ci');
+  conf(bloco.includes("'Baixada em', l.data_baixa"), 'e a data da baixa e so LIDA, para o cartao');
+}
 
-S('17d. O CARTAO DE DECISAO');
-conf(/function ciParcelaAberta\(g\)/.test(html), 'o cartao existe');
-conf(/function ciFaixaEspera\(dias\)/.test(html), 'com a etiqueta de espera por faixa');
-conf(/dias <= 15[\s\S]{0,90}#EAF3DE[\s\S]{0,30}#27500A/.test(html), 'ate 15 dias verde');
-conf(/dias <= 30[\s\S]{0,90}#FAEEDA[\s\S]{0,30}#854F0B/.test(html), '16 a 30 ambar');
-conf(/#FCEBEB[\s\S]{0,30}#A32D2D/.test(html), 'acima de 30 vermelho');
-// O bloco cinza com os quatro dados.
-conf(/Código da PC/.test(html) && /Processo SGPe/.test(html)
-  && /Nota de liquidação/.test(html) && /Baixada em/.test(html), 'os quatro dados no bloco cinza');
-conf(/procHtml\(p0\.processo_pc, p0\.codigo_pc\)/.test(html), 'o SGPe como link');
-// O bloco ambar do parecer.
-conf(/border-left:3px solid #BA7517/.test(html), 'bloco ambar com borda de 3px');
-conf(/Parecer da analista \$\{escHtml\(g\.analista_nome/.test(html), 'com o nome da analista');
-// ⚠️ O texto do parecer e RARO — 26 de 958. Sem a variante, o bloco ficaria vazio em 97%.
-conf(/a analista não escreveu observação/.test(html),
-     'e diz quando a analista nao escreveu — em vez de ficar vazio');
-conf(/Sua manifestação — obrigatória para devolver com ressalvas/.test(html), 'o rotulo do campo');
-conf(/background:#3B6D11[\s\S]{0,120}C\.I\. de acordo/.test(html), 'botao "C.I. de acordo" #3B6D11');
-conf(/background:#BA7517[\s\S]{0,120}Devolver com ressalvas/.test(html), 'e "Devolver" #BA7517');
-conf(/encerra o ciclo\. A parcela sai da fila e vai para Encerradas/.test(html), 'a linha do de acordo');
-conf(/volta para a analista corrigir\. A baixa dela permanece/.test(html), 'e a do com ressalvas');
-
-S('17e. A DECISAO EM LOTE JA EXISTIA — e foi aproveitada');
-// ⚠️ A lib, a rota e o front ja trabalhavam com LISTA de codigos_pc desde 12/08. O Richard
-// mandou aproveitar se existisse, e existe: nada de decisao em lote foi reimplementado.
-conf(/codigos_pc: codigos/.test(html), 'o front manda uma LISTA de codigos_pc');
-conf(/function ciSelToggle\(codigoPc, chave\)/.test(html), 'com selecao por PC');
-conf(/function ciMarcarTodas\(chave\)/.test(html), 'e "marcar todas"');
-conf(/de \$\{g\.pcs\.length\} PC/.test(html), 'o cartao mostra quantas estao selecionadas');
+// ⚠️ E DECIDIR CONTINUA SENDO DO TÉCNICO. No modo "agir pela conta de", o superadmin lê a
+// tela e não decide por ninguém — a mesma trava que `ciDecidir` tinha, agora em `ciConfirmar`.
+conf(/function ciConfirmar\(codigo_pc\)[\s\S]{0,200}if\(verComoAtivo\(\)\)/.test(html),
+     'ciConfirmar recusa no modo "agir pela conta de"');
 
 // ═════════════════════════════════════════════════════════════════════════════
 S('18. AGIR PELA CONTA DE — a busca quebrada (19/08/2026)');
