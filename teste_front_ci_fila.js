@@ -112,14 +112,27 @@ console.log('\n═══ 3. O BOTAO DE CADA ESTADO ═══');
   conf(/ciFilaAbrir\('2020TR000657'\)/.test(minha), 'e abre a tela de decisao');
   conf(/border-left:3px solid #185FA5/.test(minha), 'e ganha a borda esquerda na cor do tecnico');
 
+  // ⚠️ ABRIR EXISTE EM TODO ESTADO (25/08/2026). O tecnico precisava ver as parcelas, o
+  // parecer da analista e o processo SGPe ANTES de decidir se assume — e antes disso a unica
+  // porta para a TR era assumi-la.
+  conf(/>Abrir</.test(livre), 'TR livre tambem oferece Abrir, ao lado do Assumir');
+  conf((livre.match(/<button/g) || []).length === 2, 'sao dois botoes na livre',
+       String((livre.match(/<button/g) || []).length));
+  conf(livre.indexOf('>Abrir<') < livre.indexOf('>Assumir<'), 'e Abrir vem primeiro');
+  conf(/background:#fff;color:var\(--te\)[^"]*"\s*\n?\s*onclick="event\.stopPropagation\(\);ciFilaAbrir/.test(livre)
+       || /background:#fff;color:var\(--te\)/.test(livre), 'o Abrir da livre e neutro');
+
   const doOutro = linha({ tecnico_id:63, tecnico_nome:'Atemilson Bispo dos Santos' });
-  conf(/Com Atemilson/.test(doOutro), 'TR de outro mostra "Com [nome]"');
-  conf(/disabled/.test(doOutro), 'e o botao vem desabilitado');
-  // ⚠️ ARMADILHA 15: botao que aceita clique e nao responde e pior que botao cinza — e o
-  // motivo do bloqueio tem de estar no `title`, nao so na cor.
-  conf(/title="[^"]*assumiu esta TR/.test(doOutro), 'com o motivo no title');
-  conf(!/onclick="event\.stopPropagation\(\);ciFilaAssumir/.test(doOutro),
-       'e sem onclick nenhum — nao basta o atributo disabled');
+  // ⚠️ O BOTAO CINZA "Com [nome]" SAIU EM 25/08. Ele ocupava a coluna inteira sem fazer nada,
+  // e a informacao que carregava — de quem e a TR — ja esta na coluna Responsavel, com avatar
+  // e nome. Botao desabilitado que repete o que a linha ja diz e ruido; no lugar dele entrou
+  // o Abrir, que faz algo: ver sem decidir.
+  conf(/>Abrir</.test(doOutro), 'TR de outro oferece Abrir — ver sem decidir');
+  conf(!/disabled/.test(doOutro), 'e NAO ha mais botao desabilitado ocupando a coluna');
+  conf(!/ciFilaAssumir/.test(doOutro), 'nem caminho para assumir a TR de outro');
+  conf(/Atemilson/.test(doOutro), 'e o nome de quem esta com ela continua na linha');
+  // ⚠️ O Abrir da TR de outro e NEUTRO; so o da propria e verde.
+  conf(!/background:#0F6E56/.test(doOutro), 'o Abrir da TR de outro e neutro');
 
   // A zebra e a etiqueta de espera
   conf(/background:#FCEBEB/.test(livre) && /color:#A32D2D/.test(livre), 'acima de 30 dias: etiqueta vermelha');
@@ -151,8 +164,11 @@ console.log('\n═══ 4. A TELA E O CAMINHO ═══');
   // superadmin, que nao passam pela fila, nao perdem nada.
   conf(/if\(trAlvo\) \{/.test(html), 'sem TR, a tela de decisao segue como era');
 
+  // ⚠️ A janela fecha na PROXIMA FUNCAO, e nao num numero: era 2.200 e estourou em 25/08,
+  // quando a faixa ganhou o "Assumir esta demanda" e a etiqueta da TR de outro. Janela por
+  // tamanho mede o tamanho do arquivo, nao a funcao.
   const iC = html.indexOf('async function ciFaixaTrRender');
-  const faixa = html.slice(iC, iC + 2200);
+  const faixa = html.slice(iC, html.indexOf('\nasync function irCI(', iC));
   conf(iC > 0, 'a faixa da TR existe');
   conf(/background:#0F6E56/.test(faixa), 'no verde da especificacao');
   conf(/◀ Fila/.test(faixa), 'com o caminho de volta');
@@ -160,7 +176,56 @@ console.log('\n═══ 4. A TELA E O CAMINHO ═══');
   conf(/com você desde/.test(faixa), 'e desde quando esta com o tecnico');
   conf(/↩ Devolver à fila/.test(faixa) && /⇄ Passar a outro/.test(faixa), 'e as duas saidas');
   // Sem responsavel nao ha o que devolver nem a quem passar.
-  conf(/l && l\.tecnico_id \? `/.test(faixa), 'os dois botoes so aparecem quando a TR tem dono');
+  conf(/l && l\.tecnico_id && meu \? `/.test(faixa), 'devolver e passar so aparecem quando a TR e MINHA');
+  // ⚠️ NA TR LIVRE O BOTAO PRINCIPAL E ASSUMIR (25/08): quem abriu para examinar e decidiu
+  // pegar nao pode ter de voltar a fila so para isso.
+  conf(/✓ Assumir esta demanda/.test(faixa), 'a TR livre mostra "Assumir esta demanda" em destaque');
+  conf(/ciFaixaAssumir\('\$\{escHtml\(tr\)\}'\)/.test(faixa), 'e ele chama ciFaixaAssumir');
+  // ⚠️ REAPROVEITA `ciFilaAssumir`: um caminho proprio seria uma segunda definicao de
+  // "assumir", com a propria confirmacao e o proprio tratamento do 409 de "outro chegou antes".
+  const iFA = html.indexOf('async function ciFaixaAssumir');
+  conf(/await ciFilaAssumir\(tr\)/.test(html.slice(iFA, iFA + 400)),
+       'que reaproveita o assumir da fila, e nao duplica a regra');
+  conf(/irCI\(tr\)/.test(html.slice(iFA, iFA + 400)),
+       'e redesenha a tela — e o que troca os botoes de decisao de cinza para ativos');
+  // TR de outro: a faixa diz com quem esta e desde quando.
+  conf(/com \$\{escHtml\(\(l\.tecnico_nome\|\|''\)\.split\(' '\)\[0\]\)\}/.test(faixa),
+       'e a TR de outro mostra "com [nome] desde DD/MM"');
+}
+
+console.log('\n═══ 4-B. ABRIR E SO LEITURA — DECIDIR EXIGE TER ASSUMIDO (25/08/2026) ═══');
+{
+  // ⚠️ A MESMA REGRA DO SERVIDOR (`ciFila.podeDecidir`), simples o bastante para caber nos
+  // dois lados sem divergir. A tela desabilita e diz por que; o servidor recusa. Uma sem a
+  // outra deixaria ou o botao morto sem explicacao, ou a explicacao sem trava.
+  conf(/function ciPodeDecidir\(tr\)/.test(html), 'ciPodeDecidir existe na tela');
+  const iP = html.indexOf('function ciPodeDecidir');
+  const pd = html.slice(iP, iP + 400);
+  conf(/perfilEfetivo\(U\) === 'superadmin'/.test(pd), 'o superadmin decide sem restricao');
+  conf(/String\(l\.tecnico_id\) === String\(U\.id\)/.test(pd), 'e os demais so a TR que assumiram');
+
+  conf(/function ciMotivoNaoDecide\(tr\)/.test(html), 'e ha o motivo para o botao cinza dizer');
+  const iM = html.indexOf('function ciMotivoNaoDecide');
+  const mt = html.slice(iM, iM + 400);
+  conf(/Assuma a demanda para poder decidir/.test(mt), 'TR livre: "Assuma a demanda para poder decidir"');
+  conf(/passe a demanda para você/.test(mt), 'TR de outro: diz com quem esta e o que fazer');
+
+  // ── o cartao de decisao
+  const iC = html.indexOf('function ciParcelaAberta');
+  const cartao = html.slice(iC, html.indexOf('function ciConversaHtml'));
+  conf(/const minha = ciPodeDecidir\(g\.tr\)/.test(cartao), 'o cartao pergunta se a TR e minha');
+  conf(/const podeDecidir = naFila && minha/.test(cartao),
+       'e so libera os botoes quando esta na fila E e minha');
+  // ⚠️ OS BOTOES APARECEM CINZAS, com o motivo AO LADO — nao somem. Sumindo, quem abriu para
+  // examinar nao descobriria que existe um passo antes (assumir): acharia que a tela e de
+  // leitura e pronto. Botao cinza com o porque ensina o caminho; ausente esconde que ha um.
+  conf(/naFila && !minha \? `/.test(cartao), 'sem posse, ha um ramo proprio de botoes cinzas');
+  conf(/cursor:not-allowed/.test(cartao), 'os botoes vem desabilitados');
+  conf((cartao.match(/ciMotivoNaoDecide\(g\.tr\)/g) || []).length >= 3,
+       'com o motivo no title dos dois E numa etiqueta ao lado',
+       String((cartao.match(/ciMotivoNaoDecide\(g\.tr\)/g) || []).length));
+  conf(/✓ C\.I\. de acordo<\/button>[\s\S]{0,400}↩ Devolver com ressalvas/.test(cartao),
+       'e os dois botoes cinzas tem os mesmos rotulos dos ativos');
 }
 
 console.log('\n═══ 5. O MOTIVO TRAVA O BOTAO ANTES DO CLIQUE ═══');

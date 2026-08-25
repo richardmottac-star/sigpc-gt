@@ -13490,7 +13490,7 @@ function ciFilaRender() {
       <div style="flex:0 0 110px;">Analista</div>
       <div style="flex:0 0 95px;">Espera</div>
       <div style="flex:0 0 135px;">Responsável</div>
-      <div style="flex:0 0 105px;"></div>
+      <div style="flex:0 0 150px;"></div>
     </div>`
   cont.innerHTML = cab + `<div style="border-radius:0 0 8px 8px;overflow:hidden;">` +
     linhas.map((l, i) => ciFilaLinha(l, i)).join('') + `</div>`
@@ -13505,17 +13505,23 @@ function ciFilaLinha(l, i) {
   // Zebra: ímpares var(--surface-2), pares o verde muito claro.
   const fundo = (i % 2 === 0) ? 'var(--surface-2,#F7F9F7)' : '#F2F8EC'
 
-  // ⚠️ O BOTÃO NASCE CONFORME O ESTADO, e o desabilitado leva o motivo no `title` — nunca um
-  // botão que aceita clique e não responde (armadilha 15).
+  // ⚠️ ABRIR EXISTE EM TODO ESTADO (25/08/2026, decisão do Richard). O técnico precisava ver
+  // as parcelas, o parecer da analista e o processo SGPe ANTES de decidir se assume — e antes
+  // disso a única porta para a TR era assumi-la. Abrir é só leitura: quem decide é quem
+  // assumiu, e a tela de decisão desabilita os dois botões dizendo por quê.
+  //
+  // ⚠️ E O BOTÃO DESABILITADO DE "COM [NOME]" SUMIU. Ele ocupava a coluna inteira sem fazer
+  // nada — e a informação que ele carregava (de quem é a TR) já está na coluna Responsável,
+  // com avatar e nome. Botão cinza que repete o que a linha já diz é ruído.
+  const abrir = (destaque) => `<button class="btn-acao"
+    style="${destaque ? 'background:#0F6E56;color:#fff;border-color:#0F6E56;' : 'background:#fff;color:var(--te);border:1.5px solid var(--cb);'}font-weight:700;flex:1;"
+    onclick="event.stopPropagation();ciFilaAbrir('${escHtml(l.tr)}')">Abrir</button>`
+
   const botao = !l.tecnico_id
-    ? `<button class="btn-acao" style="background:#0F6E56;color:#fff;border-color:#0F6E56;font-weight:700;width:100%;"
-         onclick="event.stopPropagation();ciFilaAssumir('${escHtml(l.tr)}')">Assumir</button>`
-    : meu
-      ? `<button class="btn-acao" style="background:#fff;color:var(--te);border:1.5px solid var(--cb);font-weight:700;width:100%;"
-           onclick="event.stopPropagation();ciFilaAbrir('${escHtml(l.tr)}')">Abrir</button>`
-      : `<button class="btn-acao" disabled title="${escHtml(l.tecnico_nome||'outro técnico')} assumiu esta TR. Para trabalhar nela, peça que ela passe a demanda."
-           style="background:var(--cl);color:var(--ct);border:1px solid var(--bd);cursor:not-allowed;width:100%;
-                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Com ${escHtml((l.tecnico_nome||'').split(' ')[0])}</button>`
+    ? `<div style="display:flex;gap:5px;">${abrir(false)}
+        <button class="btn-acao" style="background:#0F6E56;color:#fff;border-color:#0F6E56;font-weight:700;flex:1;"
+          onclick="event.stopPropagation();ciFilaAssumir('${escHtml(l.tr)}')">Assumir</button></div>`
+    : abrir(meu)
 
   return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${fundo};
                border-bottom:1px solid var(--cl);${cor?`border-left:3px solid ${cor};`:'border-left:3px solid transparent;'}">
@@ -13539,7 +13545,9 @@ function ciFilaLinha(l, i) {
            <span style="font-size:11.5px;color:var(--te);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
                  title="${escHtml(l.tecnico_nome||'')}">${escHtml((l.tecnico_nome||'').split(' ')[0])}</span>`
         : `<span style="font-size:12px;color:var(--ct);">—</span>`}</div>
-    <div style="flex:0 0 105px;">${botao}</div>
+    ${/* ⚠️ 150px, e não 105: a TR livre passou a ter DOIS botões lado a lado (Abrir e
+          Assumir). Mantendo 105 os dois ficariam ilegíveis, e "Assumir" quebraria a linha. */''}
+    <div style="flex:0 0 150px;">${botao}</div>
   </div>`
 }
 
@@ -13567,8 +13575,45 @@ async function ciFilaAssumir(tr) {
   } catch(e) { toast('Erro: '+e.message,'err'); await ciFilaCarregar() }
 }
 
-/** Abre a TELA DE DECISÃO com o recorte desta TR. */
+/** Abre a TELA DE DECISÃO com o recorte desta TR. Abrir é SÓ LEITURA — ver `ciPodeDecidir`. */
 function ciFilaAbrir(tr) { irCI(tr) }
+
+/**
+ * Assumir a partir da faixa da tela de decisão — quem abriu para examinar e decidiu pegar.
+ *
+ * ⚠️ REAPROVEITA `ciFilaAssumir`, que já tem a confirmação e o tratamento do 409 de "outro
+ * assumiu primeiro". Um caminho próprio aqui seria uma segunda definição de "assumir", e um
+ * dia divergiria da primeira. Depois de assumir, a TELA É REDESENHADA: é o que troca os
+ * botões de decisão de cinza para ativos, sem a pessoa precisar voltar à fila e entrar de novo.
+ */
+async function ciFaixaAssumir(tr) {
+  await ciFilaAssumir(tr)
+  const l = _ciFila.find(x => x.tr === tr)
+  if(l && String(l.tecnico_id) === String(U.id)) irCI(tr)
+  else ciFaixaTrRender(tr)
+}
+
+/**
+ * ESTA TR É MINHA PARA DECIDIR?
+ *
+ * ⚠️ A MESMA REGRA DO SERVIDOR (`ciFila.podeDecidir`), e é de propósito que ela seja simples
+ * o bastante para caber nos dois lados sem divergir: você decide a TR que assumiu; o
+ * superadmin decide sem restrição. A tela desabilita e diz por quê; o servidor recusa. Uma
+ * sem a outra deixaria ou o botão morto sem explicação, ou a explicação sem trava.
+ */
+function ciPodeDecidir(tr) {
+  if(perfilEfetivo(U) === 'superadmin') return true
+  const l = _ciFila.find(x => x.tr === tr)
+  return !!(l && String(l.tecnico_id) === String(U.id))
+}
+
+/** O motivo da recusa, para o botão cinza poder dizer POR QUE. */
+function ciMotivoNaoDecide(tr) {
+  const l = _ciFila.find(x => x.tr === tr)
+  return l && l.tecnico_nome
+    ? `Esta TR está com ${l.tecnico_nome}. Peça que ela passe a demanda para você.`
+    : 'Assuma a demanda para poder decidir.'
+}
 
 // ── Devolver à fila e passar a outro ────────────────────────────────────────
 // ⚠️ AS DUAS EXIGEM MOTIVO, mínimo de 10 caracteres, e quem confere é o SERVIDOR
@@ -13751,7 +13796,8 @@ async function ciFaixaTrRender(tr) {
   if(!_ciFila.length) { try { await ciFilaCarregar() } catch(e) { /* a faixa degrada sozinha */ } }
   const l = _ciFila.find(x => x.tr === tr)
   const meu = l && String(l.tecnico_id) === String(U.id)
-  const desde = meu && l.assumida_em ? planDataTs(l.assumida_em) : null
+  const livre = l && !l.tecnico_id
+  const desde = l && l.assumida_em ? planDataTs(l.assumida_em) : null
   el.innerHTML = `
     <div style="background:#0F6E56;color:#fff;border-radius:10px;padding:11px 15px;margin-bottom:13px;
                 display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
@@ -13763,9 +13809,21 @@ async function ciFaixaTrRender(tr) {
           ${l ? `${l.parcelas} parcela${l.parcelas===1?'':'s'} · ${l.pcs} PC${l.pcs===1?'':'s'} · enviada por ${escHtml(l.analista_nome||'—')}`
               : 'Esta TR não está na fila do Controle Interno.'}</div>
       </div>
-      ${desde ? `<span style="background:rgba(255,255,255,.18);border-radius:20px;padding:4px 11px;
+      ${/* ⚠️ A ETIQUETA DIZ DE QUEM É, SEMPRE — não só quando é sua. Abrindo a TR de outro,
+            a pergunta que o técnico faz é "com quem está e desde quando", e a resposta tem de
+            estar no topo, e não a um scroll de distância na lista. */''}
+      ${meu && desde ? `<span style="background:rgba(255,255,255,.18);border-radius:20px;padding:4px 11px;
                    font-size:10.5px;font-weight:800;white-space:nowrap;">com você desde ${desde}</span>` : ''}
-      ${l && l.tecnico_id ? `
+      ${l && l.tecnico_id && !meu ? `<span style="background:rgba(255,255,255,.18);border-radius:20px;padding:4px 11px;
+                   font-size:10.5px;font-weight:800;white-space:nowrap;">com ${escHtml((l.tecnico_nome||'').split(' ')[0])}${desde ? ` desde ${desde}` : ''}</span>` : ''}
+
+      ${/* ⚠️ NA TR LIVRE O BOTÃO PRINCIPAL É ASSUMIR, em branco cheio sobre o verde: quem
+            abriu para examinar e decidiu pegar não pode ter de voltar à fila para isso. */''}
+      ${livre ? `
+        <button class="btn-acao" onclick="ciFaixaAssumir('${escHtml(tr)}')"
+          style="background:#fff;color:#0F6E56;border:1.5px solid #fff;font-weight:800;padding:8px 16px;">
+          ✓ Assumir esta demanda</button>` : ''}
+      ${l && l.tecnico_id && meu ? `
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
           <button class="btn-acao" onclick="ciAbrirDevolver('${escHtml(tr)}')"
             style="background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.35);font-weight:700;">↩ Devolver à fila</button>
@@ -14039,7 +14097,12 @@ function ciParcelaAberta(g) {
   const f = ciFaixaEspera(g.dias_espera)
   const valor = g.pcs.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0)
   const p0 = g.pcs[0] || {}
-  const podeDecidir = _ciAba === 'na_fila'
+  // ⚠️ DECIDIR EXIGE TER ASSUMIDO (25/08/2026). Abrir passou a ser só leitura: o técnico
+  // examina as parcelas, o parecer e o SGPe antes de escolher se pega a TR. `_ciAba` continua
+  // valendo — só a fila tem o que decidir —, e agora soma-se a posse da demanda.
+  const naFila = _ciAba === 'na_fila'
+  const minha = ciPodeDecidir(g.tr)
+  const podeDecidir = naFila && minha
   const marcados = g.pcs.filter(x => _ciSel.has(x.codigo_pc)).length
 
   const dado = (rot, val) => `
@@ -14084,6 +14147,22 @@ function ciParcelaAberta(g) {
           : `<span style="opacity:.8;">${escHtml(g.parecer_tipo || 'Sem parecer registrado')} — a analista não escreveu observação.</span>`}
       </div>
     </div>
+
+    ${/* ⚠️ NA FILA MAS NÃO É MINHA: os dois botões aparecem CINZAS, com o motivo AO LADO —
+          não somem. Sumindo, o técnico que abriu para examinar não descobriria que existe um
+          passo antes (assumir); ele acharia que a tela é de leitura e pronto. Botão cinza com
+          o porquê ensina o caminho; botão ausente esconde que há caminho. */''}
+    ${naFila && !minha ? `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-acao" disabled title="${escHtml(ciMotivoNaoDecide(g.tr))}"
+          style="background:var(--cl);color:var(--ct);border:1px solid var(--bd);cursor:not-allowed;font-weight:800;padding:8px 15px;">
+          ✓ C.I. de acordo</button>
+        <button class="btn-acao" disabled title="${escHtml(ciMotivoNaoDecide(g.tr))}"
+          style="background:var(--cl);color:var(--ct);border:1px solid var(--bd);cursor:not-allowed;font-weight:800;padding:8px 15px;">
+          ↩ Devolver com ressalvas</button>
+        <span style="font-size:11.5px;color:#8A6100;background:#FFF4D6;border:1px solid #E8CE8A;
+                     border-radius:7px;padding:5px 11px;">${escHtml(ciMotivoNaoDecide(g.tr))}</span>
+      </div>` : ''}
 
     ${podeDecidir ? `
       <div class="mc-campo" style="margin-bottom:9px;">
