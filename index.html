@@ -13321,8 +13321,9 @@ async function admRejeitar(id) {
 // SGPe, uma nota de liquidação, um parecer. Abrir uma TR de até 83 prestações para decidir
 // sobre uma é o contrário do que a pessoa está fazendo.
 //
-// A tela por TR saiu inteira, e com ela `GET /ci/fila_trabalho`, as três `POST /ci/tr/*` e a
-// tabela `ci_responsavel` — que estava VAZIA, então nada foi perdido.
+// A tela por TR saiu inteira, e com ela `GET /ci/fila_trabalho` e as três `POST /ci/tr/*`. A
+// tabela `ci_responsavel`, que guardava o dono da TR, foi renomeada para
+// `ci_responsavel_backup_20260825` — estava VAZIA, e mesmo assim não foi derrubada.
 //
 // ⚠️ A FILA LISTA POR `ci_situacao`, NÃO POR `enviado_ci`. Até 12/08/2026 filtrava por
 // `enviado_ci`, e a única ação era "devolver ao analista" — que zerava esse campo. A PC sumia
