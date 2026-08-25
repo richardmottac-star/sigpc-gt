@@ -1379,6 +1379,75 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ⚠️ OS TRÊS MODAIS DAS NOVIDADES FICAM AQUI, no HTML global, e não dentro de uma tela.
+     O aviso do primeiro acesso aparece no LOGIN, antes de qualquer tela ser montada — posto
+     dentro de `irNovidades`, ele não existiria no momento em que precisa abrir. -->
+<div class="mo" id="moNovAviso">
+  <div class="mc" style="width:430px;">
+    <div class="mch" style="background:#534AB7;">
+      <h3 id="novAvisoTitulo" style="color:#fff;">Novidades</h3>
+      <button class="mcx" onclick="fm('moNovAviso')">✕</button>
+    </div>
+    <div class="mcb">
+      <div id="novAvisoCorpo" style="margin-bottom:6px;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moNovAviso')">Depois</button>
+        <button class="mcok" style="background:#534AB7;border-color:#534AB7;" onclick="novAvisoVer()">Ver novidades</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="moNovImg">
+  <div class="mc" style="width:min(900px,94vw);">
+    <div class="mch v"><h3 id="novImgTitulo">Imagem</h3><button class="mcx" onclick="fm('moNovImg')">✕</button></div>
+    <div class="mcb"><div id="novImgCorpo"></div></div>
+  </div>
+</div>
+
+<div class="mo" id="moNovForm">
+  <div class="mc" style="width:min(620px,94vw);">
+    <div class="mch v"><h3 id="novFTit">Publicar novidade</h3><button class="mcx" onclick="fm('moNovForm')">✕</button></div>
+    <div class="mcb">
+      <div class="mc-campo"><label>Título</label><input type="text" id="novFTitulo" maxlength="160"></div>
+      <div class="mc-campo"><label>Texto</label><textarea id="novFTexto" rows="5"
+        placeholder="O que mudou, e o que a pessoa faz com isso."></textarea></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="mc-campo" style="flex:1;min-width:170px;"><label>Categoria (define o ícone e a cor)</label>
+          <select id="novFCategoria">
+            <option value="tela_nova">Tela nova</option>
+            <option value="melhoria">Melhoria</option>
+            <option value="correcao">Correção</option>
+            <option value="regra">Regra de negócio</option>
+            <option value="aviso">Aviso</option>
+          </select></div>
+        <div class="mc-campo" style="flex:1;min-width:170px;"><label>Público-alvo</label>
+          <select id="novFPublico">
+            <option value="todos">Todos</option>
+            <option value="analistas">Para analistas</option>
+            <option value="controle_interno">Controle Interno</option>
+            <option value="coordenacao">Coordenação</option>
+          </select></div>
+        <div class="mc-campo" style="flex:0 0 150px;"><label>Data</label>
+          <input type="date" id="novFData"></div>
+      </div>
+      <div class="mc-campo"><label>Link da imagem no Drive (opcional)</label>
+        <input type="text" id="novFImagem" placeholder="https://drive.google.com/file/d/.../view">
+        <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">
+          O arquivo precisa estar compartilhado como "qualquer pessoa com o link" — a conversão
+          do endereço não contorna permissão.</div></div>
+      <div class="mc-campo"><label>Legenda da imagem (opcional)</label>
+        <input type="text" id="novFLegenda"></div>
+      <div class="mc-campo"><label>Link do guia completo (opcional)</label>
+        <input type="text" id="novFGuia" placeholder="https://drive.google.com/file/d/.../view"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moNovForm')">Cancelar</button>
+        <button class="mcok" id="novFBtn" style="background:#534AB7;border-color:#534AB7;" onclick="novSalvar()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="moPuxarCi">
   <div class="mc">
     <div class="mch v"><h3>↩ Puxar de volta do Controle Interno</h3><button class="mcx" onclick="fm('moPuxarCi')">✕</button></div>
@@ -2673,6 +2742,12 @@ const SB_ITENS = [
     icone:'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z' },
   { id:'meuspedidos', bloco:'analista', rotulo:'Meus pedidos', acao:'irMeusPedidos()', pode:naoEhCI,
     icone:'M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm0 16H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V9h10v2z' },
+  // ⚠️ NOVIDADES É PARA TODOS OS PERFIS, sem exceção — inclusive o Controle Interno, que fica
+  // de fora de quase tudo no bloco Principal. Uma tela que existe para contar o que mudou não
+  // pode ter público restrito: quem não vê continua sabendo pelo WhatsApp, que é o problema.
+  { id:'novid', bloco:'analista', rotulo:'Novidades',     acao:'irNovidades()', pode:()=>true,
+    badge:'sbNovidBadge',
+    icone:'M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z' },
   { id:'perfil', bloco:'analista', rotulo:'Meu Perfil',    acao:'irMeuPerfil()', pode:()=>true,
     icone:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z' },
   // Para quem É do Controle Interno, esta é a tela de trabalho — fica no primeiro bloco.
@@ -2853,6 +2928,10 @@ function renderSB() {
   onlineIniciar()
   sinoIniciar()
   faixaIniciar()
+  // ⚠️ O CONTADOR DO MENU PRECISA DO NÚMERO ANTES DE ALGUÉM CLICAR — por isso a busca sai
+  // daqui, junto com o sino, e não de dentro de `irNovidades`. E o aviso do primeiro acesso
+  // vem logo atrás: ele só abre se houver algo novo, e uma vez por sessão.
+  novAvisoInicial()
 }
 
 /**
@@ -14378,6 +14457,331 @@ async function verProdDetalhe(analistaId, nome) {
   } catch(e) {
     document.getElementById('moNLB').innerHTML = `<p style="color:var(--r);">Erro: ${e.message}</p>`
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  NOVIDADES DO SISTEMA  (25/08/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ O PROBLEMA: cada mudança virava mensagem de WhatsApp e PDF por e-mail. Quem não leu a
+// mensagem não ficava sabendo, e quem entra depois nunca via. O histórico morava fora do
+// sistema, num lugar que não pertence a ninguém.
+//
+// ⚠️ A TELA NÃO DECIDE QUEM VÊ O QUÊ. O recorte por público acontece no SERVIDOR: mandar
+// tudo e esconder aqui deixaria a novidade da coordenação a um DevTools de distância de
+// qualquer analista. As cores e os ícones das categorias também vêm de lá — se cada lado
+// tivesse a sua tabela, publicar uma categoria nova exigiria mexer nos dois repositórios.
+
+let _novidades = []
+let _novCategorias = {}
+let _novPublicos = {}
+let _novChip = 'tudo'
+let _novContagem = {}
+let _novPodePublicar = false
+let _novNaoLidas = 0
+// ⚠️ UMA VEZ POR SESSÃO, e a marca é de MEMÓRIA, não de `localStorage`: o modal deve voltar
+// no próximo login, inclusive na mesma máquina. Guardado no navegador, quem entrasse amanhã
+// não veria o aviso — e é justamente quem passou dias fora que mais precisa dele.
+let _novModalMostrado = false
+
+// O ícone de cada categoria. A COR vem do servidor; o desenho é da tela, porque é o único
+// pedaço que não muda com o dado.
+const NOV_ICONES = {
+  tela_nova: 'M4 4h16v4H4V4zm0 6h7v10H4V10zm9 0h7v10h-7V10z',
+  melhoria:  'M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z',
+  correcao:  'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  regra:     'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
+  aviso:     'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',
+}
+const novIcone = (c) => NOV_ICONES[c] || NOV_ICONES.melhoria
+
+/**
+ * Busca as novidades. Serve a TELA e o CONTADOR DO MENU — por isso é chamada no login também.
+ *
+ * ⚠️ NÃO MARCA NADA COMO VISTO. Quem carimba "vi até aqui" é `irNovidades`, ao ABRIR a tela.
+ * Se a busca marcasse, o contador do menu zeraria sozinho na primeira navegação e ninguém
+ * chegaria a ver o número.
+ */
+async function novCarregar() {
+  try {
+    const r = await fetch(`${API_URL}/novidades?usuario_id=${U.id}`)
+    const j = await r.json()
+    if(j.error) return
+    _novidades = j.data || []
+    _novContagem = j.contagem || {}
+    _novCategorias = j.categorias || {}
+    _novPublicos = j.publicos || {}
+    _novPodePublicar = !!j.pode_publicar
+    _novNaoLidas = j.nao_lidas || 0
+    novPintarBadge()
+  } catch(e) { /* menu sem número é melhor que menu quebrado */ }
+}
+
+function novPintarBadge() {
+  const b = document.getElementById('sbNovidBadge')
+  if(!b) return
+  b.textContent = _novNaoLidas > 99 ? '99+' : _novNaoLidas
+  b.style.display = _novNaoLidas ? '' : 'none'
+}
+
+async function irNovidades() {
+  ativarMenu('novid')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:15px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#534AB7;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#CECBF6;"><path d="${NOV_ICONES.melhoria}"/></svg></span>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-size:16px;font-weight:700;">Novidades do sistema</div>
+        <div style="font-size:11.5px;color:var(--ct);">O que mudou no SIGPC-GT, da mais recente para a mais antiga</div>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;" id="novAcoes"></div>
+    </div>
+    <div id="novChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;"></div>
+    <div id="novLista"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+
+  await novCarregar()
+  novRender()
+
+  // ⚠️ CARIMBA "VI ATÉ AQUI" DEPOIS DE DESENHAR, e não antes: a lista já foi montada com o
+  // estado ANTIGO, então as etiquetas "novo" continuam visíveis nesta visita. Marcar antes
+  // faria a pessoa abrir a tela e não ver nada destacado — que é o oposto do que ela veio ver.
+  try {
+    await fetch(`${API_URL}/novidades/marcar_visto`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ usuario_id: U.id }) })
+    _novNaoLidas = 0
+    novPintarBadge()
+  } catch(e) { /* na próxima abertura marca */ }
+}
+
+function novVisiveis() {
+  if(_novChip === 'tudo')  return _novidades
+  if(_novChip === 'novas') return _novidades.filter(n => n.nova)
+  return _novidades.filter(n => n.publico === _novChip)
+}
+
+function novRender() {
+  const acoes = document.getElementById('novAcoes')
+  if(acoes) acoes.innerHTML =
+    `${_novPodePublicar ? `<button class="btn-acao" style="background:#534AB7;color:#fff;border-color:#534AB7;font-weight:700;"
+       onclick="novAbrirForm()">+ Publicar novidade</button>` : ''}
+     <button class="btn-acao" style="background:#fff;color:var(--te);border:1.5px solid var(--cb);font-weight:700;"
+       onclick="novMarcarTudo()">Marcar tudo como lido</button>`
+
+  // ── chips
+  const CHIPS = [
+    { id:'tudo',  rot:'Tudo',             n:_novContagem.tudo  ?? 0, bg:'#173404', fg:'#fff' },
+    { id:'novas', rot:'Novas para você',  n:_novContagem.novas ?? 0, bg:'#EEEDFE', fg:'#3C3489' },
+    { id:'analistas',        rot:'Para analistas',  n:_novContagem.analistas ?? 0 },
+    { id:'controle_interno', rot:'Controle Interno', n:_novContagem.controle_interno ?? 0 },
+    { id:'coordenacao',      rot:'Coordenação',      n:_novContagem.coordenacao ?? 0 },
+  ]
+  const ch = document.getElementById('novChips')
+  if(ch) ch.innerHTML = CHIPS.map(c => {
+    const on = _novChip === c.id
+    const bg = on ? (c.bg || '#534AB7') : '#fff'
+    const fg = on ? (c.fg || '#fff') : (c.n ? 'var(--te)' : 'var(--ct)')
+    return `<button onclick="novChip('${c.id}')"
+      style="border:1.5px solid ${on ? bg : 'var(--cb)'};background:${bg};color:${fg};border-radius:20px;
+             padding:5px 13px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;
+             display:inline-flex;align-items:center;gap:6px;${c.n?'':'opacity:.55;'}">
+      ${c.rot}<span style="background:${on?'rgba(255,255,255,.25)':'var(--cl)'};color:${on?fg:'var(--ct)'};
+        border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;">${c.n}</span></button>`
+  }).join('')
+
+  // ── lista, agrupada por data
+  const el = document.getElementById('novLista')
+  if(!el) return
+  const lista = novVisiveis()
+  if(!lista.length) {
+    el.innerHTML = `<div style="text-align:center;padding:28px;color:var(--ct);font-size:13px;">
+      ${_novidades.length ? 'Nada neste recorte.' : 'Ainda não há novidades publicadas.'}</div>`
+    return
+  }
+  const grupos = []
+  lista.forEach(n => {
+    const d = String(n.data).slice(0,10)
+    const g = grupos.find(x => x.data === d)
+    if(g) g.itens.push(n); else grupos.push({ data:d, itens:[n] })
+  })
+  el.innerHTML = grupos.map(g => `
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--ct);
+                font-weight:700;margin:18px 0 9px;">${escHtml(novDataLonga(g.data))}</div>
+    ${g.itens.map(novCard).join('')}`).join('')
+}
+
+/** A data por extenso do rótulo do grupo. Constrói a partir das PARTES — armadilha 25. */
+function novDataLonga(iso) {
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if(!m) return String(iso)
+  const MES = ['janeiro','fevereiro','março','abril','maio','junho','julho',
+               'agosto','setembro','outubro','novembro','dezembro']
+  return `${+m[3]} de ${MES[+m[2]-1]} de ${m[1]}`
+}
+
+function novCard(n) {
+  const cat = _novCategorias[n.categoria] || { bg:'#EEEDFE', cor:'#3C3489', rotulo:n.categoria }
+  const pub = _novPublicos[n.publico] || n.publico
+  return `<div style="background:#FCFDFC;border-radius:11px;box-shadow:var(--sombra);padding:14px 16px;
+               margin-bottom:9px;${n.nova ? 'border-left:3px solid #534AB7;' : ''}">
+    <div style="display:flex;gap:11px;align-items:flex-start;">
+      <span style="flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:${cat.bg};
+                   display:inline-flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:${cat.cor};"><path d="${novIcone(n.categoria)}"/></svg></span>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14.5px;font-weight:500;color:var(--te);">${escHtml(n.titulo||'')}</span>
+          ${n.nova ? `<span style="background:#534AB7;color:#fff;font-size:9.5px;font-weight:800;
+            padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px;">novo</span>` : ''}
+        </div>
+        <div style="font-size:13px;color:var(--ct);line-height:1.65;margin-top:5px;white-space:pre-wrap;">${escHtml(n.texto||'')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <span style="font-size:11px;color:${cat.cor};background:${cat.bg};padding:2px 9px;border-radius:20px;">${escHtml(cat.rotulo)}</span>
+          <span style="font-size:11px;color:var(--ct);background:var(--cl);padding:2px 9px;border-radius:20px;">${escHtml(pub)}</span>
+        </div>
+      </div>
+    </div>
+    ${/* ⚠️ A IMAGEM RECUA 45px À ESQUERDA para alinhar com o TÍTULO, e não com o ícone: são
+          34px do quadrado mais os 11px do espaço entre ele e o texto. */''}
+    ${n.imagem_src ? `<div style="margin:11px 0 0 45px;">
+      <img src="${escHtml(n.imagem_src)}" alt="${escHtml(n.imagem_legenda||n.titulo||'')}"
+           style="max-width:100%;border:1px solid var(--cb);border-radius:8px;display:block;"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+      ${/* ⚠️ Imagem do Drive só aparece se o arquivo estiver compartilhado como "qualquer
+            pessoa com o link" — a conversão não contorna permissão. Sem este aviso, o card
+            ficaria com um buraco silencioso e ninguém saberia que é questão de partilha. */''}
+      <div style="display:none;font-size:11px;color:#A32D2D;background:#FCEBEB;border:1px solid #F5C6C0;
+                  border-radius:7px;padding:7px 10px;">A imagem não carregou. Confira se o arquivo do Drive
+        está compartilhado como "qualquer pessoa com o link".</div>
+      ${n.imagem_legenda ? `<div style="font-size:11px;font-style:italic;color:var(--ct);margin-top:5px;">${escHtml(n.imagem_legenda)}</div>` : ''}
+    </div>` : ''}
+    ${(n.imagem_src || n.guia_url) ? `<div style="display:flex;gap:7px;flex-wrap:wrap;margin:11px 0 0 45px;">
+      ${n.imagem_src ? `<button class="btn-acao" style="background:#fff;color:#3C3489;border:1.5px solid #CECBF6;font-weight:700;"
+        onclick="novVerImagem(${n.id})">🔍 Ver como é na tela</button>` : ''}
+      ${n.guia_url ? `<a href="${escHtml(n.guia_url)}" target="_blank" rel="noopener" class="btn-acao"
+        style="background:#fff;color:var(--te);border:1.5px solid var(--cb);font-weight:700;text-decoration:none;
+               display:inline-flex;align-items:center;">📄 Guia completo</a>` : ''}
+    </div>` : ''}
+    ${_novPodePublicar ? `<div style="display:flex;gap:10px;margin:10px 0 0 45px;">
+      <a href="javascript:void(0)" onclick="novAbrirForm(${n.id})" style="font-size:10.5px;color:var(--ct);">editar</a>
+      <a href="javascript:void(0)" onclick="novExcluir(${n.id})" style="font-size:10.5px;color:var(--r);">excluir</a>
+    </div>` : ''}
+  </div>`
+}
+
+function novChip(id) { _novChip = id; novRender() }
+
+async function novMarcarTudo() {
+  try {
+    await fetch(`${API_URL}/novidades/marcar_visto`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ usuario_id: U.id }) })
+  } catch(e) { toast('Erro ao marcar como lido.','err'); return }
+  _novidades = _novidades.map(n => ({ ...n, nova:false }))
+  _novContagem = { ..._novContagem, novas:0 }
+  _novNaoLidas = 0
+  novPintarBadge(); novRender()
+  toast('Tudo marcado como lido.','ok')
+}
+
+function novVerImagem(id) {
+  const n = _novidades.find(x => x.id === id)
+  if(!n || !n.imagem_src) return
+  document.getElementById('novImgTitulo').textContent = n.titulo || 'Imagem'
+  document.getElementById('novImgCorpo').innerHTML =
+    `<img src="${escHtml(n.imagem_src)}" alt="${escHtml(n.titulo||'')}" style="max-width:100%;display:block;border-radius:8px;">
+     ${n.imagem_legenda ? `<div style="font-size:11.5px;font-style:italic;color:var(--ct);margin-top:8px;">${escHtml(n.imagem_legenda)}</div>` : ''}`
+  document.getElementById('moNovImg').classList.add('open')
+}
+
+// ── O aviso do primeiro acesso ──────────────────────────────────────────────
+//
+// ⚠️ UMA VEZ POR SESSÃO, e não a cada navegação: `_novModalMostrado` é de memória, então
+// recarregar a página traz de volta e entrar amanhã traz de novo — que é o certo, porque
+// quem passou dias fora é justamente quem precisa do aviso.
+async function novAvisoInicial() {
+  if(_novModalMostrado) return
+  _novModalMostrado = true
+  await novCarregar()
+  // Sem nada novo, o modal NÃO aparece. Um aviso que abre dizendo "nada" ensina a fechar
+  // sem ler — e aí ele deixa de funcionar no dia em que houver algo.
+  if(!_novNaoLidas) return
+  const novas = _novidades.filter(n => n.nova).slice(0, 5)
+  const el = document.getElementById('novAvisoCorpo')
+  if(!el) return
+  document.getElementById('novAvisoTitulo').textContent =
+    `${_novNaoLidas} novidade${_novNaoLidas>1?'s':''} desde sua última visita`
+  el.innerHTML = novas.map(n => {
+    const cat = _novCategorias[n.categoria] || { bg:'#EEEDFE', cor:'#3C3489' }
+    return `<div style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;">
+      <span style="flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:${cat.cor};margin-top:5px;"></span>
+      <span style="font-size:12.5px;color:var(--te);">${escHtml(n.titulo||'')}</span></div>`
+  }).join('') + (_novNaoLidas > novas.length
+    ? `<div style="font-size:11px;color:var(--ct);margin-top:6px;">e mais ${_novNaoLidas - novas.length}.</div>` : '')
+  document.getElementById('moNovAviso').classList.add('open')
+}
+
+function novAvisoVer() { fm('moNovAviso'); irNovidades() }
+
+// ── O formulário do superadmin ──────────────────────────────────────────────
+let _novEditId = null
+
+function novAbrirForm(id) {
+  if(!_novPodePublicar) { toast('Só o superadmin publica novidades.','err'); return }
+  _novEditId = id || null
+  const n = id ? _novidades.find(x => x.id === id) : null
+  const g = (k, v) => { const e = document.getElementById(k); if(e) e.value = v }
+  g('novFTitulo', n ? n.titulo : '')
+  g('novFTexto', n ? n.texto : '')
+  g('novFCategoria', n ? n.categoria : 'melhoria')
+  g('novFPublico', n ? n.publico : 'todos')
+  g('novFImagem', n && n.imagem_url ? n.imagem_url : '')
+  g('novFLegenda', n && n.imagem_legenda ? n.imagem_legenda : '')
+  g('novFGuia', n && n.guia_url ? n.guia_url : '')
+  g('novFData', n ? String(n.data).slice(0,10) : new Date().toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }))
+  document.getElementById('novFTit').textContent = id ? 'Editar novidade' : 'Publicar novidade'
+  document.getElementById('moNovForm').classList.add('open')
+}
+
+async function novSalvar() {
+  const v = (k) => (document.getElementById(k)?.value || '').trim()
+  const corpo = {
+    usuario_id: U.id, titulo: v('novFTitulo'), texto: v('novFTexto'),
+    categoria: v('novFCategoria'), publico: v('novFPublico'),
+    imagem_url: v('novFImagem') || null, imagem_legenda: v('novFLegenda') || null,
+    guia_url: v('novFGuia') || null, data: v('novFData') || null,
+  }
+  const b = document.getElementById('novFBtn'); b.disabled = true; b.textContent = 'Salvando...'
+  try {
+    const r = await fetch(`${API_URL}/novidades${_novEditId ? '/' + _novEditId : ''}`, {
+      method: _novEditId ? 'PATCH' : 'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    fm('moNovForm')
+    toast(_novEditId ? 'Novidade atualizada.' : 'Novidade publicada.','ok')
+    await novCarregar(); novRender()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+  finally { b.disabled = false; b.textContent = 'Salvar' }
+}
+
+async function novExcluir(id) {
+  const n = _novidades.find(x => x.id === id)
+  if(!n) return
+  if(!await moConfirm(`Excluir "${n.titulo}"?`, {
+    titulo:'Excluir novidade', perigo:true, okTexto:'Excluir', cancelarTexto:'Voltar',
+    detalhe:'A novidade sai da tela de todo mundo. Não tem volta.',
+  })) return
+  try {
+    const r = await fetch(`${API_URL}/novidades/${id}`, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ usuario_id: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast('Novidade excluída.','ok')
+    await novCarregar(); novRender()
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 // ══════════════════════════════════════

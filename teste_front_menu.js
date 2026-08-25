@@ -254,8 +254,12 @@ console.log('\n═══ 6. CONTROLE INTERNO ═══');
   // Controle Interno so visualizam". O repositorio e material de CONSULTA (orientacoes,
   // modelos, legislacao), nao acervo de PC: o tecnico do C.I. precisa dele tanto quanto o
   // analista. As outras quatro telas do acervo continuam recusando o perfil.
-  conf(JSON.stringify(idsDe(ci)) === '["dash","repo","perfil","ci"]',
-       'e ve Dashboard, Repositorio, Meu Perfil e Controle Interno', JSON.stringify(idsDe(ci)));
+  // ⚠️ NOVIDADES ENTROU EM 25/08/2026, e para TODOS os perfis — inclusive o C.I., que fica de
+  // fora de quase tudo neste bloco. Uma tela que existe para contar o que mudou nao pode ter
+  // publico restrito: quem nao ve continua sabendo pelo WhatsApp, que e o problema que ela
+  // veio resolver. A ORDEM tambem fica travada aqui: Novidades vem antes de Meu Perfil.
+  conf(JSON.stringify(idsDe(ci)) === '["dash","repo","novid","perfil","ci"]',
+       'e ve Dashboard, Repositorio, Novidades, Meu Perfil e Controle Interno', JSON.stringify(idsDe(ci)));
   // E as QUATRO telas do acervo recusam o perfil, nao so somem do menu.
   ['irEst','irPlanilha','irProd','irMeusPedidos'].forEach(fn => {
     const i = html.indexOf(`function ${fn}(`);
