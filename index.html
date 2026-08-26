@@ -13419,6 +13419,38 @@ let _ciSgpe = { sigla:'SCC', num:'', ano:'' }   // a sigla nasce preenchida, e �
 let _ciGeral = { q:'', analista_id:'', espera:'' }
 let _ciModo = 'geral'          // qual dos dois blocos está valendo
 
+// ⚠️ O DESTAQUE É DA LINHA ENCONTRADA, e vale para QUALQUER busca — a do processo e a de
+// PC/TR/entidade/analista. As duas filtram a lista, então o que sobra JÁ é o resultado; o
+// destaque é para a pessoa não ter de procurar de novo dentro do próprio resultado.
+//
+// ⚠️ `_ciDestacarApos` existe porque a busca é assíncrona: quem decide qual linha acender é o
+// que voltou do servidor, não o que foi digitado. Marcar a intenção antes e resolver depois
+// evita destacar uma linha da carga ANTERIOR, que é o que aconteceria guardando o código.
+let _ciDestaque = null         // codigo_pc da linha acesa — UMA por vez
+let _ciDestacarApos = false
+
+/** Id estável da linha, para a rolagem. Só o que vale em `id` sobrevive ao replace. */
+const ciIdLinha = (codigo_pc) => 'ciL_' + String(codigo_pc || '').replace(/[^A-Za-z0-9_-]/g, '_')
+
+/** Limpa o destaque e repinta. Chamado ao fechar a busca e ao começar outra. */
+function ciLimparDestaque(repintar) {
+  if(_ciDestaque === null && !_ciDestacarApos) return
+  _ciDestaque = null; _ciDestacarApos = false
+  if(repintar && document.getElementById('ciPainel')) ciListaRender()
+}
+
+/**
+ * Rola até a linha acesa e a deixa no meio da tela.
+ *
+ * ⚠️ `block:'center'` e não `'start'`: a tela do C.I. tem cabeçalho fixo de coluna, e
+ * `'start'` põe a linha exatamente embaixo dele — a pessoa rola e não vê o que procurou.
+ */
+function ciRolarAteDestaque() {
+  if(!_ciDestaque) return
+  const el = document.getElementById(ciIdLinha(_ciDestaque))
+  if(el) el.scrollIntoView({ behavior:'smooth', block:'center' })
+}
+
 const ciIniciais = (nome) => String(nome||'?').trim().split(/\s+/).slice(0,2).map(n=>n[0]||'').join('').toUpperCase()
 
 // ⚠️ A COR SAI DA POSIÇÃO, NUNCA DO NOME. Fixar "azul = Marcia" quebraria no dia em que a
@@ -13544,6 +13576,7 @@ function ciBuscarSgpe() {
   const an = document.getElementById('ciAnalista'); if(an) an.value = ''
   const es = document.getElementById('ciEspera'); if(es) es.value = ''
   _ciAberto = null; _ciDecisao = null
+  _ciDestaque = null; _ciDestacarApos = true
   ciCarregar()
 }
 
@@ -13559,8 +13592,109 @@ function ciBuscarGeral() {
   const a = document.getElementById('ciSgAno'); if(a) a.value = ''
   ciSgpeMudou()
   _ciAberto = null; _ciDecisao = null
+  _ciDestaque = null; _ciDestacarApos = true
   ciCarregar()
 }
+
+// ── A busca em destaque: F2 ─────────────────────────────────────────────────
+//
+// ⚠️ F2 NÃO ABRE COM O FOCO NUM CAMPO DE TEXTO. A tela do C.I. já tem cinco campos, e um
+// deles é o `textarea` da observação do parecer — abrir uma caixa modal por cima de alguém
+// que está escrevendo tira o foco no meio da frase e o texto parece ter sumido.
+//
+// ⚠️ E A CAIXA NÃO É UMA TERCEIRA BUSCA. Ela alimenta os MESMOS campos do bloco de cima e
+// chama `ciBuscarSgpe`, que é quem já sabe limpar o bloco de baixo e disparar a carga. Uma
+// segunda implementação "igualzinha" divergiria no primeiro ajuste — foi assim que o mapa de
+// nomes curtos chegou a ter três cópias.
+function ciBuscaEhCampo(el) {
+  if(!el) return false
+  const t = String(el.tagName || '').toUpperCase()
+  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable === true
+}
+
+function ciBuscaAbrir() {
+  if(document.getElementById('ciBuscaMo')) return
+  const d = document.createElement('div')
+  d.id = 'ciBuscaMo'
+  d.className = 'mo open'
+  d.innerHTML = `
+    <div class="mc" style="width:420px;" onclick="event.stopPropagation()">
+      <div class="mch"><h3>Localizar processo no C.I.</h3>
+        <button class="mcx" onclick="ciBuscaFechar()" aria-label="Fechar">✕</button></div>
+      <div class="mcb">
+        <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:9px;">
+          <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
+                 letter-spacing:.05em;margin-bottom:3px;">Sigla</div>
+            <input id="ciBuscaSigla" value="SCC" maxlength="10" autocomplete="off"
+              style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
+                border-radius:7px;font-size:13px;font-family:inherit;text-transform:uppercase;"></div>
+          <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
+                 letter-spacing:.05em;margin-bottom:3px;">Número</div>
+            <input id="ciBuscaNum" maxlength="10" inputmode="numeric" autocomplete="off"
+              oninput="procEdSoDigitos(this)"
+              style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
+                border-radius:7px;font-size:13px;font-family:inherit;"></div>
+          <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
+                 letter-spacing:.05em;margin-bottom:3px;">Ano</div>
+            <input id="ciBuscaAno" maxlength="4" inputmode="numeric" autocomplete="off"
+              oninput="procEdSoDigitos(this)"
+              style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
+                border-radius:7px;font-size:13px;font-family:inherit;"></div>
+        </div>
+        <div class="mcbt">
+          <button class="btn-neutro" onclick="ciBuscaFechar()">Cancelar</button>
+          <button class="btn-acao" onclick="ciBuscaLocalizar()"
+            style="padding:8px 17px;font-size:13px;">Localizar</button>
+        </div>
+      </div>
+    </div>`
+  // Clicar fora fecha, como em qualquer modal do sistema. O `stopPropagation` do cartão
+  // impede que clicar DENTRO feche junto.
+  d.onclick = ciBuscaFechar
+  d.onkeydown = (e) => { if(e.key === 'Enter') { e.preventDefault(); ciBuscaLocalizar() } }
+  document.body.appendChild(d)
+  document.addEventListener('keydown', ciBuscaEsc, true)
+  const n = document.getElementById('ciBuscaNum'); if(n) n.focus()
+}
+
+function ciBuscaEsc(e) { if(e.key === 'Escape') { e.stopPropagation(); ciBuscaFechar() } }
+
+function ciBuscaFechar() {
+  const d = document.getElementById('ciBuscaMo')
+  if(d) d.remove()
+  document.removeEventListener('keydown', ciBuscaEsc, true)
+  // ⚠️ FECHAR A BUSCA APAGA O DESTAQUE — ordem do Richard. O selo "encontrada" é a resposta
+  // de uma pergunta; encerrada a pergunta, ele deixa de dizer algo e vira enfeite preso numa
+  // linha qualquer.
+  ciLimparDestaque(true)
+}
+
+function ciBuscaLocalizar() {
+  const v = (id) => (document.getElementById(id)?.value || '').trim()
+  const s = v('ciBuscaSigla').replace(/[^A-Za-z]/g,'').toUpperCase()
+  const n = v('ciBuscaNum').replace(/[^0-9]/g,'')
+  const a = v('ciBuscaAno').replace(/[^0-9]/g,'')
+  if(!s || !n || !a) { toast('Informe a sigla, o número e o ano do processo.','err'); return }
+  // Alimenta os campos do bloco de cima e deixa `ciBuscarSgpe` fazer o resto — ela é quem
+  // limpa o bloco de baixo, troca o `_ciModo` e dispara a carga.
+  const põe = (id, val) => { const el = document.getElementById(id); if(el) el.value = val }
+  põe('ciSgSigla', s); põe('ciSgNum', n); põe('ciSgAno', a)
+  const d = document.getElementById('ciBuscaMo')
+  if(d) d.remove()
+  document.removeEventListener('keydown', ciBuscaEsc, true)
+  ciSgpeMudou()
+  ciBuscarSgpe()
+}
+
+// ⚠️ SÓ NA TELA DO C.I. — `#ciPainel` é a âncora que o resto do arquivo já usa para saber que
+// se está aqui. Sem isso, F2 abriria a busca do C.I. no meio da Minha Planilha.
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'F2') return
+  if(!document.getElementById('ciPainel')) return
+  if(ciBuscaEhCampo(e.target)) return
+  e.preventDefault()
+  ciBuscaAbrir()
+})
 
 // ── A carga ─────────────────────────────────────────────────────────────────
 
@@ -13588,7 +13722,16 @@ async function ciCarregar() {
     _ciTecnicos = j.tecnicos || []
     _ciAnalistas = j.analistas || []
     _ciTotal = j.total || _ciDados.length
+    // ⚠️ QUEM ESCOLHE A LINHA ACESA É O RESULTADO, e é a PRIMEIRA dele: a lista já vem
+    // filtrada pela busca e ordenada da mais antiga para a mais nova, então a primeira é a
+    // que o técnico veio ver. Busca sem resultado não acende nada — e a faixa de "nenhuma PC"
+    // já explica o vazio.
+    if(_ciDestacarApos) {
+      _ciDestaque = _ciDados.length ? _ciDados[0].codigo_pc : null
+      _ciDestacarApos = false
+    }
     ciRender()
+    if(_ciDestaque) ciRolarAteDestaque()
   } catch(e) {
     painel.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${escHtml(e.message)}</div>`
   }
@@ -13730,13 +13873,27 @@ function ciLinha(l, i) {
     ? `<span style="color:#9AA8A0;">—</span>`
     : procHtml(l.processo_pc, l.codigo_pc, 'processo_pc')
 
+  // ⚠️ ZEBRA E DESTAQUE NO MESMO LUGAR, e a ordem importa: o destaque SOBREPÕE a zebra, senão
+  // a linha encontrada mudaria de cor conforme caísse em posição par ou ímpar.
+  const achada = _ciDestaque !== null && _ciDestaque === l.codigo_pc
+  const fundo = achada ? '#FAEEDA' : (i % 2 === 0 ? '#fff' : 'rgba(99,153,34,.09)')
+  // ⚠️ A BORDA NASCE TRANSPARENTE EM TODA LINHA, e só troca de cor na destacada. Acrescentar
+  // 4px só na encontrada empurraria o conteúdo dela para a direita, e a coluna inteira
+  // perderia o alinhamento — quem varre a lista de cima a baixo perde o fio.
+  const borda = achada ? '#BA7517' : 'transparent'
+  const selo = achada
+    ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:6px;
+         background:#EF9F27;color:#412402;font-size:11px;font-weight:700;
+         vertical-align:middle;white-space:nowrap;">encontrada</span>`
+    : ''
+
   return `
-  <div style="${i === 0 ? '' : 'border-top:1px solid var(--cb);'}">
+  <div id="${ciIdLinha(l.codigo_pc)}" style="background:${fundo};border-left:4px solid ${borda};${i === 0 ? '' : 'border-top:1px solid var(--cb);'}">
     <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:11px 13px;
-      align-items:center;background:#fff;">
+      align-items:center;background:${fundo};">
       <div style="min-width:0;">
         <div style="font-size:20px;font-weight:500;color:var(--te);line-height:1.25;
-          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${proc}</div>
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${proc}${selo}</div>
         <div style="font-size:12px;color:var(--ct);margin-top:2px;"
           title="${escHtml(codigos.join(', '))}">
           ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')} · <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b></div>
