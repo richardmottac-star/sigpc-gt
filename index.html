@@ -14019,13 +14019,35 @@ const CI_COLS = '1fr 150px 90px 130px 92px'
 //
 // ⚠️ `sticky` no vazio também, e não é enfeite: é justamente quando não se achou nada que a
 // pessoa vai buscar de novo, e o atalho precisa estar à vista para ser o caminho.
+// ⚠️ SÃO DOIS DIVS, E NÃO UM. O de fora é o que gruda e o que TAPA: ele leva o fundo da
+// página e o espaço de 9px até a lista. O de dentro é a faixa verde, com cantos de 10px.
+// Fundir os dois deixaria as linhas da fila aparecendo pelos quatro cantos arredondados e
+// pela folga de baixo enquanto se rola — a faixa pareceria recortada.
+//
+// ⚠️ E NÃO HÁ BOTÃO AQUI, de propósito (Richard, 27/08/2026). O atalho é o único caminho: um
+// botão ao lado ensinaria que existem dois, e o teclado deixaria de ser o caminho para virar
+// a alternativa de quem já sabe.
 function ciFaixaF2() {
   return `
     <div style="position:sticky;top:0;z-index:5;background:var(--fundo-app, #F5F8F6);
-      font-size:12px;color:var(--ct);padding:7px 2px 8px;border-bottom:1px solid var(--cb);">
-      Pressione <kbd style="background:var(--cl);border:1px solid var(--cb);border-radius:4px;
-        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
-        padding:1px 5px;">F2</kbd> para localizar um processo.
+      padding-bottom:9px;">
+      <div style="display:flex;align-items:center;gap:11px;background:#EAF3DE;
+        border:1px solid #97C459;border-radius:10px;padding:12px 16px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B6D11"
+          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+          style="flex:0 0 20px;" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.2-4.2"></path>
+        </svg>
+        <span style="font-size:14px;color:#173404;">
+          Busca rápida — pressione
+          <kbd style="display:inline-block;background:#fff;border:1.5px solid #3B6D11;
+            border-bottom-width:3px;border-radius:6px;padding:2px 9px;
+            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+            font-size:14px;font-weight:500;color:#173404;line-height:1.2;
+            vertical-align:baseline;">F2</kbd>
+          para localizar um processo
+        </span>
+      </div>
     </div>`
 }
 
@@ -14034,7 +14056,7 @@ function ciListaRender() {
   if(!painel) return
   if(!_ciDados.length) {
     painel.innerHTML = ciFaixaF2() + `
-      <div style="padding:30px;text-align:center;color:var(--ct);font-size:13px;margin-top:9px;
+      <div style="padding:30px;text-align:center;color:var(--ct);font-size:13px;
       border:1px solid var(--cl);border-radius:11px;background:#fff;">
       ${_ciModo === 'sgpe'
         ? `Nenhuma PC do processo <b>${escHtml(_ciSgpe.sigla)} ${escHtml(_ciSgpe.num)}/${escHtml(_ciSgpe.ano)}</b> está no ciclo do Controle Interno.`
@@ -14087,8 +14109,7 @@ function ciListaRender() {
     </div>`
 
   painel.innerHTML = ciFaixaF2() + `
-    <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;
-      margin-top:9px;">
+    <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;">
       <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:9px 13px;
         background:#173404;color:#C0DD97;font-size:10px;font-weight:700;text-transform:uppercase;
         letter-spacing:.05em;">
