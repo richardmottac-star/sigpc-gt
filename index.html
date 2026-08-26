@@ -2832,6 +2832,13 @@ const SB_ITENS = [
   { id:'prior', bloco:'superadmin', rotulo:'Painel Técnico', acao:'irPrioridade()',
     pode:(u)=>u.perfil === 'superadmin',
     icone:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-2v-4H8v-2h4V8h2v4h4v2z' },
+  // ⚠️ SÓ SUPERADMIN, e esconder o item NÃO é a guarda — `GET /acompanhamento` confere o
+  // perfil no BANCO e devolve 403. Isto aqui só evita desenhar um caminho que a pessoa não
+  // pode percorrer. E o menu já filtra pelo papel EFETIVO (`comoPapelAtivo` no `sbMontar`):
+  // no papel analista o item some, e a rota recusaria pela mesma regra.
+  { id:'acomp', bloco:'superadmin', rotulo:'Acompanhamento', acao:'irAcompanhamento()',
+    pode:(u)=>u.perfil === 'superadmin',
+    icone:'M13 3a9 9 0 0 0-9 9H1l4 4 4-4H6a7 7 0 1 1 7 7 6.9 6.9 0 0 1-4.2-1.4l-1.4 1.5A9 9 0 1 0 13 3zm-1 5v5l4.3 2.5.7-1.2-3.5-2.1V8H12z' },
   { id:'config', bloco:'superadmin', rotulo:'Configurações', acao:'irConfiguracoes()',
     pode:(u)=>u.perfil === 'superadmin',
     icone:'M19.14 12.94a7.4 7.4 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.86a.5.5 0 0 0 .12.62l2.03 1.58a7.4 7.4 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z' },
@@ -13331,6 +13338,263 @@ async function admRejeitar(id) {
     toast('Cadastro rejeitado.','ok')
     await admCarregarPendentes()
   } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ACOMPANHAMENTO — a linha do tempo do sistema  (27/08/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ SÓ LEITURA NESTA RODADA. Nenhum botão de desfazer — o desfazer entra depois, por tipo
+// de evento, e a lista do que é reversível está em ACOMPANHAMENTO_REVERSAO.md.
+//
+// ⚠️ E O QUE ELA NÃO COBRE VEM DITO PELA ROTA (`nao_cobre`) e aparece na tela. Erro devolvido
+// por rota e ação recusada NÃO deixam registro no banco: a recusa acontece antes da escrita,
+// e não há tabela de log no sistema. Uma tela de acompanhamento que finge cobrir o que não
+// cobre é pior que uma que diz o recorte.
+
+let _acmpDados = []
+let _acmpTotal = 0, _acmpPagina = 1, _acmpTamanho = 20, _acmpPaginas = 1
+let _acmpTamanhos = [10,20,30,40,50]
+let _acmpPessoas = [], _acmpEventos = [], _acmpFamilias = {}, _acmpRotAlerta = {}, _acmpNaoCobre = []
+let _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', q:'' }
+
+// As cores por família. O evento é o que a pessoa varre com o olho, e a cor é o que separa
+// "análise" de "correção" antes de ela ler a frase.
+const ACMP_CORES = {
+  analise:  { bg:'#EAF3DE', fg:'#27500A' },
+  ci:       { bg:'#EAF1F9', fg:'#1A4E8A' },
+  correcao: { bg:'#FAEEDA', fg:'#854F0B' },
+  carteira: { bg:'#F0EBFA', fg:'#4A3080' },
+  dado:     { bg:'#F0F3F2', fg:'#4B5563' },
+}
+
+async function irAcompanhamento() {
+  // ⚠️ A TELA CONFERE, MAS QUEM IMPEDE É A ROTA. Aqui é só para não desenhar um caminho que
+  // termina em 403 — a mesma escolha da Busca global.
+  if(U.perfil !== 'superadmin' || verComoAtivo()) { toast('Acesso restrito ao técnico do sistema.','err'); return }
+  ativarMenu('acomp')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#173404;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#C0DD97"><path d="M13 3a9 9 0 0 0-9 9H1l4 4 4-4H6a7 7 0 1 1 7 7 6.9 6.9 0 0 1-4.2-1.4l-1.4 1.5A9 9 0 1 0 13 3zm-1 5v5l4.3 2.5.7-1.2-3.5-2.1V8H12z"/></svg>
+      </span>
+      <div style="min-width:0;">
+        <h2 style="font-size:19px;font-weight:800;color:var(--te);">Acompanhamento</h2>
+        <div style="font-size:12.5px;color:var(--ct);">Tudo que aconteceu no sistema, do mais recente para o mais antigo.</div>
+      </div>
+    </div>
+    <div id="acmpFiltros"></div>
+    <div id="acmpPainel"></div>`
+  acmpRenderFiltros()
+  await acmpCarregar()
+}
+
+function acmpRenderFiltros() {
+  const el = document.getElementById('acmpFiltros')
+  if(!el) return
+  const rot = (t) => `<div style="font-size:10px;color:var(--ct);text-transform:uppercase;
+    letter-spacing:.05em;margin-bottom:3px;font-weight:600;">${t}</div>`
+  const inp = `padding:7px 9px;border:1px solid var(--cb);border-radius:7px;font-size:13px;
+    font-family:inherit;background:#fff;width:100%;box-sizing:border-box;`
+  // Os eventos vêm do servidor com a contagem: o filtro não oferece o que não existe, e um
+  // `<select>` com opção que devolve zero ensina que a busca está quebrada.
+  const optEv = _acmpEventos.map(e =>
+    `<option value="${escHtml(e.evento)}" ${_acmpF.evento===e.evento?'selected':''}>${escHtml(e.rotulo)} (${e.n})</option>`).join('')
+  const optPe = _acmpPessoas.map(p =>
+    `<option value="${p.id}" ${String(_acmpF.pessoa_id)===String(p.id)?'selected':''}>${escHtml(p.nome)} (${p.n})</option>`).join('')
+  const perfis = [...new Set(_acmpPessoas.map(p=>p.perfil).filter(Boolean))].sort()
+  const optPf = perfis.map(p =>
+    `<option value="${escHtml(p)}" ${_acmpF.perfil===p?'selected':''}>${escHtml(p)}</option>`).join('')
+
+  el.innerHTML = `
+  <div style="background:var(--surface-2, #F7FAF8);border:1px solid var(--cl);border-radius:10px;
+    padding:12px 13px;margin-bottom:12px;">
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:0 0 138px;">${rot('De')}
+        <input id="acmpDe" type="date" value="${escHtml(_acmpF.de)}" style="${inp}"></div>
+      <div style="flex:0 0 138px;">${rot('Até')}
+        <input id="acmpAte" type="date" value="${escHtml(_acmpF.ate)}" style="${inp}"></div>
+      <div style="flex:1 1 190px;min-width:150px;">${rot('Pessoa')}
+        <select id="acmpPessoa" style="${inp}"><option value="">Todas</option>${optPe}</select></div>
+      <div style="flex:0 0 150px;">${rot('Perfil')}
+        <select id="acmpPerfil" style="${inp}"><option value="">Todos</option>${optPf}</select></div>
+      <div style="flex:1 1 220px;min-width:170px;">${rot('Tipo de evento')}
+        <select id="acmpEvento" style="${inp}"><option value="">Todos</option>${optEv}</select></div>
+      <div style="flex:0 0 150px;">${rot('TR')}
+        <input id="acmpTr" value="${escHtml(_acmpF.tr)}" style="${inp}"
+          onkeydown="if(event.key==='Enter')acmpBuscar()"></div>
+      <div style="flex:1 1 230px;min-width:180px;">${rot('Processo, PC, TR ou entidade')}
+        <input id="acmpQ" value="${escHtml(_acmpF.q)}" style="${inp}"
+          onkeydown="if(event.key==='Enter')acmpBuscar()"></div>
+      <button class="btn-acao" onclick="acmpBuscar()" style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Filtrar</button>
+      <button id="acmpLimpar" class="btn-secundario" onclick="acmpLimpar()" style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Limpar</button>
+    </div>
+    ${_acmpNaoCobre.length ? `
+    <div style="margin-top:9px;font-size:11.5px;color:#7A5B10;background:#FFF8E1;
+      border:1px solid #F0E2B8;border-radius:8px;padding:7px 11px;">
+      <b>Esta trilha não cobre:</b> ${_acmpNaoCobre.map(escHtml).join(' · ')}
+    </div>` : ''}
+  </div>`
+}
+
+function acmpBuscar() {
+  const v = (id) => (document.getElementById(id)?.value || '').trim()
+  _acmpF = { de:v('acmpDe'), ate:v('acmpAte'), pessoa_id:v('acmpPessoa'), perfil:v('acmpPerfil'),
+           evento:v('acmpEvento'), tr:v('acmpTr'), q:v('acmpQ') }
+  _acmpPagina = 1
+  acmpCarregar()
+}
+
+function acmpLimpar() {
+  _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', q:'' }
+  _acmpPagina = 1
+  acmpRenderFiltros()
+  acmpCarregar()
+}
+
+async function acmpCarregar() {
+  const painel = document.getElementById('acmpPainel')
+  if(!painel) return
+  painel.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
+  const p = new URLSearchParams({ usuario_id: U.id, pagina: _acmpPagina, tamanho: _acmpTamanho })
+  for(const [k,val] of Object.entries(_acmpF)) if(val) p.set(k, val)
+  try {
+    // A forma canônica: absorver o mapa `links` ANTES de renderizar, senão o processo aparece
+    // em texto puro (armadilha 20).
+    const r = await fetch(`${API_URL}/acompanhamento?${p}`)
+    const j = sgpeAbsorver(await r.json())
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _acmpDados = j.data || []
+    _acmpTotal = j.total ?? _acmpDados.length
+    _acmpPagina = j.pagina || 1
+    _acmpTamanho = j.tamanho || _acmpTamanho
+    _acmpTamanhos = j.tamanhos || _acmpTamanhos
+    _acmpPaginas = j.paginas || 1
+    _acmpPessoas = j.pessoas || []
+    _acmpEventos = j.eventos || []
+    _acmpFamilias = j.familias || {}
+    _acmpRotAlerta = j.rotulos_alerta || {}
+    _acmpNaoCobre = j.nao_cobre || []
+    acmpRenderFiltros()
+    acmpRender()
+  } catch(e) {
+    painel.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${escHtml(e.message)}</div>`
+  }
+}
+
+function acmpRender() {
+  const painel = document.getElementById('acmpPainel')
+  if(!painel) return
+  if(!_acmpDados.length) {
+    painel.innerHTML = `<div style="padding:30px;text-align:center;color:var(--ct);font-size:13px;
+      border:1px solid var(--cl);border-radius:11px;background:#fff;">Nenhum evento neste recorte.</div>`
+    return
+  }
+  const de = _acmpTotal === 0 ? 0 : (_acmpPagina - 1) * _acmpTamanho + 1
+  const ate = Math.min(_acmpPagina * _acmpTamanho, _acmpTotal)
+  const nav = (rotulo, alvo, ligado, titulo) => `
+    <button onclick="acmpIrPagina(${alvo})" ${ligado ? '' : 'disabled'} title="${titulo}"
+      class="btn-secundario" style="padding:5px 10px;font-size:12px;min-width:34px;">${rotulo}</button>`
+
+  painel.innerHTML = `
+    <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;">
+      ${_acmpDados.map((l,i) => acmpLinha(l,i)).join('')}
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;
+        padding:9px 13px;border-top:1px solid var(--cb);background:var(--surface-2, #F7FAF8);">
+        <div style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--ct);">
+          <span>Por página</span>
+          <select onchange="acmpTrocarTamanho(this.value)"
+            style="padding:4px 7px;border:1px solid var(--cb);border-radius:6px;font-size:12px;
+              font-family:inherit;background:#fff;">
+            ${_acmpTamanhos.map(t=>`<option value="${t}" ${t===_acmpTamanho?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div style="font-size:12px;color:var(--ct);">
+          Mostrando <b>${de.toLocaleString('pt-BR')}</b> a <b>${ate.toLocaleString('pt-BR')}</b>
+          de <b>${_acmpTotal.toLocaleString('pt-BR')}</b> eventos</div>
+        <div style="display:flex;gap:5px;align-items:center;">
+          ${nav('«',1,_acmpPagina>1,'Primeira')}
+          ${nav('‹',_acmpPagina-1,_acmpPagina>1,'Anterior')}
+          <span style="font-size:12px;color:var(--te);font-weight:700;padding:0 6px;white-space:nowrap;">
+            ${_acmpPagina.toLocaleString('pt-BR')} / ${_acmpPaginas.toLocaleString('pt-BR')}</span>
+          ${nav('›',_acmpPagina+1,_acmpPagina<_acmpPaginas,'Próxima')}
+          ${nav('»',_acmpPaginas,_acmpPagina<_acmpPaginas,'Última')}
+        </div>
+      </div>
+    </div>`
+}
+
+/**
+ * ⚠️ A DATA VEM PRONTA DO SERVIDOR, já em Brasília (`SQL_QUANDO`, dois passos no AT TIME
+ * ZONE — armadilha 18). A tela NÃO reconverte: `new Date(...)` sobre uma string sem fuso é
+ * lida como local, e converter de novo somaria as três horas outra vez.
+ */
+function acmpQuando(v) {
+  const m = String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : '—'
+}
+
+function acmpLinha(l, i) {
+  const c = ACMP_CORES[l.familia] || ACMP_CORES.dado
+  const fundo = i % 2 === 0 ? '#fff' : 'rgba(99,153,34,.09)'
+  const al = Array.isArray(l.alertas) ? l.alertas : []
+  const temAlerta = al.length > 0
+  const semProc = !l.processo_pc || String(l.processo_pc).trim() === '' || String(l.processo_pc).trim() === '-'
+
+  const selos = al.map(a => `<span style="display:inline-block;margin-left:6px;padding:2px 8px;
+    border-radius:6px;background:#EF9F27;color:#412402;font-size:11px;font-weight:700;
+    white-space:nowrap;">${escHtml(_acmpRotAlerta[a] || a)}</span>`).join('')
+
+  // ⚠️ O DONO APARECE SEPARADO DE QUEM FEZ quando os dois diferem. `executado_por` é nulo em
+  // todas as 1.653 linhas de hoje (ninguém agiu pela conta de outro ainda), mas o dia em que
+  // acontecer é justamente o que esta tela existe para mostrar.
+  const dono = (l.dono_nome && l.executado_por && String(l.executado_por) !== String(l.analista_id))
+    ? `<span style="color:#9AA8A0;"> · pela conta de <b>${escHtml(l.dono_nome)}</b></span>` : ''
+
+  return `
+  <div style="background:${fundo};border-left:4px solid ${temAlerta ? '#BA7517' : 'transparent'};
+    ${i === 0 ? '' : 'border-top:1px solid var(--cb);'}padding:11px 13px;">
+    <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--ct);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        white-space:nowrap;">${acmpQuando(l.quando)}</span>
+      <span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;
+        font-weight:700;background:${c.bg};color:${c.fg};">${escHtml(l.evento_rotulo)}</span>
+      <span style="font-size:13px;color:var(--te);">
+        <b>${escHtml(l.autor_nome || '—')}</b>
+        <span style="color:#9AA8A0;">(${escHtml(l.autor_perfil || 'sem perfil')})</span>${dono}</span>
+      ${selos}
+    </div>
+    <div style="font-size:12.5px;color:var(--ct);margin-top:4px;">
+      ${semProc ? '<span style="color:#9AA8A0;">sem processo</span>' : procHtml(l.processo_pc, null, 'processo_pc')}
+      · <b>${escHtml(l.tr || '—')}</b>
+      ${l.parcial_num ? ` · parcela ${escHtml(l.parcial_num)}` : ' · <span style="color:#9AA8A0;">TR inteira</span>'}
+      ${l.n_pcs ? ` · ${l.n_pcs} PC${l.n_pcs>1?'s':''}` : ''}
+      ${l.entidade ? ` · ${escHtml(l.entidade)}` : ''}
+      ${l.analista_nome ? ` · analista <b>${escHtml(l.analista_nome)}</b>` : ''}
+    </div>
+    ${(l.valor_anterior || l.valor_novo) ? `
+    <div style="font-size:12px;color:var(--ct);margin-top:3px;">
+      ${escHtml(l.valor_anterior || '—')} <span style="color:#9AA8A0;">→</span> <b>${escHtml(l.valor_novo || '—')}</b></div>` : ''}
+    ${l.observacao ? `
+    <div style="font-size:12px;color:#4A3A0C;background:#FDF6E9;border-left:3px solid #BA7517;
+      border-radius:0 7px 7px 0;padding:7px 11px;margin-top:6px;white-space:pre-wrap;">${escHtml(l.observacao)}</div>` : ''}
+  </div>`
+}
+
+function acmpIrPagina(n) {
+  const alvo = Math.min(Math.max(1, parseInt(n) || 1), Math.max(1, _acmpPaginas))
+  if(alvo === _acmpPagina) return
+  _acmpPagina = alvo
+  acmpCarregar().then(() => { const el = document.getElementById('acmpPainel'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}) })
+}
+
+function acmpTrocarTamanho(v) {
+  const t = parseInt(v) || _acmpTamanho
+  if(t === _acmpTamanho) return
+  // Trocar o tamanho volta para a página 1 — a página 40 de 20 em 20 não existe de 50 em 50.
+  _acmpTamanho = t; _acmpPagina = 1
+  acmpCarregar().then(() => { const el = document.getElementById('acmpPainel'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}) })
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
