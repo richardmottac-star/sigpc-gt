@@ -13695,7 +13695,19 @@ function ciListaRender() {
     </div>`
 }
 
+// ⚠️ UMA LINHA POR PARCELA, e não por PC — desde 26/08/2026, junto com `ci.decidir`.
+//
+// `l.codigos_pc` é a lista das PCs DAQUELA PARCELA QUE ESTÃO NA FILA; `l.n_pcs`, quantas
+// são. As PCs da parcela que a analista não encaminhou não vêm na consulta e por isso não
+// aparecem aqui — é a regra "o C.I. decide só o que foi encaminhado" chegando na tela sem
+// nenhum `if`.
+//
+// ⚠️ A CHAVE DE EXPANSÃO CONTINUA SENDO `l.codigo_pc`, e ele agora é o MENOR código da
+// parcela (o `MIN` do SQL). Serve como chave porque as parcelas não compartilham PC — mas
+// não é "a PC decidida": quem decide é a parcela inteira, e o botão manda `tr`+`parcial_num`.
 function ciLinha(l, i) {
+  const codigos = Array.isArray(l.codigos_pc) ? l.codigos_pc : [l.codigo_pc].filter(Boolean)
+  const nPcs = l.n_pcs || codigos.length || 1
   const aberta = _ciAberto === l.codigo_pc
   const f = CI_ESPERA[l.faixa_espera] || { bg:'var(--cl)', fg:'var(--ct)' }
   const dias = (l.dias_espera === null || l.dias_espera === undefined) ? '—' : `${l.dias_espera} d`
@@ -13725,8 +13737,9 @@ function ciLinha(l, i) {
       <div style="min-width:0;">
         <div style="font-size:20px;font-weight:500;color:var(--te);line-height:1.25;
           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${proc}</div>
-        <div style="font-size:12px;color:var(--ct);margin-top:2px;">
-          ${escHtml(l.codigo_pc)} · ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')}</div>
+        <div style="font-size:12px;color:var(--ct);margin-top:2px;"
+          title="${escHtml(codigos.join(', '))}">
+          ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')} · <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b></div>
         <div style="font-size:12px;color:#9AA8A0;overflow:hidden;text-overflow:ellipsis;
           white-space:nowrap;" title="${escHtml(l.entidade||'')}">${escHtml(l.entidade || '—')}</div>
       </div>
@@ -13926,18 +13939,33 @@ function ciEscolher(decisao) {
 
 // ── As escritas ─────────────────────────────────────────────────────────────
 
+// ⚠️ CONFIRMA A PARCELA, NÃO A PC — desde 26/08/2026.
+//
+// O argumento continua sendo o `codigo_pc` porque ele é a CHAVE DA LINHA na tela (o `MIN` da
+// parcela). O que vai para o servidor é `tr` + `parcial_num` + `setorial_id`, lidos da linha:
+// é o servidor que escolhe as PCs, e ele escolhe as que estão na fila daquela parcela.
+//
+// ⚠️ MANDAR O `codigo_pc` DAQUI SERIA O DEFEITO DE VOLTA. Era assim até 26/08 — um clique,
+// uma PC —, e a parcela de 9 PCs precisava de 9 cliques que podiam terminar diferentes.
 async function ciConfirmar(codigo_pc) {
   if(verComoAtivo()) { toast('Decidir no C.I. é do técnico do Controle Interno, não do analista.','err'); return }
   const l = _ciDados.find(x => x.codigo_pc === codigo_pc)
   const d = CI_DECISOES.find(x => x.id === _ciDecisao)
   if(!l || !d) return
+  const codigos = Array.isArray(l.codigos_pc) ? l.codigos_pc : [l.codigo_pc].filter(Boolean)
+  const nPcs = l.n_pcs || codigos.length || 1
   const obs = (document.getElementById('ciObs')?.value || '').trim()
   const deAcordo = d.id === 'de_acordo'
 
   if(!await moConfirm(`${d.rot}?`, {
     titulo: 'Decisão do Controle Interno',
     perigo: !deAcordo,
-    detalhe: `${l.codigo_pc} · ${l.tr} · parcela ${l.parcial_num || '—'}\n${l.entidade || ''}\n\n` +
+    // ⚠️ O MODAL LISTA AS PCs ALCANÇADAS. A decisão é da parcela, e uma parcela tem até 12 PCs
+    // na fila de hoje — confirmar sem ver quais seria assinar em branco. E numa parcela
+    // parcialmente encaminhada a lista é a única forma de o técnico ver que ela é menor do
+    // que a parcela inteira.
+    detalhe: `${l.tr} · parcela ${l.parcial_num || '—'} · ${nPcs} PC${nPcs > 1 ? 's' : ''}\n` +
+      `${codigos.join(', ')}\n${l.entidade || ''}\n\n` +
       `${d.sub}\n\nEm qualquer das duas, a baixa da analista permanece.`,
     okTexto: deAcordo ? 'Encerrar no C.I.' : 'Devolver para correção',
     cancelarTexto: 'Voltar',
@@ -13948,11 +13976,16 @@ async function ciConfirmar(codigo_pc) {
   try {
     const r = await fetch(`${API_URL}/ci/decidir`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ codigos_pc:[codigo_pc], decisao:d.id, texto:obs, autor_id:U.id })
+      body: JSON.stringify({ tr:l.tr, parcial_num:l.parcial_num, setorial_id:l.setorial_id,
+                             decisao:d.id, texto:obs, autor_id:U.id })
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    toast(deAcordo ? 'PC encerrada no Controle Interno.' : 'PC devolvida à analista para correção.', 'ok')
+    // O número vem da RESPOSTA (`afetadas`), não do que a tela achava: se uma PC entrou ou
+    // saiu da fila entre o carregamento e o clique, quem sabe o que aconteceu é o servidor.
+    const n = j.data?.afetadas ?? nPcs
+    toast((deAcordo ? 'Parcela encerrada no Controle Interno' : 'Parcela devolvida à analista para correção')
+          + ` — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
     _ciAberto = null; _ciDecisao = null
     await ciCarregar()
   } catch(e) {
