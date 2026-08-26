@@ -267,23 +267,26 @@ conf(!/U\.perfil === 'superadmin'/.test(pode), 'e o superadmin NAO tem passe liv
 conf(!/l\.ci_tecnico_id/.test(pode), 'e a posse da PC nao e mais pre-requisito');
 // ⚠️ E A TELA NAO E A TRANCA: o servidor recusa do mesmo jeito.
 const srv = fs.readFileSync(path.join(__dirname, '..', 'sigpc-api', 'server.js'), 'utf8');
-conf(/ciFila\.podeDecidir\(autor, null\)/.test(srv), 'e o servidor confere a mesma coisa');
+conf(/ciFila\.podeDecidir\(autor\)/.test(srv), 'e o servidor confere a mesma coisa');
 conf(/ciFila\.motivoNaoDecide\(\)/.test(srv), 'com a mesma frase de recusa');
 
-S('13. AS DUAS ACOES SOBRE A DEMANDA');
-conf(/id="moCiDevolver"/.test(B) && /id="moCiPassar"/.test(B), 'os dois modais existem');
-conf(/API_URL\}\/ci\/pc\/devolver/.test(B), 'devolver chama a rota por PC');
-conf(/API_URL\}\/ci\/pc\/passar/.test(B), 'e passar tambem');
-// ⚠️ O botao so acende com o motivo, e o title diz quantos caracteres faltam.
-for (const fn of ['ciDevChecar', 'ciPassChecar']) {
-  const c = corpo(fn);
-  conf(/b\.disabled =/.test(c), `${fn} nasce com o botao cinza`);
-  conf(/Faltam \$\{10 - v\.length\} caractere/.test(c), `${fn} diz quantos caracteres faltam`);
-}
-// ⚠️ A LISTA SAO OS OUTROS TECNICOS — o proprio nao entra: para ficar com a PC basta abri-la,
-// e oferecer "passar para mim mesmo" seria um caminho que o servidor recusa.
-conf(/_ciTecnicos\.filter\(t => String\(t\.id\) !== String\(U\.id\)\)/.test(corpo('ciAbrirPassar')),
-     'e o proprio nao aparece na lista de destinos');
+S('13. A TELA NAO TEM MAIS NENHUMA ACAO DE POSSE');
+// ⚠️ "Devolver a fila" e "Passar a outro tecnico" SAIRAM em 26/08/2026, com os dois modais e
+// as seis funcoes que os operavam. Eles pertenciam ao modelo em que a PC tinha dono ANTES do
+// parecer; com a atribuicao vindo do parecer, o tecnico gravado e **quem ja decidiu** —
+// devolver apagaria esse registro, e passar entregaria uma demanda que ninguem segura.
+conf(!/id="moCiDevolver"/.test(B) && !/id="moCiPassar"/.test(B), 'os dois modais sairam');
+for (const fn of ['ciAbrirDevolver', 'ciDevChecar', 'ciDevConfirmar',
+                  'ciAbrirPassar', 'ciPassChecar', 'ciPassConfirmar'])
+  conf(!new RegExp(`function ${fn}\\(`).test(B), `a funcao ${fn} saiu`);
+conf(!/_ciAcaoPc/.test(B), 'e o estado que elas usavam tambem');
+// ⚠️ A TELA NAO CHAMA NENHUMA ROTA /ci/pc/*. A fila e LEITURA; a unica escrita e o parecer.
+conf(!/\/ci\/pc\//.test(semComentario), 'nenhuma chamada a /ci/pc/ sobrou');
+// ⚠️ E AS UNICAS DUAS ESCRITAS DA TELA sao o parecer e nada mais. `sinoCarregar` e afins vivem
+// fora deste bloco; aqui dentro, so pode haver um POST.
+const posts = (semComentario.match(/method:'POST'/g) || []).length;
+conf(posts === 1, 'a tela do C.I. faz UM POST so — o do parecer', posts + ' POSTs');
+conf(/API_URL\}\/ci\/decidir/.test(B), 'e ele vai para /ci/decidir');
 
 S('14. O QUE A TELA NUNCA FAZ');
 // ⚠️ NADA AQUI TOCA NA BAIXA. Nem a decisao, nem a devolucao a fila, nem o passar a outro.

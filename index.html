@@ -13387,7 +13387,6 @@ let _ciTotal = 0
 let _ciChip = 'fila'
 let _ciAberto = null          // codigo_pc da PC expandida — UMA por vez
 let _ciDecisao = null         // 'de_acordo' | 'ressalva' — a escolha na PC aberta
-let _ciAcaoPc = null          // a PC dos modais de devolver e passar
 
 // ⚠️ OS DOIS BLOCOS DE BUSCA SÃO EXCLUDENTES, e a decisão é do Richard: usar um limpa o
 // outro. Combiná-los pareceria mais poderoso e devolveria vazio silencioso toda vez que o
@@ -13426,44 +13425,7 @@ async function irCI() {
       grid-template-columns:repeat(auto-fit,minmax(165px,1fr));"></div>
     <div id="ciChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;"></div>
     ${ciBuscaHtml()}
-    <div id="ciPainel"></div>
-
-    <div class="mo" id="moCiDevolver">
-      <div class="mc" style="width:430px;">
-        <div class="mch v"><h3>Devolver à fila</h3><button class="mcx" onclick="fm('moCiDevolver')">✕</button></div>
-        <div class="mcb">
-          <div class="mci">A PC <b id="ciDevPc"></b> volta a ficar <b>sem técnico</b>, e qualquer um do C.I.
-            pode pegá-la. A posição na fila não muda, e a baixa da analista continua como está.
-            O motivo fica no histórico da parcela.</div>
-          <div class="mc-campo"><label>Motivo (mínimo 10 caracteres)</label>
-            <textarea id="ciDevMotivo" rows="3" oninput="ciDevChecar()"
-              placeholder="Por que esta demanda volta para a fila?"></textarea></div>
-          <div class="mcbt">
-            <button class="mccn" onclick="fm('moCiDevolver')">Cancelar</button>
-            <button class="mcok" id="ciDevBtn" disabled onclick="ciDevConfirmar()">Devolver à fila</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="mo" id="moCiPassar">
-      <div class="mc" style="width:430px;">
-        <div class="mch v"><h3>Passar a outro</h3><button class="mcx" onclick="fm('moCiPassar')">✕</button></div>
-        <div class="mcb">
-          <div class="mci">A PC <b id="ciPassPc"></b> passa a ser de outro técnico do Controle Interno,
-            que é avisado no sino. O motivo fica no histórico da parcela.</div>
-          <div class="mc-campo"><label>Para quem</label>
-            <select id="ciPassDestino" onchange="ciPassChecar()"><option value="">Escolha o técnico</option></select></div>
-          <div class="mc-campo"><label>Motivo (mínimo 10 caracteres)</label>
-            <textarea id="ciPassMotivo" rows="3" oninput="ciPassChecar()"
-              placeholder="Por que esta demanda passa para outra pessoa?"></textarea></div>
-          <div class="mcbt">
-            <button class="mccn" onclick="fm('moCiPassar')">Cancelar</button>
-            <button class="mcok" id="ciPassBtn" disabled onclick="ciPassConfirmar()">Passar a demanda</button>
-          </div>
-        </div>
-      </div>
-    </div>`
+    <div id="ciPainel"></div>`
   ciSgpeMudou()
   await ciCarregar()
 }
@@ -13904,20 +13866,10 @@ function ciDetalhe(l) {
         <span style="font-size:11.5px;color:var(--ct);">
           Ao confirmar, esta PC passa a levar o seu nome: <b>${escHtml(U.nome)}</b>, ${hoje}.</span>
       </div>
-      ${''/* ⚠️ OS DOIS SÓ APARECEM QUANDO A PC JÁ TEM TÉCNICO (26/08/2026). Antes bastava ser
-           do C.I., e numa PC sem dono — que é o caso NORMAL agora, porque abrir não atribui —
-           o Devolver à fila devolvia o quê? A rota respondia 409 esta PC ja esta livre, e o
-           botão era o que a armadilha 15 descreve: aceita o clique e não faz nada.
-           Eles servem à PC que voltou de uma rodada e traz o técnico do parecer anterior. */}
-      ${minha && l.ci_tecnico_id ? `
-      <div style="margin-top:11px;padding-top:10px;border-top:1px dashed var(--cb);display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-sec" onclick="ciAbrirDevolver('${escHtml(l.codigo_pc)}')"
-          style="padding:6px 13px;font-size:11.5px;"
-          title="Solta a PC: ela volta a ficar sem técnico, na mesma posição da fila.">Devolver à fila</button>
-        <button class="btn-sec" onclick="ciAbrirPassar('${escHtml(l.codigo_pc)}')"
-          style="padding:6px 13px;font-size:11.5px;"
-          title="Entrega esta PC a outro técnico do Controle Interno.">Passar a outro técnico</button>
-      </div>` : ''}
+      ${''/* ⚠️ HAVIA "Devolver à fila" E "Passar a outro técnico" AQUI, e os dois saíram em
+           26/08/2026. Eles pertenciam ao modelo em que a PC tinha dono ANTES do parecer.
+           Com a atribuição vindo do parecer, o técnico gravado é quem JÁ DECIDIU: devolver
+           apagaria esse registro, e passar entregaria uma demanda que ninguém segura. */}
     </div>`
 
   return `
@@ -13989,72 +13941,17 @@ async function ciConfirmar(codigo_pc) {
   }
 }
 
-// ⚠️ OS DOIS MODAIS NASCEM COM O BOTÃO DESABILITADO, e o motivo fica no `title`. Desabilitar em
-// vez de recusar depois é o que impede a pessoa de escrever, clicar e perder o texto.
-function ciAbrirDevolver(codigo_pc) {
-  _ciAcaoPc = codigo_pc
-  document.getElementById('ciDevPc').textContent = codigo_pc
-  document.getElementById('ciDevMotivo').value = ''
-  ciDevChecar()
-  document.getElementById('moCiDevolver').classList.add('open')
-}
-function ciDevChecar() {
-  const v = (document.getElementById('ciDevMotivo')?.value || '').trim()
-  const b = document.getElementById('ciDevBtn')
-  if(!b) return
-  b.disabled = v.length < 10
-  b.title = v.length < 10 ? `Faltam ${10 - v.length} caractere(s) — o motivo fica no histórico da parcela.` : ''
-}
-async function ciDevConfirmar() {
-  const motivo = (document.getElementById('ciDevMotivo').value || '').trim()
-  const b = document.getElementById('ciDevBtn'); b.disabled = true; b.textContent = 'Devolvendo...'
-  try {
-    const r = await fetch(`${API_URL}/ci/pc/devolver`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ codigo_pc: _ciAcaoPc, usuario_id: U.id, motivo }) })
-    const j = await r.json()
-    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    fm('moCiDevolver'); toast(`A PC ${_ciAcaoPc} voltou para a fila.`,'ok')
-    _ciAberto = null; _ciDecisao = null
-    await ciCarregar()
-  } catch(e) { toast('Erro: '+e.message,'err'); b.disabled = false; b.textContent = 'Devolver à fila' }
-}
-
-function ciAbrirPassar(codigo_pc) {
-  _ciAcaoPc = codigo_pc
-  document.getElementById('ciPassPc').textContent = codigo_pc
-  document.getElementById('ciPassMotivo').value = ''
-  // ⚠️ A LISTA SÃO OS OUTROS TÉCNICOS — o próprio não entra: para ficar com a PC basta abri-la,
-  // e oferecer "passar para mim mesmo" seria um caminho que o servidor recusa.
-  const sel = document.getElementById('ciPassDestino')
-  sel.innerHTML = '<option value="">Escolha o técnico</option>' +
-    _ciTecnicos.filter(t => String(t.id) !== String(U.id))
-      .map(t => `<option value="${t.id}">${escHtml(t.nome)}</option>`).join('')
-  ciPassChecar()
-  document.getElementById('moCiPassar').classList.add('open')
-}
-function ciPassChecar() {
-  const v = (document.getElementById('ciPassMotivo')?.value || '').trim()
-  const d = document.getElementById('ciPassDestino')?.value || ''
-  const b = document.getElementById('ciPassBtn')
-  if(!b) return
-  b.disabled = v.length < 10 || !d
-  b.title = !d ? 'Escolha para quem vai a demanda.'
-          : v.length < 10 ? `Faltam ${10 - v.length} caractere(s) — o motivo fica no histórico da parcela.` : ''
-}
-async function ciPassConfirmar() {
-  const motivo = (document.getElementById('ciPassMotivo').value || '').trim()
-  const destino_id = document.getElementById('ciPassDestino').value
-  const b = document.getElementById('ciPassBtn'); b.disabled = true; b.textContent = 'Passando...'
-  try {
-    const r = await fetch(`${API_URL}/ci/pc/passar`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ codigo_pc: _ciAcaoPc, usuario_id: U.id, destino_id, motivo }) })
-    const j = await r.json()
-    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    fm('moCiPassar'); toast(`A PC ${_ciAcaoPc} agora é de ${j.data.agora_com}.`,'ok')
-    _ciAberto = null; _ciDecisao = null
-    await ciCarregar()
-  } catch(e) { toast('Erro: '+e.message,'err'); b.disabled = false; b.textContent = 'Passar a demanda' }
-}
+// ⚠️ AS SEIS FUNÇÕES DOS MODAIS "Devolver à fila" E "Passar a outro" SAÍRAM EM 26/08/2026,
+// junto com as rotas `POST /ci/pc/devolver` e `/passar` que elas chamavam.
+//
+// ⚠️ `ci_tecnico_id` TEM UM CAMINHO DE ESCRITA SÓ: a confirmação do parecer. `passar` gravava
+// a coluna e `devolver` a zerava — duas portas para a mesma resposta, e a resposta passaria a
+// depender de por onde se entrou.
+//
+// E as duas perderam o sentido junto com o modelo: com a atribuição vindo do parecer, o
+// técnico gravado na PC é **quem já deu parecer nela**. Devolver apagaria esse registro, que
+// é trilha; e passar entregaria uma demanda que ninguém está segurando — os três olham a
+// mesma fila e qualquer um dá o parecer de qualquer PC.
 
 
 /**
