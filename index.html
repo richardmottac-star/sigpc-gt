@@ -14014,17 +14014,45 @@ function ciChip(id) {
 // que a primeira linha acabou de construir.
 const CI_COLS = '1fr 150px 90px 130px 92px'
 
+// A faixa do F2, escrita UMA vez: ela aparece com lista e sem lista, e duas cópias
+// divergiriam no primeiro ajuste de cor.
+//
+// ⚠️ `sticky` no vazio também, e não é enfeite: é justamente quando não se achou nada que a
+// pessoa vai buscar de novo, e o atalho precisa estar à vista para ser o caminho.
+function ciFaixaF2() {
+  return `
+    <div style="position:sticky;top:0;z-index:5;background:var(--fundo-app, #F5F8F6);
+      font-size:12px;color:var(--ct);padding:7px 2px 8px;border-bottom:1px solid var(--cb);">
+      Pressione <kbd style="background:var(--cl);border:1px solid var(--cb);border-radius:4px;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
+        padding:1px 5px;">F2</kbd> para localizar um processo.
+    </div>`
+}
+
 function ciListaRender() {
   const painel = document.getElementById('ciPainel')
   if(!painel) return
   if(!_ciDados.length) {
-    painel.innerHTML = `<div style="padding:30px;text-align:center;color:var(--ct);font-size:13px;
+    painel.innerHTML = ciFaixaF2() + `
+      <div style="padding:30px;text-align:center;color:var(--ct);font-size:13px;margin-top:9px;
       border:1px solid var(--cl);border-radius:11px;background:#fff;">
       ${_ciModo === 'sgpe'
         ? `Nenhuma PC do processo <b>${escHtml(_ciSgpe.sigla)} ${escHtml(_ciSgpe.num)}/${escHtml(_ciSgpe.ano)}</b> está no ciclo do Controle Interno.`
         : 'Nenhuma PC neste recorte.'}</div>`
     return
   }
+  // ⚠️ A FAIXA DO F2 É `sticky`, E ISSO SÓ FUNCIONA PORQUE ELA FICA FORA DA CAIXA DA LISTA.
+  //
+  // O container da lista tem `overflow:hidden` (é ele que faz o `border-radius` cortar as
+  // linhas). `overflow` diferente de `visible` num ancestral vira o contexto de rolagem do
+  // `sticky`: dentro dali a faixa grudaria num container que não rola, e simplesmente não se
+  // mexeria. Fora dele, o contexto é o `#BODY` (`.body{overflow-y:auto}`) — que é quem rola
+  // de verdade nesta tela.
+  //
+  // ⚠️ E ELA PRECISA DE FUNDO OPACO. Sem `background`, as linhas da fila passariam POR BAIXO
+  // e o texto ficaria ilegível sobre elas — um sticky transparente parece um defeito de
+  // renderização, não um cabeçalho.
+  //
   // ⚠️ A FAIXA AMARELA DE CORTE SAIU EM 27/08/2026 — porque o corte saiu. Ela dizia
   // "mostrando as 300 mais antigas de 875" e mandava "use a busca", que só ajuda quem já sabe
   // o que procurar. Quem precisava da parcela 400 não tinha caminho nenhum. O rodapé abaixo
@@ -14058,13 +14086,9 @@ function ciListaRender() {
       </div>
     </div>`
 
-  painel.innerHTML = `
-    <div style="font-size:12px;color:var(--ct);margin-bottom:7px;">
-      Pressione <kbd style="background:var(--cl);border:1px solid var(--cb);border-radius:4px;
-        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
-        padding:1px 5px;">F2</kbd> para localizar um processo.
-    </div>
-    <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;">
+  painel.innerHTML = ciFaixaF2() + `
+    <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;
+      margin-top:9px;">
       <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:9px 13px;
         background:#173404;color:#C0DD97;font-size:10px;font-weight:700;text-transform:uppercase;
         letter-spacing:.05em;">
