@@ -13696,6 +13696,118 @@ document.addEventListener('keydown', (e) => {
   ciBuscaAbrir()
 })
 
+// ── Reabrir uma parcela encerrada ───────────────────────────────────────────
+//
+// ⚠️ REABRIR NÃO DESFAZ A BAIXA — e o modal diz isso antes de qualquer outra coisa. Existe
+// no sistema um caminho que desfaz (`POST /parcela/puxar_ci`), e ele derruba `baixada`,
+// `enviado_ci` e `parecer_tipo` e tira a PC da produtividade. São ações opostas com nomes
+// parecidos; quem confundir as duas apaga a produtividade de uma analista sem ver erro.
+//
+// ⚠️ E A ROTA ENTRA PELA PARCELA, não por `codigos_pc` — mesma unidade de `/ci/decidir` desde
+// 26/08. Os códigos aparecem no modal porque o técnico precisa ver QUAIS voltam (numa parcela
+// parcialmente encaminhada elas são menos que a parcela inteira), mas quem escolhe as PCs é o
+// servidor: ele reabre as que estão `encerrado` naquela parcela.
+function ciReabrirAbrir(codigo_pc) {
+  if(verComoAtivo()) { toast('Reabrir no C.I. é do técnico do Controle Interno.','err'); return }
+  const l = _ciDados.find(x => x.codigo_pc === codigo_pc)
+  if(!l) return
+  if(document.getElementById('ciReabrirMo')) return
+  const codigos = Array.isArray(l.codigos_pc) ? l.codigos_pc : [l.codigo_pc].filter(Boolean)
+  const nPcs = l.n_pcs || codigos.length || 1
+  const semProc = !l.processo_pc || String(l.processo_pc).trim() === '' || String(l.processo_pc).trim() === '-'
+
+  const d = document.createElement('div')
+  d.id = 'ciReabrirMo'
+  d.className = 'mo open'
+  d.dataset.pc = codigo_pc
+  d.innerHTML = `
+    <div class="mc" style="width:470px;" onclick="event.stopPropagation()">
+      <div class="mch"><h3>Reabrir no Controle Interno</h3>
+        <button class="mcx" onclick="ciReabrirFechar()" aria-label="Fechar">✕</button></div>
+      <div class="mcb">
+        <div class="mci">
+          <b>${semProc ? '—' : escHtml(normalizarProcesso(l.processo_pc))}</b><br>
+          ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')} ·
+          <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b><br>
+          <span style="font-size:11.5px;">${escHtml(codigos.join(', '))}</span>
+        </div>
+        <div style="font-size:12.5px;color:var(--ct);line-height:1.6;margin-bottom:12px;">
+          A parcela volta para o analista como pendência dele.
+          <b>A baixa e o encaminhamento ao C.I. continuam valendo.</b>
+        </div>
+        <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;
+          margin-bottom:3px;">Motivo (obrigatório)</div>
+        <textarea id="ciReabrirTxt" rows="3" oninput="ciReabrirMudou()"
+          placeholder="Por que esta parcela está voltando?"
+          style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
+            border-radius:7px;font-size:12.5px;font-family:inherit;resize:vertical;"></textarea>
+        <div style="font-size:11.5px;color:var(--ct);margin-top:5px;">
+          O analista vai ler este texto — ele chega no sino e fica no histórico da parcela.</div>
+        <div class="mcbt">
+          <button class="btn-neutro" onclick="ciReabrirFechar()">Cancelar</button>
+          <button id="ciReabrirBt" class="btn-acao" onclick="ciReabrirConfirmar()" disabled
+            title="Escreva o motivo — o analista vai lê-lo."
+            style="padding:8px 17px;font-size:13px;">Reabrir</button>
+        </div>
+      </div>
+    </div>`
+  d.onclick = ciReabrirFechar
+  document.body.appendChild(d)
+  document.addEventListener('keydown', ciReabrirEsc, true)
+  const t = document.getElementById('ciReabrirTxt'); if(t) t.focus()
+}
+
+function ciReabrirEsc(e) { if(e.key === 'Escape') { e.stopPropagation(); ciReabrirFechar() } }
+
+function ciReabrirFechar() {
+  const d = document.getElementById('ciReabrirMo')
+  if(d) d.remove()
+  document.removeEventListener('keydown', ciReabrirEsc, true)
+}
+
+/** O botão nasce cinza e só acende com motivo escrito — armadilha 15, com o motivo no title. */
+function ciReabrirMudou() {
+  const bt = document.getElementById('ciReabrirBt')
+  if(!bt) return
+  const t = (document.getElementById('ciReabrirTxt')?.value || '').trim()
+  bt.disabled = !t
+  bt.title = t ? 'Devolver esta parcela ao analista' : 'Escreva o motivo — o analista vai lê-lo.'
+}
+
+async function ciReabrirConfirmar() {
+  const d = document.getElementById('ciReabrirMo')
+  if(!d) return
+  const l = _ciDados.find(x => x.codigo_pc === d.dataset.pc)
+  const txt = (document.getElementById('ciReabrirTxt')?.value || '').trim()
+  if(!l || !txt) return
+
+  const bt = document.getElementById('ciReabrirBt')
+  if(bt) { bt.disabled = true; bt.textContent = 'Reabrindo...' }
+  try {
+    const r = await fetch(`${API_URL}/ci/reabrir`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr:l.tr, parcial_num:l.parcial_num, setorial_id:l.setorial_id,
+                             texto:txt, autor_id:U.id })
+    })
+    const j = await r.json()
+    // ⚠️ A MENSAGEM É A QUE A ROTA DEVOLVEU, e não uma traduzida aqui. Ela distingue o 403
+    // (não é do C.I.) do 409 (a parcela já não está encerrada), e as duas exigem coisas
+    // diferentes de quem está na frente da tela.
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const n = j.data?.afetadas ?? (l.n_pcs || 1)
+    ciReabrirFechar()
+    toast(`Parcela reaberta e devolvida ao analista — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
+    _ciAberto = null; _ciDecisao = null
+    await ciCarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    // ⚠️ O MODAL FICA ABERTO E O BOTÃO VOLTA A ACENDER NO ERRO — armadilha 15. Fechar aqui
+    // esconderia a razão da recusa e apagaria o motivo já digitado.
+    if(bt) { bt.textContent = 'Reabrir' }
+    ciReabrirMudou()
+  }
+}
+
 // ── A carga ─────────────────────────────────────────────────────────────────
 
 async function ciCarregar() {
@@ -13886,6 +13998,15 @@ function ciLinha(l, i) {
   // 4px só na encontrada empurraria o conteúdo dela para a direita, e a coluna inteira
   // perderia o alinhamento — quem varre a lista de cima a baixo perde o fio.
   const borda = achada ? '#BA7517' : 'transparent'
+  // ⚠️ O "REABRIR" TESTA `ci_situacao`, NÃO O CHIP. Encerrada é encerrada — e a busca por
+  // processo devolve a parcela em qualquer estado, sem passar por chip nenhum. Amarrar o
+  // botão ao chip o faria sumir justamente em quem chegou pela busca, que é o caminho de
+  // quem já sabe o que veio procurar.
+  //
+  // ⚠️ E É O MESMO PREDICADO DA ROTA: `ciFila.podeReabrir` é `perfilEfetivo === 'controle_interno'`,
+  // superadmin incluído na recusa. A tela desenha o que o servidor autoriza — aqui o botão
+  // nem nasce; lá o servidor devolve 403.
+  const podeReabrir = l.ci_situacao === 'encerrado' && !verComoAtivo() && U.perfil === 'controle_interno'
   const selo = achada
     ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:6px;
          background:#EF9F27;color:#412402;font-size:11px;font-weight:700;
@@ -13910,7 +14031,13 @@ function ciLinha(l, i) {
       <div><span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:13px;
         font-weight:700;background:${f.bg};color:${f.fg};">${dias}</span></div>
       <div style="min-width:0;">${tec}</div>
-      <div style="text-align:right;">
+      <div style="text-align:right;white-space:nowrap;">
+        ${podeReabrir
+          ? `<button onclick="event.stopPropagation();ciReabrirAbrir('${escHtml(l.codigo_pc)}')"
+               class="ci-bt-abrir" style="margin-right:7px;"
+               title="Devolver esta parcela ao analista — a baixa continua valendo"
+               >Reabrir</button>`
+          : ''}
         <button onclick="ciExpandir('${escHtml(l.codigo_pc)}')" class="ci-bt-abrir"
           title="${aberta ? 'Fechar o cartão' : 'Ver o parecer, o valor e a nota de liquidação'}"
           >${aberta ? 'Fechar' : 'Abrir'}</button>
