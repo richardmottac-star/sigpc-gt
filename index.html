@@ -13429,6 +13429,19 @@ let _ciModo = 'geral'          // qual dos dois blocos está valendo
 let _ciDestaque = null         // codigo_pc da linha acesa — UMA por vez
 let _ciDestacarApos = false
 
+// ⚠️ A PAGINAÇÃO É DO SERVIDOR, e estes dois são só o que a tela PEDE. Quem manda é a
+// resposta: `ciCarregar` reescreve os dois com o que voltou, porque `ciFila.paginacao`
+// normaliza o tamanho para a lista fechada e a página para >= 1. Desenhar pelo pedido faria
+// o seletor mostrar 7 quando o servidor aplicou 20.
+//
+// ⚠️ O TAMANHO PERSISTE ENQUANTO SE ESTÁ NA TELA, e a página NÃO: trocar de chip, buscar ou
+// limpar volta para a 1. Manter a página ao trocar de recorte cairia numa página que talvez
+// nem exista no recorte novo — e a tela mostraria vazio sobre uma fila cheia.
+let _ciPagina = 1
+let _ciTamanho = 20
+let _ciTamanhos = [10, 20, 30, 40, 50]
+let _ciPaginas = 1
+
 /** Id estável da linha, para a rolagem. Só o que vale em `id` sobrevive ao replace. */
 const ciIdLinha = (codigo_pc) => 'ciL_' + String(codigo_pc || '').replace(/[^A-Za-z0-9_-]/g, '_')
 
@@ -13505,16 +13518,18 @@ function ciBuscaHtml() {
       Localizar pelo processo SGPe</div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
       <div style="flex:0 0 80px;">${rot('Sigla')}
-        <input id="ciSgSigla" value="SCC" maxlength="10" style="${inp}text-transform:uppercase;"
+        <input id="ciSgSigla" value="${CI_SIGLA_PADRAO}" maxlength="10" style="${inp}text-transform:uppercase;"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
       <div style="flex:0 0 120px;">${rot('Número')}
-        <input id="ciSgNum" maxlength="10" placeholder="9692" style="${inp}"
+        <input id="ciSgNum" maxlength="10" style="${inp}"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
       <div style="flex:0 0 90px;">${rot('Ano')}
-        <input id="ciSgAno" maxlength="4" placeholder="2024" style="${inp}"
+        <input id="ciSgAno" maxlength="4" style="${inp}"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
       <button id="ciSgBt" class="btn-acao" onclick="ciBuscarSgpe()" disabled
         style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Buscar</button>
+      <button id="ciSgLimpar" class="btn-secundario" onclick="ciLimparSgpe()" disabled
+        style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Limpar</button>
       ${''/* ⚠️ O ESPAÇO QUE SOBRA FICA VAZIO, de propósito (26/08/2026). Os três campos são
              curtos — 80, 120 e 90 — e antes o Número esticava com `flex:1 1 190px` até ocupar
              a linha inteira. Um campo de dez dígitos com 400px de largura promete um texto
@@ -13522,9 +13537,6 @@ function ciBuscaHtml() {
              formato pelo TAMANHO de cada caixa. O `flex:1` abaixo é só o vazio. */}
       <div style="flex:1 1 0;min-width:0;"></div>
     </div>
-    <div style="font-size:10.5px;color:var(--ct);margin-top:7px;">
-      Os três campos são obrigatórios. Pontuação e zeros à esquerda não importam —
-      <b>9692</b> encontra <b>SCC 00009692/2024</b>.</div>
   </div>
 
   <div style="background:var(--surface-2, #F7FAF8);border:1px solid var(--cl);border-radius:10px;
@@ -13550,6 +13562,10 @@ function ciBuscaHtml() {
 }
 
 /** Acende o botão do SGPe só com os três campos, e diz no `title` o que falta. */
+// A sigla nasce e volta a este valor. Um lugar só: o `value` do campo, o reset do Limpar e o
+// estado "já está no início" leem daqui, e três literais divergiriam no primeiro ajuste.
+const CI_SIGLA_PADRAO = 'SCC'
+
 function ciSgpeMudou() {
   const v = (id) => (document.getElementById(id)?.value || '').trim()
   const s = v('ciSgSigla').replace(/[^A-Za-z]/g,'')
@@ -13563,6 +13579,41 @@ function ciSgpeMudou() {
   if(!a) falta.push('o ano')
   bt.disabled = falta.length > 0
   bt.title = falta.length ? `Informe ${falta.join(', ')} do processo.` : 'Localizar este processo no ciclo do C.I.'
+
+  // ⚠️ O LIMPAR SE DESABILITA NO ESTADO INICIAL, e "inicial" é campo vazio COM a sigla no
+  // padrão — não é "os três vazios". Um Limpar sempre aceso num formulário já limpo é o
+  // botão que aceita clique e não faz nada, que é a armadilha 15 pelo avesso.
+  const lb = document.getElementById('ciSgLimpar')
+  if(lb) {
+    const inicial = !n && !a && s.toUpperCase() === CI_SIGLA_PADRAO && _ciModo !== 'sgpe'
+    lb.disabled = inicial
+    lb.title = inicial ? 'Os campos já estão no estado inicial.'
+                       : 'Esvaziar os campos e desfazer esta busca'
+  }
+}
+
+/**
+ * Limpa a busca por processo: campos, resultado e destaque.
+ *
+ * ⚠️ ELE DESFAZ A BUSCA, e não só apaga o texto. Deixar `_ciModo = 'sgpe'` com os campos
+ * vazios manteria a lista filtrada por um processo que já não está escrito em lugar nenhum —
+ * a tela mostraria um recorte sem dizer de quê.
+ */
+function ciLimparSgpe() {
+  const põe = (id, val) => { const el = document.getElementById(id); if(el) el.value = val }
+  põe('ciSgSigla', CI_SIGLA_PADRAO); põe('ciSgNum', ''); põe('ciSgAno', '')
+  const eraSgpe = _ciModo === 'sgpe'
+  _ciSgpe = { sigla:CI_SIGLA_PADRAO, num:'', ano:'' }
+  _ciDestaque = null; _ciDestacarApos = false
+  if(eraSgpe) {
+    _ciModo = 'geral'
+    _ciAberto = null; _ciDecisao = null
+    _ciPagina = 1
+  }
+  ciSgpeMudou()
+  const n = document.getElementById('ciSgNum'); if(n) n.focus()
+  // Só recarrega se havia um recorte para desfazer — senão o clique só devolve o foco.
+  if(eraSgpe) ciCarregar(); else if(document.getElementById('ciPainel')) ciListaRender()
 }
 
 /** Buscar pelo processo LIMPA o bloco de baixo, e vice-versa. */
@@ -13577,6 +13628,7 @@ function ciBuscarSgpe() {
   const es = document.getElementById('ciEspera'); if(es) es.value = ''
   _ciAberto = null; _ciDecisao = null
   _ciDestaque = null; _ciDestacarApos = true
+  _ciPagina = 1
   ciCarregar()
 }
 
@@ -13593,6 +13645,7 @@ function ciBuscarGeral() {
   ciSgpeMudou()
   _ciAberto = null; _ciDecisao = null
   _ciDestaque = null; _ciDestacarApos = true
+  _ciPagina = 1
   ciCarregar()
 }
 
@@ -13625,24 +13678,27 @@ function ciBuscaAbrir() {
         <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:9px;">
           <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
                  letter-spacing:.05em;margin-bottom:3px;">Sigla</div>
-            <input id="ciBuscaSigla" value="SCC" maxlength="10" autocomplete="off"
+            <input id="ciBuscaSigla" value="${CI_SIGLA_PADRAO}" maxlength="10" autocomplete="off"
+              oninput="ciBuscaMudou()"
               style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
                 border-radius:7px;font-size:13px;font-family:inherit;text-transform:uppercase;"></div>
           <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
                  letter-spacing:.05em;margin-bottom:3px;">Número</div>
             <input id="ciBuscaNum" maxlength="10" inputmode="numeric" autocomplete="off"
-              oninput="procEdSoDigitos(this)"
+              oninput="procEdSoDigitos(this);ciBuscaMudou()"
               style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
                 border-radius:7px;font-size:13px;font-family:inherit;"></div>
           <div><div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;
                  letter-spacing:.05em;margin-bottom:3px;">Ano</div>
             <input id="ciBuscaAno" maxlength="4" inputmode="numeric" autocomplete="off"
-              oninput="procEdSoDigitos(this)"
+              oninput="procEdSoDigitos(this);ciBuscaMudou()"
               style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
                 border-radius:7px;font-size:13px;font-family:inherit;"></div>
         </div>
         <div class="mcbt">
           <button class="btn-neutro" onclick="ciBuscaFechar()">Cancelar</button>
+          <button id="ciBuscaLimpar" class="btn-secundario" onclick="ciBuscaLimparCampos()" disabled
+            style="padding:8px 17px;font-size:13px;">Limpar</button>
           <button class="btn-acao" onclick="ciBuscaLocalizar()"
             style="padding:8px 17px;font-size:13px;">Localizar</button>
         </div>
@@ -13654,6 +13710,36 @@ function ciBuscaAbrir() {
   d.onkeydown = (e) => { if(e.key === 'Enter') { e.preventDefault(); ciBuscaLocalizar() } }
   document.body.appendChild(d)
   document.addEventListener('keydown', ciBuscaEsc, true)
+  ciBuscaMudou()
+  const n = document.getElementById('ciBuscaNum'); if(n) n.focus()
+}
+
+/** O Limpar da caixa: mesmo estado inicial do bloco de cima — sigla no padrão, resto vazio. */
+function ciBuscaMudou() {
+  const bt = document.getElementById('ciBuscaLimpar')
+  if(!bt) return
+  const v = (id) => (document.getElementById(id)?.value || '').trim()
+  const s = v('ciBuscaSigla').replace(/[^A-Za-z]/g,'').toUpperCase()
+  const n = v('ciBuscaNum').replace(/[^0-9]/g,'')
+  const a = v('ciBuscaAno').replace(/[^0-9]/g,'')
+  const inicial = !n && !a && s === CI_SIGLA_PADRAO && _ciModo !== 'sgpe'
+  bt.disabled = inicial
+  bt.title = inicial ? 'Os campos já estão no estado inicial.'
+                     : 'Esvaziar os campos e desfazer esta busca'
+}
+
+/**
+ * ⚠️ O LIMPAR DA CAIXA DESFAZ A BUSCA TAMBÉM, e não só esvazia os três campos dela.
+ *
+ * Ele delega a `ciLimparSgpe`, que é quem já sabe apagar o recorte, o destaque e voltar à
+ * página 1 — a caixa do F2 nunca foi uma segunda busca, e o Limpar dela não pode virar um
+ * segundo limpar. O que sobra aqui é o que é só da caixa: os próprios campos e o foco.
+ */
+function ciBuscaLimparCampos() {
+  const põe = (id, val) => { const el = document.getElementById(id); if(el) el.value = val }
+  põe('ciBuscaSigla', CI_SIGLA_PADRAO); põe('ciBuscaNum', ''); põe('ciBuscaAno', '')
+  ciLimparSgpe()
+  ciBuscaMudou()
   const n = document.getElementById('ciBuscaNum'); if(n) n.focus()
 }
 
@@ -13814,7 +13900,8 @@ async function ciCarregar() {
   const painel = document.getElementById('ciPainel')
   if(!painel) return
   painel.innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
-  const p = new URLSearchParams({ usuario_id: U.id, chip: _ciChip })
+  const p = new URLSearchParams({ usuario_id: U.id, chip: _ciChip,
+                                  pagina: _ciPagina, tamanho: _ciTamanho })
   if(_ciModo === 'sgpe') {
     p.set('sgpe_sigla', _ciSgpe.sigla); p.set('sgpe_num', _ciSgpe.num); p.set('sgpe_ano', _ciSgpe.ano)
   } else {
@@ -13833,7 +13920,13 @@ async function ciCarregar() {
     _ciResumo = j.resumo || { cards:{}, chips:{} }
     _ciTecnicos = j.tecnicos || []
     _ciAnalistas = j.analistas || []
-    _ciTotal = j.total || _ciDados.length
+    _ciTotal = j.total ?? _ciDados.length
+    // O servidor é quem manda: ele normalizou o tamanho e a página, e a tela desenha o que
+    // foi APLICADO, não o que foi pedido.
+    _ciPagina = j.pagina || 1
+    _ciTamanho = j.tamanho || _ciTamanho
+    _ciTamanhos = Array.isArray(j.tamanhos) && j.tamanhos.length ? j.tamanhos : _ciTamanhos
+    _ciPaginas = j.paginas || 1
     // ⚠️ QUEM ESCOLHE A LINHA ACESA É O RESULTADO, e é a PRIMEIRA dele: a lista já vem
     // filtrada pela busca e ordenada da mais antiga para a mais nova, então a primeira é a
     // que o técnico veio ver. Busca sem resultado não acende nada — e a faixa de "nenhuma PC"
@@ -13896,6 +13989,9 @@ function ciRender() {
 function ciChip(id) {
   _ciChip = id
   _ciAberto = null; _ciDecisao = null
+  // ⚠️ Trocar de recorte volta para a página 1: a página 30 do chip anterior pode não existir
+  // aqui, e a tela mostraria vazio sobre uma fila cheia.
+  _ciPagina = 1
   ciCarregar()
 }
 
@@ -13929,13 +14025,38 @@ function ciListaRender() {
         : 'Nenhuma PC neste recorte.'}</div>`
     return
   }
-  // ⚠️ O CORTE É DITO. O servidor traz no máximo o teto; quando há mais, a faixa conta quantas
-  // ficaram de fora. Uma lista truncada em silêncio se lê como "acabou".
-  const sobra = _ciTotal > _ciDados.length
-    ? `<div style="padding:8px 13px;background:#FFF8E1;border-top:1px solid #F0E2B8;font-size:11.5px;color:#7A5B10;">
-         Mostrando as <b>${_ciDados.length.toLocaleString('pt-BR')}</b> mais antigas de
-         <b>${_ciTotal.toLocaleString('pt-BR')}</b>. Use a busca para chegar a uma PC específica.</div>`
-    : ''
+  // ⚠️ A FAIXA AMARELA DE CORTE SAIU EM 27/08/2026 — porque o corte saiu. Ela dizia
+  // "mostrando as 300 mais antigas de 875" e mandava "use a busca", que só ajuda quem já sabe
+  // o que procurar. Quem precisava da parcela 400 não tinha caminho nenhum. O rodapé abaixo
+  // não avisa de um limite: ele NAVEGA.
+  const de = _ciTotal === 0 ? 0 : (_ciPagina - 1) * _ciTamanho + 1
+  const ate = Math.min(_ciPagina * _ciTamanho, _ciTotal)
+  const nav = (rot, alvo, ligado, titulo) => `
+    <button onclick="ciIrPagina(${alvo})" ${ligado ? '' : 'disabled'} title="${titulo}"
+      class="btn-secundario" style="padding:5px 10px;font-size:12px;min-width:34px;">${rot}</button>`
+  const rodape = `
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;
+      padding:9px 13px;border-top:1px solid var(--cb);background:var(--surface-2, #F7FAF8);">
+      <div style="display:flex;gap:7px;align-items:center;font-size:12px;color:var(--ct);">
+        <span>Por página</span>
+        <select onchange="ciTrocarTamanho(this.value)"
+          style="padding:4px 7px;border:1px solid var(--cb);border-radius:6px;font-size:12px;
+            font-family:inherit;background:#fff;">
+          ${_ciTamanhos.map(t => `<option value="${t}" ${t === _ciTamanho ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--ct);">
+        Mostrando <b>${de.toLocaleString('pt-BR')}</b> a <b>${ate.toLocaleString('pt-BR')}</b>
+        de <b>${_ciTotal.toLocaleString('pt-BR')}</b> parcelas</div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        ${nav('«', 1, _ciPagina > 1, 'Primeira página')}
+        ${nav('‹', _ciPagina - 1, _ciPagina > 1, 'Página anterior')}
+        <span style="font-size:12px;color:var(--te);font-weight:700;padding:0 6px;white-space:nowrap;">
+          ${_ciPagina.toLocaleString('pt-BR')} / ${_ciPaginas.toLocaleString('pt-BR')}</span>
+        ${nav('›', _ciPagina + 1, _ciPagina < _ciPaginas, 'Próxima página')}
+        ${nav('»', _ciPaginas, _ciPagina < _ciPaginas, 'Última página')}
+      </div>
+    </div>`
 
   painel.innerHTML = `
     <div style="font-size:12px;color:var(--ct);margin-bottom:7px;">
@@ -13951,8 +14072,41 @@ function ciListaRender() {
         <div>Técnico C.I.</div><div></div>
       </div>
       ${_ciDados.map((l, i) => ciLinha(l, i)).join('')}
-      ${sobra}
+      ${rodape}
     </div>`
+}
+
+/**
+ * Troca de página. Fecha o detalhe e rola para o topo da lista.
+ *
+ * ⚠️ FECHAR O DETALHE NÃO É ARRUMAÇÃO. `_ciAberto` guarda um `codigo_pc`, e a página nova tem
+ * outras parcelas: o cartão ficaria aberto sobre uma linha que não está mais na tela, ou —
+ * pior — sobre a linha errada se um código coincidir. E `_ciDecisao` guarda o rádio marcado;
+ * levá-lo para outra parcela ofereceria "Confirmar parecer" com a escolha feita para outra.
+ */
+function ciIrPagina(n) {
+  const alvo = Math.min(Math.max(1, parseInt(n) || 1), Math.max(1, _ciPaginas))
+  if(alvo === _ciPagina) return
+  _ciPagina = alvo
+  _ciAberto = null; _ciDecisao = null
+  ciCarregar().then(ciRolarAoTopoDaLista)
+}
+
+/** ⚠️ Trocar o tamanho VOLTA PARA A PÁGINA 1 — a página 40 de 20 em 20 não existe de 50 em 50. */
+function ciTrocarTamanho(v) {
+  const t = parseInt(v) || _ciTamanho
+  if(t === _ciTamanho) return
+  _ciTamanho = t
+  _ciPagina = 1
+  _ciAberto = null; _ciDecisao = null
+  ciCarregar().then(ciRolarAoTopoDaLista)
+}
+
+/** ⚠️ Não rola se há linha acesa: o destaque já rolou até ela, e o topo desfaria isso. */
+function ciRolarAoTopoDaLista() {
+  if(_ciDestaque) return
+  const el = document.getElementById('ciPainel')
+  if(el) el.scrollIntoView({ behavior:'smooth', block:'start' })
 }
 
 // ⚠️ UMA LINHA POR PARCELA, e não por PC — desde 26/08/2026, junto com `ci.decidir`.
