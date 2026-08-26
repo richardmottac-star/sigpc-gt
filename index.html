@@ -714,6 +714,29 @@ tbody tr.grupo-sep:hover { background:#F5F8F6; box-shadow:none; }
   box-shadow: 0 1px 3px rgba(6,20,14,.15);
 }
 
+/* ── O "Abrir"/"Fechar" da fila do C.I.: verde sólido com relevo ──
+   ⚠️ O seletor é `button.ci-bt-abrir` (0,1,1), e não `.ci-bt-abrir` (0,1,0): o `button, .btn`
+   lá de cima é 0,0,1 e as duas regras de sombra logo acima listam classe por classe. Com
+   elemento + classe nenhuma delas alcança o fundo, a cor do texto nem a sombra daqui — e a
+   regra ainda vem DEPOIS de todas, que é o desempate quando a especificidade empata. */
+button.ci-bt-abrir {
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 7px 18px; border-radius: 8px; border: none;
+  background: #3B6D11; color: #FFFFFF;
+  box-shadow: 0 3px 0 #173404;
+  cursor: pointer;
+  transition: transform .06s, box-shadow .06s;
+}
+button.ci-bt-abrir:hover {
+  background: #639922; color: #FFFFFF;
+  box-shadow: 0 3px 0 #27500A;
+}
+button.ci-bt-abrir:active {
+  background: #639922; color: #FFFFFF;
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
 /* ── Chips de status: borda na cor do texto a 25% ── */
 .st-livre      { border: 1px solid rgba(75,85,99,.25); }
 .st-analise    { border: 1px solid rgba(3,105,161,.25); }
@@ -13713,8 +13736,7 @@ function ciLinha(l, i) {
         font-weight:700;background:${f.bg};color:${f.fg};">${dias}</span></div>
       <div style="min-width:0;">${tec}</div>
       <div style="text-align:right;">
-        <button onclick="ciExpandir('${escHtml(l.codigo_pc)}')" class="btn-sec"
-          style="padding:4px 12px;font-size:12px;font-family:inherit;cursor:pointer;"
+        <button onclick="ciExpandir('${escHtml(l.codigo_pc)}')" class="ci-bt-abrir"
           title="${aberta ? 'Fechar o cartão' : 'Ver o parecer, o valor e a nota de liquidação'}"
           >${aberta ? 'Fechar' : 'Abrir'}</button>
       </div>
