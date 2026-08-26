@@ -12,8 +12,8 @@
 //   · o cabeçalho, os quatro cards sólidos e os cinco chips, com as cores da especificação;
 //   · os DOIS blocos de busca, e o fato de serem EXCLUDENTES;
 //   · os três campos do SGPe obrigatórios, e o botão cinza que diz o que falta;
-//   · a lista de uma linha por PC, com as larguras e a zebra;
-//   · que EXPANDIR MARCA A PC COMO SUA — e que não toma a PC de quem já está com ela;
+//   · a lista com o PROCESSO SGPe em destaque, os três degraus e a divisória entre blocos;
+//   · que ABRIR NÃO É ASSUMIR — a PC só ganha técnico quando o parecer é confirmado;
 //   · as duas decisões, com o texto e as cores exatas, e o Confirmar na cor da escolhida;
 //   · que nada da tela escreve na baixa.
 //
@@ -115,61 +115,91 @@ conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um modo 
 // "SCC" toda vez seria atrito sem resposta a dar.
 conf(/sigla:_ciSgpe\.sigla \|\| 'SCC'/.test(ge), 'a sigla sobrevive — e o unico campo com padrao');
 
-S('6. OS TRES CAMPOS DO SGPe, E O BOTAO QUE DIZ O QUE FALTA');
+S('6. OS TRES CAMPOS DO SGPe — CURTOS, LADO A LADO, E OS TRES OBRIGATORIOS');
 conf(/id="ciSgSigla" value="SCC" maxlength="10"/.test(B), 'a sigla nasce SCC');
 conf(/text-transform:uppercase/.test(B1), 'e sobe para maiusculas na tela');
-conf(/id="ciSgNum" placeholder="9692 ou 00009692"/.test(B), 'o numero aceita as duas grafias');
-conf(/id="ciSgAno" placeholder="2024" maxlength="4"/.test(B), 'e o ano tem quatro digitos');
-// As larguras da especificação: sigla estreita, número largo, ano estreito.
-conf(/flex:0 0 88px;">\$\{rot\('Sigla'\)\}/.test(B1), 'sigla estreita');
-conf(/flex:1 1 190px;min-width:150px;">\$\{rot\('Número'\)\}/.test(B1), 'numero largo');
-conf(/flex:0 0 96px;">\$\{rot\('Ano'\)\}/.test(B1), 'ano estreito');
+conf(/id="ciSgNum" maxlength="10"/.test(B), 'o numero aceita 10 digitos');
+conf(/id="ciSgAno" maxlength="4"/.test(B), 'e o ano, 4');
+// ⚠️ AS LARGURAS SAO FIXAS, E O QUE SOBRA DA LINHA FICA VAZIO (Richard, 26/08/2026).
+// Antes o Numero esticava com `flex:1 1 190px` ate ocupar a linha inteira: um campo de dez
+// digitos com 400px de largura promete um texto longo que ele nao aceita, e some com a
+// relacao entre os tres. A tela ensina o formato pelo TAMANHO de cada caixa.
+conf(/flex:0 0 80px;">\$\{rot\('Sigla'\)\}/.test(B1), 'sigla em 80px');
+conf(/flex:0 0 120px;">\$\{rot\('Número'\)\}/.test(B1), 'numero em 120px');
+conf(/flex:0 0 90px;">\$\{rot\('Ano'\)\}/.test(B1), 'ano em 90px');
+// ⚠️ SÓ NO BLOCO DO SGPe: a explicação de POR QUE o Número deixou de esticar cita a largura
+// antiga do campo, e uma busca no bloco inteiro acharia o próprio comentário.
+const blocoSgpe = B1.slice(B1.indexOf('Localizar pelo processo SGPe'), B1.indexOf('Ou procurar na fila'));
+conf(!/flex:1 1 190px;/.test(blocoSgpe), 'e nenhum deles estica');
+conf(/<div style="flex:1 1 0;min-width:0;"><\/div>/.test(B1), 'o espaco que sobra fica vazio');
+conf(/onclick="ciBuscarSgpe\(\)" disabled/.test(B), 'o botao Buscar vem logo depois, e nasce cinza');
 conf(/letter-spacing:\.05em;margin-bottom:3px;font-weight:600/.test(B1), 'com o rotulo pequeno em cima de cada um');
 // ⚠️ OS TRES SAO OBRIGATORIOS: buscar so pelo numero devolveria o SCC 7537 de sete anos
 // diferentes — a armadilha 19 dita como interface.
 const mud = corpo('ciSgpeMudou');
-conf(/bt\.disabled = falta\.length > 0/.test(mud), 'o botao so acende com os tres');
+conf(/bt\.disabled = falta\.length > 0/.test(mud), 'e so acende com os tres');
 conf(/bt\.title = falta\.length \?/.test(mud), 'e o cinza DIZ o que falta (armadilha 15)');
 for (const c of ['a sigla', 'o número', 'o ano']) conf(mud.includes(`'${c}'`), `sabe apontar "${c}"`);
 conf(/Pontuação e zeros à esquerda não importam/.test(B), 'e a tela explica a normalizacao');
-conf(/<b>9692<\/b> encontra <b>SCC 00009692\/2024<\/b>/.test(B1), 'com o exemplo dos dois lados');
 
-S('7. A LISTA — UMA LINHA POR PC');
-conf(/const CI_COLS = '135px 1fr 95px 85px 110px 80px'/.test(B), 'as seis larguras da especificacao');
-conf(/background:#173404;color:#C0DD97/.test(B1), 'a faixa de cabecalho verde escuro');
-for (const t of ['PC', 'TR e entidade', 'Analista', 'Espera', 'Técnico C.I.'])
+S('7. A LISTA — O PROCESSO SGPe E O ELEMENTO PRINCIPAL');
+// ⚠️ O TECNICO DO C.I. NAO PROCURA PELO CODIGO DA PC: ele procura pelo PROCESSO, porque e com
+// o processo aberto no SGPe que ele confere. A primeira versao punha `2020PC000448` em
+// destaque e o processo escondido dentro do cartao — o numero que a pessoa tem na mao era o
+// unico que ela nao via na lista.
+conf(/const CI_COLS = '1fr 150px 90px 130px 92px'/.test(B), 'as larguras: o processo toma o espaco livre');
+conf(/background:#173404;color:#C0DD97/.test(B1), 'a faixa de cabecalho verde escuro, mantida');
+for (const t of ['Processo SGPe', 'Analista', 'Espera', 'Técnico C.I.'])
   conf(B.includes(`<div>${t}</div>`), `coluna "${t}"`);
-conf(/font-size:13px;font-weight:500/.test(B1), 'o codigo da PC em 13px peso 500');
-conf(/· parcela \$\{escHtml\(l\.parcial_num \|\| '—'\)\}/.test(B), 'a TR vem com o numero da parcela');
-conf(/font-size:11px;color:var\(--ct\)/.test(B1), 'e a entidade menor, em cinza');
-// ⚠️ Ímpares no cinza do tema, pares no verde bem claro — o mesmo par da tela Estoque.
-conf(/const fundo = \(i % 2 === 0\) \? 'var\(--surface-2, #F7FAF8\)' : '#F2F8EC'/.test(B), 'a zebra');
-conf(/width:22px;height:22px;border-radius:50%/.test(B1), 'o tecnico com avatar de 22px');
-conf(/<span style="color:#9AA8A0;font-size:12px;">—<\/span>/.test(B), 'e "—" quando ninguem esta com ela');
-// ⚠️ A COR DO AVATAR SAI DA POSICAO, nunca do nome: fixar "azul = Marcia" quebraria no dia em
-// que a equipe mudasse, e ela ja mudou uma vez.
-conf(/_ciTecnicos\.findIndex\(t => String\(t\.id\) === String\(id\)\)/.test(B),
-     'a cor do tecnico sai da posicao na equipe');
-// ⚠️ O CORTE E DITO, nunca silencioso: uma lista truncada sem aviso se le como "acabou".
+conf(!/<div>PC<\/div>/.test(B), 'e "PC" deixou de ser coluna — virou subtitulo');
+// Os tres degraus da esquerda.
+conf(/font-size:20px;font-weight:500;color:var\(--te\)/.test(B1), '1o degrau: o processo em 20px, weight 500, cor primaria');
+conf(/font-size:12px;color:var\(--ct\);margin-top:2px/.test(B1), '2o degrau: PC · TR · parcela em 12px, cor secundaria');
+conf(/\$\{escHtml\(l\.codigo_pc\)\} · \$\{escHtml\(l\.tr\)\} · parcela/.test(B), 'com os tres, nessa ordem');
+conf(/font-size:12px;color:#9AA8A0;overflow:hidden/.test(B1), '3o degrau: a entidade em 12px, cor mais fraca');
+// ⚠️ AS COLUNAS DA DIREITA CAEM PARA 13px de proposito: competir em tamanho com o processo
+// desfaria o degrau que a primeira linha acabou de construir.
+conf((B1.match(/font-size:13px/g) || []).length >= 3, 'as colunas da direita em 13px');
+// ⚠️ PC SEM PROCESSO MOSTRA UM TRACO NO MESMO LUGAR E NO MESMO TAMANHO. Encolher ou esconder
+// desalinharia a coluna toda, e quem varre a lista de cima a baixo perderia o fio.
+conf(/const semProc = !l\.processo_pc/.test(B), 'PC sem processo e detectada');
+conf(/\? `<span style="color:#9AA8A0;">—<\/span>`/.test(B), 'e mostra um traco, no mesmo lugar');
+conf(/String\(l\.processo_pc\)\.trim\(\) === '-'/.test(B), 'inclusive quando o dado gravado e o literal "-"');
+// ⚠️ SEM ZEBRA (26/08/2026): cada PC e um bloco separado por uma divisoria de 1px na cor de
+// borda padrao. A zebra pintava a linha inteira e competia com a hierarquia dos tres degraus.
+conf(!/i % 2 === 0/.test(B), 'a zebra saiu');
+conf(!/#F2F8EC/.test(B), 'e o verde alternado tambem');
+conf(/\$\{i === 0 \? '' : 'border-top:1px solid var\(--cb\);'\}/.test(B),
+     'divisoria de 1px entre os blocos — sem borda no topo do primeiro');
+conf(/<span style="color:#9AA8A0;font-size:13px;">—<\/span>/.test(B), '"—" quando ninguem esta com ela');
 conf(/Mostrando as <b>\$\{_ciDados\.length\.toLocaleString\('pt-BR'\)\}<\/b> mais antigas de/.test(B1),
-     'e quando a lista e cortada, ela diz quantas ficaram de fora');
+     'e o corte continua sendo dito');
 
-S('8. EXPANDIR MARCA A PC COMO SUA');
+S('8. ABRIR NAO E ASSUMIR');
+// ⚠️ ATE 25/08 EXPANDIR A LINHA GRAVAVA A PC no nome de quem clicou — `POST /ci/pc/abrir`. A
+// ideia era coordenar os tres tecnicos; o efeito foi que **olhar virou tomar**. No primeiro
+// dia o nome do superadmin, que nao e do C.I., apareceu numa PC que ele nao analisa.
 const exp = corpo('ciExpandir');
-conf(/EXPANDIR MARCA A PC COMO SUA/.test(B), 'a regra esta escrita no codigo');
-conf(/<b>Expandir marca a PC como sua\.<\/b>/.test(B1), 'e o aviso aparece na tela ao abrir');
-conf(/API_URL\}\/ci\/pc\/abrir/.test(exp), 'abrir chama POST /ci/pc/abrir');
-conf(/method:'POST'/.test(exp), 'por POST — um GET que muda estado o pre-fetch dispara sozinho');
-// ⚠️ ABRIR NAO TOMA A PC DE QUEM JA ESTA COM ELA. Uma marca que troca de dono a cada clique
-// nao coordena nada: bastaria espiar a PC da colega para ela sumir do "Comigo" dela.
-conf(/if\(!l \|\| l\.ci_situacao !== 'na_fila' \|\| l\.ci_tecnico_id\) return/.test(exp),
-     'PC de outro, ou fora da fila, nao e sequer marcada');
-// ⚠️ No modo "agir pela conta de", abrir e so leitura: marcar a PC no nome do analista
-// representado poria o trabalho do C.I. na conta de quem nao e do C.I.
-conf(/if\(verComoAtivo\(\)\) return/.test(exp), 'e no modo "agir pela conta de" nao marca nada');
-conf(/_ciAberto === codigo_pc[\s\S]{0,90}_ciAberto = null/.test(exp), 'clicar de novo fecha');
-// Os chips "Comigo" e "Com outros" acabaram de mudar no banco.
-conf(/ch\.minhas = \(ch\.minhas \|\| 0\) \+ 1/.test(exp), 'e o chip "Comigo" acompanha na hora');
+conf(exp.length > 0, 'ciExpandir existe');
+conf(!/async function ciExpandir/.test(B), 'e nao e mais async — nao ha rota a esperar');
+conf(!/fetch/.test(exp), 'nao chama rota nenhuma');
+conf(!/ci_tecnico_id/.test(exp), 'nao grava ci_tecnico_id');
+conf(!/ci_tecnico_em/.test(exp), 'nem ci_tecnico_em');
+conf(!/API_URL\}\/ci\/pc\/abrir/.test(B), 'e a chamada a /ci/pc/abrir sumiu da tela inteira');
+conf(/_ciAberto = _ciAberto === codigo_pc \? null : codigo_pc/.test(exp), 'ela so alterna qual cartao esta aberto');
+conf(/ciListaRender\(\)/.test(exp), 'e repinta');
+// O botao "Abrir"/"Fechar" no lugar da seta.
+conf(!/\$\{aberta \? '▲' : '▼'\}/.test(B), 'a seta saiu');
+conf(/>\$\{aberta \? 'Fechar' : 'Abrir'\}<\/button>/.test(B1), 'e virou um botao Abrir / Fechar');
+conf(/onclick="ciExpandir\('\$\{escHtml\(l\.codigo_pc\)\}'\)" class="btn-sec"/.test(B),
+     'pequeno, no estilo secundario');
+conf(/padding:4px 12px;font-size:12px/.test(B1), 'em 12px');
+conf(/<div style="text-align:right;">\s*<button onclick="ciExpandir/.test(B1), 'alinhado a direita da linha');
+// ⚠️ A LINHA INTEIRA DEIXOU DE SER CLICAVEL. Com abrir sendo so abrir isso seria inofensivo,
+// mas o processo SGPe da primeira linha e um LINK: clicar nele abriria o cartao junto.
+conf(!/<div onclick="ciExpandir/.test(B), 'e a linha inteira nao e mais um botao');
+// ⚠️ O QUE A TELA PROMETE: fechar sem decidir nao deixa rastro.
+conf(/fechar sem decidir não deixa rastro/.test(B), 'e a tela diz que fechar sem decidir nao deixa rastro');
 
 S('9. O CARTAO ABERTO');
 const det = corpo('ciDetalhe');
@@ -217,23 +247,28 @@ conf(/title="\$\{escHtml\(motivo\)\}"/.test(B), 'com o motivo no title');
 for (const m of ['Esta PC já foi encerrada no Controle Interno.',
                  'Esta PC está com a analista, aguardando a correção.',
                  'Escolha uma das duas opções acima.',
-                 'Abra a PC para que ela fique com você.'])
+                 'O parecer do Controle Interno é dado por um técnico do C.I.'])
   conf(B.includes(m), `o motivo "${m.slice(0, 34)}..."`);
 // ⚠️ O BOTAO TOMA A COR DA OPCAO ESCOLHIDA — e o que liga a escolha ao ato.
 conf(/background:\$\{pode \? escolhida\.cor : '#B6C2BB'\}/.test(B), 'e o botao toma a cor da opcao escolhida');
-conf(/Fica registrado como decidido por <b>\$\{escHtml\(U\.nome\)\}<\/b> em <b>\$\{hoje\}<\/b>/.test(B1),
-     'com o "fica registrado como decidido por [nome] em [data]"');
+conf(B1.includes("Ao confirmar, esta PC passa a levar o seu nome: <b>${escHtml(U.nome)}</b>, ${hoje}."),
+     'e o rodape diz que confirmar e o que carimba o nome');
 
-S('12. QUEM DECIDE E QUEM ESTA COM A PC');
+S('12. O PARECER E DADO POR UM TECNICO DO C.I. — SUPERADMIN INCLUIDO NA RECUSA');
 const pode = corpo('ciPodeDecidir');
 conf(/if\(verComoAtivo\(\)\) return false/.test(pode), 'no modo "agir pela conta de", ninguem decide');
-conf(/if\(U\.perfil === 'superadmin'\) return true/.test(pode), 'o superadmin decide qualquer uma');
-conf(/String\(l\.ci_tecnico_id\) === String\(U\.id\)/.test(pode), 'e os demais so a que esta com eles');
-// ⚠️ E A TELA NAO E A TRAVA. Desabilitar avisa; recusar impede — e a diferenca aparece no dia
-// em que alguem tiver duas abas abertas e a segunda ainda mostrar a PC como sua.
-conf(/ciFila\.podeDecidir\(autor, d\.ci_tecnico_id\)/.test(
-       fs.readFileSync(path.join(__dirname, '..', 'sigpc-api', 'server.js'), 'utf8')),
-     'e o servidor confere a mesma coisa, por PC');
+// ⚠️ MUDOU EM 26/08/2026. O parecer **carimba o nome de quem o deu** na PC, e o nome que fica
+// ali tem de ser o de alguem do Controle Interno. Um superadmin decidindo poria o nome dele
+// numa PC que ele nao analisa — que foi o que aconteceu no primeiro dia da tela.
+conf(/return U\.perfil === 'controle_interno'/.test(pode), 'so o perfil controle_interno decide');
+conf(!/U\.perfil === 'superadmin'/.test(pode), 'e o superadmin NAO tem passe livre aqui');
+// ⚠️ A POSSE SAIU DA CONDICAO: ela virou CONSEQUENCIA do parecer, e exigi-la antes travaria a
+// fila inteira — nenhuma PC tem dono ate alguem dar o primeiro parecer.
+conf(!/l\.ci_tecnico_id/.test(pode), 'e a posse da PC nao e mais pre-requisito');
+// ⚠️ E A TELA NAO E A TRANCA: o servidor recusa do mesmo jeito.
+const srv = fs.readFileSync(path.join(__dirname, '..', 'sigpc-api', 'server.js'), 'utf8');
+conf(/ciFila\.podeDecidir\(autor, null\)/.test(srv), 'e o servidor confere a mesma coisa');
+conf(/ciFila\.motivoNaoDecide\(\)/.test(srv), 'com a mesma frase de recusa');
 
 S('13. AS DUAS ACOES SOBRE A DEMANDA');
 conf(/id="moCiDevolver"/.test(B) && /id="moCiPassar"/.test(B), 'os dois modais existem');

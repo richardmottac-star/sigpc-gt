@@ -13487,17 +13487,23 @@ function ciBuscaHtml() {
     <div style="font-size:11.5px;font-weight:700;color:var(--te);margin-bottom:9px;">
       Localizar pelo processo SGPe</div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-      <div style="flex:0 0 88px;">${rot('Sigla')}
+      <div style="flex:0 0 80px;">${rot('Sigla')}
         <input id="ciSgSigla" value="SCC" maxlength="10" style="${inp}text-transform:uppercase;"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
-      <div style="flex:1 1 190px;min-width:150px;">${rot('Número')}
-        <input id="ciSgNum" placeholder="9692 ou 00009692" style="${inp}"
+      <div style="flex:0 0 120px;">${rot('Número')}
+        <input id="ciSgNum" maxlength="10" placeholder="9692" style="${inp}"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
-      <div style="flex:0 0 96px;">${rot('Ano')}
-        <input id="ciSgAno" placeholder="2024" maxlength="4" style="${inp}"
+      <div style="flex:0 0 90px;">${rot('Ano')}
+        <input id="ciSgAno" maxlength="4" placeholder="2024" style="${inp}"
                oninput="ciSgpeMudou()" onkeydown="if(event.key==='Enter')ciBuscarSgpe()"></div>
       <button id="ciSgBt" class="btn-acao" onclick="ciBuscarSgpe()" disabled
-        style="padding:8px 17px;font-size:13px;">Buscar processo</button>
+        style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Buscar</button>
+      ${''/* ⚠️ O ESPAÇO QUE SOBRA FICA VAZIO, de propósito (26/08/2026). Os três campos são
+             curtos — 80, 120 e 90 — e antes o Número esticava com `flex:1 1 190px` até ocupar
+             a linha inteira. Um campo de dez dígitos com 400px de largura promete um texto
+             longo que ele não aceita, e some com a relação entre os três: a tela ensina o
+             formato pelo TAMANHO de cada caixa. O `flex:1` abaixo é só o vazio. */}
+      <div style="flex:1 1 0;min-width:0;"></div>
     </div>
     <div style="font-size:10.5px;color:var(--ct);margin-top:7px;">
       Os três campos são obrigatórios. Pontuação e zeros à esquerda não importam —
@@ -13655,7 +13661,22 @@ function ciChip(id) {
 
 // ── A lista, uma linha por PC ───────────────────────────────────────────────
 
-const CI_COLS = '135px 1fr 95px 85px 110px 80px'
+// ⚠️ O PROCESSO SGPe É O ELEMENTO PRINCIPAL DA LINHA.  (Richard, 26/08/2026)
+//
+// O técnico do C.I. não procura pelo código da PC: ele procura pelo PROCESSO, porque é com o
+// processo aberto no SGPe que ele confere. A primeira versão desta tela punha `2020PC000448`
+// em destaque e o processo escondido dentro do cartão — o número que a pessoa tem na mão era
+// o único que ela não via na lista.
+//
+// A hierarquia da esquerda tem três degraus, e ela é a mesma em toda linha:
+//   1. o processo SGPe, 20px, weight 500, cor primária;
+//   2. código da PC · TR · parcela, 12px, cor secundária;
+//   3. a entidade, 12px, cor mais fraca.
+//
+// ⚠️ AS COLUNAS DA DIREITA CAEM PARA 13px de propósito. Elas são contexto — quem analisa,
+// há quanto tempo, com quem está —, e competir em tamanho com o processo desfaria o degrau
+// que a primeira linha acabou de construir.
+const CI_COLS = '1fr 150px 90px 130px 92px'
 
 function ciListaRender() {
   const painel = document.getElementById('ciPainel')
@@ -13681,7 +13702,7 @@ function ciListaRender() {
       <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:9px 13px;
         background:#173404;color:#C0DD97;font-size:10px;font-weight:700;text-transform:uppercase;
         letter-spacing:.05em;">
-        <div>PC</div><div>TR e entidade</div><div>Analista</div><div>Espera</div>
+        <div>Processo SGPe</div><div>Analista</div><div>Espera</div>
         <div>Técnico C.I.</div><div></div>
       </div>
       ${_ciDados.map((l, i) => ciLinha(l, i)).join('')}
@@ -13691,8 +13712,6 @@ function ciListaRender() {
 
 function ciLinha(l, i) {
   const aberta = _ciAberto === l.codigo_pc
-  // Ímpares no cinza do tema, pares no verde bem claro — o mesmo par usado na tela Estoque.
-  const fundo = (i % 2 === 0) ? 'var(--surface-2, #F7FAF8)' : '#F2F8EC'
   const f = CI_ESPERA[l.faixa_espera] || { bg:'var(--cl)', fg:'var(--ct)' }
   const dias = (l.dias_espera === null || l.dias_espera === undefined) ? '—' : `${l.dias_espera} d`
 
@@ -13701,82 +13720,88 @@ function ciLinha(l, i) {
          <span style="flex:0 0 22px;width:22px;height:22px;border-radius:50%;
            background:${ciCorTecnico(l.ci_tecnico_id)};color:#fff;font-size:9px;font-weight:700;
            display:inline-flex;align-items:center;justify-content:center;">${ciIniciais(l.ci_tecnico_nome)}</span>
-         <span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+         <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
            title="${escHtml(l.ci_tecnico_nome||'')}">${escHtml(String(l.ci_tecnico_nome||'').split(' ')[0])}</span></span>`
-    : '<span style="color:#9AA8A0;font-size:12px;">—</span>'
+    : '<span style="color:#9AA8A0;font-size:13px;">—</span>'
+
+  // ⚠️ PC SEM PROCESSO CADASTRADO MOSTRA UM TRAÇO NO MESMO LUGAR E NO MESMO TAMANHO. Encolher
+  // ou esconder faria as linhas sem processo desalinharem da coluna toda, e quem varre a lista
+  // de cima a baixo perderia o fio. O traço em 20px diz "aqui falta um dado", e não "aqui não
+  // há linha". O lápis do `procHtml` continua junto — é por ele que o número é corrigido.
+  const semProc = !l.processo_pc || String(l.processo_pc).trim() === '' || String(l.processo_pc).trim() === '-'
+  const proc = semProc
+    ? `<span style="color:#9AA8A0;">—</span>`
+    : procHtml(l.processo_pc, l.codigo_pc, 'processo_pc')
 
   return `
-  <div style="border-top:1px solid var(--cl);">
-    <div onclick="ciExpandir('${escHtml(l.codigo_pc)}')" role="button" tabindex="0"
-      style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:10px 13px;
-        align-items:center;cursor:pointer;background:${aberta ? '#fff' : fundo};">
-      <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;
-        white-space:nowrap;" title="${escHtml(l.codigo_pc)}">${escHtml(l.codigo_pc)}</div>
+  <div style="${i === 0 ? '' : 'border-top:1px solid var(--cb);'}">
+    <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:11px 13px;
+      align-items:center;background:#fff;">
       <div style="min-width:0;">
-        <div style="font-size:12.5px;">${escHtml(l.tr)}
-          <span style="color:var(--ct);">· parcela ${escHtml(l.parcial_num || '—')}</span></div>
-        <div style="font-size:11px;color:var(--ct);overflow:hidden;text-overflow:ellipsis;
+        <div style="font-size:20px;font-weight:500;color:var(--te);line-height:1.25;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${proc}</div>
+        <div style="font-size:12px;color:var(--ct);margin-top:2px;">
+          ${escHtml(l.codigo_pc)} · ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')}</div>
+        <div style="font-size:12px;color:#9AA8A0;overflow:hidden;text-overflow:ellipsis;
           white-space:nowrap;" title="${escHtml(l.entidade||'')}">${escHtml(l.entidade || '—')}</div>
       </div>
-      <div style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
         title="${escHtml(l.analista_nome_completo || l.analista_nome || '')}">${escHtml(l.analista_nome || '—')}</div>
-      <div><span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;
+      <div><span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:13px;
         font-weight:700;background:${f.bg};color:${f.fg};">${dias}</span></div>
       <div style="min-width:0;">${tec}</div>
-      <div style="text-align:right;font-size:12px;color:var(--ct);">${aberta ? '▲' : '▼'}</div>
+      <div style="text-align:right;">
+        <button onclick="ciExpandir('${escHtml(l.codigo_pc)}')" class="btn-sec"
+          style="padding:4px 12px;font-size:12px;font-family:inherit;cursor:pointer;"
+          title="${aberta ? 'Fechar o cartão' : 'Ver o parecer, o valor e a nota de liquidação'}"
+          >${aberta ? 'Fechar' : 'Abrir'}</button>
+      </div>
     </div>
     ${aberta ? ciDetalhe(l) : ''}
   </div>`
 }
 
-// ── Abrir, e o que a abertura significa ─────────────────────────────────────
+// ── Abrir é só abrir ────────────────────────────────────────────────────────
 //
-// ⚠️ EXPANDIR MARCA A PC COMO SUA (decisão do Richard, 25/08/2026). É a abertura que registra
-// o responsável: os outros dois técnicos passam a ver o seu nome na coluna e param de abrir a
-// mesma prestação. Era esse o problema — três pessoas na mesma fila e nada no banco dizendo
-// quem estava com o quê.
+// ⚠️ ABRIR NÃO É ASSUMIR.  (ordem do Richard, 26/08/2026)
 //
-// ⚠️ ABRIR NÃO TOMA A PC DE QUEM JÁ ESTÁ COM ELA. A marca existe para coordenar, e uma marca
-// que troca de dono a cada clique não coordena nada: bastaria espiar a PC da colega para ela
-// sumir do "Comigo" dela no meio do trabalho. Quando já tem dono, abrir é leitura pura.
+// Até 25/08 expandir a linha GRAVAVA a PC no nome de quem clicou — `POST /ci/pc/abrir`, que
+// escrevia `ci_tecnico_id`. A ideia era coordenar os três técnicos; o efeito foi que **olhar
+// virou tomar**. Não havia como examinar um valor, um processo SGPe ou o parecer da analista
+// sem se declarar responsável, e no primeiro dia o nome do superadmin — que não é do C.I. —
+// apareceu numa PC que ele não analisa.
 //
-// ⚠️ E A TELA NÃO DECIDE ISSO SOZINHA. Quem marca é `POST /ci/pc/abrir`, numa transação com a
-// trava dentro do UPDATE — dois cliques simultâneos não podem marcar dois donos.
-async function ciExpandir(codigo_pc) {
-  if(_ciAberto === codigo_pc) { _ciAberto = null; _ciDecisao = null; ciListaRender(); return }
-  _ciAberto = codigo_pc
+// Agora esta função **não chama rota nenhuma**. Ela troca uma variável e repinta.
+//
+// ⚠️ A PC SÓ GANHA TÉCNICO NO INSTANTE EM QUE O PARECER É CONFIRMADO, e quem grava é
+// `ci.decidir`, no mesmo UPDATE da decisão. Sem parecer, ela continua na fila e sem nome de
+// técnico. **Fechar sem dar parecer não deixa rastro** — nem no banco, nem no histórico.
+//
+// ⚠️ E É POR ISSO QUE NÃO HÁ `await` AQUI. Se um dia alguém quiser "marcar quem está
+// olhando", o caminho não é reabrir esta porta: é uma coluna que diga isso, e que não se
+// confunda com o responsável pelo parecer.
+function ciExpandir(codigo_pc) {
+  _ciAberto = _ciAberto === codigo_pc ? null : codigo_pc
   _ciDecisao = null
   ciListaRender()
-
-  // No modo "agir pela conta de", abrir é só leitura: marcar a PC no nome do analista
-  // representado poria o trabalho do C.I. na conta de quem não é do C.I.
-  if(verComoAtivo()) return
-  const l = _ciDados.find(x => x.codigo_pc === codigo_pc)
-  if(!l || l.ci_situacao !== 'na_fila' || l.ci_tecnico_id) return
-  try {
-    const r = await fetch(`${API_URL}/ci/pc/abrir`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ codigo_pc, usuario_id: U.id })
-    })
-    const j = await r.json()
-    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    l.ci_tecnico_id = j.data.tecnico_id
-    l.ci_tecnico_nome = j.data.tecnico_nome
-    // Os chips "Comigo" e "Com outros" acabaram de mudar no banco. Repintar só a lista
-    // deixaria o chip dizendo um número e a coluna mostrando outro.
-    if(j.data.marcou) {
-      const ch = _ciResumo.chips || {}
-      ch.minhas = (ch.minhas || 0) + 1
-    }
-    ciRender()
-  } catch(e) { toast('Não foi possível marcar a PC: '+e.message, 'err') }
 }
 
-/** Quem decide é quem está com a PC. A mesma regra vale no servidor — ver `ciFila.podeDecidir`. */
+/**
+ * ⚠️ O PARECER DO C.I. É DADO POR UM TÉCNICO DO C.I. — E SÓ.  (26/08/2026)
+ *
+ * Nem coordenador, nem superadmin. Não é hierarquia: o parecer **carimba o nome de quem o
+ * deu** na PC, e o nome que fica ali tem de ser o de alguém do Controle Interno.
+ *
+ * ⚠️ A POSSE SAIU DA CONDIÇÃO. Antes era "você decide a PC que é sua", porque abrir já a
+ * marcava como sua; agora a posse é CONSEQUÊNCIA do parecer, e exigi-la antes travaria a fila
+ * inteira — nenhuma PC tem dono até alguém dar o primeiro parecer.
+ *
+ * ⚠️ E A TELA NÃO É A TRANCA: `POST /ci/decidir` recusa do mesmo jeito. Aqui o botão fica
+ * cinza com o motivo no `title`; lá o servidor devolve 403.
+ */
 function ciPodeDecidir(l) {
   if(verComoAtivo()) return false
-  if(U.perfil === 'superadmin') return true
-  return !!l.ci_tecnico_id && String(l.ci_tecnico_id) === String(U.id)
+  return U.perfil === 'controle_interno'
 }
 
 function ciDetalhe(l) {
@@ -13790,17 +13815,23 @@ function ciDetalhe(l) {
       <div style="font-size:12.5px;color:var(--te);word-break:break-word;">${val}</div>
     </div>`
 
-  // ⚠️ O AVISO DA MARCA VEM ANTES DE TUDO, e só quando a PC está na fila. Numa encerrada não há
-  // marca a fazer, e repetir o aviso ali ensinaria a ignorá-lo.
-  const marca = !naFila ? '' : `
-    <div style="display:flex;gap:8px;align-items:flex-start;background:#FFF8E1;border:1px solid #F0E2B8;
-      border-radius:8px;padding:8px 11px;margin-bottom:12px;font-size:11.5px;color:#7A5B10;">
-      <span style="flex:0 0 auto;">⚠️</span>
-      <span><b>Expandir marca a PC como sua.</b> ${
-        l.ci_tecnico_id
-          ? `Esta prestação está com <b>${escHtml(l.ci_tecnico_nome||'')}</b>${minha ? ' — você' : ''}.`
-          : 'Ao abrir, ela passa a levar o seu nome para os outros técnicos.'}</span>
-    </div>`
+  // ⚠️ O AVISO "EXPANDIR MARCA A PC COMO SUA" SAIU EM 26/08/2026 — porque a regra saiu.
+  //
+  // Abrir não grava mais nada. O que a faixa diz agora é o contrário: **fechar sem dar
+  // parecer não deixa rastro**, e é isso que o técnico precisa saber para poder examinar à
+  // vontade. Quando a PC já tem técnico — porque alguém já deu parecer nela e ela voltou de
+  // uma rodada — a faixa diz de quem é, que é a informação útil naquele caso.
+  const marca = !naFila ? '' : (l.ci_tecnico_id
+    ? `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--surface-2, #F7FAF8);
+        border:1px solid var(--cl);border-radius:8px;padding:8px 11px;margin-bottom:12px;
+        font-size:11.5px;color:var(--ct);">
+        <span>Último parecer nesta PC: <b>${escHtml(l.ci_tecnico_nome||'')}</b>
+          ${l.ci_rodada > 1 ? ` — rodada ${l.ci_rodada}` : ''}.</span></div>`
+    : `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--surface-2, #F7FAF8);
+        border:1px solid var(--cl);border-radius:8px;padding:8px 11px;margin-bottom:12px;
+        font-size:11.5px;color:var(--ct);">
+        <span>Abrir não atribui esta PC a ninguém. Ela passa a levar o seu nome apenas quando
+          você confirmar o parecer — <b>fechar sem decidir não deixa rastro</b>.</span></div>`)
 
   const parecer = `
     <div style="border-left:3px solid #BA7517;background:#FDF6E9;border-radius:0 8px 8px 0;
@@ -13839,11 +13870,10 @@ function ciDetalhe(l) {
   const motivo = !naFila
     ? (l.ci_situacao === 'encerrado' ? 'Esta PC já foi encerrada no Controle Interno.'
                                      : 'Esta PC está com a analista, aguardando a correção.')
-    : !minha ? (l.ci_tecnico_nome
-        ? `Esta PC está com ${l.ci_tecnico_nome}. Peça que ela passe a demanda para você.`
-        : 'Abra a PC para que ela fique com você.')
+    : !minha ? 'O parecer do Controle Interno é dado por um técnico do C.I. — o seu nome ' +
+                'ficaria registrado nesta PC.'
     : !escolhida ? 'Escolha uma das duas opções acima.'
-    : 'Registrar a decisão do Controle Interno.'
+    : 'Registrar o parecer do Controle Interno nesta PC.'
 
   const decisao = !naFila ? `
     <div style="background:var(--surface-2, #F7FAF8);border-radius:9px;padding:11px 13px;
@@ -13870,11 +13900,16 @@ function ciDetalhe(l) {
           title="${escHtml(motivo)}"
           style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;
             border:none;cursor:${pode ? 'pointer' : 'not-allowed'};color:#fff;
-            background:${pode ? escolhida.cor : '#B6C2BB'};">Confirmar decisão</button>
+            background:${pode ? escolhida.cor : '#B6C2BB'};">Confirmar parecer</button>
         <span style="font-size:11.5px;color:var(--ct);">
-          Fica registrado como decidido por <b>${escHtml(U.nome)}</b> em <b>${hoje}</b>.</span>
+          Ao confirmar, esta PC passa a levar o seu nome: <b>${escHtml(U.nome)}</b>, ${hoje}.</span>
       </div>
-      ${minha ? `
+      ${''/* ⚠️ OS DOIS SÓ APARECEM QUANDO A PC JÁ TEM TÉCNICO (26/08/2026). Antes bastava ser
+           do C.I., e numa PC sem dono — que é o caso NORMAL agora, porque abrir não atribui —
+           o Devolver à fila devolvia o quê? A rota respondia 409 esta PC ja esta livre, e o
+           botão era o que a armadilha 15 descreve: aceita o clique e não faz nada.
+           Eles servem à PC que voltou de uma rodada e traz o técnico do parecer anterior. */}
+      ${minha && l.ci_tecnico_id ? `
       <div style="margin-top:11px;padding-top:10px;border-top:1px dashed var(--cb);display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-sec" onclick="ciAbrirDevolver('${escHtml(l.codigo_pc)}')"
           style="padding:6px 13px;font-size:11.5px;"
@@ -13950,7 +13985,7 @@ async function ciConfirmar(codigo_pc) {
     toast('Erro: '+e.message,'err')
     // ⚠️ O BOTÃO VOLTA A ACENDER NO ERRO. Botão que aceita clique e não responde é pior que
     // botão cinza — armadilha 15; e aqui a pessoa precisa poder tentar de novo.
-    if(bt) { bt.disabled = false; bt.textContent = 'Confirmar decisão' }
+    if(bt) { bt.disabled = false; bt.textContent = 'Confirmar parecer' }
   }
 }
 
