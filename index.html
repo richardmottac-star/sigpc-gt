@@ -13826,6 +13826,11 @@ function ciListaRender() {
     : ''
 
   painel.innerHTML = `
+    <div style="font-size:12px;color:var(--ct);margin-bottom:7px;">
+      Pressione <kbd style="background:var(--cl);border:1px solid var(--cb);border-radius:4px;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
+        padding:1px 5px;">F2</kbd> para localizar um processo.
+    </div>
     <div style="border:1px solid var(--cl);border-radius:11px;overflow:hidden;background:#fff;">
       <div style="display:grid;grid-template-columns:${CI_COLS};gap:10px;padding:9px 13px;
         background:#173404;color:#C0DD97;font-size:10px;font-weight:700;text-transform:uppercase;
@@ -13963,6 +13968,13 @@ function ciDetalhe(l) {
   const minha = ciPodeDecidir(l)
   const hoje = new Date().toLocaleDateString('pt-BR')
 
+  // ⚠️ UM TEXTO SÓ PARA QUEM NÃO É DO C.I., e ele aparece em TRÊS lugares: no `title` do
+  // botão, no `title` de cada rádio e na linha ao lado do botão. Três lugares dizendo coisas
+  // parecidas com palavras diferentes é onde a pessoa começa a achar que são três
+  // impedimentos distintos — e o superadmin, que é isento em todo o resto do sistema, é
+  // justamente quem mais precisa da frase sem rodeio.
+  const NAO_E_CI = 'Você não é técnico do Controle Interno — esta parcela não pode ser decidida por você.'
+
   const dado = (rot, val) => `
     <div style="min-width:0;">
       <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;">${rot}</div>
@@ -14006,7 +14018,8 @@ function ciDetalhe(l) {
     const on = _ciDecisao === d.id
     const livre = minha && naFila
     return `
-    <label style="display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:9px;
+    <label ${!minha ? `title="${escHtml(NAO_E_CI)}"` : ''}
+      style="display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:9px;
       cursor:${livre ? 'pointer' : 'not-allowed'};margin-bottom:8px;
       border:1.5px solid ${on ? d.cor : 'var(--cb)'};background:${on ? d.bg : '#fff'};
       opacity:${livre ? 1 : .55};">
@@ -14024,8 +14037,7 @@ function ciDetalhe(l) {
   const motivo = !naFila
     ? (l.ci_situacao === 'encerrado' ? 'Esta PC já foi encerrada no Controle Interno.'
                                      : 'Esta PC está com a analista, aguardando a correção.')
-    : !minha ? 'O parecer do Controle Interno é dado por um técnico do C.I. — o seu nome ' +
-                'ficaria registrado nesta PC.'
+    : !minha ? NAO_E_CI
     : !escolhida ? 'Escolha uma das duas opções acima.'
     : 'Registrar o parecer do Controle Interno nesta PC.'
 
@@ -14055,8 +14067,14 @@ function ciDetalhe(l) {
           style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;
             border:none;cursor:${pode ? 'pointer' : 'not-allowed'};color:#fff;
             background:${pode ? escolhida.cor : '#B6C2BB'};">Confirmar parecer</button>
-        <span style="font-size:11.5px;color:var(--ct);">
-          Ao confirmar, esta PC passa a levar o seu nome: <b>${escHtml(U.nome)}</b>, ${hoje}.</span>
+        ${minha
+          ? `<span style="font-size:11.5px;color:var(--ct);">
+               Ao confirmar, esta PC passa a levar o seu nome: <b>${escHtml(U.nome)}</b>, ${hoje}.</span>`
+          // ⚠️ A FRASE ANTIGA MENTIA PARA QUEM NÃO É DO C.I. — ela prometia "esta PC passa a
+          // levar o SEU nome" a um coordenador ou ao superadmin, que são justamente os dois
+          // perfis que a rota RECUSA desde 26/08. Ler uma promessa e receber 403 é pior que
+          // ler a recusa: a pessoa tenta, falha, e conclui que o sistema está quebrado.
+          : `<span style="font-size:11.5px;color:var(--ct);">${escHtml(NAO_E_CI)}</span>`}
       </div>
       ${''/* ⚠️ HAVIA "Devolver à fila" E "Passar a outro técnico" AQUI, e os dois saíram em
            26/08/2026. Eles pertenciam ao modelo em que a PC tinha dono ANTES do parecer.
