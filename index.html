@@ -13727,11 +13727,11 @@ function ciLinha(l, i) {
 //
 // ⚠️ ABRIR NÃO É ASSUMIR.  (ordem do Richard, 26/08/2026)
 //
-// Até 25/08 expandir a linha GRAVAVA a PC no nome de quem clicou — `POST /ci/pc/abrir`, que
-// escrevia `ci_tecnico_id`. A ideia era coordenar os três técnicos; o efeito foi que **olhar
-// virou tomar**. Não havia como examinar um valor, um processo SGPe ou o parecer da analista
-// sem se declarar responsável, e no primeiro dia o nome do superadmin — que não é do C.I. —
-// apareceu numa PC que ele não analisa.
+// Até 25/08 expandir a linha GRAVAVA a PC no nome de quem clicou: havia uma rota de abertura
+// que escrevia `ci_tecnico_id`. A ideia era coordenar os três técnicos; o efeito foi que
+// **olhar virou tomar**. Não havia como examinar um valor, um processo SGPe ou o parecer da
+// analista sem se declarar responsável, e no primeiro dia o nome do superadmin — que não é
+// do C.I. — apareceu numa PC que ele não analisa.
 //
 // Agora esta função **não chama rota nenhuma**. Ela troca uma variável e repinta.
 //
@@ -13942,7 +13942,7 @@ async function ciConfirmar(codigo_pc) {
 }
 
 // ⚠️ AS SEIS FUNÇÕES DOS MODAIS "Devolver à fila" E "Passar a outro" SAÍRAM EM 26/08/2026,
-// junto com as rotas `POST /ci/pc/devolver` e `/passar` que elas chamavam.
+// junto com as duas rotas de posse do servidor que elas chamavam.
 //
 // ⚠️ `ci_tecnico_id` TEM UM CAMINHO DE ESCRITA SÓ: a confirmação do parecer. `passar` gravava
 // a coluna e `devolver` a zerava — duas portas para a mesma resposta, e a resposta passaria a
