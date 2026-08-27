@@ -17803,11 +17803,14 @@ function sigefTagsDe(pcs) {
 function _sigefBadge(tag, opts) {
   const d = SIGEF_TAGS[tag]; if (!d) return ''
   const o = opts || {}
-  const chave = escHtml(JSON.stringify(o.codigos || []))
+  // A chave da parcela e os códigos, num objeto só — é o que `sigefAbrir` precisa para
+  // montar a frase "Vale para a parcela 3 da 2021TR000559 — 2 PCs: ..." e para declarar.
+  const ctx = escHtml(JSON.stringify({
+    codigos: o.codigos || [], tr: o.tr || null, parcial: o.parcial == null ? null : String(o.parcial) }))
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;
       padding:3px 8px;border-radius:20px;background:${d.fundo};color:${d.cor};border:1px solid ${d.borda};
       white-space:nowrap;">${escHtml(d.rotulo)}${o.conta || ''}${o.mini ? '' : `<button title="O que é isto?"
-      onclick="event.stopPropagation();sigefAbrir('${tag}',${chave})"
+      onclick="event.stopPropagation();sigefAbrir('${tag}',${ctx})"
       style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
       border-radius:50%;background:${d.cor};color:${d.fundo};font-size:9px;font-weight:800;">?</button>`}</span>`
 }
@@ -17831,6 +17834,11 @@ function sigefBadges(pcs, opts) {
       mini: o.mini,
       conta: (total > 1 && alvo.length < total) ? ` ${alvo.length}/${total}` : '',
       codigos: alvo.map(p => p.codigo_pc),
+      // ⚠️ A CHAVE DA PARCELA VIAJA COM A ETIQUETA. A declaração é por
+      // `(setorial_id, tr, parcial_num)`, e é daqui que o modal a recebe — sem ela o botão
+      // Declarar não tem o que mandar, e some (ver `sigefAbrir`).
+      tr: alvo.length ? alvo[0].tr : null,
+      parcial: alvo.length ? alvo[0].parcial_num : null,
     })
   }).join(' ')
 }
@@ -17863,7 +17871,10 @@ function sigefBadgesContagem(mapa) {
 }
 
 // O estado do modal. Uma declaração por vez, e ela some ao fechar.
-let _sigefTag = null, _sigefPcs = [], _sigefResp = null
+// ⚠️ `_sigefCtx` guarda a CHAVE DA PARCELA — `{codigos, tr, parcial}`. A declaração é por
+// parcela desde 27/08: o modal manda `(setorial_id, tr, parcial_num, tag)` e o servidor
+// resolve quais PCs alcançar. A lista de códigos aqui serve para MOSTRAR, não para escolher.
+let _sigefTag = null, _sigefCtx = { codigos: [], tr: null, parcial: null }, _sigefResp = null
 
 /**
  * As PCs que a tela já tem em mão, achatadas de `window._planDadosCache` (TR → parcial → pcs).
@@ -17880,12 +17891,15 @@ function sigefPcsCache() {
 }
 
 /** Abre a explicação — e, nas duas tags que declaram, o formulário. */
-function sigefAbrir(tag, codigos) {
+function sigefAbrir(tag, ctx) {
   const d = SIGEF_TAGS[tag]; if (!d) return
-  _sigefTag = tag; _sigefPcs = codigos || []; _sigefResp = null
+  _sigefTag = tag
+  _sigefCtx = Object.assign({ codigos: [], tr: null, parcial: null }, ctx || {})
+  _sigefResp = null
+  const cods = _sigefCtx.codigos || []
 
   // A data declarada, para o texto do cinza. Vem das PCs que a tela já tem em mão.
-  const pc = sigefPcsCache().find(p => _sigefPcs.includes(p.codigo_pc) && p.sigef_registro_em)
+  const pc = sigefPcsCache().find(p => cods.includes(p.codigo_pc) && p.sigef_registro_em)
   const dt = pc ? planDataTs(pc.sigef_registro_em) : '—'
 
   document.getElementById('sigefTitulo').textContent = d.titulo
@@ -17897,7 +17911,12 @@ function sigefAbrir(tag, codigos) {
 
   // ⚠️ SÓ AS DUAS QUE DECLARAM MOSTRAM O FORMULÁRIO. Na âmbar o SIGEF já registrou: o que
   // falta é o parecer aqui, e o servidor responde 409 se alguém insistir.
-  const mostra = !!d.declara
+  //
+  // ⚠️ E SÓ COM A CHAVE DA PARCELA NA MÃO. A etiqueta do Estoque e a da Produtividade são
+  // agregadas e não trazem `tr`/`parcial` — ali o modal explica e não oferece o botão, em vez
+  // de oferecer um que não teria o que mandar (armadilha 15).
+  const temChave = !!(_sigefCtx.tr && _sigefCtx.parcial != null)
+  const mostra = !!d.declara && temChave
   document.getElementById('sigefDeclBox').style.display = mostra ? '' : 'none'
   const btn = document.getElementById('btnSigefDecl')
   btn.style.display = mostra ? '' : 'none'
@@ -17907,20 +17926,26 @@ function sigefAbrir(tag, codigos) {
          <input type="radio" name="sigefResp" value="${r.cod}" onchange="_sigefResp='${r.cod}';sigefPintarBotao()"
            style="width:auto;margin:0;"> <span>${escHtml(r.rotulo)}</span></label>`).join('')
     document.getElementById('sigefData').value = ''
-    document.getElementById('sigefAlvo').textContent =
-      _sigefPcs.length === 1 ? `Vale para a PC ${_sigefPcs[0]}.`
-        : `Vale para as ${_sigefPcs.length} PCs desta parcela nesta situação.`
+    // ⚠️ A FRASE DIZ A PARCELA, QUANTAS PCs E QUAIS. O analista está afirmando um fato sobre
+    // um conjunto de prestações — ele precisa ver o conjunto antes de afirmar, e não só o
+    // número. Era "Vale para a PC 2021PC002125", uma PC de cada vez, até 27/08.
+    document.getElementById('sigefAlvo').innerHTML =
+      `Vale para a <b>parcela ${escHtml(String(_sigefCtx.parcial))}</b> da `
+      + `<b>${escHtml(_sigefCtx.tr)}</b> — ${cods.length} PC${cods.length > 1 ? 's' : ''}: `
+      + escHtml(cods.join(', '))
     sigefPintarBotao()
+  } else if (d.declara && !temChave) {
+    document.getElementById('sigefDeclBox').style.display = 'none'
   }
 
   // ⚠️ O HISTÓRICO APARECE SEMPRE QUE EXISTIR. "A declaração não se desmarca: se o analista
   // errar, ele declara de novo e o histórico guarda as duas" — então as duas têm de ser
   // visíveis, ou a segunda pareceria ter apagado a primeira.
-  const comDecl = sigefPcsCache().filter(p => _sigefPcs.includes(p.codigo_pc)
+  const comDecl = sigefPcsCache().filter(p => cods.includes(p.codigo_pc)
     && Array.isArray(p.sigef_declaracao) && p.sigef_declaracao.length)
   const todas = comDecl.length ? comDecl[0].sigef_declaracao : []
   document.getElementById('sigefHistorico').innerHTML = !todas.length ? '' :
-    `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">Declarações desta PC</div>`
+    `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">Declarações desta parcela</div>`
     + todas.slice().reverse().map(x => `<div style="font-size:11px;color:var(--ct);border-left:2px solid var(--cl);padding:3px 0 3px 8px;margin-bottom:4px;">
         <b>${escHtml(x.resposta_rotulo || x.resposta || '')}</b> — registro em ${escHtml(String(x.data_registro||'—'))}<br>
         <span style="color:#9AA8A0;">por ${escHtml(x.declarado_por_nome || ('id '+x.declarado_por))} · ${planDataTs(x.declarado_em)}</span>
@@ -17940,44 +17965,54 @@ function sigefPintarBotao() {
 }
 
 /**
- * Grava a declaração.
+ * Grava a declaração — UMA chamada, para a parcela inteira.
  *
- * ⚠️ UMA CHAMADA POR PC, e é o mesmo desenho do encaminhamento ao C.I.: a conversa é por PC,
- * mas quem escreve é o analista, uma vez, na parcela. A rota é por `codigo_pc` — a unidade da
- * classificação também é a PC (são 353 PCs, não 353 parcelas).
+ * ⚠️ ERA UM LAÇO DE REQUISIÇÕES, UMA POR PC, até 27/08. Uma falha no meio deixava metade da
+ * parcela declarada e a outra metade não, e não havia como voltar: a declaração não se
+ * desmarca. Agora o servidor abre UMA transação sobre `(setorial_id, tr, parcial_num, tag)` e
+ * ou grava tudo, ou nada. É a armadilha 24 — tirado o laço, a conferência é uma só.
  *
- * ⚠️ E O RESULTADO É CONTADO. Se uma das chamadas falhar, a tela diz quantas foram e quantas
- * não — declarar de novo é permitido, então o conserto é repetir. Dizer "pronto" sem conferir
- * seria a armadilha 15 pelo avesso: o botão respondeu, e o dado não foi.
+ * ⚠️ QUEM ESCOLHE AS PCs É O SERVIDOR, pela tag recalculada no banco. A lista que a tela tem
+ * serve para MOSTRAR ao analista o que ele está afirmando; mandá-la como alvo deixaria o
+ * navegador escolher onde escrever.
  */
 async function sigefDeclarar() {
   const btn = document.getElementById('btnSigefDecl')
   const resposta = _sigefResp
   const data_registro = document.getElementById('sigefData').value
-  if (!resposta || !data_registro) return
+  if (!resposta || !data_registro || !_sigefCtx.tr || _sigefCtx.parcial == null) return
   btn.disabled = true; btn.textContent = 'Declarando...'
 
-  let feitas = 0; const erros = []
-  for (const cod of _sigefPcs) {
-    try {
-      const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(cod)}/sigef_declaracao`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resposta, data_registro, usuario_id: U.id })
-      })
-      const j = await r.json()
-      if (j.error) erros.push(`${cod}: ${j.error.message}`); else feitas++
-    } catch (e) { erros.push(`${cod}: ${e.message}`) }
-  }
+  try {
+    const r = await fetch(`${API_URL}/parcela/sigef_declaracao`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tr: _sigefCtx.tr, parcial_num: String(_sigefCtx.parcial),
+        setorial_id: U.setorialFiltro || 'FCEE',
+        tag: _sigefTag, resposta, data_registro, usuario_id: U.id })
+    })
+    const j = await r.json()
+    if (j.error) throw new Error(j.error.message || j.error)
 
-  btn.textContent = '✓ Declarar'
-  if (erros.length) {
-    toast(`${feitas} declarada(s), ${erros.length} com erro. ${erros[0]}`, 'err')
+    const n = (j.data.alcancadas || []).length
+    fm('moSigef')
+    toast(`Registro declarado na parcela ${_sigefCtx.parcial} — ${n} PC${n > 1 ? 's' : ''}.`)
+    // ⚠️ O QUE FICOU DE FORA É DITO, e não escondido. Uma parcela pode ter a final em outra
+    // situação: sem este aviso o analista sairia achando que resolveu a parcela inteira.
+    const fora = (j.data.fora || []).filter(x => x.sigef_tag)
+    if (fora.length) {
+      setTimeout(() => toast(
+        `${fora.length} PC${fora.length > 1 ? 's' : ''} desta parcela em outra situação — declare à parte.`,
+        'err'), 3200)
+    }
+    if (typeof buscarPlan === 'function') buscarPlan()
+  } catch (e) {
+    // O modal FICA ABERTO no erro, com o que a pessoa digitou — refazer é um clique.
+    toast('Erro: ' + e.message, 'err')
     btn.disabled = false
-    return
+  } finally {
+    btn.textContent = '✓ Declarar'
   }
-  fm('moSigef')
-  toast(`Registro declarado em ${feitas} PC${feitas > 1 ? 's' : ''}.`)
-  if (typeof buscarPlan === 'function') buscarPlan()
 }
 
 function toast(msg, tipo='ok') {
