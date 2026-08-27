@@ -7576,13 +7576,22 @@ async function prodCarregar() {
     const mapaStats = {}
     pcs.forEach(p => {
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{}}
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{},conta:0,descontadas:0}
       const s = mapaStats[p.analista_id]
       s.total++
       // ⚠️ A CONFERÊNCIA COM O SIGEF, contada à parte de `status` — pela mesma razão do
       // `noCi` logo abaixo: uma PC baixada pode estar pendente no SIGEF, e é essa diferença
       // que a tag mostra. A tag vem PRONTA do servidor, em `p.sigef_tag`.
       if(p.sigef_tag) s.sigef[p.sigef_tag] = (s.sigef[p.sigef_tag]||0) + 1
+      // ⚠️ A PRODUTIVIDADE SOMA O QUE O SERVIDOR CALCULOU, e não reimplementa a regra.
+      // `sigef_conta` já é "(baixada OU enviado_ci) E não pendente no SIGEF" — a expressão
+      // vive em `lib/sigef.js` e é a mesma do dashboard, dos relatórios e do setorial.
+      //
+      // ⚠️ Até 27/08 esta tela contava `status === 'baixada'` para o anel de meta, enquanto a
+      // regra escrita do projeto dizia `baixada OU enviado_ci`. Eram DOIS números diferentes,
+      // e o anel mostrava o menor — ninguém tinha percebido porque nada os comparava.
+      if(p.sigef_conta === true) s.conta++
+      if(p.sigef_descontada === true) s.descontadas++
       if(p.status==='baixada') s.baixadas++
       else if(p.status==='analise') s.analise++
       else if(p.status==='diligencia') s.dilig++
@@ -7596,7 +7605,9 @@ async function prodCarregar() {
     _prodDados = Object.entries(mapaStats).map(([analistaId, stats]) => {
       const u = usuariosPorId[analistaId]
       const meta = metaPorId[analistaId] || 0
-      const pct = meta>0 ? Math.round(stats.baixadas/meta*100) : null
+      // ⚠️ O PERCENTUAL SAI DA CONTA CONCILIADA, não de `baixadas`. É a regra de 27/08: a PC
+      // pendente de conferência com o SIGEF não entra enquanto o analista não declarar.
+      const pct = meta>0 ? Math.round(stats.conta/meta*100) : null
       const grupo = u.grupo ? parseInt(u.grupo) : null
       return {u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, ...stats, pct}
     }).filter(d => d.total > 0).filter(d => {
@@ -7661,9 +7672,23 @@ function prodCardGrande(d) {
   const { u, total, baixadas, analise, dilig, reanalise, meta, grupo, coord } = d
   const noCi = d.noCi || 0
   const faltaCi = Math.max(0, baixadas - noCi)
-  const pct = meta > 0 ? Math.round(baixadas / meta * 100) : null
-  const faltam = meta > 0 ? meta - baixadas : 0
-  const bateu = meta > 0 && baixadas >= meta
+  // ⚠️ A CONTA CONCILIADA COM O SIGEF é o número da meta, do anel e do percentual (27/08).
+  // `baixadas` continua sendo `status = 'baixada'` e serve só ao "caminho das baixadas", que
+  // é um retrato do acervo — não a produtividade. Misturar os dois foi o defeito que este
+  // ciclo achou.
+  const conta = d.conta == null ? baixadas : d.conta
+  const descontadas = d.descontadas || 0
+  const sig = d.sigef || {}
+  const semReg = sig.SEM_REGISTRO_SIGEF || 0
+  const verFinal = sig.VERIFICAR_FINAL || 0
+  const ambar = sig.ABERTA_COM_BAIXA_SIGEF || 0
+  const pendencias = semReg + verFinal + ambar
+  // "sobe de X para Y": Y é a contagem com as pendências resolvidas — as descontadas voltam,
+  // e as âmbar entram quando o parecer for registrado aqui.
+  const seResolver = conta + descontadas + ambar
+  const pct = meta > 0 ? Math.round(conta / meta * 100) : null
+  const faltam = meta > 0 ? meta - conta : 0
+  const bateu = meta > 0 && conta >= meta
   const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   // ⚠️ O anel nasce VAZIO (offset = volta inteira) e o CSS anima até o valor. Desenhar já no
   // valor final e animar depois faria o anel piscar cheio antes de recuar.
@@ -7693,17 +7718,12 @@ function prodCardGrande(d) {
         <span style="font-size:11px;color:#C0DD97;">apurado às ${agora}</span>
       </div>
     </div>
-    ${/* A CONFERÊNCIA COM O SIGEF na Produtividade — o quarto lugar.
-          ⚠️ FORA DOS NÚMEROS DA META, e de propósito: nenhuma destas tags muda a
-          produtividade. Elas dizem o que conferir, e a linha abaixo explica que o caminho é
-          a Minha Planilha, porque declarar é ato sobre uma parcela. */''}
-    ${Object.keys(d.sigef || {}).length ? `
-    <div style="padding:10px 18px;background:#FAFCFB;border-bottom:1px solid var(--cl);display:flex;
-                gap:8px;align-items:center;flex-wrap:wrap;">
-      <span style="font-size:11px;font-weight:800;color:var(--ct);">Conferência com o SIGEF:</span>
-      ${sigefBadgesContagem(d.sigef)}
-      <span style="font-size:10.5px;color:var(--ct);">— não altera a meta. Resolva na Minha Planilha.</span>
-    </div>` : ''}
+    ${/* A CONFERÊNCIA COM O SIGEF na Produtividade.
+          ⚠️ ELA ALTERA A META, e até 27/08 esta linha dizia o contrário — "não altera a
+          meta". Dizia errado: a PC pendente sai da contagem enquanto não for declarada,
+          porque a CGE também não a considera. Trocar a frase sem trocar a conta teria
+          deixado a tela mentindo dos dois jeitos. */''}
+    ${sigefFaixaProdutividade({ semReg, verFinal, ambar, pendencias, conta, seResolver, descontadas })}
 
     <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;align-items:center;flex-wrap:wrap;">
       <svg width="150" height="150" viewBox="0 0 150 150" style="flex:0 0 150px;">
@@ -7721,11 +7741,11 @@ function prodCardGrande(d) {
       <div style="flex:1;min-width:230px;">
         <div style="font-size:13px;color:var(--te);font-weight:600;">Meta do período</div>
         <div style="margin-top:5px;font-size:13px;color:var(--ct);">
-          <span style="font-size:30px;font-weight:500;color:#3B6D11;" data-conta="${baixadas}">0</span>
-          de ${meta || '—'} PCs baixadas</div>
+          <span style="font-size:30px;font-weight:500;color:#3B6D11;" data-conta="${conta}">0</span>
+          de ${meta || '—'} PCs conferidas</div>
         ${meta > 0 ? (bateu
           ? `<div style="margin-top:11px;background:#EAF3DE;color:#27500A;border-radius:8px;padding:9px 13px;font-size:12.5px;font-weight:700;">
-               ✓ Meta batida — ${baixadas - meta} PC${(baixadas - meta) === 1 ? '' : 's'} acima</div>`
+               ✓ Meta batida — ${conta - meta} PC${(conta - meta) === 1 ? '' : 's'} acima</div>`
           : `<div style="margin-top:11px;background:#FAEEDA;color:#633806;border-radius:8px;padding:9px 13px;font-size:12.5px;font-weight:700;">
                Faltam ${faltam} PC${faltam === 1 ? '' : 's'} para bater a meta</div>`)
           : `<div style="margin-top:11px;background:#F1F4F2;color:var(--ct);border-radius:8px;padding:9px 13px;font-size:12.5px;">
@@ -7844,9 +7864,41 @@ function prodRender(dados) {
     return
   }
 
+  // ⚠️ O MESMO AVISO NO SETORIAL, agregado — o coordenador precisa ver de QUEM são as
+  // pendências, e o card individual não responde isso para quem olha o grupo inteiro. A faixa
+  // é a mesma função da Produtividade do analista: só o cabeçalho e o possessivo mudam.
+  //
+  // ⚠️ SEM O BOTÃO "Ver minhas pendências": ele leva à Minha Planilha, que é a do próprio
+  // usuário. Num card de grupo o botão prometeria a fila de outra pessoa — botão que aceita
+  // clique e não responde (armadilha 15). O caminho do coordenador é a lista abaixo.
+  const agg = dados.reduce((s, d) => {
+    const g = d.sigef || {}
+    s.semReg += g.SEM_REGISTRO_SIGEF || 0
+    s.verFinal += g.VERIFICAR_FINAL || 0
+    s.ambar += g.ABERTA_COM_BAIXA_SIGEF || 0
+    s.conta += d.conta || 0
+    s.descontadas += d.descontadas || 0
+    if ((g.SEM_REGISTRO_SIGEF || 0) + (g.VERIFICAR_FINAL || 0) + (g.ABERTA_COM_BAIXA_SIGEF || 0)) s.analistas++
+    return s
+  }, { semReg: 0, verFinal: 0, ambar: 0, conta: 0, descontadas: 0, analistas: 0 })
+  const faixaSetorial = sigefFaixaProdutividade(
+    { ...agg, seResolver: agg.conta + agg.descontadas + agg.ambar },
+    {
+      semBotao: true, possessivo: 'a',
+      titulo: agg.semReg + agg.verFinal + agg.ambar
+        ? `Conferência com o SIGEF — ${agg.analistas} analista${agg.analistas === 1 ? '' : 's'} com pendência`
+        : 'Os números deste recorte estão conferidos com o extrato do SIGEF. Nenhuma pendência.',
+      texto: 'A CGE enviou o extrato oficial do SIGEF e cruzamos com o sistema. Enquanto uma prestação estiver pendente de conferência, ela não entra na contagem — porque a CGE também não a considera. Isso não é perda de produtividade: é conferência em andamento. Abra o card de cada analista para ver de quem são.',
+    })
+
   if(_prodAba === 'cards') {
-    cont.innerHTML = `<div class="prod-cards">${dados.map(d => {
+    cont.innerHTML = `<div style="border-radius:12px;overflow:hidden;margin-bottom:12px;
+        box-shadow:var(--sombra);">${faixaSetorial}</div>
+      <div class="prod-cards">${dados.map(d => {
       const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
+      // A conta CONCILIADA com o SIGEF — é ela que vai ao lado do percentual e aos totais.
+      // `baixadas` fica só onde a pergunta é "qual o estado do acervo", não "quanto contou".
+      const conta = d.conta == null ? baixadas : d.conta
       const cor = prodCorPct(pct)
       const pctTxt = pct===null ? '—' : pct+'%'
       return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="prodAbrirCard(${u.id})">
@@ -7858,7 +7910,7 @@ function prodRender(dados) {
         <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct||0}%;background:${cor}"></div></div>
         <div class="prod-nums" style="margin-top:5px;">
           <span>📋 ${total} PCs</span>
-          <span style="font-weight:700;color:${cor}">✓ ${baixadas} baixadas (${pctTxt})</span>
+          <span style="font-weight:700;color:${cor}">✓ ${conta} conferidas (${pctTxt})</span>
         </div>
         <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
           <span>🔵 ${analise} análise</span><span>🟡 ${dilig} dilig.</span><span>🔴 ${reanalise} reanál.</span>
@@ -7869,6 +7921,8 @@ function prodRender(dados) {
     // TABELA — linhas alternadas neutras; só o % e a barra recebem cor de acordo com a meta
     const linhas = dados.map((d,i) => {
       const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
+      // A conta CONCILIADA — a mesma da grade de cards e do card grande.
+      const conta = d.conta == null ? baixadas : d.conta
       const cor = prodCorPct(pct)
       const pctTxt = pct===null ? '—' : pct+'%'
       return `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
@@ -7890,7 +7944,7 @@ function prodRender(dados) {
     }).join('')
 
     const totTotal = dados.reduce((a,d)=>a+d.total,0)
-    const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+    const totBx = dados.reduce((a,d)=>a+(d.conta==null?d.baixadas:d.conta),0)
     const totMeta = dados.reduce((a,d)=>a+(d.meta||0),0)
     const totDil = dados.reduce((a,d)=>a+d.dilig,0)
     const totAn = dados.reduce((a,d)=>a+d.analise,0)
@@ -7948,12 +8002,12 @@ function prodExportPDF() {
     const pctTxt = d.pct===null?'—':d.pct+'%'
     return `<tr style="background:${cor}">
       <td>${i+1}</td><td><b>${d.u.nome}</b></td><td>${d.grupo||'—'}</td><td>${d.coord}</td>
-      <td>${d.meta||'—'}</td><td>${d.total}</td><td><b style="color:#006B3C">${d.baixadas}</b></td>
+      <td>${d.meta||'—'}</td><td>${d.total}</td><td><b style="color:#006B3C">${d.conta==null?d.baixadas:d.conta}</b></td>
       <td>${d.analise}</td><td>${d.dilig}</td><td>${d.reanalise}</td>
       <td><b>${pctTxt}</b></td></tr>`
   }).join('')
   const totTotal = dados.reduce((a,d)=>a+d.total,0)
-  const totBx = dados.reduce((a,d)=>a+d.baixadas,0)
+  const totBx = dados.reduce((a,d)=>a+(d.conta==null?d.baixadas:d.conta),0)
   const totMeta = dados.reduce((a,d)=>a+(d.meta||0),0)
   const totPct = totMeta>0?Math.round(totBx/totMeta*100)+'%':'—'
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -10310,6 +10364,12 @@ let _planPrefs  = {}   // tr -> {fixada, expandida}
 let _planAnots  = {}   // tr -> [anotacao]
 let _planChip   = ''   // filtro rápido ativo
 let _planOrdem  = 'analise'
+// ⚠️ RECORTE DE CONFERÊNCIA COM O SIGEF — aceso por `sigefVerPendencias()`, na faixa da
+// Produtividade. É um filtro à PARTE dos chips, e não um chip a mais, porque ele responde uma
+// pergunta de outra natureza: os chips recortam por situação da análise (prazo, diligência,
+// sem C.I.), este recorta pelo cruzamento com uma fonte externa. Vira chip no dia em que a
+// conferência virar rotina, não antes.
+let _planFiltroSigef = false
 // Quem chegou com destino: {tr, parcial, chip}. Posto por `irPlanilha`, gasto por
 // `planIrAoAlvo` na primeira pintura e apagado ali mesmo.
 let _planAlvo   = null
@@ -10459,7 +10519,14 @@ function planOrdenar(lista) {
 function planAplicar() {
   const todas = window._planDadosCache || []
   const chip = PLAN_CHIPS.find(c => c.id === _planChip)
-  const lista = planOrdenar(chip ? todas.filter(chip.teste) : todas)
+  let lista = chip ? todas.filter(chip.teste) : todas
+  // ⚠️ O RECORTE DO SIGEF COMPÕE COM O CHIP, não o substitui: quem veio da faixa da
+  // Produtividade e depois clica num chip está estreitando, não trocando de pergunta.
+  if (_planFiltroSigef) {
+    lista = lista.filter(t => (t.parciais || []).some(pa =>
+      (pa.pcs || []).some(p => p && p.sigef_tag)))
+  }
+  lista = planOrdenar(lista)
 
   window._planTot = lista.length
   const totalPag = Math.max(1, Math.ceil(lista.length/PP))
@@ -10476,6 +10543,9 @@ function planChip(id) {
   window._planPag = 0
   planAplicar()
 }
+
+/** Desliga o recorte de conferência com o SIGEF, sem mexer nos outros filtros. */
+function planLimparSigef() { _planFiltroSigef = false; window._planPag = 0; planAplicar() }
 
 function planOrdemMudou(v) { _planOrdem = v; window._planPag = 0; planAplicar() }
 
@@ -10794,7 +10864,21 @@ function planRenderBarra(todas) {
         border:1.5px solid #B9D3EC;font-weight:700;font-size:11px;padding:4px 11px;">Limpar</button>
     </div>` : ''
 
-  barra.innerHTML = recorte + `
+  // ⚠️ O RECORTE DO SIGEF TEM ETIQUETA PRÓPRIA, e ela é obrigatória: quem chega aqui pelo
+  // botão da Produtividade vê uma planilha com menos TRs do que tem, e sem esta faixa
+  // concluiria que perdeu TR. Ela também é o único jeito de desligar o filtro.
+  const recorteSigef = _planFiltroSigef ? `
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#FAEEDA;border:1.5px solid #EF9F27;
+                border-radius:8px;padding:8px 12px;margin-bottom:11px;">
+      <span style="font-size:13px;line-height:1;">🔎</span>
+      <div style="font-size:12px;color:#633806;">
+        Mostrando só as TRs com <b>pendência de conferência com o SIGEF</b>.
+      </div>
+      <button class="btn-acao" onclick="planLimparSigef()" style="margin-left:auto;background:#fff;color:#633806;
+        border:1.5px solid #EF9F27;font-weight:700;font-size:11px;padding:4px 11px;">Ver todas</button>
+    </div>` : ''
+
+  barra.innerHTML = recorteSigef + recorte + `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
       <button class="btn-acao" style="background:#fff;color:var(--v);border:1.5px solid var(--v);font-weight:700;"
         onclick="planTodas(${abertas ? 'false' : 'true'})">
@@ -18004,6 +18088,80 @@ function sigefPintarBotao() {
     : !dt ? 'Informe a data do registro no SIGEF.' : ''
   btn.disabled = !!falta
   btn.title = falta
+}
+
+/**
+ * A FAIXA DE CONFERÊNCIA COM O SIGEF — na Produtividade do analista e no Setorial.
+ *
+ * ⚠️ UMA FUNÇÃO PARA OS DOIS. No card do analista os números são dele; no setorial são a soma
+ * do grupo, e muda só o cabeçalho. Duas cópias divergiriam no primeiro ajuste de texto — foi
+ * o que aconteceu com o mapa de nomes curtos.
+ *
+ * ⚠️ E O TEXTO EXPLICA A SUBTRAÇÃO ANTES DE MOSTRÁ-LA. O analista abre a tela e vê um número
+ * menor que o de ontem; se a explicação vier depois do número, ele já concluiu que perdeu
+ * trabalho. Por isso o título e o parágrafo vêm primeiro, e os blocos depois.
+ */
+function sigefFaixaProdutividade(x, opts) {
+  const o = opts || {}
+  const { semReg = 0, verFinal = 0, ambar = 0, conta = 0, seResolver = 0 } = x || {}
+  const pendencias = semReg + verFinal + ambar
+
+  // Sem pendência: a faixa vira confirmação. Ela NÃO some — sumir deixaria o analista sem
+  // saber se foi conferido ou se a conferência não rodou.
+  if (!pendencias) {
+    return `<div style="margin:0;padding:12px 18px;background:#EAF3DE;border-bottom:1px solid var(--cl);
+        border-left:4px solid #97C459;display:flex;gap:10px;align-items:center;">
+      <span style="font-size:17px;line-height:1;">✅</span>
+      <div style="font-size:12.5px;color:#27500A;font-weight:600;">
+        ${o.titulo || 'Seus números estão conferidos com o extrato do SIGEF. Nenhuma pendência.'}</div>
+    </div>`
+  }
+
+  // ⚠️ BLOCO COM ZERO NÃO APARECE. Um "0 finais a verificar" ocuparia a mesma largura de um
+  // número que importa, e a faixa toda perde a leitura.
+  const bloco = (n, bg, fg, rotulo, nota, sinal) => !n ? '' : `
+    <div style="flex:1;min-width:150px;background:${bg};color:${fg};border-radius:10px;padding:10px 12px;">
+      <div style="font-size:23px;font-weight:600;line-height:1;">${sinal || ''}${n}</div>
+      <div style="font-size:11.5px;font-weight:700;margin-top:3px;">${rotulo}</div>
+      <div style="font-size:10.5px;margin-top:2px;opacity:.85;">${nota}</div>
+    </div>`
+
+  const NOTA_FORA = 'Fora da contagem até você verificar'
+  return `<div style="margin:0;padding:13px 18px;background:#FAEEDA;border-bottom:1px solid var(--cl);
+      border-left:4px solid #EF9F27;">
+    <div style="font-size:13px;font-weight:700;color:#633806;">
+      ${o.titulo || 'Seus números estão em conferência com o SIGEF'}</div>
+    <div style="font-size:12px;color:#633806;line-height:1.5;margin-top:5px;max-width:820px;">
+      ${o.texto || 'A CGE enviou o extrato oficial do SIGEF e cruzamos com o sistema. Enquanto uma prestação estiver pendente de conferência, ela não entra na contagem — porque a CGE também não a considera. Isso não é perda de produtividade: é conferência em andamento.'}</div>
+    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:11px;">
+      ${bloco(semReg, '#FDEBEC', '#8E1B1B', 'Sem registro no SIGEF', NOTA_FORA)}
+      ${bloco(verFinal, '#E8F0FB', '#1B4F8E', 'Finais a verificar', NOTA_FORA)}
+      ${/* ⚠️ A ÂMBAR ENTRA COM SINAL DE MAIS, e é o único bloco que soma. Ela não está sendo
+            descontada de nada: é trabalho que o SIGEF já reconhece e que este sistema ainda
+            não contou, porque a PC continua aberta aqui. Mostrá-la em vermelho junto com as
+            outras diria ao analista que ele perdeu três coisas, quando uma delas ele ganha. */''}
+      ${bloco(ambar, '#EAF3DE', '#27500A', 'Baixadas no SIGEF, abertas aqui', 'Trabalho seu que ainda não foi contado', '+')}
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:11px;">
+      <div style="font-size:12px;color:#633806;font-weight:600;">
+        Ao resolver as ${pendencias} pendência${pendencias === 1 ? '' : 's'},
+        ${o.possessivo || 'sua'} contagem sobe de <b>${conta}</b> para <b>${seResolver}</b></div>
+      ${o.semBotao ? '' : `<button class="btn-acao" style="margin-left:auto;background:#3B6D11;color:#fff;font-weight:700;"
+        onclick="sigefVerPendencias()">Ver minhas pendências</button>`}
+    </div>
+  </div>`
+}
+
+/**
+ * Leva à fila do analista, recortada nas PCs com pendência de conferência.
+ *
+ * ⚠️ O RECORTE É PELA TAG, e não por status ou por data: é a mesma pergunta que a faixa acaba
+ * de fazer, e chegar na Minha Planilha inteira obrigaria o analista a procurar as etiquetas
+ * TR por TR.
+ */
+function sigefVerPendencias() {
+  _planFiltroSigef = true
+  irPlanilha()
 }
 
 /**

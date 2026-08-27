@@ -312,7 +312,11 @@ conf(/font-size:30px;font-weight:500;color:#3B6D11/.test(html), 'o N das baixada
 S('12d. META BATIDA OU FALTANDO');
 conf(/Faltam \$\{faltam\} PC/.test(html), 'faixa ambar quando falta');
 conf(/#FAEEDA;color:#633806/.test(html), 'nas cores ambar');
-conf(/Meta batida — \$\{baixadas - meta\} PC/.test(html), 'faixa verde quando bateu');
+// ⚠️ ERA `baixadas - meta` ATE 27/08/2026, e mudou DE PROPOSITO: a meta passou a ser medida
+// pela conta CONCILIADA com o SIGEF (`conta`), e nao por `status = 'baixada'`. Eram dois
+// numeros diferentes — a regra escrita do projeto sempre disse `baixada OU enviado_ci`, e
+// esta tela contava outra coisa. Ver `lib/sigef.js`, no sigpc-api.
+conf(/Meta batida — \$\{conta - meta\} PC/.test(html), 'faixa verde quando bateu');
 conf(/#EAF3DE;color:#27500A/.test(html), 'nas cores verdes');
 // ⚠️ O aviso do Quadro 2 DESCEU do topo: ressalva longe do numero que ela explica nao e lida.
 conf(/Quadro 2 do relatório CGE/.test(html), 'o aviso da CGE esta no card');
