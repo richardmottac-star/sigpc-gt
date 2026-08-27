@@ -1496,6 +1496,41 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ⚠️ DESFAZER A PUXADA DO C.I. — 26/08/2026.
+     O cabeçalho é VERDE, e não vermelho como o do "Puxar de volta": aquele DESFAZ a baixa,
+     este a DEVOLVE. Repetir o vermelho aqui faria a tela avisar de perigo na ação que
+     conserta, e o aviso perderia o sentido nas duas.
+     A caixa de texto explica o que volta — e a última frase é a que importa para a CGE:
+     nada é recriado com data nova. -->
+<div class="mo" id="moDesfazerPx">
+  <div class="mc">
+    <div class="mch v"><h3>⤺ Desfazer a puxada do Controle Interno</h3><button class="mcx" onclick="dpxFechar()">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="dpxInfo"></div>
+      <div style="background:var(--vbg);border:1.5px solid var(--v);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11.5px;color:var(--te);line-height:1.6;">
+        A baixa volta com a data original, o parecer é restaurado e a parcial retorna à
+        produtividade do analista. <b>Nada é recriado com data nova.</b>
+      </div>
+      <div class="mc-campo"><label>Motivo * (mínimo 10 caracteres)</label>
+        <textarea id="dpxMotivo" rows="3" oninput="dpxContar()" style="resize:vertical;"
+          placeholder="Por que esta puxada precisa ser desfeita..."></textarea>
+        <div style="font-size:10px;color:var(--ct);margin-top:4px;" id="dpxContador">0 caracteres</div>
+      </div>
+      <!-- ⚠️ A MENSAGEM DE ERRO FICA AQUI DENTRO, e não só no toast. A rota distingue o 403
+           (sem foto), o 404 e o 409 (a parcial mudou depois da puxada) — e o texto do 409
+           lista PC por PC o que mudou. Isso não cabe num toast que some sozinho. -->
+      <div id="dpxMsg" style="display:none;background:#FFEBEE;border:1.5px solid #C62828;
+        border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:#8E1B1B;
+        line-height:1.5;white-space:normal;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="dpxFechar()">Cancelar</button>
+        <button class="mcok" id="dpxBtn" onclick="dpxSalvar()" disabled
+          title="Escreva o motivo">⤺ Desfazer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="moPcNova">
   <div class="mc">
     <div class="mch v"><h3>➕ Cadastrar PC nesta TR</h3><button class="mcx" onclick="fm('moPcNova')">✕</button></div>
@@ -11129,7 +11164,7 @@ function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
  * PC — a tela não manda `tr` nem `parcial_num`, e é isso que impede a final de arrastar a
  * parcial 1 junto nos 5 casos em que as duas dividem o mesmo número.
  */
-async function acAbrir(ev, codigoPc, tr, parcialNum) {
+async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
   ev.stopPropagation();
   const jaEra = _acAberto && _acAberto.dataset.pc === codigoPc;
   acFechar();
@@ -11156,6 +11191,10 @@ async function acAbrir(ev, codigoPc, tr, parcialNum) {
     if (j.error) throw new Error(j.error.message || j.error);
     if (_acAberto !== cx) return;   // fecharam enquanto carregava
     const d = j.data;
+    // O número de PCs vem do cartão, não do servidor — `GET /parcela/acoes` responde sobre
+    // UMA PC, e quem sabe quantas irmãs a parcela tem é a linha que desenhou o botão.
+    d.n_pcs = Number(nPcs) || 0;
+    d.parcial_num = parcialNum;
     _acDados = d;
 
     const pc = `'${escHtml(codigoPc)}'`;
@@ -11217,6 +11256,21 @@ async function acAbrir(ev, codigoPc, tr, parcialNum) {
     else
       linhas.push(acItem('Solicitar volta do C.I.', '📨', `scAbrir(${pc},'puxar_ci')`,
         p.viaSolicitacao, 'vermelho', p.viaSolicitacao ? null : p.motivo));
+
+    // ⚠️ DESFAZER A PUXADA — 26/08/2026. Só aparece quando o servidor manda o campo: quem
+    // decide se ele existe é `GET /parcela/acoes`, e uma parcela que nunca foi puxada não
+    // tem por que mostrar um item que só sabe recusar.
+    //
+    // ⚠️ E AQUI O ITEM QUE NÃO PODE FICA CINZA MESMO — não vira "Solicitar", como os dois de
+    // cima. Não há caminho por solicitação para esta ação (só o técnico do sistema desfaz), e
+    // oferecer um pedido que não existe seria pior que o item cinza. O motivo da rota vai
+    // inteiro no `title` e na segunda linha, PALAVRA POR PALAVRA — é ele que explica que a
+    // puxada é anterior a 26/08 e não tem foto, e resumir isso apagaria a única informação
+    // que a pessoa precisa para saber o que fazer em vez disso.
+    const dp = d.desfazer_puxar_ci;
+    if (dp)
+      linhas.push(acItem('Desfazer a puxada do C.I.', '⤺',
+        dp.pode ? 'dpxAbrir()' : '', !!dp.pode, 'verde', dp.motivo));
 
     // ── GRUPO 3: CONSULTA E CADASTRO (roxo e cinza) ─────────────────────────
     linhas.push(acGrupo('Consulta e cadastro'));
@@ -11419,6 +11473,117 @@ async function pxSalvar() {
 }
 
 // ══════════════════════════════════════
+//  B2 — DESFAZER A PUXADA DO C.I.  (26/08/2026)
+// ══════════════════════════════════════
+//
+// ⚠️ ESTA TELA NÃO DECIDE NADA. Quem diz se dá para desfazer, e por que não dá, é o servidor
+// em `GET /parcela/acoes` (`desfazer_puxar_ci`). A tela não sabe — e não deve saber — que a
+// regra é "só superadmin e só com foto": repetir isso aqui criaria a segunda cópia que
+// diverge no primeiro ajuste, como aconteceu três vezes com o mapa de nomes curtos.
+//
+// ⚠️ E O `historico_id` VEM DO SERVIDOR, não da tela. É ele que identifica QUAL puxada está
+// sendo desfeita — a mesma parcela pode ter sido puxada mais de uma vez, e a rota escolhe a
+// última ainda não desfeita cuja foto alcança esta PC.
+
+let _dpxHid = null;   // o id da puxada em foco, como o servidor mandou
+
+function dpxAbrir() {
+  const d = _acDados || {};
+  const dp = d.desfazer_puxar_ci || {};
+  if (!dp.pode || !dp.historico_id) return;
+  _dpxHid = dp.historico_id;
+
+  const n = d.n_pcs || 0;
+  const par = String(d.parcial_num ?? '').trim();
+  // ⚠️ A data vem do `criado_em` do histórico, que a API (em UTC) serializa com o `Z` certo —
+  // o navegador converte para Brasília sozinho. É o mesmo caminho de `pHistoricoPc`, e é por
+  // isso que NÃO se faz conta de fuso aqui: fazer duas vezes é a armadilha 18 ao contrário.
+  const quando = dp.puxada_em ? new Date(dp.puxada_em).toLocaleString('pt-BR') : '—';
+
+  document.getElementById('dpxInfo').innerHTML =
+    `<strong>TR:</strong> ${escHtml(d.tr || '—')} &nbsp;·&nbsp; `
+    + `<strong>Parcela:</strong> ${par ? escHtml(par) : '—'}<br>`
+    // ⚠️ "PCs NESTA PARCELA", e não "PCs alcançadas" — a diferença é medida e importa.
+    // A restauração alcança exatamente as PCs da FOTO, que são as que a puxada levou; o
+    // cartão conta as PCs da parcela HOJE. Nas 3 TRs em que a PC final divide `parcial_num`
+    // com a parcial 1, e em qualquer parcela que ganhou PC depois da puxada, os dois números
+    // divergem. Prometer "alcançadas" seria prometer um número que a tela não tem — o real
+    // vem no aviso de sucesso, que usa o `count` da própria rota.
+    + `<strong>PCs nesta parcela:</strong> ${n || '—'} &nbsp;·&nbsp; `
+    + `<strong>Puxada em:</strong> ${escHtml(quando)}`;
+
+  document.getElementById('dpxMotivo').value = '';
+  const msg = document.getElementById('dpxMsg');
+  msg.style.display = 'none'; msg.textContent = '';
+  document.getElementById('moDesfazerPx').classList.add('open');
+  document.addEventListener('keydown', dpxEsc, true);
+  dpxContar();
+  document.getElementById('dpxMotivo').focus();
+}
+
+// Esc fecha. O modal não tem handler global — cada um registra o seu, como o `ciReabrir`.
+function dpxEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); dpxFechar(); } }
+
+function dpxFechar() {
+  document.removeEventListener('keydown', dpxEsc, true);
+  fm('moDesfazerPx');
+  _dpxHid = null;
+}
+
+/**
+ * O botão nasce cinza e acende com o motivo escrito — armadilha 15, com o porquê no `title`.
+ *
+ * ⚠️ O MÍNIMO DE 10 CARACTERES ESTÁ NO RÓTULO DO CAMPO, e não numa trava aqui. Quem valida o
+ * motivo é `correcao.validarMotivo`, no servidor; repetir o número na tela criaria a segunda
+ * regra que envelhece sozinha. O contador mostra quantos há, o rótulo diz quantos faltam, e
+ * se ainda assim faltar, o erro do servidor volta dentro do modal.
+ */
+function dpxContar() {
+  const t = (document.getElementById('dpxMotivo').value || '').trim();
+  document.getElementById('dpxContador').textContent =
+    `${t.length} caractere${t.length === 1 ? '' : 's'}`;
+  const bt = document.getElementById('dpxBtn');
+  bt.disabled = !t;
+  bt.title = bt.disabled
+    ? 'Escreva o motivo — ele fica no histórico e a CGE lê.'
+    : 'Restaurar a parcial ao estado gravado antes da puxada';
+}
+
+async function dpxSalvar() {
+  if (!_dpxHid) return;
+  const bt = document.getElementById('dpxBtn');
+  const msg = document.getElementById('dpxMsg');
+  msg.style.display = 'none'; msg.textContent = '';
+  bt.disabled = true; bt.textContent = 'Desfazendo…';
+  try {
+    const r = await fetch(`${API_URL}/parcela/desfazer_puxar_ci`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      // ⚠️ `analista_id` É O USUÁRIO LOGADO, e NÃO o `alvo()`. Esta ação é do técnico do
+      // sistema — mandar o analista de quem se está vendo a planilha faria o servidor ler o
+      // perfil dele e recusar com 403, num modal que só se abre para quem PODE.
+      body: JSON.stringify({
+        historico_id: _dpxHid,
+        motivo: document.getElementById('dpxMotivo').value.trim(),
+        analista_id: U.id,
+      }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+    toast(`✓ Puxada desfeita — ${j.count} PC${j.count > 1 ? 's' : ''} de volta, com a baixa original.`, 'ok');
+    dpxFechar(); buscarPlan(); dashAtualizar();
+  } catch (e) {
+    // ⚠️ O MODAL FICA ABERTO e o botão reacende. A mensagem vem inteira do servidor — ela
+    // distingue o 403 (sem foto), o 404 e o 409 da parcial alterada depois da puxada, e este
+    // último lista PC por PC o que mudou. Reescrever isso aqui apagaria o diagnóstico.
+    msg.textContent = e.message;
+    msg.style.display = '';
+  } finally {
+    bt.disabled = false; bt.textContent = '⤺ Desfazer';
+    dpxContar();
+  }
+}
+
+// ══════════════════════════════════════
 //  C — CADASTRAR PC
 // ══════════════════════════════════════
 let _pnTr = null, _pnTipo = 'parcial';
@@ -11550,7 +11715,10 @@ function pBotaoAcoes(pa, tr) {
   // ⚠️ O NÚMERO DA PARCIAL VIAJA JUNTO, e sai de `pa.num` — o mesmo objeto que desenhou a
   // linha. A versão de 18/08 procurava esse número numa varredura que quebrava por causa de
   // uma variável inexistente; procurar o que já se tem na mão foi o erro, não o nome errado.
-  return `<button class="btn-acao" onclick="acAbrir(event,'${escHtml(pc)}','${escHtml(tr)}','${escHtml(String(pa.num))}')"
+  // ⚠️ E O NÚMERO DE PCs DA PARCELA VIAJA JUNTO PELO MESMO MOTIVO — `pa.pcs` está aqui, e o
+  // modal de desfazer precisa dele para dizer quantas PCs a restauração alcança. Buscá-lo
+  // depois seria repetir o erro de 18/08, que varreu um cache inexistente.
+  return `<button class="btn-acao" onclick="acAbrir(event,'${escHtml(pc)}','${escHtml(tr)}','${escHtml(String(pa.num))}',${(pa.pcs || []).length})"
     title="Ações desta parcial — situação, parecer, C.I., correções, cadastro e histórico"
     style="background:var(--v);color:#fff;border-color:var(--v);font-weight:800;font-size:11.5px;
            padding:6px 14px;box-shadow:0 1px 4px rgba(0,0,0,.15);">Ações ▾</button>`;
