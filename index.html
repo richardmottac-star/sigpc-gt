@@ -1114,9 +1114,15 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         </div>
         <div id="sigefAlvo" style="font-size:11px;color:var(--ct);margin-bottom:8px;"></div>
       </div>
+      <!-- O que o SIGEF registrou para esta prestação — só na âmbar, que é onde o analista
+           precisa saber O QUE confirmar antes de ir registrar o parecer. -->
+      <div id="sigefOSigef" style="display:none;margin-top:14px;"></div>
       <div id="sigefHistorico" style="margin-top:12px;"></div>
       <div class="mcbt">
         <button class="mccn" onclick="fm('moSigef')">Fechar</button>
+        <!-- Leva ao fluxo normal de parecer, com a parcela já aberta e posicionada.
+             ⚠️ NÃO baixa nada daqui: a baixa continua sendo o passo do parecer. -->
+        <button class="mcok" id="btnSigefIr" style="display:none;" onclick="sigefIrParaParcela()">→ Ir para a parcela</button>
         <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15). -->
         <button class="mcok" id="btnSigefDecl" style="display:none;" disabled onclick="sigefDeclarar()">✓ Declarar</button>
       </div>
@@ -17938,6 +17944,42 @@ function sigefAbrir(tag, ctx) {
     document.getElementById('sigefDeclBox').style.display = 'none'
   }
 
+  // ── A ÂMBAR: o que o SIGEF registrou, e o caminho para confirmar ────────────
+  // ⚠️ O texto da âmbar manda "confirmar o parecer no sistema" e até hoje não dizia O QUÊ
+  // nem POR ONDE. Sem o status e a data, o analista ia registrar um parecer sem saber o que
+  // o SIGEF já afirma sobre a mesma prestação — e a divergência de ressalva (38 casos
+  // medidos) nasce exatamente aí.
+  const boxSig = document.getElementById('sigefOSigef')
+  const btnIr = document.getElementById('btnSigefIr')
+  const ehAmbar = tag === 'ABERTA_COM_BAIXA_SIGEF'
+  const doSigef = ehAmbar ? sigefPcsCache().filter(p => cods.includes(p.codigo_pc)) : []
+  if (ehAmbar && doSigef.length) {
+    // Uma linha por PC: numa parcela mista o status do SIGEF pode não ser o mesmo em todas,
+    // e mostrar só a primeira esconderia a diferença.
+    boxSig.style.display = ''
+    boxSig.innerHTML = `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">
+        O que o SIGEF registrou</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+        <thead><tr style="color:var(--ct);text-align:left;">
+          <th style="padding:3px 6px;font-weight:700;">PC</th>
+          <th style="padding:3px 6px;font-weight:700;">Parecer no SIGEF</th>
+          <th style="padding:3px 6px;font-weight:700;">Data</th></tr></thead>
+        <tbody>${doSigef.map(p => `<tr style="border-top:1px solid var(--cl);">
+          <td style="padding:4px 6px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc)}</td>
+          <td style="padding:4px 6px;font-weight:700;color:#8A6100;">${escHtml(p.sigef_status || '—')}</td>
+          <td style="padding:4px 6px;white-space:nowrap;">${planDataTs(p.data_baixa_sigef)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div style="font-size:10.5px;color:var(--ct);margin-top:5px;">
+        Registre o parecer normalmente. A baixa e a produtividade seguem o caminho de sempre.</div>`
+  } else {
+    boxSig.style.display = 'none'; boxSig.innerHTML = ''
+  }
+  // ⚠️ O botão só aparece com a chave da parcela na mão — no Estoque e na Produtividade a
+  // etiqueta é agregada e não tem `tr`/`parcial`, e um botão sem destino seria botão que
+  // aceita clique e não responde (armadilha 15).
+  btnIr.style.display = (ehAmbar && temChave) ? '' : 'none'
+
   // ⚠️ O HISTÓRICO APARECE SEMPRE QUE EXISTIR. "A declaração não se desmarca: se o analista
   // errar, ele declara de novo e o histórico guarda as duas" — então as duas têm de ser
   // visíveis, ou a segunda pareceria ter apagado a primeira.
@@ -17962,6 +18004,21 @@ function sigefPintarBotao() {
     : !dt ? 'Informe a data do registro no SIGEF.' : ''
   btn.disabled = !!falta
   btn.title = falta
+}
+
+/**
+ * Leva à parcela, no fluxo normal de parecer, já expandida e posicionada.
+ *
+ * ⚠️ ELE NÃO BAIXA NADA. É `irPlanilha(tr, parcial)`, o mesmo caminho que a notificação do
+ * C.I. e o card do Dashboard usam — a baixa continua sendo o passo do parecer, com o menu
+ * "Ações" da parcela. Um atalho que baixasse daqui seria um terceiro caminho de baixa, sem
+ * parecer e sem trilha.
+ */
+function sigefIrParaParcela() {
+  const { tr, parcial } = _sigefCtx
+  if (!tr || parcial == null) return
+  fm('moSigef')
+  irPlanilha(tr, String(parcial))
 }
 
 /**
