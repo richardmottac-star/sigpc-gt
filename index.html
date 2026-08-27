@@ -1094,6 +1094,36 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<!-- ══ MODAL CONFERÊNCIA COM O SIGEF ══
+     UM modal para as quatro tags. O corpo é montado por `sigefAbrir()` a partir de
+     `SIGEF_TAGS` — o texto de cada situação está definido UMA vez, naquele objeto.
+     O bloco da declaração só aparece nas duas tags que declaram. -->
+<div class="mo" id="moSigef">
+  <div class="mc">
+    <div class="mch" id="sigefCab"><h3 id="sigefTitulo">Conferência com o SIGEF</h3><button class="mcx" onclick="fm('moSigef')">✕</button></div>
+    <div class="mcb">
+      <div class="mci" id="sigefTexto"></div>
+      <div id="sigefDeclBox" style="display:none;margin-top:14px;">
+        <div class="mc-campo"><label>O parecer estava registrado no SIGEF? *</label>
+          <div id="sigefRespostas" style="display:flex;flex-direction:column;gap:2px;"></div>
+        </div>
+        <div class="mc-campo"><label>Data do registro no SIGEF *</label>
+          <input type="date" id="sigefData" onchange="sigefPintarBotao()" style="width:100%;">
+          <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">
+            A data em que o parecer foi registrado no SIGEF — não a data de hoje, se for outra.</div>
+        </div>
+        <div id="sigefAlvo" style="font-size:11px;color:var(--ct);margin-bottom:8px;"></div>
+      </div>
+      <div id="sigefHistorico" style="margin-top:12px;"></div>
+      <div class="mcbt">
+        <button class="mccn" onclick="fm('moSigef')">Fechar</button>
+        <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15). -->
+        <button class="mcok" id="btnSigefDecl" style="display:none;" disabled onclick="sigefDeclarar()">✓ Declarar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL DEVOLVER MASTER ══ -->
 <div class="mo" id="moDevM">
   <div class="mc">
@@ -4041,7 +4071,11 @@ function renderEst(rows) {
       <td class="est-ent" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
-      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span></td>
+      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span>${
+        /* A CONFERÊNCIA COM O SIGEF no setorial. Aqui a linha é a TR agregada, então vêm os
+           CÓDIGOS das tags e a contagem — ver `sigefBadgesDeTags`. */''
+        }${(t.sigef_tags||[]).length ? `<div style="margin-top:3px;">${
+          sigefBadgesDeTags(t.sigef_tags, t.sigef_pendentes)}</div>` : ''}</td>
       <td>${acoes}</td>
     </tr>`
   })
@@ -7536,9 +7570,13 @@ async function prodCarregar() {
     const mapaStats = {}
     pcs.forEach(p => {
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0}
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{}}
       const s = mapaStats[p.analista_id]
       s.total++
+      // ⚠️ A CONFERÊNCIA COM O SIGEF, contada à parte de `status` — pela mesma razão do
+      // `noCi` logo abaixo: uma PC baixada pode estar pendente no SIGEF, e é essa diferença
+      // que a tag mostra. A tag vem PRONTA do servidor, em `p.sigef_tag`.
+      if(p.sigef_tag) s.sigef[p.sigef_tag] = (s.sigef[p.sigef_tag]||0) + 1
       if(p.status==='baixada') s.baixadas++
       else if(p.status==='analise') s.analise++
       else if(p.status==='diligencia') s.dilig++
@@ -7649,6 +7687,17 @@ function prodCardGrande(d) {
         <span style="font-size:11px;color:#C0DD97;">apurado às ${agora}</span>
       </div>
     </div>
+    ${/* A CONFERÊNCIA COM O SIGEF na Produtividade — o quarto lugar.
+          ⚠️ FORA DOS NÚMEROS DA META, e de propósito: nenhuma destas tags muda a
+          produtividade. Elas dizem o que conferir, e a linha abaixo explica que o caminho é
+          a Minha Planilha, porque declarar é ato sobre uma parcela. */''}
+    ${Object.keys(d.sigef || {}).length ? `
+    <div style="padding:10px 18px;background:#FAFCFB;border-bottom:1px solid var(--cl);display:flex;
+                gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;font-weight:800;color:var(--ct);">Conferência com o SIGEF:</span>
+      ${sigefBadgesContagem(d.sigef)}
+      <span style="font-size:10.5px;color:var(--ct);">— não altera a meta. Resolva na Minha Planilha.</span>
+    </div>` : ''}
 
     <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;align-items:center;flex-wrap:wrap;">
       <svg width="150" height="150" viewBox="0 0 150 150" style="flex:0 0 150px;">
@@ -9587,7 +9636,7 @@ function relRenderTabela() {
   document.getElementById('relTblTit').textContent = `${total} registros encontrados`
   document.getElementById('relThead').innerHTML = `<tr>
     <th>#</th><th>Analista</th><th>TR</th><th>SGPe MÃE</th><th>Código PC</th><th>SGPe PC</th>
-    <th>Entidade</th><th>Status</th><th>Baixada</th>
+    <th>Entidade</th><th>Status</th><th>Baixada</th><th>SIGEF</th>
   </tr>`
   document.getElementById('relTbody').innerHTML = pag.map((r,i) => {
     const cor = r.status==='baixada'?'#F0FAF4':''
@@ -9601,6 +9650,9 @@ function relRenderTabela() {
       <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.entidade||''}">${r.entidade||'—'}</td>
       <td><span class="bdg ${r.status==='baixada'?'bdg-livre':'bdg-analise'}" style="font-size:10px;">${r.status||'—'}</span></td>
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
+      ${/* A CONFERÊNCIA COM O SIGEF nos relatórios. Aqui a linha é UMA PC, então o componente
+            recebe a PC sozinha — e o "?" continua funcionando, com alvo certo para declarar. */''}
+      <td style="white-space:nowrap;">${sigefBadges([r]) || '<span style="color:var(--ct);font-size:10px;">—</span>'}</td>
     </tr>`
   }).join('')
 
@@ -11760,7 +11812,10 @@ function renderPlan(rows) {
               style="width:auto;cursor:pointer;margin:0;">` : ''}
             <span style="background:var(--vc);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">✓ ${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
             <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeParecer(pa.parecer_tipo)}
-              ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}</span>
+              ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}
+              ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro
+                    lugares, e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
+              ${sigefBadges(pa.pcs)}</span>
             <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>
               ${/* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
@@ -11815,7 +11870,10 @@ function renderPlan(rows) {
         <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#FAFCFB;flex-wrap:wrap;">
           <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
           <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSitOuNova(pa)}
-            ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}</span>
+            ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}
+            ${/* A âmbar mora AQUI: "baixada no SIGEF, aberta aqui" só existe em parcial
+                  aberta. As outras três aparecem no ramo de cima, o das baixadas. */''}
+            ${sigefBadges(pa.pcs)}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${/* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
                   "Registrar parecer" e "Encaminhar ao C.I." saíram da linha e viraram os
@@ -11887,6 +11945,10 @@ function renderPlan(rows) {
             ${trNova ? `<span title="Assumida ${planHaQuantoTempo(assumida)} — some sozinha depois de ${DIAS_TR_NOVA} dias"
               style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--az);color:#fff;">✨ NOVA</span>` : ''}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
+            ${/* A CONFERÊNCIA COM O SIGEF na FILA — a TR recolhida também mostra, senão a
+                  pendência só apareceria para quem já abriu o cartão. As PCs vêm de todas as
+                  parciais da TR; o componente é o mesmo do cartão da parcela. */''}
+            ${sigefBadges(r.parciais.flatMap(pa => pa.pcs))}
           </div>
           <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
             ${escHtml(r.entidade||'—')}${assumida ? ` · assumida em ${planData(assumida)}${trNova ? ` (${planHaQuantoTempo(assumida)})` : ''}` : ''}${planInicioAnalise(r)}
@@ -17680,6 +17742,242 @@ function estLogExportarCSV() {
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
   a.download=`estornos_realizados_${dt}.csv`; a.click()
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CONFERÊNCIA COM O SIGEF — as tags, e a declaração do analista (27/08/2026)
+//
+//  ⚠️ A TAG NÃO É CALCULADA AQUI. Ela chega pronta em `pc.sigef_tag`, do servidor, pela
+//  expressão de `lib/sigef.js`. Classificar de novo na tela seria a segunda cópia da regra —
+//  e a segunda cópia é sempre a que fica velha (foi o que aconteceu com o `MAPA_PLAN_EST`).
+//
+//  ⚠️ E O TEXTO DE CADA SITUAÇÃO ESTÁ AQUI, UMA VEZ SÓ. As quatro telas que mostram a tag
+//  chamam `sigefBadges()`; o balão de "?" lê deste mesmo objeto. Copiar a frase para o cartão
+//  faria as duas divergirem no dia em que uma fosse ajustada.
+// ══════════════════════════════════════════════════════════════════════════════
+const SIGEF_TAGS = {
+  SEM_REGISTRO_SIGEF: {
+    rotulo: 'Sem registro no SIGEF', cor: '#991B1B', fundo: '#FDECEC', borda: '#F2C6C6', declara: true,
+    titulo: 'Sem registro no SIGEF',
+    texto: 'Esta prestação consta como baixada no sistema, mas não aparece no extrato do SIGEF enviado pela CGE. Verifique se o parecer foi registrado no SIGEF, e não apenas anexado ao SGPe. Depois de registrar, declare abaixo — a conferência acontece na próxima extração.'
+  },
+  ABERTA_COM_BAIXA_SIGEF: {
+    rotulo: 'Baixada no SIGEF, aberta aqui', cor: '#8A6100', fundo: '#FDF6E7', borda: '#EFDCA6', declara: false,
+    titulo: 'Baixada no SIGEF, aberta aqui',
+    texto: 'O SIGEF registra esta prestação como baixada, mas ela continua aberta aqui. Confirme o parecer no sistema para que a baixa e a produtividade fiquem registradas.'
+  },
+  VERIFICAR_FINAL: {
+    rotulo: 'Verificar registro no SIGEF', cor: '#1A4E8A', fundo: '#EAF1F9', borda: '#BFD5EC', declara: true,
+    titulo: 'Verificar registro no SIGEF',
+    texto: 'A prestação final não aparece no extrato da CGE, que lista apenas as aprovadas pelo Secretário. Confirme no SIGEF se o parecer está registrado e declare abaixo.'
+  },
+  REGISTRO_DECLARADO: {
+    rotulo: 'Registro declarado', cor: '#5B6B62', fundo: '#F1F4F2', borda: '#D8DFDB', declara: false,
+    titulo: 'Registro declarado',
+    // ⚠️ O `[data]` É SUBSTITUÍDO em `sigefAbrir`. Ele fica no texto, e não concatenado fora,
+    // para que a frase continue legível e editável num lugar só.
+    texto: 'Você declarou o registro em [data]. A conferência acontece quando a CGE enviar a próxima extração.'
+  },
+}
+
+// As duas respostas. Os códigos são os mesmos de `lib/sigef.js` — o servidor recusa qualquer
+// outro, então um erro de digitação aqui vira 400 e não dado torto.
+const SIGEF_RESPOSTAS = [
+  { cod: 'ja_estava',       rotulo: 'Já estava registrado no SIGEF' },
+  { cod: 'registrei_agora', rotulo: 'Não estava; registrei agora' },
+]
+
+/** As tags distintas de um conjunto de PCs, na ordem em que devem aparecer. */
+function sigefTagsDe(pcs) {
+  const vistas = new Set((pcs || []).map(p => p && p.sigef_tag).filter(Boolean))
+  return Object.keys(SIGEF_TAGS).filter(t => vistas.has(t))
+}
+
+/**
+ * UMA etiqueta. É a única função que desenha a tag — as três chamadoras abaixo só decidem
+ * QUANTAS e com que contagem.
+ *
+ * ⚠️ O "?" É UM BOTÃO, e não um `title`: o texto tem quatro linhas e diz o que fazer. Um
+ * balão do sistema some quando o ponteiro sai, e não dá para copiar nem clicar dentro.
+ */
+function _sigefBadge(tag, opts) {
+  const d = SIGEF_TAGS[tag]; if (!d) return ''
+  const o = opts || {}
+  const chave = escHtml(JSON.stringify(o.codigos || []))
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;
+      padding:3px 8px;border-radius:20px;background:${d.fundo};color:${d.cor};border:1px solid ${d.borda};
+      white-space:nowrap;">${escHtml(d.rotulo)}${o.conta || ''}${o.mini ? '' : `<button title="O que é isto?"
+      onclick="event.stopPropagation();sigefAbrir('${tag}',${chave})"
+      style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
+      border-radius:50%;background:${d.cor};color:${d.fundo};font-size:9px;font-weight:800;">?</button>`}</span>`
+}
+
+/**
+ * O componente, a partir das PCs. Fila do analista, cartão da parcela e relatórios.
+ *
+ * @param pcs   as PCs do grupo (uma parcela, uma TR, uma linha de relatório)
+ * @param opts  { mini: true } para a versão compacta de tabela, sem o "?"
+ */
+function sigefBadges(pcs, opts) {
+  const o = opts || {}
+  const tags = sigefTagsDe(pcs)
+  if (!tags.length) return ''
+  const total = (pcs || []).length
+  return tags.map(t => {
+    // ⚠️ QUANTAS PCs DO GRUPO ESTÃO NESTA SITUAÇÃO. Sem a fração, uma parcela de 7 PCs com 2
+    // pendentes parece inteira pendente — e o analista iria conferir as sete.
+    const alvo = (pcs || []).filter(p => p && p.sigef_tag === t)
+    return _sigefBadge(t, {
+      mini: o.mini,
+      conta: (total > 1 && alvo.length < total) ? ` ${alvo.length}/${total}` : '',
+      codigos: alvo.map(p => p.codigo_pc),
+    })
+  }).join(' ')
+}
+
+/**
+ * O mesmo componente a partir dos CÓDIGOS já agregados — é como o Estoque recebe, porque
+ * `GET /prestacoes_contas/resumo_tr` agrupa por TR e não devolve PC nenhuma.
+ *
+ * ⚠️ SEM O "?" AQUI, de propósito: sem os `codigo_pc` não há o que declarar, e um botão que
+ * abrisse o modal sem alvo seria botão que aceita clique e não responde (armadilha 15). A
+ * explicação continua a um clique, no cartão da parcela.
+ */
+function sigefBadgesDeTags(tags, n) {
+  const lista = Object.keys(SIGEF_TAGS).filter(t => (tags || []).includes(t))
+  if (!lista.length) return ''
+  return lista.map(t => _sigefBadge(t, { mini: true, conta: lista.length === 1 && n ? ` ${n}` : '' })).join(' ')
+}
+
+/**
+ * O mesmo componente a partir de um mapa { TAG: quantas } — é como a Produtividade recebe,
+ * porque lá a linha é o ANALISTA e o que importa é quantas PCs dele estão em cada situação.
+ *
+ * ⚠️ TAMBÉM SEM O "?": declarar é ato sobre uma PC, e nesta tela não há PC nenhuma na mão. O
+ * caminho é a Minha Planilha, que é onde o analista já trabalha a parcela.
+ */
+function sigefBadgesContagem(mapa) {
+  const m = mapa || {}
+  return Object.keys(SIGEF_TAGS).filter(t => m[t]).map(t =>
+    _sigefBadge(t, { mini: true, conta: ` ${m[t]}` })).join(' ')
+}
+
+// O estado do modal. Uma declaração por vez, e ela some ao fechar.
+let _sigefTag = null, _sigefPcs = [], _sigefResp = null
+
+/**
+ * As PCs que a tela já tem em mão, achatadas de `window._planDadosCache` (TR → parcial → pcs).
+ *
+ * ⚠️ Ela pode vir VAZIA, e isso é normal: o modal também abre a partir do Estoque e dos
+ * relatórios, onde a Minha Planilha nunca foi carregada. Quando vem vazia o modal mostra a
+ * explicação e o formulário — o que falta é só o histórico, que é informação a mais.
+ */
+function sigefPcsCache() {
+  const trs = window._planDadosCache || []
+  const out = []
+  trs.forEach(t => (t.parciais || []).forEach(pa => (pa.pcs || []).forEach(p => out.push(p))))
+  return out
+}
+
+/** Abre a explicação — e, nas duas tags que declaram, o formulário. */
+function sigefAbrir(tag, codigos) {
+  const d = SIGEF_TAGS[tag]; if (!d) return
+  _sigefTag = tag; _sigefPcs = codigos || []; _sigefResp = null
+
+  // A data declarada, para o texto do cinza. Vem das PCs que a tela já tem em mão.
+  const pc = sigefPcsCache().find(p => _sigefPcs.includes(p.codigo_pc) && p.sigef_registro_em)
+  const dt = pc ? planDataTs(pc.sigef_registro_em) : '—'
+
+  document.getElementById('sigefTitulo').textContent = d.titulo
+  document.getElementById('sigefCab').style.background = d.fundo
+  document.getElementById('sigefCab').style.color = d.cor
+  const box = document.getElementById('sigefTexto')
+  box.style.background = d.fundo; box.style.color = d.cor; box.style.borderColor = d.borda
+  box.textContent = d.texto.replace('[data]', dt)
+
+  // ⚠️ SÓ AS DUAS QUE DECLARAM MOSTRAM O FORMULÁRIO. Na âmbar o SIGEF já registrou: o que
+  // falta é o parecer aqui, e o servidor responde 409 se alguém insistir.
+  const mostra = !!d.declara
+  document.getElementById('sigefDeclBox').style.display = mostra ? '' : 'none'
+  const btn = document.getElementById('btnSigefDecl')
+  btn.style.display = mostra ? '' : 'none'
+  if (mostra) {
+    document.getElementById('sigefRespostas').innerHTML = SIGEF_RESPOSTAS.map(r =>
+      `<label style="display:flex;gap:7px;align-items:center;cursor:pointer;padding:5px 0;">
+         <input type="radio" name="sigefResp" value="${r.cod}" onchange="_sigefResp='${r.cod}';sigefPintarBotao()"
+           style="width:auto;margin:0;"> <span>${escHtml(r.rotulo)}</span></label>`).join('')
+    document.getElementById('sigefData').value = ''
+    document.getElementById('sigefAlvo').textContent =
+      _sigefPcs.length === 1 ? `Vale para a PC ${_sigefPcs[0]}.`
+        : `Vale para as ${_sigefPcs.length} PCs desta parcela nesta situação.`
+    sigefPintarBotao()
+  }
+
+  // ⚠️ O HISTÓRICO APARECE SEMPRE QUE EXISTIR. "A declaração não se desmarca: se o analista
+  // errar, ele declara de novo e o histórico guarda as duas" — então as duas têm de ser
+  // visíveis, ou a segunda pareceria ter apagado a primeira.
+  const comDecl = sigefPcsCache().filter(p => _sigefPcs.includes(p.codigo_pc)
+    && Array.isArray(p.sigef_declaracao) && p.sigef_declaracao.length)
+  const todas = comDecl.length ? comDecl[0].sigef_declaracao : []
+  document.getElementById('sigefHistorico').innerHTML = !todas.length ? '' :
+    `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">Declarações desta PC</div>`
+    + todas.slice().reverse().map(x => `<div style="font-size:11px;color:var(--ct);border-left:2px solid var(--cl);padding:3px 0 3px 8px;margin-bottom:4px;">
+        <b>${escHtml(x.resposta_rotulo || x.resposta || '')}</b> — registro em ${escHtml(String(x.data_registro||'—'))}<br>
+        <span style="color:#9AA8A0;">por ${escHtml(x.declarado_por_nome || ('id '+x.declarado_por))} · ${planDataTs(x.declarado_em)}</span>
+      </div>`).join('')
+
+  document.getElementById('moSigef').classList.add('open')
+}
+
+/** ⚠️ O botão NASCE DESABILITADO e só acende com resposta E data (armadilha 15). */
+function sigefPintarBotao() {
+  const btn = document.getElementById('btnSigefDecl')
+  const dt = (document.getElementById('sigefData') || {}).value
+  const falta = !_sigefResp ? 'Escolha uma das duas respostas.'
+    : !dt ? 'Informe a data do registro no SIGEF.' : ''
+  btn.disabled = !!falta
+  btn.title = falta
+}
+
+/**
+ * Grava a declaração.
+ *
+ * ⚠️ UMA CHAMADA POR PC, e é o mesmo desenho do encaminhamento ao C.I.: a conversa é por PC,
+ * mas quem escreve é o analista, uma vez, na parcela. A rota é por `codigo_pc` — a unidade da
+ * classificação também é a PC (são 353 PCs, não 353 parcelas).
+ *
+ * ⚠️ E O RESULTADO É CONTADO. Se uma das chamadas falhar, a tela diz quantas foram e quantas
+ * não — declarar de novo é permitido, então o conserto é repetir. Dizer "pronto" sem conferir
+ * seria a armadilha 15 pelo avesso: o botão respondeu, e o dado não foi.
+ */
+async function sigefDeclarar() {
+  const btn = document.getElementById('btnSigefDecl')
+  const resposta = _sigefResp
+  const data_registro = document.getElementById('sigefData').value
+  if (!resposta || !data_registro) return
+  btn.disabled = true; btn.textContent = 'Declarando...'
+
+  let feitas = 0; const erros = []
+  for (const cod of _sigefPcs) {
+    try {
+      const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(cod)}/sigef_declaracao`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resposta, data_registro, usuario_id: U.id })
+      })
+      const j = await r.json()
+      if (j.error) erros.push(`${cod}: ${j.error.message}`); else feitas++
+    } catch (e) { erros.push(`${cod}: ${e.message}`) }
+  }
+
+  btn.textContent = '✓ Declarar'
+  if (erros.length) {
+    toast(`${feitas} declarada(s), ${erros.length} com erro. ${erros[0]}`, 'err')
+    btn.disabled = false
+    return
+  }
+  fm('moSigef')
+  toast(`Registro declarado em ${feitas} PC${feitas > 1 ? 's' : ''}.`)
+  if (typeof buscarPlan === 'function') buscarPlan()
 }
 
 function toast(msg, tipo='ok') {
