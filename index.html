@@ -1504,7 +1504,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
      nada é recriado com data nova. -->
 <div class="mo" id="moDesfazerPx">
   <div class="mc">
-    <div class="mch v"><h3>⤺ Desfazer a puxada do Controle Interno</h3><button class="mcx" onclick="dpxFechar()">✕</button></div>
+    <div class="mch v"><h3>↺ Desfazer a puxada do Controle Interno</h3><button class="mcx" onclick="dpxFechar()">✕</button></div>
     <div class="mcb">
       <div class="mci" id="dpxInfo"></div>
       <div style="background:var(--vbg);border:1.5px solid var(--v);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11.5px;color:var(--te);line-height:1.6;">
@@ -1525,7 +1525,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       <div class="mcbt">
         <button class="mccn" onclick="dpxFechar()">Cancelar</button>
         <button class="mcok" id="dpxBtn" onclick="dpxSalvar()" disabled
-          title="Escreva o motivo">⤺ Desfazer</button>
+          title="Escreva o motivo">↺ Desfazer</button>
       </div>
     </div>
   </div>
@@ -11269,7 +11269,7 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // que a pessoa precisa para saber o que fazer em vez disso.
     const dp = d.desfazer_puxar_ci;
     if (dp)
-      linhas.push(acItem('Desfazer a puxada do C.I.', '⤺',
+      linhas.push(acItem('Desfazer a puxada do C.I.', '↺',
         dp.pode ? 'dpxAbrir()' : '', !!dp.pode, 'verde', dp.motivo));
 
     // ── GRUPO 3: CONSULTA E CADASTRO (roxo e cinza) ─────────────────────────
@@ -11578,7 +11578,7 @@ async function dpxSalvar() {
     msg.textContent = e.message;
     msg.style.display = '';
   } finally {
-    bt.disabled = false; bt.textContent = '⤺ Desfazer';
+    bt.disabled = false; bt.textContent = '↺ Desfazer';
     dpxContar();
   }
 }
