@@ -12362,6 +12362,49 @@ function pCiConversaHtml(msgs) {
   }).map(m => ciBolha(m)).join('')
 }
 
+/**
+ * UMA BOLHA DA CONVERSA COM O C.I. — restaurada de `b86ceda` em 28/08/2026.
+ *
+ * ⚠️ ELA SUMIU EM `36c6000` (25/08, "a tela do C.I. volta a ser POR PC"), que reescreveu 1.454
+ * linhas e levou a DEFINIÇÃO junto, deixando a chamada órfã em `pCiConversaHtml`. O resultado
+ * era um `ReferenceError` — mas só na parcela que TEM mensagem, porque `pCiConversaHtml`
+ * retorna antes quando a lista está vazia. Como as únicas mensagens do sistema são as 129 da
+ * reabertura, o defeito ficou invisível por três dias e apareceu na planilha de quem teve PC
+ * devolvida pelo C.I.
+ *
+ * ⚠️ E É POR ISSO QUE ELA VIVE AQUI, colada em `pCiConversaHtml`. Antes estava a 1.400 linhas
+ * de distância, num bloco de outra tela — e foi essa distância que deixou apagá-la sem que
+ * ninguém visse a chamada ficar sem dono.
+ */
+function ciBolha(m) {
+  const doCI = m.direcao === 'ci_para_analista'
+  const iniciais = (m.autor_nome || '?').split(' ').filter(Boolean).slice(0, 2)
+    .map((n) => n[0]).join('').toUpperCase()
+  // ⚠️ `criado_em` vem como texto ISO da rota; `new Date` sobre ele é seguro. Não usar
+  // `String(d).slice(0,10)` em lugar nenhum daqui — armadilha 25.
+  const quando = m.criado_em
+    ? new Date(m.criado_em).toLocaleString('pt-BR',
+      { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : ''
+  const papel = doCI ? 'C.I.' : (perfilLabel(m.autor_perfil) || 'Analista')
+  return `
+  <div style="display:flex;gap:9px;margin-bottom:11px;${doCI ? '' : 'flex-direction:row-reverse;'}">
+    <div style="width:31px;height:31px;border-radius:50%;background:${doCI ? '#8A6100' : '#5C7A6B'};
+                color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;
+                justify-content:center;flex-shrink:0;">${escHtml(iniciais)}</div>
+    <div style="max-width:78%;">
+      <div style="font-size:10.5px;color:var(--ct);margin-bottom:3px;${doCI ? '' : 'text-align:right;'}">
+        <strong style="color:var(--te);">${escHtml(m.autor_nome || '—')}</strong>
+        · ${escHtml(papel)} · ${quando}${m.rodada > 1 ? ` · rodada ${m.rodada}` : ''}
+      </div>
+      <div style="background:${doCI ? '#FFF3D6' : '#F1F5F3'};
+                  border:1px solid ${doCI ? '#F0DDB0' : 'var(--cb)'};border-radius:9px;
+                  padding:9px 12px;font-size:12.5px;line-height:1.5;
+                  white-space:pre-line;">${escHtml(m.texto || '')}</div>
+    </div>
+  </div>`
+}
+
 /** Busca a conversa das parcelas que estão no ciclo do CI, depois da tela pintada. */
 async function pCiCarregarConversas(rows) {
   const alvos = []
