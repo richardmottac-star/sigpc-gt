@@ -12397,6 +12397,18 @@ function pCiBloco(r, pa) {
   </div>`
 }
 
+/**
+ * A conversa do C.I. — TODAS as rodadas, na ordem em que foram escritas.
+ *
+ * ⚠️ NÃO FILTRE POR RODADA AQUI. A mensagem de devolução fica UMA rodada atrás da PC — é a
+ * regra, e ela está escrita em `lib/ci.js`, no `sigpc-api`: o C.I. escreve na rodada corrente
+ * e o `devolver` sobe a rodada logo depois. Casar `m.rodada` com `pa.ci_rodada` acha ZERO, e
+ * zero mensagem parece "o C.I. não disse nada" — o oposto do que aconteceu. Medido em 28/08:
+ * 129 de 129 mensagens em `rodada = 1` com a PC em `ci_rodada = 2`, em 46 TRs.
+ *
+ * ⚠️ A ordem é `criado_em`, que é como a rota devolve. A rodada diz em que volta a mensagem
+ * nasceu; quem responde "o que veio antes" é o relógio.
+ */
 function pCiConversaHtml(msgs) {
   if(!msgs || !msgs.length)
     return '<div style="font-size:11.5px;color:var(--ct);">Nada ainda. O parecer está no SIGEF.</div>'
