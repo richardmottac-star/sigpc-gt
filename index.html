@@ -278,7 +278,9 @@ tr:last-child td{border-bottom:none;}
 .prod-abrir:active{transform:translateY(3px);box-shadow:0 0 0 #173404;}
 /* O card do dispensado — o unico cinza da grade. A borda esquerda vence a do grupo por
    especificidade: `.prod-card.prod-disp` tem duas classes contra o seletor de atributo. */
-.prod-card.prod-disp{background:#F5F5F2;}
+/* ⚠️ O `overflow:hidden` E O QUE FAZ A FAIXA ENCOSTAR NO CANTO. Ela sai do padding por margem
+   negativa; sem isto, o retângulo dela vaza por cima do border-radius do card. */
+.prod-card.prod-disp{background:#F5F5F2;overflow:hidden;}
 .prod-card.prod-disp[data-grupo]{border-left:4px solid #B8B8B2;}
 .prod-disp .prod-nome{color:#6B6B65;}
 
@@ -7679,6 +7681,12 @@ const PROD_SIT = [
 
 const RAIO_ANEL = 52
 const VOLTA_ANEL = 2 * Math.PI * RAIO_ANEL      // 326.73
+// O anel PEQUENO dos cards da grade (28/08/2026): r = 43 num viewBox de 100, renderizado em
+// 52px. ⚠️ A volta é arredondada para 270 de propósito — é o valor que vai no `dasharray` e no
+// `dashoffset`, e os dois têm de sair da MESMA constante. Calcular um e escrever o outro à mão
+// deixaria o anel parando um fio antes do fim em 100%, e ninguém acharia o motivo.
+const RAIO_MINI = 43
+const VOLTA_MINI = 270                          // ≈ 2π·43 = 270,18
 
 /** As iniciais do círculo — no máximo duas, do primeiro e do último nome. */
 function prodIniciais(nome) {
@@ -7978,30 +7986,50 @@ function prodRender(dados) {
       // aqui fazia sete informações competirem pelo mesmo olhar. O que fica é o que responde
       // "como está esta pessoa": nome, número conferido, percentual, barra.
       const disp = ehDispensado(u)
+      // ⚠️ O ANEL SUBSTITUIU A BARRA (28/08/2026). `VOLTA_MINI` é a circunferência de r=43 num
+      // viewBox de 100 — 270 —, e é ela que o `dashoffset` consome. O SVG é desenhado em 100 e
+      // renderizado em 52px: assim o `stroke-width:9` fica proporcional ao anel grande do card
+      // aberto, sem precisar de um raio quebrado.
+      //
+      // ⚠️ O PERCENTUAL NÃO VAI DENTRO DO SVG. O `rotate(-90deg)` que põe o zero no topo giraria
+      // o texto junto — ele fica num `<span>` posicionado por cima, fora da rotação.
+      const anelOffset = VOLTA_MINI * (1 - Math.min(1, (pct || 0) / 100))
       return `<div class="prod-card${disp ? ' prod-disp' : ''}" data-grupo="${grupo||''}">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;">
+        ${/* ⚠️ A FAIXA ATRAVESSA O CARD INTEIRO. As margens negativas comem o padding de 14px,
+              e é o `overflow:hidden` de `.prod-disp` que faz ela encostar no canto arredondado
+              em vez de vazar por cima dele. */''}
+        ${disp ? `<div style="margin:-14px -14px 11px;background:#6B6B65;color:#F2F2EF;
+            font-size:11px;font-weight:500;padding:6px 14px;display:flex;align-items:center;gap:6px;
+            letter-spacing:.02em;">
+            <span style="font-size:11px;line-height:1;">🔒</span>
+            DISPENSADO EM ${dataBr(u.data_saida)}${u.portaria ? ' · PORTARIA ' + escHtml(u.portaria) : ''}
+          </div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px;">
           <div class="prod-nome" style="margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             ${u.nome} ${tagPessoa(u)}</div>
           <span style="font-size:9px;color:var(--ct);white-space:nowrap;flex:0 0 auto;">G${grupo||'?'}</span>
         </div>
-        <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;">
-          <span style="font-size:27px;font-weight:600;line-height:1;color:${disp ? '#6B6B65' : cor};"
-            >${conta}</span>
-          ${disp
-            ? `<span style="font-size:11.5px;color:#6B6B65;">congeladas</span>
-               <span style="margin-left:auto;font-size:11px;color:#6B6B65;white-space:nowrap;"
-                 >${dataBr(u.data_saida)}</span>`
-            : `<span style="font-size:11.5px;color:var(--ct);">de ${meta||'—'}</span>
-               <span style="margin-left:auto;font-size:14px;font-weight:700;color:${cor};"
-                 >${pctTxt}</span>`}
-        </div>
-        ${/* ⚠️ A barra do dispensado fica VAZIA, e nao em 0% de vermelho: nao ha meta a bater,
-              e uma barra vermelha diria que ele nao bateu. */''}
-        <div class="prod-bar-wrap" style="height:5px;margin:9px 0 0;">
-          <div class="prod-bar" style="height:5px;width:${disp ? 0 : (pct||0)}%;background:${cor}"></div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:11px;">
-          <button class="prod-abrir" onclick="prodAbrirCard(${u.id})">Abrir</button>
+        <div style="display:flex;align-items:center;gap:13px;">
+          <div style="position:relative;width:52px;height:52px;flex:0 0 52px;">
+            <svg width="52" height="52" viewBox="0 0 100 100" style="transform:rotate(-90deg);display:block;">
+              <circle cx="50" cy="50" r="43" fill="none"
+                stroke="${disp ? '#E4E4E0' : 'var(--surface-1, #E4EAE6)'}" stroke-width="9"/>
+              ${/* ⚠️ O ANEL DO DISPENSADO FICA VAZIO — só o círculo de fundo. Um anel em 0%
+                    colorido diria "não bateu a meta", quando o certo é não haver meta. */''}
+              ${disp ? '' : `<circle cx="50" cy="50" r="43" fill="none" stroke="${cor}" stroke-width="9"
+                stroke-linecap="round" stroke-dasharray="${VOLTA_MINI}"
+                stroke-dashoffset="${anelOffset.toFixed(2)}"/>`}
+            </svg>
+            <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-size:11.5px;font-weight:500;color:${disp ? '#6B6B65' : cor};">${disp ? '—' : pctTxt}</span>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:23px;font-weight:500;line-height:1;color:${disp ? '#6B6B65' : cor};"
+              >${conta}</div>
+            <div style="font-size:11.5px;color:${disp ? '#6B6B65' : 'var(--ct)'};margin-top:3px;"
+              >${disp ? 'congeladas' : 'de ' + (meta || '—')}</div>
+          </div>
+          <button class="prod-abrir" style="flex:0 0 auto;" onclick="prodAbrirCard(${u.id})">Abrir</button>
         </div>
       </div>`
     }).join('')}</div>`
