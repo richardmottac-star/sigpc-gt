@@ -10094,6 +10094,12 @@ async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
                 nunca no recorte que tinha acabado de prometer. */''}
           <option value="venc365">Vencidas há mais de 1 ano</option>
           <option value="30d">A vencer em 30 dias</option>
+          ${/* ⚠️ ESTA OPÇÃO NASCEU EM 28/08/2026 pelo MESMO motivo da de cima: a faixa cinza
+                conta "acervo importado, sem prazo definido" — `dt_limite_pc < CORTE_PRAZO` —
+                e `venc365` é outro conjunto. Uma PC importada com vencimento em 10/2025 tem
+                331 dias: entra na faixa e NÃO entraria no `venc365`. Reaproveitar o filtro
+                pareceria economia e o botão voltaria a prometer um número e entregar outro. */''}
+          <option value="importado">Acervo importado, sem prazo definido</option>
         </select>
       </div>
       ${/* O ÚNICO "Buscar" da tela, e vem do helper que as outras cinco telas usam. */''}
@@ -10175,10 +10181,51 @@ function renderAlertasPrazo(alertas) {
   const { contagem } = alertas
   const vencidas = (contagem.vencida365 || 0) + (contagem.vencidaMenos365 || 0)
   const aVencer = contagem.aVencer30 || 0
+  // ⚠️ O BOTÃO PROMETE O QUE A LISTA ENTREGA (28/08/2026). A Minha Planilha lista TR; o botão
+  // dizia "Ver as 214" e entregava 41 TRs, e o 214 não reaparecia em lugar nenhum depois do
+  // clique. Quem conta as TRs é o SERVIDOR, que já tem as linhas — recontar aqui seria uma
+  // segunda definição do mesmo recorte, e um dia divergiria da primeira.
+  const trs = alertas.trs || {}
+  const trs365 = trs.vencida365 || 0
+  const trs30 = trs.aVencer30 || 0
+  // O corte do prazo, para o filtro do acervo importado usar o MESMO critério da contagem.
+  if(alertas.corte_prazo) _planCortePrazo = alertas.corte_prazo
+  const imp = alertas.importado || { pcs: 0, trs: 0 }
 
   const faixas = []
 
-  // ── Faixa 1: o passivo. Só aparece se houver. ──────────────────────────────
+  // ── Faixa 0: o acervo importado. Cinza, e NÃO é alerta. ────────────────────
+  // ⚠️ ELA NASCEU EM 28/08/2026 NO LUGAR DA FAIXA VERMELHA. O alerta contava como "prazo
+  // vencido" 9.616 PCs que nunca nasceram no sistema — 3.253 delas "vencendo" no mesmo dia,
+  // 30/01/2021, porque o `dt_limite_pc` do acervo antigo é cálculo em lote e não prazo
+  // (decisão do Richard, 10/08/2026). Com o `CORTE_PRAZO` aplicado, a vermelha zera para
+  // todos os 44 analistas.
+  //
+  // ⚠️ E A FAIXA NÃO SOME, de propósito. Sumir deixaria o analista sem saber se o alerta foi
+  // conferido ou se parou de rodar, e apagaria da tela dele um acervo que continua no nome
+  // dele. Ela vira CINZA e diz o que aquilo é — o número continua visível, o alarme não.
+  if(imp.pcs) {
+    faixas.push(`
+    <div style="display:flex;align-items:center;gap:11px;background:#F1F4F2;border:1.5px solid var(--cb);
+                border-radius:9px;padding:10px 14px;">
+      <span style="font-size:16px;line-height:1;">🗂️</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12.5px;font-weight:700;color:#5B6B62;">
+          ${imp.pcs} prestaç${imp.pcs>1?'ões':'ão'} de acervo importado, sem prazo definido no sistema</div>
+        <div style="font-size:10.5px;color:#8A968F;margin-top:1px;">
+          O prazo dessas prestações veio da carga e não é confiável.
+          O alerta volta quando houver data informada no sistema.</div>
+      </div>
+      <button class="btn-acao" onclick="planIrParaImportadas()"
+        style="background:#fff;color:#5B6B62;border:1.5px solid var(--cb);font-weight:700;white-space:nowrap;"
+        title="Filtra a lista pelo acervo importado e rola até ela"
+        >Ver ${imp.trs} TR${imp.trs>1?'s':''}</button>
+    </div>`)
+  }
+
+  // ── Faixa 1: o passivo REAL. Só aparece se houver prazo definido no sistema. ─
+  // ⚠️ Ela volta sozinha assim que existir PC com `dt_limite_pc` a partir do corte — não há
+  // nada a religar. Hoje, medido em 28/08, ela não aparece para ninguém.
   if(contagem.vencida365) {
     faixas.push(`
     <div style="display:flex;align-items:center;gap:11px;background:#FFEBEE;border:1.5px solid #E5A3A3;
@@ -10195,7 +10242,7 @@ function renderAlertasPrazo(alertas) {
       </div>
       <button class="btn-acao" onclick="planIrParaVencidas()"
         style="background:#C62828;color:#fff;border-color:#C62828;font-weight:800;white-space:nowrap;"
-        title="Filtra a lista pelas vencidas e rola até ela">Ver as ${contagem.vencida365}</button>
+        title="Filtra a lista pelas vencidas e rola até ela">Ver ${trs365} TR${trs365>1?'s':''}</button>
     </div>`)
   }
 
@@ -10211,7 +10258,7 @@ function renderAlertasPrazo(alertas) {
       </div>
       ${aVencer ? `<button class="btn-acao" onclick="planIrPara30d()"
         style="background:#fff;color:var(--te);border:1.5px solid var(--cl);font-weight:700;white-space:nowrap;"
-        title="Filtra a lista pelas que vencem em 30 dias">Ver as ${aVencer}</button>` : ''}
+        title="Filtra a lista pelas que vencem em 30 dias">Ver ${trs30} TR${trs30>1?'s':''}</button>` : ''}
     </div>`)
 
   cont.innerHTML = faixas.join('')
@@ -10236,6 +10283,12 @@ function renderAlertasPrazo(alertas) {
 function planIrParaVencidas() { return planFiltrarPrazo('venc365') }
 /** Aplica o filtro das que vencem em 30 dias e rola até a lista. */
 function planIrPara30d() { return planFiltrarPrazo('30d') }
+/** Aplica o filtro do acervo importado — o mesmo conjunto que a faixa cinza conta. */
+function planIrParaImportadas() { return planFiltrarPrazo('importado') }
+// ⚠️ O CORTE DO PRAZO VEM DO SERVIDOR, e a tela NÃO tem cópia dele. Foi a duplicação em
+// potencial que deixou o sino e o alerta discordarem por 18 dias: o sino calava sobre o
+// acervo antigo e esta tela mostrava as mesmas PCs como passivo do analista.
+let _planCortePrazo = null
 
 /**
  * Tira o recorte de prazo e de situação, e devolve a lista inteira.
@@ -10358,7 +10411,12 @@ async function buscarPlan() {
         // `prazoDias` é a MESMA conta que pinta a coluna e alimenta o balão — era uma
         // terceira cópia local (`diasDe`) até 09/08/2026. As faixas do filtro de prazo,
         // logo abaixo, são as mesmas de `prazoSituacao`: >0 vencida, entre -30 e 0 a vencer.
-        const dias = pa.pcs.map(x => prazoDias(x.dt_limite_pc)).filter(x => x !== null)
+        // ⚠️ SÓ AS ABERTAS ENTRAM NO `maxDias` (28/08/2026). A rota `alertas_prazo` exige
+        // `status <> 'baixada'`, e aqui o máximo era tirado de TODAS as PCs da parcela —
+        // então numa parcela mista a PC JÁ BAIXADA puxava a parcela inteira para dentro do
+        // recorte de vencidas. O botão prometia um conjunto e o filtro entregava outro.
+        const dias = pa.pcs.filter(x => x.baixada !== true)
+          .map(x => prazoDias(x.dt_limite_pc)).filter(x => x !== null)
         return {
           num: pa.num, pcs: pa.pcs, qtd: pa.pcs.length, valor: pa.valor, baixada,
           soFinal: pa.pcs.every(planEhFinal),
@@ -10420,6 +10478,16 @@ async function buscarPlan() {
         // volta a prometer um número e a entregar outro.
         if(prazo === 'venc365' && !(pa.maxDias > 365)) return false
         if(prazo === '30d'  && prazoFaixa(pa.maxDias) !== 'avencer') return false
+        // ⚠️ O RECORTE DA FAIXA CINZA: `dt_limite_pc` ANTERIOR ao corte do prazo. É o MESMO
+        // critério que a rota usa para contar, e o corte vem DELA (`_planCortePrazo`) — a tela
+        // não tem cópia da data. Sem o corte carregado, a opção não recorta nada em vez de
+        // recortar errado: um filtro que inventa a própria data é o defeito que ele corrige.
+        if(prazo === 'importado') {
+          if(!_planCortePrazo) return true
+          const temImportada = (pa.pcs||[]).some(x => x.baixada !== true && x.dt_limite_pc
+            && String(diaBr(x.dt_limite_pc) || '') < _planCortePrazo)
+          if(!temImportada) return false
+        }
         return true
       })})).filter(t => t.parciais.length)
     }
@@ -10945,7 +11013,8 @@ function planRenderBarra(todas) {
   //
   // Os cards continuam sendo o TOTAL de propósito: eles respondem "quanto eu tenho", não
   // "quanto o filtro trouxe". Quem responde o recorte é esta etiqueta, ao lado da lista.
-  const PRAZO_ROTULO = { venc:'Vencidas', venc365:'Vencidas há mais de 1 ano', '30d':'A vencer em 30 dias' }
+  const PRAZO_ROTULO = { venc:'Vencidas', venc365:'Vencidas há mais de 1 ano', '30d':'A vencer em 30 dias',
+    importado:'Acervo importado, sem prazo definido' }
   const prazoAtivo = document.getElementById('plPrazo')?.value || ''
   const sitAtiva   = document.getElementById('plSit')?.value || ''
   const recorte = (prazoAtivo || sitAtiva) ? `

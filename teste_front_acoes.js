@@ -180,7 +180,12 @@ conf(!/max-height:280px;overflow-y:auto/.test(html), 'e o scroll interno junto')
 conf(/com prazo vencido há mais de um ano/.test(html), 'faixa 1: o passivo historico');
 conf(/Passivo histórico — a maior parte veio da carga inicial/.test(html),
      'com a linha que impede ler o numero como culpa de quem abriu a tela');
-conf(/Ver as \$\{contagem\.vencida365\}/.test(html), 'e o botao que leva ao filtro');
+// ⚠️ O BOTAO PASSOU A PROMETER TRs EM 28/08/2026. Ele dizia "Ver as ${contagem.vencida365}",
+// que e um numero de PCs, e a lista que ele abre mostra TRs — o numero prometido nao
+// reaparecia em lugar nenhum depois do clique. O bot ao promete o que a lista entrega.
+conf(/Ver \$\{trs365\} TR/.test(html), 'e o botao que leva ao filtro, prometendo TRs');
+conf(/const trs365 = trs\.vencida365 \|\| 0/.test(html),
+     'e a contagem de TR vem do SERVIDOR, nao e recontada na tela');
 conf(/Nenhuma PC vence nos próximos 30 dias/.test(html),
      'faixa 2: aparece TAMBEM no zero — o zero e' + ' uma boa noticia, e some se nao for dita');
 // ⚠️ O botao nao monta consulta propria: mexe no MESMO <select> e chama o MESMO buscarPlan.
