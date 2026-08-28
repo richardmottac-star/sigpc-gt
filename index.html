@@ -7570,7 +7570,7 @@ async function prodCarregar() {
     const usuariosPorId = {}
     ;(todosUsers||[]).forEach(u => { if(contaProdutividade(u)) usuariosPorId[u.id] = u })
 
-    const [pcs, metaPorId] = await Promise.all([fetchTodasPCs(sid), fetchMetasVigentes()])
+    const [pcs, metaPorId] = await Promise.all([fetchTodasPCs(sid), fetchMetasVigentes(), carregarSubstituicoes()])
 
     // Agrega prestacoes_contas por analista_id (evita duplicar quem tem grafias diferentes de nome)
     const mapaStats = {}
@@ -7604,7 +7604,11 @@ async function prodCarregar() {
 
     _prodDados = Object.entries(mapaStats).map(([analistaId, stats]) => {
       const u = usuariosPorId[analistaId]
-      const meta = metaPorId[analistaId] || 0
+      // ⚠️ O DISPENSADO NÃO RECEBE META (28/08). Ele continua no relatório e continua com os
+      // números dele — o que sai é a meta, e com ela o percentual, o anel e o "faltam N".
+      // A soma do grupo cai junto porque a parcela dele virou zero: 46 metas viram 39, e a
+      // soma 5.068 vira 4.425. `metas_analistas` NÃO é alterada — a linha continua lá.
+      const meta = contaMeta(u) ? (metaPorId[analistaId] || 0) : 0
       // ⚠️ O PERCENTUAL SAI DA CONTA CONCILIADA, não de `baixadas`. É a regra de 27/08: a PC
       // pendente de conferência com o SIGEF não entra enquanto o analista não declarar.
       const pct = meta>0 ? Math.round(stats.conta/meta*100) : null
@@ -7701,16 +7705,27 @@ function prodCardGrande(d) {
     </div>`
   const seta = `<span style="color:#9AA8A0;font-size:17px;flex:0 0 auto;align-self:center;">→</span>`
 
+  // ⚠️ O CARD DO DISPENSADO É CINZA E NÃO TEM ANEL DE META. Um anel em 0% diria "não bateu a
+  // meta"; o certo é não haver meta a bater. O cabeçalho verde é o do analista em atividade —
+  // manter a mesma cor faria o card mentir por semelhança.
+  const disp = ehDispensado(u)
+  const subLinha = textoSubstituto(u)
+  const cabBg = disp ? '#4A544E' : '#173404'
+  const cabIni = disp ? '#6C7A72' : '#3B6D11'
+  const cabSub = disp ? '#D8DFDB' : '#C0DD97'
+
   return `
   <div style="background:#FCFDFC;border-radius:14px;box-shadow:var(--sombra);overflow:hidden;">
 
-    <div style="background:#173404;padding:15px 18px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
-      <span style="flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:#3B6D11;color:#EAF3DE;
+    <div style="background:${cabBg};padding:15px 18px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;">
+      <span style="flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:${cabIni};color:#EAF3DE;
         display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;">
         ${escHtml(prodIniciais(u.nome))}</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:17px;font-weight:500;color:#fff;line-height:1.25;">${escHtml(u.nome)}</div>
-        <div style="font-size:12px;color:#C0DD97;margin-top:1px;">
+        <div style="font-size:17px;font-weight:500;color:#fff;line-height:1.25;display:flex;
+             align-items:center;gap:8px;flex-wrap:wrap;">
+          ${escHtml(u.nome)} ${tagPessoa(u)}</div>
+        <div style="font-size:12px;color:${cabSub};margin-top:1px;">
           Grupo ${grupo || '—'} · coordenação de ${escHtml(coord || '—')}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
@@ -7725,6 +7740,29 @@ function prodCardGrande(d) {
           deixado a tela mentindo dos dois jeitos. */''}
     ${sigefFaixaProdutividade({ semReg, verFinal, ambar, pendencias, conta, seResolver, descontadas })}
 
+    ${/* A LINHA DO CONGELAMENTO — só no card do dispensado, e no lugar do anel de meta.
+          ⚠️ Ela diz "congelados", e não "encerrados": as PCs continuam com ele e o C.I. ainda
+          pode devolver parcela para correção. Congelado é parar de crescer, não acabar. */''}
+    ${disp ? `
+    <div style="padding:15px 18px;border-bottom:1px solid var(--cl);background:#F1F4F2;
+                border-left:4px solid #6C7A72;">
+      <div style="font-size:13px;font-weight:700;color:#3F4A44;">
+        Números congelados em ${dataBr(u.data_saida)}, data da dispensa.
+        ${(_subs.porDispensado.get(u.id) || [])[0]
+          ? 'Substituído por ' + escHtml((_subs.porDispensado.get(u.id) || [])[0].substituto_nome) + '.' : ''}</div>
+      <div style="font-size:12px;color:var(--ct);margin-top:5px;line-height:1.5;">
+        ${u.portaria ? 'Portaria ' + escHtml(u.portaria) + '. ' : ''}Sem meta a partir desta data.
+        As <b>${conta}</b> PC${conta === 1 ? '' : 's'} apuradas continuam atribuídas a
+        ${escHtml((u.nome || '').split(' ')[0])} — nada foi transferido.</div>
+    </div>` : ''}
+
+    ${subLinha ? `
+    <div style="padding:11px 18px;border-bottom:1px solid var(--cl);background:#EAF3DE;
+                border-left:4px solid #97C459;font-size:12.5px;color:#27500A;font-weight:600;">
+      ${escHtml((_subs.porSubstituto.get(u.id) || []).map(l =>
+        'Designado em ' + dataBr(l.data_publicacao) + ' em substituição a ' + l.dispensado_nome).join(' · '))}</div>` : ''}
+
+    ${disp ? '' : `
     <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;align-items:center;flex-wrap:wrap;">
       <svg width="150" height="150" viewBox="0 0 150 150" style="flex:0 0 150px;">
         <circle cx="75" cy="75" r="${RAIO_ANEL}" fill="none" stroke="var(--surface-1, #E4EAE6)" stroke-width="13"/>
@@ -7759,7 +7797,7 @@ function prodCardGrande(d) {
           O Quadro 2 do relatório CGE considera apenas as baixas dentro do período informado,
           então os percentuais podem divergir.</div>
       </div>
-    </div>
+    </div>`}
 
     <div style="padding:15px 18px;border-bottom:1px solid var(--cl);">
       <div style="font-size:13px;font-weight:600;color:var(--te);margin-bottom:10px;">
@@ -7903,7 +7941,7 @@ function prodRender(dados) {
       const pctTxt = pct===null ? '—' : pct+'%'
       return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="prodAbrirCard(${u.id})">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-          <div class="prod-nome">${u.nome}</div>
+          <div class="prod-nome">${u.nome} ${tagPessoa(u)}</div>
           <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
         </div>
         <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">Meta: ${meta||'—'}${meta?' PCs no período':''}</div>
@@ -7927,7 +7965,7 @@ function prodRender(dados) {
       const pctTxt = pct===null ? '—' : pct+'%'
       return `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
         <td style="font-size:11px;color:var(--ct);text-align:center;">${i+1}</td>
-        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="prodAbrirCard(${u.id})">${u.nome}</td>
+        <td style="font-weight:700;font-size:12px;cursor:pointer;color:var(--v);" onclick="prodAbrirCard(${u.id})">${u.nome} ${tagPessoa(u)}</td>
         <td style="font-size:11px;text-align:center;">${grupo||'—'}</td>
         <td style="font-size:11px;">${coord}</td>
         <td style="font-size:12px;text-align:center;">${meta||'—'}</td>
@@ -8995,7 +9033,7 @@ async function cgeGerar() {
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
     const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
-      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs()
+      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs(), carregarSubstituicoes()
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
@@ -9028,7 +9066,7 @@ async function cgeGerar() {
     const q2linhas = q2Sorted.map((d,i) => {
       return `<tr>
         <td>${i+1}</td>
-        <td style="font-weight:700;text-align:left;">${d.u.nome}</td>
+        <td style="font-weight:700;text-align:left;">${d.u.nome} ${tagPessoa(d.u)}</td>
         <td>${d.coord}</td>
         <td style="text-align:right;">${d.meta||'—'}</td>
         <td style="text-align:right;">${d.bxSecretario}</td>
@@ -9634,6 +9672,10 @@ async function relBuscar() {
   const tr = document.getElementById('relTR')?.value.trim()||''
   const status = document.getElementById('relStatus')?.value||''
   const sid = U.setorialFiltro || 'FCEE'
+  // O quadro de pessoal, para a tag e a observação da dispensa na linha do relatório.
+  // ⚠️ Com `await`: sem ele a tabela pinta antes de `_usrPorId` existir e nenhuma tag aparece
+  // — e a tag some em silêncio, sem erro nenhum no console.
+  await carregarSubstituicoes()
 
   document.getElementById('relMsg').style.display='block'
   document.getElementById('relMsg').innerHTML='<div class="loading"><div class="spin"></div>Gerando relatório...</div>'
@@ -9702,7 +9744,11 @@ function relRenderTabela() {
     const cor = r.status==='baixada'?'#F0FAF4':''
     return `<tr style="background:${cor}">
       <td style="font-size:10px;color:var(--ct);">${from+i+1}</td>
-      <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'}</td>
+      ${/* ⚠️ A OBSERVAÇÃO DA DISPENSA VAI NA LINHA, e não num rodapé. Relatório circula por
+            página, e ressalva a três blocos do nome não é lida — é a mesma lição do aviso do
+            Quadro 2, que desceu para junto do número que ele explica, em 18/08. */''}
+      <td style="font-size:11px;font-weight:600;">${r.analista_completo||'—'} ${tagPessoaPorId(r.analista_id)}
+        ${obsDispensa(r.analista_id)}</td>
       <td style="font-size:11px;font-weight:600;color:var(--az);">${r.tr||'—'}</td>
       <td class="proc-sgpe" style="font-size:10px;white-space:nowrap;">${procHtml(r.processo_mae, r.codigo_pc, 'processo_mae')}</td>
       <td style="font-size:10px;">${r.codigo_pc||'—'}</td>
@@ -17833,6 +17879,135 @@ function estLogExportarCSV() {
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
   a.download=`estornos_realizados_${dt}.csv`; a.click()
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  DISPENSA E SUBSTITUIÇÃO — as tags de pessoa (28/08/2026)
+//
+//  ⚠️ QUEM TEM `data_saida` ESTÁ DISPENSADO. É uma coluna, e só uma — a tela não deduz por
+//  `ativo` (o dispensado continua ativo, por decisão do Richard: ele precisa terminar o que
+//  ficou em curso) nem por último acesso.
+//
+//  ⚠️ E O ÍNDICE DO SUBSTITUTO É UMA LISTA. Uma pessoa pode substituir mais de uma: o Willian
+//  (id 50) entrou no lugar da Caroline e saiu substituído pela Fabiana. Guardar só a última
+//  apagaria metade da história.
+// ══════════════════════════════════════════════════════════════════════════════
+let _subs = { lista: [], porDispensado: new Map(), porSubstituto: new Map() }
+// ⚠️ O QUADRO DE PESSOAL, indexado por id. A tag precisa de `data_saida` e `portaria`, e há
+// tela — o relatório — cuja linha traz só o analista. Sem este índice, cada uma buscaria
+// usuários do seu jeito, e a que esquecesse não pintaria tag: a tag some em SILÊNCIO, que é o
+// pior modo de uma informação de pessoal falhar.
+let _usrPorId = new Map()
+
+/** A tag de uma pessoa a partir do id — para as telas que só têm o id na linha. */
+function tagPessoaPorId(id) {
+  const u = _usrPorId.get(Number(id))
+  return u ? tagPessoa(u) : ''
+}
+
+/**
+ * A observação da dispensa, para a linha do relatório. Vazia para quem não foi dispensado.
+ *
+ * ⚠️ ELA DIZ "apurada até a data da dispensa", e é o texto que o Richard definiu. A conta em
+ * si NÃO é recortada por data — congelar é parar de crescer e perder a meta, não recalcular
+ * (a alternativa zeraria três pessoas por causa do carimbo de carga de 30/06). A frase
+ * descreve o efeito para quem lê o relatório; a regra está em `contaMeta`.
+ */
+function obsDispensa(id) {
+  const u = _usrPorId.get(Number(id))
+  if (!ehDispensado(u)) return ''
+  return `<div style="font-weight:400;font-size:10px;color:var(--ct);line-height:1.35;margin-top:2px;">`
+    + escHtml(u.nome) + ' — dispensado em ' + dataBr(u.data_saida)
+    + (u.portaria ? ' pela Portaria ' + escHtml(u.portaria) : '')
+    + '. Produtividade apurada até a data da dispensa.</div>'
+}
+
+async function carregarSubstituicoes() {
+  try {
+    const [r, ru] = await Promise.all([
+      fetch(`${API_URL}/substituicao`),
+      fetch(`${API_URL}/usuarios${U.setorialFiltro ? '?setorial_id=' + encodeURIComponent(U.setorialFiltro) : ''}`),
+    ])
+    const j = await r.json()
+    const ju = await ru.json()
+    _usrPorId = new Map((ju.data || []).map((u) => [Number(u.id), u]))
+    const lista = j.data || []
+    const porDispensado = new Map(), porSubstituto = new Map()
+    lista.forEach(l => {
+      // ⚠️ Só por `id`. Quatro das nove linhas têm id nulo de propósito (sem cadastro) — elas
+      // ficam de fora, e é o certo: não há a quem pregar a tag. Casar por NOME aqui seria a
+      // armadilha 1 de volta, com dado de pessoal.
+      if (l.dispensado_id != null) {
+        if (!porDispensado.has(l.dispensado_id)) porDispensado.set(l.dispensado_id, [])
+        porDispensado.get(l.dispensado_id).push(l)
+      }
+      if (l.substituto_id != null) {
+        if (!porSubstituto.has(l.substituto_id)) porSubstituto.set(l.substituto_id, [])
+        porSubstituto.get(l.substituto_id).push(l)
+      }
+    })
+    _subs = { lista, porDispensado, porSubstituto }
+  } catch (e) { /* sem a tabela, a tela simplesmente não pinta tag nenhuma */ }
+}
+
+const dataBr = (d) => { const x = String(d || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(x)
+  ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '—' }
+
+/** Está dispensado? Uma coluna, e só uma. */
+function ehDispensado(u) { return !!(u && u.data_saida) }
+
+/** A frase da dispensa, para o `title` e para o card. */
+function textoDispensa(u) {
+  if (!ehDispensado(u)) return ''
+  const quem = (_subs.porDispensado.get(u.id) || [])[0]
+  return `Dispensado em ${dataBr(u.data_saida)}`
+    + (u.portaria ? ` pela Portaria ${u.portaria}` : '')
+    + (quem ? `. Substituído por ${quem.substituto_nome}.` : '.')
+}
+
+/** A frase da substituição. Lista todas, porque uma pessoa pode substituir mais de uma. */
+function textoSubstituto(u) {
+  const ls = _subs.porSubstituto.get(u && u.id) || []
+  if (!ls.length) return ''
+  return ls.map(l => `Em substituição a ${l.dispensado_nome} desde ${dataBr(l.data_publicacao)}`
+    + (l.portaria ? ` (Portaria ${l.portaria})` : '')).join(' · ')
+}
+
+/**
+ * AS TAGS DE PESSOA — o mesmo componente em toda listagem, card e relatório.
+ *
+ * ⚠️ AS DUAS PODEM APARECER JUNTAS, e isso não é defeito: o Willian é dispensado E
+ * substituto. Fazer uma excluir a outra esconderia metade do que aconteceu com ele.
+ */
+function tagPessoa(u, opts) {
+  const o = opts || {}
+  if (!u) return ''
+  const out = []
+  if (ehDispensado(u)) {
+    out.push(`<span title="${escHtml(textoDispensa(u))}" style="display:inline-block;font-size:9.5px;
+      font-weight:800;padding:2px 8px;border-radius:20px;background:#F1F4F2;color:#5B6B62;
+      border:1px solid #D8DFDB;white-space:nowrap;">Dispensado</span>`)
+  }
+  const ts = textoSubstituto(u)
+  if (ts && !o.soDispensa) {
+    out.push(`<span title="${escHtml(ts)}" style="display:inline-block;font-size:9.5px;
+      font-weight:800;padding:2px 8px;border-radius:20px;background:#EAF3DE;color:#27500A;
+      border:1px solid #97C459;white-space:nowrap;">Substituto</span>`)
+  }
+  return out.join(' ')
+}
+
+/**
+ * Este usuário entra nas contas de META?
+ *
+ * ⚠️ O DISPENSADO NÃO ENTRA — nem recebe meta, nem soma na do grupo. São 46 metas viram 39, e
+ * a soma 5.068 vira 4.425. Ele continua nas listas, continua com os números dele e continua
+ * com a linha em `metas_analistas`: o que ele não faz é entrar na conta.
+ *
+ * ⚠️ NÃO CONFUNDIR com `contaProdutividade(u)`, que decide quem APARECE no relatório
+ * (coordenador e C.I. não aparecem). Este decide quem tem META. São perguntas diferentes, e
+ * o dispensado responde "sim" à primeira e "não" à segunda.
+ */
+function contaMeta(u) { return !ehDispensado(u) }
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  CONFERÊNCIA COM O SIGEF — as tags, e a declaração do analista (27/08/2026)

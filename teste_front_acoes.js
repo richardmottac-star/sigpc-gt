@@ -286,8 +286,12 @@ conf(/onclick="prodAbrirCard\(\$\{u\.id\}\)"/.test(html), 'o card pequeno leva a
 conf(/Voltar à lista/.test(html), 'e ha caminho de volta');
 
 S('12b. O CABECALHO');
-conf(/background:#173404/.test(html), 'fundo #173404');
-conf(/width:44px;height:44px;border-radius:50%;background:#3B6D11;color:#EAF3DE/.test(html),
+// ⚠️ AS CORES VIRARAM VARIAVEIS EM 28/08/2026, e o teste passou a olhar a ORIGEM delas: o
+// card do DISPENSADO e cinza (#4A544E) e o do analista em atividade continua verde (#173404).
+// Fixar o literal no HTML do cabecalho recusaria a variacao que agora e o certo.
+conf(/const cabBg = disp \? '#4A544E' : '#173404'/.test(html), 'fundo #173404, e #4A544E no dispensado');
+conf(/const cabIni = disp \? '#6C7A72' : '#3B6D11'/.test(html), 'a inicial acompanha a cor do cabecalho');
+conf(/width:44px;height:44px;border-radius:50%;background:\$\{cabIni\};color:#EAF3DE/.test(html),
      'circulo de 44px com as iniciais');
 conf(/function prodIniciais\(nome\)/.test(html), 'e as iniciais saem do nome');
 conf(/font-size:17px;font-weight:500;color:#fff/.test(html), 'nome 17px peso 500 branco');
