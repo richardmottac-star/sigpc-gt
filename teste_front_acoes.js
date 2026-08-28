@@ -289,8 +289,10 @@ S('12b. O CABECALHO');
 // ⚠️ AS CORES VIRARAM VARIAVEIS EM 28/08/2026, e o teste passou a olhar a ORIGEM delas: o
 // card do DISPENSADO e cinza (#4A544E) e o do analista em atividade continua verde (#173404).
 // Fixar o literal no HTML do cabecalho recusaria a variacao que agora e o certo.
-conf(/const cabBg = disp \? '#4A544E' : '#173404'/.test(html), 'fundo #173404, e #4A544E no dispensado');
-conf(/const cabIni = disp \? '#6C7A72' : '#3B6D11'/.test(html), 'a inicial acompanha a cor do cabecalho');
+// ⚠️ O cinza do dispensado saiu do verde-acinzentado para o neutro em 28/08 — o card do
+// dispensado nao deve puxar para a familia verde do analista em atividade.
+conf(/const cabBg = disp \? '#4A4A46' : '#173404'/.test(html), 'fundo #173404, e #4A4A46 no dispensado');
+conf(/const cabIni = disp \? '#6C6C66' : '#3B6D11'/.test(html), 'a inicial acompanha a cor do cabecalho');
 conf(/width:44px;height:44px;border-radius:50%;background:\$\{cabIni\};color:#EAF3DE/.test(html),
      'circulo de 44px com as iniciais');
 conf(/function prodIniciais\(nome\)/.test(html), 'e as iniciais saem do nome');

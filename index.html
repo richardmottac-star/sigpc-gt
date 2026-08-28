@@ -269,6 +269,18 @@ tr:last-child td{border-bottom:none;}
 .prod-bar-wrap{background:#E8EEEB;border-radius:10px;height:7px;overflow:hidden;margin:5px 0;}
 .prod-bar{height:7px;border-radius:10px;background:var(--v);transition:width .5s;}
 .prod-nums{display:flex;justify-content:space-between;font-size:10px;color:var(--ct);}
+/* ⚠️ O botao Abrir do card: verde com relevo. O `translateY(3px)` no :active come o
+   box-shadow, e e o que da a sensacao de afundar — sem ele o botao so pisca. */
+.prod-abrir{background:#3B6D11;color:#fff;border:none;border-radius:7px;font-weight:800;
+  font-size:11.5px;padding:6px 14px;cursor:pointer;box-shadow:0 3px 0 #173404;
+  font-family:Barlow,sans-serif;transition:background .15s;}
+.prod-abrir:hover{background:#639922;}
+.prod-abrir:active{transform:translateY(3px);box-shadow:0 0 0 #173404;}
+/* O card do dispensado — o unico cinza da grade. A borda esquerda vence a do grupo por
+   especificidade: `.prod-card.prod-disp` tem duas classes contra o seletor de atributo. */
+.prod-card.prod-disp{background:#F5F5F2;}
+.prod-card.prod-disp[data-grupo]{border-left:4px solid #B8B8B2;}
+.prod-disp .prod-nome{color:#6B6B65;}
 
 /* ══ REPOSITÓRIO ══ */
 .repo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}
@@ -7713,9 +7725,12 @@ function prodCardGrande(d) {
   // manter a mesma cor faria o card mentir por semelhança.
   const disp = ehDispensado(u)
   const subLinha = textoSubstituto(u)
-  const cabBg = disp ? '#4A544E' : '#173404'
-  const cabIni = disp ? '#6C7A72' : '#3B6D11'
-  const cabSub = disp ? '#D8DFDB' : '#C0DD97'
+  const cabBg = disp ? '#4A4A46' : '#173404'
+  const cabIni = disp ? '#6C6C66' : '#3B6D11'
+  const cabSub = disp ? '#D8D8D2' : '#C0DD97'
+  // A portaria vem do cadastro; o "substituído por" e o "em substituição a", da `substituicao`.
+  const subDele = (_subs.porDispensado.get(u.id) || [])[0]
+  const subsPara = _subs.porSubstituto.get(u.id) || []
 
   return `
   <div style="background:#FCFDFC;border-radius:14px;box-shadow:var(--sombra);overflow:hidden;">
@@ -7743,29 +7758,45 @@ function prodCardGrande(d) {
           deixado a tela mentindo dos dois jeitos. */''}
     ${sigefFaixaProdutividade({ semReg, verFinal, ambar, pendencias, conta, seResolver, descontadas })}
 
-    ${/* A LINHA DO CONGELAMENTO — só no card do dispensado, e no lugar do anel de meta.
+    ${/* A FAIXA DA PORTARIA — logo abaixo do cabeçalho, no mesmo lugar da linha do SIGEF.
           ⚠️ Ela diz "congelados", e não "encerrados": as PCs continuam com ele e o C.I. ainda
-          pode devolver parcela para correção. Congelado é parar de crescer, não acabar. */''}
+          pode devolver parcela para correção. Congelado é parar de crescer, não acabar.
+          ⚠️ E a segunda linha explica a AUSÊNCIA da meta antes de o analista procurar por ela
+          — o anel some logo abaixo, e sem essa frase o sumiço parece defeito. */''}
     ${disp ? `
-    <div style="padding:15px 18px;border-bottom:1px solid var(--cl);background:#F1F4F2;
-                border-left:4px solid #6C7A72;">
-      <div style="font-size:13px;font-weight:700;color:#3F4A44;">
-        Números congelados em ${dataBr(u.data_saida)}, data da dispensa.
-        ${(_subs.porDispensado.get(u.id) || [])[0]
-          ? 'Substituído por ' + escHtml((_subs.porDispensado.get(u.id) || [])[0].substituto_nome) + '.' : ''}</div>
-      <div style="font-size:12px;color:var(--ct);margin-top:5px;line-height:1.5;">
-        ${u.portaria ? 'Portaria ' + escHtml(u.portaria) + '. ' : ''}Sem meta a partir desta data.
-        As <b>${conta}</b> PC${conta === 1 ? '' : 's'} apuradas continuam atribuídas a
-        ${escHtml((u.nome || '').split(' ')[0])} — nada foi transferido.</div>
+    <div style="padding:13px 18px;border-bottom:1px solid var(--cl);background:#F2F2EF;">
+      <div style="font-size:12.5px;color:#4A4A46;font-weight:700;line-height:1.5;">
+        ${u.portaria ? 'Portaria ' + escHtml(u.portaria) + ', publicada em ' : 'Dispensado em '}${
+          dataBr(subDele ? subDele.data_publicacao : u.data_saida)}. Números congelados nessa data.${
+          subDele ? ' Substituído por ' + escHtml(subDele.substituto_nome) + '.' : ''}</div>
+      <div style="font-size:11.5px;color:#7A7A73;margin-top:4px;line-height:1.5;">
+        A meta não se aplica a período encerrado. As prestações que ele baixou permanecem
+        atribuídas a ele.</div>
     </div>` : ''}
 
-    ${subLinha ? `
-    <div style="padding:11px 18px;border-bottom:1px solid var(--cl);background:#EAF3DE;
-                border-left:4px solid #97C459;font-size:12.5px;color:#27500A;font-weight:600;">
-      ${escHtml((_subs.porSubstituto.get(u.id) || []).map(l =>
-        'Designado em ' + dataBr(l.data_publicacao) + ' em substituição a ' + l.dispensado_nome).join(' · '))}</div>` : ''}
+    ${subsPara.length ? `
+    <div style="padding:12px 18px;border-bottom:1px solid var(--cl);background:#EAF3DE;
+                border-left:4px solid #97C459;font-size:12.5px;color:#27500A;font-weight:600;
+                line-height:1.5;">
+      ${subsPara.map((l) => 'Designado pela Portaria ' + escHtml(l.portaria)
+        + ', publicada em ' + dataBr(l.data_publicacao)
+        + ', em substituição a ' + escHtml(l.dispensado_nome) + '.').join('<br>')}</div>` : ''}
 
-    ${disp ? '' : `
+    ${/* ⚠️ NO LUGAR DO ANEL, no card do dispensado: as baixadas em destaque e dois blocos.
+          Um anel em 0% diria "não bateu a meta", quando o certo é não haver meta a bater. */''}
+    ${disp ? `
+    <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;
+                align-items:center;flex-wrap:wrap;">
+      <div style="flex:0 0 auto;min-width:150px;">
+        <div style="font-size:44px;font-weight:500;line-height:1;color:#4A4A46;"
+          data-conta="${baixadas}">0</div>
+        <div style="font-size:12px;color:var(--ct);margin-top:3px;">PCs baixadas por ele</div>
+      </div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;flex:1;min-width:230px;">
+        ${blocoCaminho(total, 'PCs no nome dele', '#F1F4F2', '#4A4A46')}
+        ${blocoCaminho(total - baixadas, 'abertas', '#F1F4F2', '#4A4A46')}
+      </div>
+    </div>` : `
     <div style="padding:17px 18px;border-bottom:1px solid var(--cl);display:flex;gap:22px;align-items:center;flex-wrap:wrap;">
       <svg width="150" height="150" viewBox="0 0 150 150" style="flex:0 0 150px;">
         <circle cx="75" cy="75" r="${RAIO_ANEL}" fill="none" stroke="var(--surface-1, #E4EAE6)" stroke-width="13"/>
@@ -7942,19 +7973,35 @@ function prodRender(dados) {
       const conta = d.conta == null ? baixadas : d.conta
       const cor = prodCorPct(pct)
       const pctTxt = pct===null ? '—' : pct+'%'
-      return `<div class="prod-card" data-grupo="${grupo||''}" style="cursor:pointer;" onclick="prodAbrirCard(${u.id})">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-          <div class="prod-nome">${u.nome} ${tagPessoa(u)}</div>
-          <span style="font-size:9px;background:var(--vbg);color:var(--v);padding:2px 7px;border-radius:10px;font-weight:700;">G${grupo||'?'} — ${coord}</span>
+      // ⚠️ O CARD FICOU COM QUATRO LINHAS. Saíram o total de PCs, os três contadores de
+      // situação e a linha "Meta: N PCs no período" — tudo isso aparece ao abrir, e repetir
+      // aqui fazia sete informações competirem pelo mesmo olhar. O que fica é o que responde
+      // "como está esta pessoa": nome, número conferido, percentual, barra.
+      const disp = ehDispensado(u)
+      return `<div class="prod-card${disp ? ' prod-disp' : ''}" data-grupo="${grupo||''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;">
+          <div class="prod-nome" style="margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            ${u.nome} ${tagPessoa(u)}</div>
+          <span style="font-size:9px;color:var(--ct);white-space:nowrap;flex:0 0 auto;">G${grupo||'?'}</span>
         </div>
-        <div style="font-size:10px;color:var(--ct);margin-bottom:8px;">Meta: ${meta||'—'}${meta?' PCs no período':''}</div>
-        <div class="prod-bar-wrap"><div class="prod-bar" style="width:${pct||0}%;background:${cor}"></div></div>
-        <div class="prod-nums" style="margin-top:5px;">
-          <span>📋 ${total} PCs</span>
-          <span style="font-weight:700;color:${cor}">✓ ${conta} conferidas (${pctTxt})</span>
+        <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;">
+          <span style="font-size:27px;font-weight:600;line-height:1;color:${disp ? '#6B6B65' : cor};"
+            >${conta}</span>
+          ${disp
+            ? `<span style="font-size:11.5px;color:#6B6B65;">congeladas</span>
+               <span style="margin-left:auto;font-size:11px;color:#6B6B65;white-space:nowrap;"
+                 >${dataBr(u.data_saida)}</span>`
+            : `<span style="font-size:11.5px;color:var(--ct);">de ${meta||'—'}</span>
+               <span style="margin-left:auto;font-size:14px;font-weight:700;color:${cor};"
+                 >${pctTxt}</span>`}
         </div>
-        <div style="font-size:9px;color:var(--ct);margin-top:4px;border-top:1px solid var(--cb);padding-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
-          <span>🔵 ${analise} análise</span><span>🟡 ${dilig} dilig.</span><span>🔴 ${reanalise} reanál.</span>
+        ${/* ⚠️ A barra do dispensado fica VAZIA, e nao em 0% de vermelho: nao ha meta a bater,
+              e uma barra vermelha diria que ele nao bateu. */''}
+        <div class="prod-bar-wrap" style="height:5px;margin:9px 0 0;">
+          <div class="prod-bar" style="height:5px;width:${disp ? 0 : (pct||0)}%;background:${cor}"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:11px;">
+          <button class="prod-abrir" onclick="prodAbrirCard(${u.id})">Abrir</button>
         </div>
       </div>`
     }).join('')}</div>`
