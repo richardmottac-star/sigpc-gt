@@ -7606,8 +7606,11 @@ async function prodCarregar() {
       const u = usuariosPorId[analistaId]
       // ⚠️ O DISPENSADO NÃO RECEBE META (28/08). Ele continua no relatório e continua com os
       // números dele — o que sai é a meta, e com ela o percentual, o anel e o "faltam N".
-      // A soma do grupo cai junto porque a parcela dele virou zero: 46 metas viram 39, e a
-      // soma 5.068 vira 4.425. `metas_analistas` NÃO é alterada — a linha continua lá.
+      // A soma do grupo cai junto porque a parcela dele virou zero: das 45 metas que chegam
+      // a esta tela (soma 5.041), saem as 7 dos dispensados (643) — ficam 38, somando 4.398.
+      // ⚠️ São 45 e não 46: a meta da Caroline (id 30) tem `analista_id` NULO e o `mapa` de
+      // `fetchMetasVigentes` a descarta, então ela nunca entrou em soma nenhuma.
+      // `metas_analistas` NÃO é alterada — a linha continua lá.
       const meta = contaMeta(u) ? (metaPorId[analistaId] || 0) : 0
       // ⚠️ O PERCENTUAL SAI DA CONTA CONCILIADA, não de `baixadas`. É a regra de 27/08: a PC
       // pendente de conferência com o SIGEF não entra enquanto o analista não declarar.
@@ -17999,9 +18002,11 @@ function tagPessoa(u, opts) {
 /**
  * Este usuário entra nas contas de META?
  *
- * ⚠️ O DISPENSADO NÃO ENTRA — nem recebe meta, nem soma na do grupo. São 46 metas viram 39, e
- * a soma 5.068 vira 4.425. Ele continua nas listas, continua com os números dele e continua
- * com a linha em `metas_analistas`: o que ele não faz é entrar na conta.
+ * ⚠️ O DISPENSADO NÃO ENTRA — nem recebe meta, nem soma na do grupo. Medido em 28/08: das 46
+ * metas vigentes, **45 chegam a esta tela** (as que têm `analista_id`), somando **5.041**;
+ * tirando as 7 dos dispensados (643), ficam **38 somando 4.398**. A 46ª é órfã — a meta da
+ * Caroline, sem `analista_id` — e nunca contou. Ele continua nas listas, continua com os
+ * números dele e continua com a linha em `metas_analistas`: o que ele não faz é entrar na conta.
  *
  * ⚠️ NÃO CONFUNDIR com `contaProdutividade(u)`, que decide quem APARECE no relatório
  * (coordenador e C.I. não aparecem). Este decide quem tem META. São perguntas diferentes, e
