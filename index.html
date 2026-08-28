@@ -17910,10 +17910,11 @@ function tagPessoaPorId(id) {
 /**
  * A observação da dispensa, para a linha do relatório. Vazia para quem não foi dispensado.
  *
- * ⚠️ ELA DIZ "apurada até a data da dispensa", e é o texto que o Richard definiu. A conta em
- * si NÃO é recortada por data — congelar é parar de crescer e perder a meta, não recalcular
- * (a alternativa zeraria três pessoas por causa do carimbo de carga de 30/06). A frase
- * descreve o efeito para quem lê o relatório; a regra está em `contaMeta`.
+ * ⚠️ ELA DIZIA "Produtividade apurada até a data da dispensa" ATÉ 28/08, E ERA FALSO. A conta
+ * NÃO é recortada por data: congelar é parar de crescer e perder a meta, não recalcular — a
+ * alternativa zeraria três pessoas por causa do carimbo de carga de 30/06. O texto prometia
+ * um recorte que o código não faz, e quem lesse o relatório concluiria que os números foram
+ * cortados. **O texto tem que dizer o que a conta faz** — decisão do Richard, 28/08.
  */
 function obsDispensa(id) {
   const u = _usrPorId.get(Number(id))
@@ -17921,7 +17922,7 @@ function obsDispensa(id) {
   return `<div style="font-weight:400;font-size:10px;color:var(--ct);line-height:1.35;margin-top:2px;">`
     + escHtml(u.nome) + ' — dispensado em ' + dataBr(u.data_saida)
     + (u.portaria ? ' pela Portaria ' + escHtml(u.portaria) : '')
-    + '. Produtividade apurada até a data da dispensa.</div>'
+    + '. Meta encerrada em ' + dataBr(u.data_saida) + '.</div>'
 }
 
 async function carregarSubstituicoes() {
