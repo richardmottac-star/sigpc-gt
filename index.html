@@ -11984,33 +11984,83 @@ function pFaixaPasso(pa) {
 // pessoa não pode executar continua clicável, e leva ao caminho que existe para ela.
 
 let _acAberto = null;   // o elemento do menu aberto agora, ou null
+let _acBotao  = null;   // o botão que abriu — é nele que o menu fica ancorado
 
 function acFechar() {
   if (_acAberto) { _acAberto.remove(); _acAberto = null; }
+  _acBotao = null;
   document.removeEventListener('click', acCliqueFora, true);
   document.removeEventListener('keydown', acEsc, true);
+  window.removeEventListener('scroll', acReposicionar, true);
+  window.removeEventListener('resize', acReposicionar);
 }
 function acCliqueFora(e) { if (_acAberto && !_acAberto.contains(e.target)) acFechar(); }
 // ⚠️ Esc fecha, como o indicador de online. Menu que só fecha clicando fora prende quem
 // abriu sem querer no meio de um formulário.
 function acEsc(e) { if (e.key === 'Escape') acFechar(); }
 
-// As seis famílias de cor do menu, por GRUPO — especificação do Richard, 18/08/2026.
-// Cada uma é o par (cor do ícone, fundo claro da mesma família): o quadradinho fica legível
-// nos dois temas e o item cinza continua parecendo cinza sem virar borrão.
+/**
+ * O menu ACOMPANHA o botão — na rolagem e no redimensionamento.
+ *
+ * ⚠️ `position:fixed` sozinho não segue nada: a lista ficava parada na tela enquanto a
+ * página rolava, e se descolava da linha da parcial. O que não couber abaixo do botão abre
+ * PARA CIMA, em vez de escorrer para fora da janela.
+ */
+function acReposicionar() {
+  if (!_acAberto || !_acBotao || !_acBotao.isConnected) return;
+  const r = _acBotao.getBoundingClientRect();
+  const alt  = _acAberto.offsetHeight || 260;
+  const larg = _acAberto.offsetWidth  || 250;
+  const folgaBaixo = window.innerHeight - r.bottom - 8;
+  const paraCima = folgaBaixo < alt && r.top - 8 > folgaBaixo;
+  let topo = paraCima ? r.top - alt - 5 : r.bottom + 5;
+  topo = Math.max(8, Math.min(topo, window.innerHeight - alt - 8));
+  _acAberto.style.top  = topo + 'px';
+  _acAberto.style.left = Math.max(8, Math.min(r.left, window.innerWidth - larg - 8)) + 'px';
+}
+
+// As famílias de cor do menu, pela NATUREZA DA AÇÃO. Cada uma é o par (traço do ícone, fundo
+// do quadradinho): o que desfaz se distingue do que registra à primeira vista, e o item
+// indisponível continua parecendo cinza sem virar borrão.
 const AC_CORES = {
-  azul:     { fg: '#1A4E8A', bg: '#EAF1F9' },
-  verde:    { fg: '#1B7A3E', bg: '#EAF7EF' },
-  ambar:    { fg: '#8A6100', bg: '#FFF3CD' },
-  vermelho: { fg: '#C62828', bg: '#FFEBEE' },
-  roxo:     { fg: '#6B3FA0', bg: '#F0E9F8' },
-  cinza:    { fg: '#5B6B62', bg: '#F1F4F2' },
+  situacao: { fg: '#1B4F8E', bg: '#E8F0FB' },
+  parecer:  { fg: '#3B6D11', bg: '#EAF3DE' },
+  correcao: { fg: '#BA7517', bg: '#FAEEDA' },
+  desfaz:   { fg: '#C62828', bg: '#FDEBEC' },
+  inativo:  { fg: '#9A9A94', bg: 'var(--surface-1, #E9EDEA)' },
 };
 
-/** O título de um grupo — letra pequena, maiúscula, sem peso visual de item. */
+// Ícones de LINHA, no mesmo desenho dos que já existem no arquivo (traço 2, pontas
+// arredondadas). Nada de emoji: eles mudam de forma e de tamanho a cada sistema.
+const AC_ICONES = {
+  sit:       '<polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"></path>',
+  parecer:   '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
+  doc:       '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>',
+  enviar:    '<line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
+  lapis:     '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path>',
+  carta:     '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path><polyline points="22 6 12 13 2 6"></polyline>',
+  voltar:    '<polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>',
+  desfazer:  '<polyline points="1 4 1 10 7 10"></polyline><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path>',
+  relogio:   '<circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline>',
+  mais:      '<rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>',
+  historico: '<path d="M3 3v6h6"></path><path d="M3.5 9a9 9 0 1 0 2.1-3.4L3 9"></path><polyline points="12 8 12 12.5 15 14"></polyline>',
+};
+
+function acIcone(nome, cor) {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${cor}"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+    style="display:block;">${AC_ICONES[nome] || AC_ICONES.doc}</svg>`;
+}
+
+let _acLinha = 0;    // a vez da zebra
+let _acSecao = 0;    // quantos títulos de seção já saíram
+
+/** O título de um grupo — letra pequena, maiúscula, e divisória a partir do segundo. */
 function acGrupo(titulo) {
-  return `<div style="padding:9px 14px 4px;font-size:9.5px;font-weight:800;text-transform:uppercase;
-    letter-spacing:.07em;color:#9AA8A0;">${escHtml(titulo)}</div>`;
+  const div = _acSecao++ ? 'border-top:1px solid var(--cl);' : '';
+  return `<div style="${div}padding:10px 14px 5px;font-size:10px;font-weight:800;
+    text-transform:uppercase;letter-spacing:.09em;color:var(--ct, #8A968F);
+    background:var(--surface-2, #FAFCFA);">${escHtml(titulo)}</div>`;
 }
 
 /**
@@ -12021,25 +12071,26 @@ function acGrupo(titulo) {
  * armadilha 15 levada a sério: o que a pessoa não pode fazer tem de dizer POR QUE ali mesmo,
  * senão ela procura o botão que sumiu.
  *
- * @param cor    chave de AC_CORES. Item inativo ignora a cor e vai para o cinza.
- * @param motivo o texto pequeno da segunda linha, quando inativo.
+ * @param icone  chave de AC_ICONES.
+ * @param cor    chave de AC_CORES, pela NATUREZA da ação. Item inativo vai para o cinza.
+ * @param motivo o texto pequeno da segunda linha, quando houver.
  */
 function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
-  const c = ativo ? (AC_CORES[cor] || AC_CORES.cinza) : AC_CORES.cinza;
-  const corTexto = ativo ? 'var(--te)' : '#9AA8A0';
+  const c = ativo ? (AC_CORES[cor] || AC_CORES.situacao) : AC_CORES.inativo;
+  const corTexto = ativo ? 'var(--te)' : '#9A9A94';
+  const fundo = (_acLinha++ % 2) ? '#F1F7EA' : 'var(--surface-2, #FAFCFA)';
   return `<button role="menuitem" ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
     title="${escHtml(motivo || rotulo)}"
-    style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;background:none;
-           border:0;padding:11px 14px;font-size:13.5px;font-family:inherit;color:${corTexto};
-           cursor:${ativo ? 'pointer' : 'not-allowed'};"
-    onmouseover="if(!this.disabled)this.style.background='#F5F9F7'"
-    onmouseout="this.style.background='none'">
-    <span style="flex:0 0 28px;width:28px;height:28px;border-radius:7px;background:${c.bg};
-      color:${c.fg};display:inline-flex;align-items:center;justify-content:center;
-      font-size:14px;line-height:1;">${icone}</span>
-    <span style="flex:1;min-width:0;">
-      <span style="display:block;font-weight:${destaque && ativo ? '800' : '600'};line-height:1.35;">${escHtml(rotulo)}</span>
-      ${!ativo && motivo ? `<span style="display:block;font-size:10.5px;color:#9AA8A0;line-height:1.35;margin-top:1px;white-space:normal;">${escHtml(motivo)}</span>` : ''}
+    style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
+           background:${fundo};border:0;padding:9px 14px;font-size:13.5px;font-family:inherit;
+           color:${corTexto};cursor:${ativo ? 'pointer' : 'not-allowed'};"
+    onmouseover="if(!this.disabled)this.style.background='#EAF3DE'"
+    onmouseout="this.style.background='${fundo}'">
+    <span style="flex:0 0 30px;width:30px;height:30px;border-radius:8px;background:${c.bg};
+      display:inline-flex;align-items:center;justify-content:center;">${acIcone(icone, c.fg)}</span>
+    <span style="flex:1;min-width:0;padding-top:4px;">
+      <span style="display:block;font-size:13.5px;font-weight:${destaque && ativo ? '800' : '600'};line-height:1.35;">${escHtml(rotulo)}</span>
+      ${motivo ? `<span style="display:block;font-size:11px;color:var(--ct, #8A968F);line-height:1.35;margin-top:2px;white-space:normal;">${escHtml(motivo)}</span>` : ''}
     </span></button>`;
 }
 
@@ -12060,17 +12111,19 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
   const cx = document.createElement('div');
   cx.dataset.pc = codigoPc;
   cx.setAttribute('role', 'menu');
-  const r = bt.getBoundingClientRect();
-  cx.style.cssText = `position:fixed;z-index:9999;background:#fff;border:1.5px solid var(--cl);
-    border-radius:9px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:5px 0;min-width:246px;
-    top:${Math.min(r.bottom + 5, window.innerHeight - 300)}px;
-    left:${Math.max(8, Math.min(r.left, window.innerWidth - 262))}px;`;
-  cx.innerHTML = `<div style="padding:9px 14px;color:var(--ct);font-size:11px;">
+  cx.style.cssText = `position:fixed;z-index:9999;background:var(--surface-2, #FAFCFA);
+    border:1.5px solid var(--cl);border-radius:11px;box-shadow:0 8px 24px rgba(0,0,0,.14);
+    padding:0;overflow:hidden;min-width:250px;top:-9999px;left:-9999px;`;
+  cx.innerHTML = `<div style="padding:11px 14px;color:var(--ct);font-size:11px;">
     <span class="spin" style="width:11px;height:11px;display:inline-block;"></span> carregando…</div>`;
   document.body.appendChild(cx);
   _acAberto = cx;
+  _acBotao = bt;
+  acReposicionar();
   document.addEventListener('click', acCliqueFora, true);
   document.addEventListener('keydown', acEsc, true);
+  window.addEventListener('scroll', acReposicionar, true);
+  window.addEventListener('resize', acReposicionar);
 
   try {
     const j = await (await fetch(`${API_URL}/parcela/acoes?codigo_pc=${encodeURIComponent(codigoPc)}&usuario_id=${U.id}`)).json();
@@ -12087,61 +12140,62 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     const nm = `'${escHtml(String(parcialNum ?? ''))}'`;
     const semNum = !String(parcialNum ?? '').trim();
     const linhas = [];
+    _acLinha = 0; _acSecao = 0;
 
-    // ── GRUPO 1: FLUXO DA ANÁLISE (azul e verde) ────────────────────────────
+    // ── GRUPO 1: FLUXO DA ANÁLISE ───────────────────────────────────────────
     // ⚠️ Os três botões que ficavam soltos na linha vivem AQUI desde 18/08/2026 — decisão do
     // Richard. A linha da parcial passou a ter um botão só.
     linhas.push(acGrupo('Fluxo da análise'));
 
-    linhas.push(acItem('Salvar situação', '🔄', `pAbrirSitPc(${nm})`,
-      !d.baixada && !semNum, 'azul',
+    linhas.push(acItem('Salvar situação', 'sit', `pAbrirSitPc(${nm})`,
+      !d.baixada && !semNum, 'situacao',
       semNum ? 'Esta parcial não tem número — não é possível registrar'
              : (d.baixada ? 'A parcial já está baixada' : null)));
 
-    linhas.push(acItem('Registrar parecer', '📝', `pAbrirParPc(${nm})`,
-      !d.baixada && !semNum, 'verde',
+    linhas.push(acItem('Registrar parecer', 'parecer', `pAbrirParPc(${nm})`,
+      !d.baixada && !semNum, 'parecer',
       semNum ? 'Esta parcial não tem número — não é possível registrar'
              : (d.baixada ? 'A parcial já está baixada' : null)));
 
-    linhas.push(acItem('Ver parecer', '📄', `pVerParecerPc(${nm})`, !!d.baixada, 'verde',
+    linhas.push(acItem('Ver parecer', 'doc', `pVerParecerPc(${nm})`, !!d.baixada, 'parecer',
       d.baixada ? null : 'A parcial ainda não tem parecer registrado'));
 
     // ⚠️ EM DESTAQUE, e é de propósito. O encaminhamento ao C.I. é OBRIGATÓRIO (decisão do
     // Richard, 13/08/2026), e esconder este botão foi o defeito que deixou 2.181 parciais
     // baixadas sem caminho para o C.I. Ele saiu da linha em 18/08 — mas entra aqui em negrito.
-    linhas.push(acItem('Encaminhar ao C.I.', '🏛', `pEnviarCiPc(${nm})`,
-      d.baixada === true && d.enviado_ci !== true && !semNum, 'azul',
+    linhas.push(acItem('Encaminhar ao C.I.', 'enviar', `pEnviarCiPc(${nm})`,
+      d.baixada === true && d.enviado_ci !== true && !semNum, 'situacao',
       semNum ? 'Esta parcial não tem número'
              : (d.enviado_ci ? 'Já está no Controle Interno'
                              : (d.baixada ? null : 'Registre o parecer antes de encaminhar')),
       true));
 
-    // ── GRUPO 2: CORREÇÕES (âmbar e vermelho) ───────────────────────────────
+    // ── GRUPO 2: CORREÇÕES ──────────────────────────────────────────────────
     linhas.push(acGrupo('Correções'));
 
     const c = d.corrigir_situacao || {};
     if (c.pendente)
-      linhas.push(acItem('Corrigir situação', '⏳', '', false, 'ambar',
+      linhas.push(acItem('Corrigir situação', 'relogio', '', false, 'correcao',
         'Já existe um pedido pendente com o coordenador'));
     else if (c.pode)
-      linhas.push(acItem('Corrigir situação', '✎', `corAbrir(${pc})`, true, 'ambar'));
+      linhas.push(acItem('Corrigir situação', 'lapis', `corAbrir(${pc})`, true, 'correcao'));
     else
-      linhas.push(acItem('Solicitar correção da situação', '📨',
-        `scAbrir(${pc},'corrigir_situacao')`, c.viaSolicitacao, 'ambar',
+      linhas.push(acItem('Solicitar correção da situação', 'carta',
+        `scAbrir(${pc},'corrigir_situacao')`, c.viaSolicitacao, 'correcao',
         c.viaSolicitacao ? null : c.motivo));
 
     const p = d.puxar_ci || {};
     if (!d.enviado_ci)
-      linhas.push(acItem('Puxar de volta do C.I.', '↩', '', false, 'vermelho',
+      linhas.push(acItem('Puxar de volta do C.I.', 'voltar', '', false, 'desfaz',
         'Esta parcial não está no Controle Interno'));
     else if (p.pendente)
-      linhas.push(acItem('Puxar de volta do C.I.', '⏳', '', false, 'vermelho',
+      linhas.push(acItem('Puxar de volta do C.I.', 'relogio', '', false, 'desfaz',
         'Já existe um pedido pendente com o coordenador'));
     else if (p.pode)
-      linhas.push(acItem('Puxar de volta do C.I.', '↩', `pxAbrir(${pc})`, true, 'vermelho'));
+      linhas.push(acItem('Puxar de volta do C.I.', 'voltar', `pxAbrir(${pc})`, true, 'desfaz'));
     else
-      linhas.push(acItem('Solicitar volta do C.I.', '📨', `scAbrir(${pc},'puxar_ci')`,
-        p.viaSolicitacao, 'vermelho', p.viaSolicitacao ? null : p.motivo));
+      linhas.push(acItem('Solicitar volta do C.I.', 'carta', `scAbrir(${pc},'puxar_ci')`,
+        p.viaSolicitacao, 'desfaz', p.viaSolicitacao ? null : p.motivo));
 
     // ⚠️ DESFAZER A PUXADA — 26/08/2026. Só aparece quando o servidor manda o campo: quem
     // decide se ele existe é `GET /parcela/acoes`, e uma parcela que nunca foi puxada não
@@ -12155,24 +12209,27 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // que a pessoa precisa para saber o que fazer em vez disso.
     const dp = d.desfazer_puxar_ci;
     if (dp)
-      linhas.push(acItem('Desfazer a puxada do C.I.', '↺',
-        dp.pode ? 'dpxAbrir()' : '', !!dp.pode, 'verde', dp.motivo));
+      linhas.push(acItem('Desfazer a puxada do C.I.', 'desfazer',
+        dp.pode ? 'dpxAbrir()' : '', !!dp.pode, 'desfaz', dp.motivo));
 
-    // ── GRUPO 3: CONSULTA E CADASTRO (roxo e cinza) ─────────────────────────
+    // ── GRUPO 3: CONSULTA E CADASTRO ────────────────────────────────────────
     linhas.push(acGrupo('Consulta e cadastro'));
 
-    linhas.push(acItem('Cadastrar PC nesta TR', '➕', `pnAbrir('${escHtml(tr)}')`,
-      !!d.cadastrar_pc, 'roxo',
+    linhas.push(acItem('Cadastrar PC nesta TR', 'mais', `pnAbrir('${escHtml(tr)}')`,
+      !!d.cadastrar_pc, 'situacao',
       d.cadastrar_pc ? null : 'Esta TR não está com você'));
 
     // O histórico abre SEMPRE — com ou sem parecer. Ver `pHistoricoPc`.
-    linhas.push(acItem('Histórico da parcial', '🕘', `pHistoricoPc(${nm})`, true, 'cinza'));
+    linhas.push(acItem('Histórico da parcial', 'historico', `pHistoricoPc(${nm})`, true, 'situacao'));
 
     cx.innerHTML = linhas.join('');
+    acReposicionar();
   } catch (e) {
-    if (_acAberto === cx)
+    if (_acAberto === cx) {
       cx.innerHTML = `<div style="padding:10px 14px;color:var(--r);font-size:11.5px;max-width:250px;">
         Erro ao carregar as ações: ${escHtml(e.message)}</div>`;
+      acReposicionar();
+    }
   }
 }
 
