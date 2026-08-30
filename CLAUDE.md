@@ -525,6 +525,35 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
     disse "o SIGEF mostra 20 parcelas na 2020TR000658" porque a impressão cortava em 20; o PDF
     tem 26, de `000001` a `000026`. Quem imprime lista de conferência imprime inteira.
 
+28. **⚠️ `sigef_status` GUARDA A SITUAÇÃO, NÃO A BAIXA — perguntar se ele EXISTE é defeito**
+    (30/08/2026).
+
+    A tag **`ABERTA_COM_BAIXA_SIGEF`** perguntava `sigef_status IS NOT NULL AND baixada =
+    false`. Funcionava enquanto o campo só era preenchido pela conciliação com o extrato da
+    CGE, que só falava de baixa. **A importação do SIGEF de 30/08 encheu o campo com a situação
+    corrente de qualquer PC** — e 1.598 PCs **em análise** caíram na tag: ela saltou de **398
+    para 1.996** e apareceu em quase toda TR livre do estoque.
+
+    ⚠️ **A pergunta certa é o que o campo DIZ.** A lista única é `SIGEF_BAIXA`, em
+    `sigpc-api/lib/sigef.js`: códigos `AV`, `SV`, `AT`, `ST`, `AS`, `SS` e os textos longos
+    `Baixa Regular`, `Baixa Regular Ressalva`, `Regular`, `Regular com Ressalvas` e as quatro
+    variantes com `- Técnico` / `- Secretário`. **Duas famílias de valor convivem no mesmo
+    campo** — texto longo da CGE e código de duas letras do SIGEF —, e é por isso que a lista
+    tem de existir em vez de um `LIKE 'Baixa%'`.
+
+    ⚠️ **Irregular NÃO é baixa.** `IC/IP/IS/IF`, `CT/PT/LT/FT`, `CS/PS/LS/FS` ficam de fora: é
+    decisão desfavorável, e a PC continua aberta aqui dentro. Fora também `VA`, `VR`, `VT`,
+    `VS`, `DV`, `DT`, `ED` e `DA`.
+
+    ⚠️ **A comparação normaliza os DOIS lados** com `btrim(upper(...))`, e a constante já está
+    escrita em maiúscula. O acento fica: `Secretário` em maiúscula continua acentuado no
+    Postgres e no JS — normalizar um lado só é que quebra.
+
+    ⚠️ **As outras duas tags não mudaram, e isso foi medido, não presumido:**
+    `SEM_REGISTRO_SIGEF` **350** e `VERIFICAR_FINAL` **284**, iguais antes e depois da carga —
+    elas pedem `sigef_status IS NULL` **com** `baixada = true`, e toda PC importada nasceu com
+    o campo preenchido.
+
 ---
 
 ## As três regras do time de agentes (Richard, 13/08/2026)
