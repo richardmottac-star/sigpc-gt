@@ -959,6 +959,24 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
     <div class="top-user">
       <!-- SINO — o contador só existe quando há não lidas. Um badge permanente vira parte do
            cenário e para de ser lido; é justamente o que se quer evitar. -->
+      <!-- CONSULTAR SGPe — o botao fica ANTES do sino de proposito. O sino e o que o sistema
+           tem para dizer; este e o que a pessoa vai buscar la fora, e e a unica coisa do
+           cabecalho que sai do sistema. A tecla vem numa kbd ao lado, e nao so no title:
+           atalho que so aparece ao parar o mouse em cima e atalho que ninguem descobre.
+           O SVG esta escrito aqui, e nao vem de sgpeLogoSvg(): este cabecalho e HTML
+           ESTATICO, fora de qualquer template — a chamada da funcao sairia como texto. -->
+      <button id="sgpeBtnTopo" onclick="sgpeConsultaAbrir()" title="Consultar processo no SGPe (F4)"
+        style="background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);cursor:pointer;
+               padding:5px 10px;margin-right:8px;border-radius:8px;color:#fff;display:flex;align-items:center;
+               gap:7px;font-family:Barlow,sans-serif;transition:background 150ms;"
+        onmouseover="this.style.background=&quot;rgba(255,255,255,.20)&quot;"
+        onmouseout="this.style.background=&quot;rgba(255,255,255,.10)&quot;">
+        <span style="background:#fff;border-radius:5px;padding:3px;display:flex;"><svg viewBox="0 0 40 40" width="17" height="17" aria-hidden="true" style="display:block;"><path fill="#009640" d="M4 9 L18 9 L26 20 L18 31 L4 31 L12 20 Z"/><path fill="#009640" d="M17 9 L28 9 L36 20 L28 31 L17 31 L25 20 Z" opacity=".72"/><rect fill="#E30613" x="4" y="34.2" width="32" height="3.4" rx="1.7"/></svg></span>
+        <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">Consultar SGPe</span>
+        <kbd style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);
+                    border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:10px;
+                    font-weight:700;line-height:1.5;">F4</kbd>
+      </button>
       <div id="sinoBox" style="position:relative;display:none;margin-right:6px;">
         <button id="sinoBtn" onclick="sinoAbrir(event)" title="Notificações"
           style="background:none;border:0;cursor:pointer;padding:6px 8px;font-size:19px;line-height:1;color:#fff;">🔔</button>
@@ -4585,6 +4603,434 @@ function procHtml(bruto, codigo_pc, campo) {
   return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
     title="Corrigir o processo SGPe" style="cursor:pointer;margin-left:5px;font-size:11px;${semLink ? 'color:#B8860B;opacity:.85;' : 'opacity:0;'}">✎</span>`
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CONSULTAR PROCESSO NO SGPe — o portal público, sem sair do sistema
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Tudo o que é desta janela mora AQUI, num bloco só: o logo, o modal, os seis estados, as
+// consultas recentes, a tecla F4 e os dois ícones que a abrem já consultada.
+//
+// ⚠️ ESTE BLOCO É CONTÍGUO DE PROPÓSITO, e é a lição de 28/08: o `ciBolha` foi apagado por
+// estar a 1.400 linhas do seu único chamador, dentro de um bloco de outra tela. A tela ficou
+// quebrada três dias em 46 TRs e 22 analistas. Funções que só fazem sentido juntas ficam
+// juntas — quem for mexer aqui, mexa aqui, e não espalhe.
+//
+// ⚠️ NADA DISTO ESCREVE NO BANCO. A rota é GET /sgpe/consulta e vai ao portal público a cada
+// chamada — sem cache nesta fase, por decisão do Richard. As "recentes" são do NAVEGADOR de
+// quem consultou (localStorage), não do sistema: elas não são histórico, são atalho.
+
+// O logo do SGPe — duas setas verdes e o traço vermelho.
+// SVG e não imagem: o modal abre de dentro de um `innerHTML`, e um `<img>` com data-uri de
+// 4 KB apareceria depois do resto. Aqui o logo já está desenhado quando o modal aparece.
+function sgpeLogoSvg(tam) {
+  const t = tam || 26
+  return `<svg viewBox="0 0 40 40" width="${t}" height="${t}" aria-hidden="true" style="flex-shrink:0;display:block;">
+    <path fill="#009640" d="M4 9 L18 9 L26 20 L18 31 L4 31 L12 20 Z"/>
+    <path fill="#009640" d="M17 9 L28 9 L36 20 L28 31 L17 31 L25 20 Z" opacity=".72"/>
+    <rect fill="#E30613" x="4" y="34.2" width="32" height="3.4" rx="1.7"/>
+  </svg>`
+}
+
+// ── AS CONSULTAS RECENTES ────────────────────────────────────────────────────
+// ⚠️ VALIDADE DE 7 DIAS, e a data vai gravada EM CADA ITEM, não na lista. Uma validade da
+// lista inteira faria a consulta de hoje morrer junto com a da semana passada.
+// ⚠️ E o `try` em volta de tudo não é zelo: no modo anônimo do navegador o `localStorage`
+// LANÇA ao ser tocado, e sem isto o modal não abriria — a janela toda cairia por causa de um
+// atalho de conveniência.
+const SGPE_RECENTES_CHAVE = 'sigpc_sgpe_recentes'
+const SGPE_RECENTES_MAX   = 5
+const SGPE_RECENTES_DIAS  = 7
+
+function sgpeRecentesLer() {
+  try {
+    const cru = JSON.parse(localStorage.getItem(SGPE_RECENTES_CHAVE) || '[]')
+    if(!Array.isArray(cru)) return []
+    const limite = Date.now() - SGPE_RECENTES_DIAS * 86400000
+    return cru.filter(x => x && x.sigla && x.numero && x.ano && Number(x.em) >= limite)
+              .slice(0, SGPE_RECENTES_MAX)
+  } catch(_) { return [] }
+}
+
+function sgpeRecentesGravar(sigla, numero, ano, rotulo) {
+  try {
+    const novo = { sigla, numero: String(numero), ano: String(ano), rot: rotulo || '', em: Date.now() }
+    const chave = (x) => `${x.sigla}|${x.numero}|${x.ano}`
+    // Consultar de novo o mesmo processo o traz para o topo em vez de duplicar a linha.
+    const lista = [novo, ...sgpeRecentesLer().filter(x => chave(x) !== chave(novo))]
+    localStorage.setItem(SGPE_RECENTES_CHAVE, JSON.stringify(lista.slice(0, SGPE_RECENTES_MAX)))
+  } catch(_) {}
+}
+
+function sgpeRecentesLimpar() {
+  try { localStorage.removeItem(SGPE_RECENTES_CHAVE) } catch(_) {}
+  const cx = document.getElementById('sgpeRecentes')
+  if(cx) cx.innerHTML = sgpeRecentesHtml()
+}
+
+function sgpeRecentesHtml() {
+  const r = sgpeRecentesLer()
+  if(!r.length) return ''
+  return `
+    <div style="margin-top:16px;border-top:1px solid var(--cb);padding-top:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+        <span style="font-size:10px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.4px;">Consultas recentes</span>
+        <button type="button" data-f="limpar" style="background:none;border:0;cursor:pointer;font-family:Barlow,sans-serif;
+          font-size:11px;color:var(--ct);text-decoration:underline;padding:2px 0;">limpar</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        ${r.map(x => `
+          <button type="button" data-f="rec" data-s="${escHtml(x.sigla)}" data-n="${escHtml(x.numero)}" data-a="${escHtml(x.ano)}"
+            style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:var(--cl);border:1px solid transparent;
+                   border-radius:7px;padding:7px 10px;cursor:pointer;font-family:Barlow,sans-serif;transition:border-color 140ms;"
+            onmouseover="this.style.borderColor='var(--cb)'" onmouseout="this.style.borderColor='transparent'">
+            <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-weight:700;color:var(--te);">
+              ${escHtml(x.sigla)} ${escHtml(x.numero)}/${escHtml(x.ano)}</span>
+            ${x.rot ? `<span style="font-size:11px;color:var(--ct);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(x.rot)}</span>` : ''}
+          </button>`).join('')}
+      </div>
+    </div>`
+}
+
+// ── O BLOCO DO ENCONTRADO ────────────────────────────────────────────────────
+
+// ⚠️ A FAIXA DE POSIÇÃO É O ELEMENTO MAIS IMPORTANTE DA JANELA, e por isso vem antes dos
+// dados do processo: quem abre esta consulta quer saber ONDE o processo está, não do que ele
+// trata. As duas cores dizem coisas diferentes — verde é "está parado ali", âmbar é "saiu de
+// um setor e o outro ainda não recebeu". Trocá-las por uma cor só apagaria a distinção que a
+// lib existe para fazer.
+function sgpeFaixaPosicao(a) {
+  if(!a) return ''
+  const parado = a.situacao === 'ONDE_ESTA'
+  const fundo  = parado ? '#EAF3DE' : '#FAEEDA'
+  const borda  = parado ? '#3B6D11' : '#BA7517'
+  const rotulo = parado ? 'ONDE ESTÁ AGORA' : 'EM TRÂNSITO PARA'
+  // ⚠️ `dias` pode ser NULO, e nulo não é zero: é o trâmite em trânsito sem trâmite anterior,
+  // de onde não há de quando contar. Mostrar "0 dias" ali afirmaria que saiu hoje.
+  const temDias = a.dias !== null && a.dias !== undefined
+  return `
+    <div style="background:${fundo};border-left:5px solid ${borda};border-radius:0 9px 9px 0;
+                padding:13px 16px;margin:14px 0;display:flex;align-items:center;gap:14px;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:10.5px;font-weight:800;color:${borda};text-transform:uppercase;letter-spacing:.7px;">${rotulo}</div>
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:700;
+                    color:var(--te);margin-top:3px;word-break:break-all;">${escHtml(a.setor_sigla || '—')}</div>
+        ${a.setor_nome ? `<div style="font-size:12px;color:var(--ct);margin-top:2px;line-height:1.4;">${escHtml(a.setor_nome)}</div>` : ''}
+      </div>
+      ${temDias ? `
+      <div style="text-align:center;flex-shrink:0;">
+        <div style="font-size:30px;font-weight:800;color:${borda};line-height:1;">${a.dias}</div>
+        <div style="font-size:10px;color:${borda};opacity:.85;font-weight:600;margin-top:2px;">dias aqui</div>
+      </div>` : ''}
+    </div>`
+}
+
+function sgpeDado(rot, val) {
+  return `
+    <div style="min-width:0;">
+      <div style="font-size:9.5px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.4px;">${rot}</div>
+      <div style="font-size:12.5px;color:var(--te);line-height:1.45;margin-top:2px;word-break:break-word;">${val || '—'}</div>
+    </div>`
+}
+
+// ⚠️ A LINHA DO TEMPO VEM INVERTIDA — o trâmite de agora em cima. O portal entrega em ordem
+// cronológica, e num processo de 34 passos isso põe o que interessa no fim da rolagem.
+function sgpeLinhaTempo(t) {
+  if(!t || !t.length) return ''
+  const inv = t.slice().reverse()
+  return `
+    <div style="margin-top:16px;">
+      <div style="font-size:10px;font-weight:700;color:var(--ct);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">
+        Caminho do processo · ${t.length} tramitaç${t.length === 1 ? 'ão' : 'ões'}</div>
+      <div style="position:relative;padding-left:24px;">
+        <div style="position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--cb);"></div>
+        ${inv.map((p, i) => {
+          const atual   = i === 0
+          const abertura = p.ordem === 1
+          return `
+          <div style="position:relative;padding-bottom:${i === inv.length - 1 ? '0' : '15px'};">
+            <div style="position:absolute;left:-24px;top:2px;width:12px;height:12px;border-radius:50%;
+                        background:${atual ? 'var(--v)' : '#fff'};border:2px solid ${atual ? 'var(--v)' : 'var(--cb)'};"></div>
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+              <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+                           font-weight:700;color:var(--te);">${escHtml(p.setor_sigla || '—')}</span>
+              ${atual ? `<span style="font-size:9px;font-weight:800;background:var(--v);color:#fff;border-radius:20px;padding:1px 7px;">atual</span>` : ''}
+              ${abertura ? `<span style="font-size:9px;font-weight:700;background:var(--cl);color:var(--ct);border-radius:20px;padding:1px 7px;">abertura</span>` : ''}
+              ${/* A permanência à direita, e NULA quando o trâmite ainda não fechou — ver
+                    lib/sgpe-portal.js. "0 dias" é uma afirmação diferente de "ainda está lá",
+                    e há caso real de zero: processo recebido e encaminhado no mesmo dia. */''}
+              <span style="margin-left:auto;font-size:11.5px;color:var(--ct);white-space:nowrap;">
+                ${p.permanencia_dias === null ? 'ainda aqui' : p.permanencia_dias + ' dia' + (p.permanencia_dias === 1 ? '' : 's')}</span>
+            </div>
+            ${p.setor_nome ? `<div style="font-size:11px;color:var(--ct);margin-top:1px;line-height:1.4;">${escHtml(p.setor_nome)}</div>` : ''}
+            <div style="font-size:11px;color:#8A968F;margin-top:3px;line-height:1.5;">
+              recebido ${p.dt_recebto ? sgpeData(p.dt_recebto) : '—'}
+              · encaminhado ${p.dt_encaminha ? sgpeData(p.dt_encaminha) : '—'}
+              ${p.quem_encaminhou ? ' por ' + escHtml(p.quem_encaminhou) : ''}</div>
+          </div>`
+        }).join('')}
+      </div>
+    </div>`
+}
+
+// ⚠️ A DATA VEM DO PORTAL COMO TEXTO `AAAA-MM-DD` e é fatiada como texto. Passá-la por
+// `new Date(...)` a puxaria um dia para trás — é a armadilha 25, e a lib do servidor evita a
+// mesma coisa pelo mesmo motivo.
+function sgpeData(iso) {
+  const s = String(iso || '')
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : escHtml(s || '—')
+}
+
+function sgpeEncontradoHtml(d) {
+  const p = d.processo || {}
+  const pilula = `${p.situacao_portal || ''}${p.estado_portal ? ' · ' + p.estado_portal : ''}`.trim()
+  const finalizado = /ARQUIVAD|FINALIZAD|ENCERRAD/i.test(pilula)
+  const inter = (p.interessados || [])[0]
+  return `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;
+                   font-weight:700;color:var(--te);">${escHtml(p.numero_oficial || `${p.sigla} ${p.numero}/${p.ano}`)}</span>
+      ${pilula ? `<span style="font-size:10px;font-weight:800;border-radius:20px;padding:2px 9px;
+        background:${finalizado ? '#EEF2F7' : '#E0F2E9'};color:${finalizado ? '#37474F' : 'var(--verde-primario,#2E7D32)'};">${escHtml(pilula)}</span>` : ''}
+      <span style="margin-left:auto;display:flex;gap:7px;">
+        <button type="button" data-f="copiar" class="mccn" style="padding:5px 12px;font-size:12px;">Copiar</button>
+        ${/* ⚠️ "ABRIR NO SGPe" SÓ APARECE SE O LINK ESTIVER RESOLVIDO NO CACHE. O portal
+              público NÃO devolve o `nuProcesso` interno, que é o que a URL do SGPe exige
+              (armadilha 20) — e há caso medido em que o portal ACHA o processo e o cache o
+              tem como NAO_ENCONTRADO: o SCC 2049/2025. Botão sempre visível levaria a um
+              endereço quebrado, que é pior do que não ter botão (armadilha 15). */''}
+        ${d.link ? `<a href="${escHtml(d.link)}" target="_blank" rel="noopener" class="mcok"
+          style="padding:5px 12px;font-size:12px;text-decoration:none;display:inline-block;">Abrir no SGPe ↗</a>` : ''}
+      </span>
+    </div>
+
+    ${sgpeFaixaPosicao(d.atual)}
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:11px 16px;">
+      ${sgpeDado('Assunto', escHtml(p.assunto || p.titulo || ''))}
+      ${sgpeDado('Classe', escHtml(p.classe || ''))}
+      ${sgpeDado('Interessado', escHtml(inter ? (inter.nome || inter.nmInteressado || '') : ''))}
+      ${sgpeDado('Aberto em', `${p.dt_entrada ? sgpeData(p.dt_entrada) : '—'}${p.setor_abertura ? ' · ' + escHtml(String(p.setor_abertura).split(' - ')[0]) : ''}`)}
+    </div>
+
+    ${sgpeLinhaTempo(d.tramitacoes)}`
+}
+
+// ── OS SEIS ESTADOS ──────────────────────────────────────────────────────────
+function sgpeCaixa(cor, fundo, borda, titulo, texto) {
+  return `
+    <div style="background:${fundo};border:1px solid ${borda};border-left:4px solid ${cor};
+                border-radius:0 9px 9px 0;padding:13px 15px;">
+      <div style="font-size:13px;font-weight:700;color:${cor};">${titulo}</div>
+      <div style="font-size:12.5px;color:var(--te);margin-top:4px;line-height:1.55;">${texto}</div>
+    </div>`
+}
+
+// ── O MODAL ──────────────────────────────────────────────────────────────────
+let _sgpeModal = null
+
+/**
+ * Abre a janela de consulta. Sem argumento, no estado inicial; com um processo, já consultado.
+ * @param bruto  'SCC 9622/2024' — o texto como está na PC. Opcional.
+ */
+function sgpeConsultaAbrir(bruto) {
+  if(_sgpeModal) { const c = document.getElementById('sgpeNum'); if(c) c.focus(); return }
+
+  const el = document.createElement('div')
+  el.className = 'mo open'
+  // ⚠️ z-index ACIMA DO CABEÇALHO. O `.mo` do sistema é 200 e o cabeçalho fixo sobe mais que
+  // isso em algumas telas; o modal apareceria por baixo da barra verde. E o F4 abre de
+  // QUALQUER tela — não dá para depender do empilhamento de uma só.
+  el.style.zIndex = '1300'
+  el.innerHTML = `
+    <div class="mc" style="width:640px;">
+      <div class="mch" style="background:#F4F8F2;gap:11px;">
+        ${sgpeLogoSvg(30)}
+        <div style="flex:1;min-width:0;">
+          <h3 style="line-height:1.25;">Consultar processo no SGPe</h3>
+          <div style="font-size:11.5px;color:var(--ct);margin-top:1px;">Situação e caminho do processo, sem sair do sistema</div>
+        </div>
+        <button class="mcx" data-f="x" title="Fechar (Esc)">✕</button>
+      </div>
+      <div class="mcb">
+        <div style="display:flex;gap:9px;align-items:flex-end;">
+          <div class="mc-campo" style="margin-bottom:0;width:82px;flex-shrink:0;">
+            <label>Sigla</label>
+            <input id="sgpeSigla" type="text" value="SCC" maxlength="8" autocomplete="off"
+              style="text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
+          </div>
+          <div class="mc-campo" style="margin-bottom:0;width:118px;flex-shrink:0;">
+            <label>Número</label>
+            <input id="sgpeNum" type="text" inputmode="numeric" maxlength="9" autocomplete="off"
+              placeholder="9622" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
+          </div>
+          <div class="mc-campo" style="margin-bottom:0;width:84px;flex-shrink:0;">
+            <label>Ano</label>
+            <input id="sgpeAno" type="text" inputmode="numeric" maxlength="4" autocomplete="off"
+              placeholder="2024" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
+          </div>
+          ${/* O relevo é o que faz este botão ser o próximo passo óbvio da janela — os campos
+                à esquerda são planos, e ele é a única coisa em pé na linha. */''}
+          <button type="button" id="sgpeBt" data-f="ir" class="mcok"
+            style="padding:9px 20px;font-size:13.5px;box-shadow:0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16);
+                   transition:transform 90ms, box-shadow 90ms, opacity 140ms;"
+            onmousedown="this.style.transform='translateY(2px)';this.style.boxShadow='0 0 0 #2A5A0C'"
+            onmouseup="this.style.transform='';this.style.boxShadow='0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16)'"
+            onmouseout="this.style.transform='';this.style.boxShadow='0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16)'">Consultar</button>
+        </div>
+
+        <div id="sgpeSaida" style="margin-top:14px;"></div>
+        <div id="sgpeRecentes">${sgpeRecentesHtml()}</div>
+
+        <div style="margin-top:15px;padding-top:10px;border-top:1px solid var(--cl);font-size:10.5px;color:#9AA8A0;text-align:center;">
+          <kbd style="background:var(--cl);border:1px solid var(--cb);border-bottom-width:2px;border-radius:4px;
+                      padding:1px 5px;font-family:ui-monospace,monospace;font-size:10px;color:var(--ct);">F4</kbd>
+          abre esta janela de qualquer tela · <kbd style="background:var(--cl);border:1px solid var(--cb);
+          border-bottom-width:2px;border-radius:4px;padding:1px 5px;font-family:ui-monospace,monospace;font-size:10px;color:var(--ct);">Esc</kbd> fecha
+        </div>
+      </div>
+    </div>`
+  document.body.appendChild(el)
+  _sgpeModal = el
+
+  const cSig = document.getElementById('sgpeSigla')
+  const cNum = document.getElementById('sgpeNum')
+  const cAno = document.getElementById('sgpeAno')
+  const bt   = document.getElementById('sgpeBt')
+  const out  = document.getElementById('sgpeSaida')
+
+  const fechar = () => {
+    document.removeEventListener('keydown', tecla, true)
+    el.remove(); _sgpeModal = null
+  }
+
+  const marcarSigla = (erro) => {
+    cSig.style.borderColor = erro ? 'var(--r)' : ''
+    cSig.style.background  = erro ? '#FEF2F2' : ''
+  }
+
+  const consultar = async () => {
+    const s = (cSig.value || '').trim().toUpperCase()
+    const n = (cNum.value || '').replace(/\D/g, '')
+    const a = (cAno.value || '').replace(/\D/g, '')
+    marcarSigla(false)
+    if(!s || !n || !a) { out.innerHTML = sgpeCaixa('#B45309', '#FEF3C7', '#FCD34D',
+      'Faltam dados', 'Informe a sigla, o número e o ano do processo.'); return }
+
+    // BUSCANDO — o botão perde o relevo junto com a opacidade: um botão em relevo e apagado
+    // parece clicável e não é (armadilha 15).
+    bt.disabled = true; bt.style.opacity = '.5'; bt.style.cursor = 'wait'; bt.style.boxShadow = 'none'
+    out.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:20px 0;color:var(--ct);font-size:13px;">
+      <div class="spin"></div>Consultando o portal do SGPe...</div>`
+    try {
+      const r = await fetch(`${API_URL}/sgpe/consulta?sigla=${encodeURIComponent(s)}&numero=${encodeURIComponent(n)}&ano=${encodeURIComponent(a)}`)
+      const j = await r.json()
+      if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+      const d = j.data || {}
+
+      if(d.erro === 'SIGLA_NAO_CADASTRADA') {
+        marcarSigla(true)
+        out.innerHTML = sgpeCaixa('#B91C1C', '#FEF2F2', '#FCA5A5', 'Sigla não cadastrada',
+          `<b>${escHtml(d.sigla || s)}</b> não está no mapa de órgãos do sistema.`)
+        cSig.focus(); cSig.select()
+      } else if(d.erro === 'NAO_ENCONTRADO') {
+        out.innerHTML = sgpeCaixa('#B45309', '#FEF3C7', '#FCD34D', 'Processo não encontrado',
+          'Confira o número e o ano — a sigla está cadastrada.')
+      } else if(d.erro === 'SIGILOSO') {
+        out.innerHTML = sgpeCaixa('#4B5563', '#F3F4F6', '#D1D5DB', 'Processo sigiloso',
+          'O processo existe, mas os dados dele não são públicos. Consulte pelo SGPe, com o seu login.')
+      } else {
+        out.innerHTML = sgpeEncontradoHtml(d)
+        const p = d.processo || {}
+        sgpeRecentesGravar(s, n, a, p.assunto || p.titulo || '')
+        document.getElementById('sgpeRecentes').innerHTML = sgpeRecentesHtml()
+      }
+    } catch(e) {
+      out.innerHTML = sgpeCaixa('#B91C1C', '#FEF2F2', '#FCA5A5', 'Não deu para consultar', escHtml(e.message))
+    } finally {
+      bt.disabled = false; bt.style.opacity = ''; bt.style.cursor = ''
+      bt.style.boxShadow = '0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16)'
+    }
+  }
+
+  el.addEventListener('click', (e) => {
+    const alvo = e.target.closest && e.target.closest('[data-f]')
+    const f = alvo && alvo.getAttribute('data-f')
+    if(f === 'x') return fechar()
+    if(f === 'ir') return consultar()
+    if(f === 'limpar') return sgpeRecentesLimpar()
+    if(f === 'copiar') {
+      const t = `${(cSig.value||'').trim().toUpperCase()} ${(cNum.value||'').trim()}/${(cAno.value||'').trim()}`
+      try { navigator.clipboard.writeText(t); toast('Processo copiado.', 'ok') }
+      catch(_) { toast('Não deu para copiar.', 'err') }
+      return
+    }
+    if(f === 'rec') {
+      cSig.value = alvo.getAttribute('data-s')
+      cNum.value = alvo.getAttribute('data-n')
+      cAno.value = alvo.getAttribute('data-a')
+      return consultar()
+    }
+    // ⚠️ CLICAR FORA NÃO FECHA, e é decisão de uso: a janela tem campo digitável, e quem está
+    // digitando o número erra o alvo do clique. Perder o que foi digitado por um clique de
+    // 3 px fora do painel é o tipo de coisa que faz a pessoa parar de usar a ferramenta.
+    // Repare que não há aqui a comparação do alvo com o próprio fundo, e a ausência é
+    // proposital — todos os outros modais do sistema a têm. O Esc fecha, e o rodapé diz isso.
+  })
+
+  const tecla = (e) => {
+    if(e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(); return }
+    if(e.key === 'Enter' && (e.target === cSig || e.target === cNum || e.target === cAno)) {
+      e.preventDefault(); consultar()
+    }
+  }
+  document.addEventListener('keydown', tecla, true)
+
+  // Já veio com processo? Consulta sozinha — quem clicou no ícone da lista já disse qual é.
+  if(bruto && !procVazio(bruto)) {
+    const m = String(normalizarProcesso(bruto)).match(/^([A-Z0-9]+)\s+0*(\d+)\s*\/\s*(\d{4})$/i)
+    if(m) {
+      cSig.value = m[1].toUpperCase(); cNum.value = m[2]; cAno.value = m[3]
+      consultar()
+    } else { cNum.focus() }
+  } else {
+    setTimeout(() => cNum.focus(), 30)
+  }
+}
+
+// ── O ÍCONE DAS LISTAS ───────────────────────────────────────────────────────
+// ⚠️ SÓ ONDE HÁ PROCESSO CADASTRADO. Numa PC sem número o ícone abriria a janela vazia e o
+// analista leria "processo não encontrado" sobre um processo que ninguém informou — o que
+// falta ali é o dado, e quem resolve isso é o lápis do `procHtml`, não esta consulta.
+function sgpeIconeConsulta(bruto) {
+  if(procVazio(bruto)) return ''
+  return `<button type="button" onclick="event.stopPropagation();sgpeConsultaAbrir('${escHtml(String(bruto))}')"
+    title="Consultar este processo no SGPe" aria-label="Consultar no SGPe"
+    style="width:26px;height:26px;padding:0;margin-left:5px;background:none;border:0;cursor:pointer;
+           border-radius:6px;vertical-align:middle;display:inline-flex;align-items:center;justify-content:center;
+           opacity:.75;transition:opacity 140ms, background 140ms;"
+    onmouseover="this.style.opacity='1';this.style.background='var(--cl)'"
+    onmouseout="this.style.opacity='.75';this.style.background='none'">${sgpeLogoSvg(18)}</button>`
+}
+
+// ── F4, DE QUALQUER TELA ─────────────────────────────────────────────────────
+// ⚠️ F4 PORQUE F2 JÁ É A BUSCA DA FILA DO C.I. Duas telas disputando a mesma tecla dariam à
+// pessoa uma tecla que faz coisas diferentes conforme onde ela está — que é pior do que não
+// ter atalho nenhum.
+//
+// ⚠️ E NÃO DISPARA DENTRO DE CAMPO DE TEXTO. Em muitos navegadores o F4 tem função própria na
+// barra de endereço, e mais: quem está digitando o número de uma NL não espera uma janela
+// abrindo por cima. O `isContentEditable` entra junto porque as anotações da TR usam isso.
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'F4' || e.ctrlKey || e.altKey || e.metaKey) return
+  const t = e.target
+  const tag = t && t.tagName
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return
+  e.preventDefault()
+  sgpeConsultaAbrir()
+})
 
 /** Analista, coordenador e superadmin corrigem. No modo "ver como", ninguém. */
 function procEdSoDigitos(el) { el.value = el.value.replace(/[^0-9]/g, '') }
@@ -12129,7 +12575,7 @@ function renderPlan(rows) {
       const linhasPC = pa.pcs.map(p => {
         return `<tr>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
-          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}${sgpeIconeConsulta(p.processo_pc)}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
           <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
@@ -15019,7 +15465,7 @@ function ciLinha(l, i) {
   const semProc = !l.processo_pc || String(l.processo_pc).trim() === '' || String(l.processo_pc).trim() === '-'
   const proc = semProc
     ? `<span style="color:#9AA8A0;">—</span>`
-    : procHtml(l.processo_pc, l.codigo_pc, 'processo_pc')
+    : procHtml(l.processo_pc, l.codigo_pc, 'processo_pc') + sgpeIconeConsulta(l.processo_pc)
 
   // ⚠️ ZEBRA E DESTAQUE NO MESMO LUGAR, e a ordem importa: o destaque SOBREPÕE a zebra, senão
   // a linha encontrada mudaria de cor conforme caísse em posição par ou ímpar.
