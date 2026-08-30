@@ -472,6 +472,59 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
     declaração léxica não vira propriedade do contexto do `vm`, e o teste não conseguiria nem
     ler nem escrever `_faixas`.
 
+26. **⚠️ AUSÊNCIA NO RELATÓRIO DO SIGEF NÃO PROVA AUSÊNCIA DE PC** (Richard, 30/08/2026).
+
+    Os relatórios *"Listar Prestação Contas Parcial/Final por Transferência"* saem com
+    **Ano Base**, e o SIGEF lista **o que está em curso, não o histórico**. PC encerrada sai da
+    listagem e continua existindo.
+
+    **Medido em 30/08/2026:** **235 PCs** do banco não constam do relatório — **234 têm valor,
+    NL e processo, e a maioria está baixada**. Elas **ficam**, por decisão do Richard. No mesmo
+    confronto, **362 TRs da planilha da CGE** (190 de 2017, 164 de 2022) não aparecem no
+    relatório Ano Base 2026, com **4.624 PCs, nenhuma baixada**.
+
+    ⚠️ **A REGRA QUE FICA: estes relatórios servem para ACRESCENTAR o que falta, NUNCA para
+    apagar.** Qualquer rotina que "sincronize" a base com o SIGEF removendo o que não está na
+    listagem apaga acervo bom — e é exatamente o tipo de conserto que destrói dado, como o
+    `recarga_exec.js` de 05/08 (armadilha do `nums[0]`).
+
+    ⚠️ **E a comparação é por TR + número da parcela, nunca por contagem de linhas:** o SIGEF
+    dá **uma linha por parcela** e o banco **uma linha por PC** — uma parcela pode ter várias
+    PCs (a mesma NL quitada por mais de uma). Comparar 8.587 parcelas com 13.627 PCs não
+    significa nada.
+
+    ⚠️ **O escopo é a TR:** são do GT as TRs da planilha da CGE. Dentro delas, tudo o que o
+    SIGEF mostra entra; TR fora da planilha fica de fora, com tudo dela. Sem esse recorte, o
+    levantamento de 30/08 acusou 3.742 ausentes — o número correto no escopo é **1.821**.
+
+27. **⚠️ `parcela_seq` NÃO É CHAVE DE COMPARAÇÃO COM O SIGEF — a coluna é `parcial_num`**
+    (Richard, 30/08/2026).
+
+    O número que o SIGEF chama de **"Parcial"** corresponde ao **`parcial_num`**, e a medição é
+    definitiva: em **1.193 de 1.193 TRs** todo `parcial_num` do banco existe na lista do SIGEF.
+    O `parcela_seq` só cabe em 943 delas (79%).
+
+    ⚠️ **`parcela_seq` é contador de PC dentro da TR, não número de parcela.** Na
+    `2020TR000658` o SIGEF lista 26 parciais e o banco tem 44 PCs com `parcela_seq` até 46 —
+    porque **uma parcela pode ter várias PCs**. Comparar por `parcela_seq` faz o índice 24
+    "colidir" com a parcela 24 do SIGEF quando as duas coisas não têm relação: ali o
+    `parcela_seq` 24 é a PC `2021PC001810`, que é a **parcial 13**.
+
+    ⚠️ **A regra para a colisão de índice, quando aparecer:** compare o número do SIGEF com o
+    `parcial_num` da PC que ocupa aquele `parcela_seq`. **Igual** → é a mesma PC, não entra.
+    **Diferente** → é colisão de índice, a PC do SIGEF não existe, entra com `parcela_seq`
+    NOVO, nunca reaproveitando o ocupado. Medido em 30/08: das 191 colisões, **191 eram de
+    índice e nenhuma era a mesma PC** — e não podia ser outro resultado, porque a prova por
+    `parcial_num` já teria excluído a candidata antes.
+
+    ⚠️ **E a prova de duplicidade reprova a PARCELA, não a TR.** Reprovar a TR inteira por uma
+    colisão custou, na primeira rodada, 1.149 PCs que não colidiam com nada — ficaram de fora
+    por causa de 191 casos de outra TR.
+
+    ⚠️ **Cuidado ao LER o dry-run: lista cortada com `.slice()` mente.** A primeira leitura
+    disse "o SIGEF mostra 20 parcelas na 2020TR000658" porque a impressão cortava em 20; o PDF
+    tem 26, de `000001` a `000026`. Quem imprime lista de conferência imprime inteira.
+
 ---
 
 ## As três regras do time de agentes (Richard, 13/08/2026)
