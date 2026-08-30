@@ -963,15 +963,16 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
            tem para dizer; este e o que a pessoa vai buscar la fora, e e a unica coisa do
            cabecalho que sai do sistema. A tecla vem numa kbd ao lado, e nao so no title:
            atalho que so aparece ao parar o mouse em cima e atalho que ninguem descobre.
-           O SVG esta escrito aqui, e nao vem de sgpeLogoSvg(): este cabecalho e HTML
-           ESTATICO, fora de qualquer template — a chamada da funcao sairia como texto. -->
+           O `src` da imagem e preenchido pelo script (ver SGPE_LOGO): este cabecalho e HTML
+           ESTATICO, fora de qualquer template — a chamada da funcao sairia como texto,
+           e repetir o base64 aqui seria a quarta copia da mesma imagem. -->
       <button id="sgpeBtnTopo" onclick="sgpeConsultaAbrir()" title="Consultar processo no SGPe (F4)"
         style="background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);cursor:pointer;
                padding:5px 10px;margin-right:8px;border-radius:8px;color:#fff;display:flex;align-items:center;
                gap:7px;font-family:Barlow,sans-serif;transition:background 150ms;"
         onmouseover="this.style.background=&quot;rgba(255,255,255,.20)&quot;"
         onmouseout="this.style.background=&quot;rgba(255,255,255,.10)&quot;">
-        <span style="background:#fff;border-radius:5px;padding:3px;display:flex;"><svg viewBox="0 0 40 40" width="17" height="17" aria-hidden="true" style="display:block;"><path fill="#009640" d="M4 9 L18 9 L26 20 L18 31 L4 31 L12 20 Z"/><path fill="#009640" d="M17 9 L28 9 L36 20 L28 31 L17 31 L25 20 Z" opacity=".72"/><rect fill="#E30613" x="4" y="34.2" width="32" height="3.4" rx="1.7"/></svg></span>
+        <span style="background:#fff;border-radius:5px;padding:3px;display:flex;"><img id="sgpeLogoTopo" width="17" height="17" alt="" aria-hidden="true" style="display:block;object-fit:contain;"></span>
         <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">Consultar SGPe</span>
         <kbd style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);
                     border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:10px;
@@ -4621,16 +4622,33 @@ function procHtml(bruto, codigo_pc, campo) {
 // chamada — sem cache nesta fase, por decisão do Richard. As "recentes" são do NAVEGADOR de
 // quem consultou (localStorage), não do sistema: elas não são histórico, são atalho.
 
-// O logo do SGPe — duas setas verdes e o traço vermelho.
-// SVG e não imagem: o modal abre de dentro de um `innerHTML`, e um `<img>` com data-uri de
-// 4 KB apareceria depois do resto. Aqui o logo já está desenhado quando o modal aparece.
-function sgpeLogoSvg(tam) {
+// ⚠️ O LOGO DO SGPe MORA NESTA CONSTANTE, E EM MAIS LUGAR NENHUM. São três pontos que o
+// desenham — o cabeçalho do sistema, o cabeçalho do modal e o ícone ao lado do número do
+// processo —, e três cópias do mesmo base64 seriam três coisas para atualizar quando o
+// órgão trocar a marca. É a mesma razão do `MAPA_NOME` ter uma dona só: cópia que ninguém
+// compara é cópia que diverge sem dar erro.
+//
+// ⚠️ E É A IMAGEM OFICIAL, recortada da original — não um desenho. Até 30/08 aqui havia um
+// SVG de duas setas e um traço, feito de memória; ele parecia o logo e não era. Marca de
+// órgão público não se aproxima: ou é o arquivo, ou não é a marca. NÃO REDESENHAR.
+const SGPE_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA3CAMAAABuDnn5AAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAAflBMVEUAAAAAkT3YJBsMlkj9/fzd6tv5rarqbGhtxpbh6dqv4sWc17X07+lbvIf8sLC8/LyxsbHjQTux9fD/enpzubkAf3/2hHxVqlVMtXkAfwB/f39j/7H/AAC938oA/wAA/38AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACfk/MoAAAAIHRSTlMA/v7+EZvo/Prq5/Fh/AMEA/8EAwMC/wP/AgIDAakBAnXlt0wAAAJtSURBVHjajZaJcsIgEIYhLCYxJGq0Vu31/m/Z5QiwXJEZnU7109vj3w2MmXPFF7D4wJNJyW70n9lZmJKA7xF3Y3IeJDvvcff+AJEmfCDH+ayamlemDl3XRST+hZzgHDW/quTZct3Fk/DSHBeaVOwTanGC4YLm65PJQWMIas1TmQTwoNZcNKvj1JR+r2uizOESNBeTn6FctJI93yJh07OimoQPqKYZyJ95YzYayfUNchRey9Ki0ZWU5CIC8czVPDNNTg9qrm9UyJAba+NGktXJjkRLVWcJ5X7CZj1PknhNhUqknofhmJA81cxn5WV9RslChVISrSEfuiAJmeWZVAjjHGdTSHFs5Gk8RJ1g9cwotfPEaINv4ennYZ/ECm17CP78vJc0CWun7NfvlwfxZqoZO14YTe2+lNshzU6Qri5zkoYha453msj9PCIr85BnfVa0JgY62T4HUNiPegf2dsNy+rsoqabcW3wYPTcOWWXFZIqjSU4V55gj68B8FblzREatSji6R8SkrGFPjqxxWcWBrdY6qyX9MqzFaT7VXDBrHG09P+7yO5F9M7mONPR4ohfypHFKWhfu4jzRFXCzmkMjTpHrec1WXURJz5Jw3O37Wt7Iqtn3sp6+QgRfj3O2jrVeaZF/X1M9kl7sl+zKUqvLplfigMRZ6Hs9Ts/d5TF+xvm+7+ndZTrZtn+VO120J2AxHvJrVmxzW7iSQdBT7Fs/JycR9le1f9GVDONcwPuW7InKlcwq9opdIZ5PLup67uHfBz3n28nHWb+wWrIPnCcb9fRpHhS5WhuyFafXVMlD+oxTtqPHWPHqs2LZGtw/7c8ffUMyPhwAAAAASUVORK5CYII='
+
+/** O logo em `<img>`, no tamanho pedido. `flex-shrink:0` porque ele vive dentro de linhas
+ *  flex que espremeriam a imagem antes do texto. */
+function sgpeLogoImg(tam) {
   const t = tam || 26
-  return `<svg viewBox="0 0 40 40" width="${t}" height="${t}" aria-hidden="true" style="flex-shrink:0;display:block;">
-    <path fill="#009640" d="M4 9 L18 9 L26 20 L18 31 L4 31 L12 20 Z"/>
-    <path fill="#009640" d="M17 9 L28 9 L36 20 L28 31 L17 31 L25 20 Z" opacity=".72"/>
-    <rect fill="#E30613" x="4" y="34.2" width="32" height="3.4" rx="1.7"/>
-  </svg>`
+  return `<img src="${SGPE_LOGO}" width="${t}" height="${t}" alt="" aria-hidden="true"
+    style="flex-shrink:0;display:block;object-fit:contain;">`
+}
+
+// ⚠️ O CABEÇALHO DO SISTEMA É HTML ESTÁTICO, e por isso o `src` dele é preenchido AQUI, e não
+// escrito lá. Repetir o base64 no HTML seria a quarta cópia da mesma imagem; chamar a função
+// de dentro daquele markup não funcionaria, porque ali não há template literal nenhum. Este
+// script roda depois de o cabeçalho já estar no DOM — o `if` é para o caso de ele mudar de
+// lugar um dia e a atribuição virar silenciosa em vez de derrubar a página.
+{
+  const _lg = document.getElementById('sgpeLogoTopo')
+  if(_lg) _lg.src = SGPE_LOGO
 }
 
 // ── AS CONSULTAS RECENTES ────────────────────────────────────────────────────
@@ -4691,6 +4709,33 @@ function sgpeRecentesHtml() {
           </button>`).join('')}
       </div>
     </div>`
+}
+
+// ── O TAMANHO DA JANELA ──────────────────────────────────────────────────────
+// ⚠️ A ESCOLHA VIVE NA SESSÃO, NÃO NO `localStorage`. Quem expande está expandindo para o
+// processo de 34 trâmites que tem na frente AGORA; guardar isso para sempre faria a janela
+// abrir em tela cheia semanas depois, para uma consulta de duas linhas. O `sessionStorage`
+// morre com a aba, que é exatamente o tempo de vida da decisão.
+// ⚠️ E ele também LANÇA no modo anônimo do navegador — mesmo cuidado das recentes: sem o
+// `try`, a janela deixaria de abrir por causa de uma preferência de tamanho.
+const SGPE_CHEIA_CHAVE = 'sigpc_sgpe_tela_cheia'
+function sgpeCheiaLer() { try { return sessionStorage.getItem(SGPE_CHEIA_CHAVE) === '1' } catch(_) { return false } }
+function sgpeCheiaGravar(v) { try { sessionStorage.setItem(SGPE_CHEIA_CHAVE, v ? '1' : '0') } catch(_) {} }
+
+/** Aplica o tamanho à caixa e acerta o botão. UMA função, chamada na abertura e na troca — se
+ *  cada caminho escrevesse o seu, a janela abriria de um jeito e alternaria para outro, e a
+ *  divergência só apareceria em quem expandiu numa consulta e voltou noutra. */
+function sgpeAplicarTamanho(mc, bt, cheia) {
+  if(!mc) return
+  mc.style.width     = cheia ? '98vw' : '860px'
+  mc.style.maxWidth  = cheia ? '98vw' : '96vw'
+  mc.style.height    = cheia ? '96vh' : ''
+  mc.style.maxHeight = cheia ? '96vh' : '90vh'
+  if(bt) {
+    bt.textContent = cheia ? '⤡' : '⤢'
+    bt.title = cheia ? 'Voltar ao tamanho normal' : 'Expandir'
+    bt.setAttribute('aria-label', bt.title)
+  }
 }
 
 // ── O BLOCO DO ENCONTRADO ────────────────────────────────────────────────────
@@ -4783,32 +4828,43 @@ function sgpeData(iso) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : escHtml(s || '—')
 }
 
-function sgpeEncontradoHtml(d) {
+// ⚠️ A IDENTIFICAÇÃO SAIU DO CORPO E SUBIU PARA A LINHA DA BUSCA (30/08/2026). Número,
+// situação, Copiar e Abrir no SGPe ficam na parte FIXA da janela — num processo de 34
+// trâmites eles rolavam para fora da tela junto com o resto, e quem chegava ao fim da linha
+// do tempo já não via de qual processo aquilo era. É a mesma pergunta que a faixa de posição
+// responde: o que identifica não pode sumir enquanto se lê o detalhe.
+function sgpeIdentHtml(d) {
   const p = d.processo || {}
   const pilula = `${p.situacao_portal || ''}${p.estado_portal ? ' · ' + p.estado_portal : ''}`.trim()
   const finalizado = /ARQUIVAD|FINALIZAD|ENCERRAD/i.test(pilula)
-  const inter = (p.interessados || [])[0]
   return `
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
+      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;
                    font-weight:700;color:var(--te);">${escHtml(p.numero_oficial || `${p.sigla} ${p.numero}/${p.ano}`)}</span>
       ${pilula ? `<span style="font-size:10px;font-weight:800;border-radius:20px;padding:2px 9px;
         background:${finalizado ? '#EEF2F7' : '#E0F2E9'};color:${finalizado ? '#37474F' : 'var(--verde-primario,#2E7D32)'};">${escHtml(pilula)}</span>` : ''}
-      <span style="margin-left:auto;display:flex;gap:7px;">
-        <button type="button" data-f="copiar" class="mccn" style="padding:5px 12px;font-size:12px;">Copiar</button>
-        ${/* ⚠️ "ABRIR NO SGPe" SÓ APARECE SE O LINK ESTIVER RESOLVIDO NO CACHE. O portal
-              público NÃO devolve o `nuProcesso` interno, que é o que a URL do SGPe exige
-              (armadilha 20) — e há caso medido em que o portal ACHA o processo e o cache o
-              tem como NAO_ENCONTRADO: o SCC 2049/2025. Botão sempre visível levaria a um
-              endereço quebrado, que é pior do que não ter botão (armadilha 15). */''}
-        ${d.link ? `<a href="${escHtml(d.link)}" target="_blank" rel="noopener" class="mcok"
-          style="padding:5px 12px;font-size:12px;text-decoration:none;display:inline-block;">Abrir no SGPe ↗</a>` : ''}
-      </span>
-    </div>
+      <button type="button" data-f="copiar" class="mccn" style="padding:5px 12px;font-size:12px;">Copiar</button>
+      ${/* ⚠️ "ABRIR NO SGPe" SÓ APARECE SE O LINK ESTIVER RESOLVIDO NO CACHE. O portal
+            público NÃO devolve o `nuProcesso` interno, que é o que a URL do SGPe exige
+            (armadilha 20) — e há caso medido em que o portal ACHA o processo e o cache o
+            tem como NAO_ENCONTRADO: o SCC 2049/2025. Botão sempre visível levaria a um
+            endereço quebrado, que é pior do que não ter botão (armadilha 15). */''}
+      ${d.link ? `<a href="${escHtml(d.link)}" target="_blank" rel="noopener" class="mcok"
+        style="padding:5px 12px;font-size:12px;text-decoration:none;display:inline-block;">Abrir no SGPe ↗</a>` : ''}
+    </div>`
+}
 
+function sgpeEncontradoHtml(d) {
+  const p = d.processo || {}
+  const inter = (p.interessados || [])[0]
+  return `
     ${sgpeFaixaPosicao(d.atual)}
 
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:11px 16px;">
+    ${/* ⚠️ QUATRO COLUNAS, e é a largura de 860px que as paga. Em duas, o assunto e o
+          interessado — que são os dois campos longos — caíam em linhas diferentes e a grade
+          virava uma escada. As quatro só existem porque a janela cresceu; não copiar este
+          `repeat(4,1fr)` para bloco de tela estreita. */''}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;">
       ${sgpeDado('Assunto', escHtml(p.assunto || p.titulo || ''))}
       ${sgpeDado('Classe', escHtml(p.classe || ''))}
       ${sgpeDado('Interessado', escHtml(inter ? (inter.nome || inter.nmInteressado || '') : ''))}
@@ -4845,17 +4901,26 @@ function sgpeConsultaAbrir(bruto) {
   // QUALQUER tela — não dá para depender do empilhamento de uma só.
   el.style.zIndex = '1300'
   el.innerHTML = `
-    <div class="mc" style="width:640px;">
-      <div class="mch" style="background:#F4F8F2;gap:11px;">
-        ${sgpeLogoSvg(30)}
+    <div class="mc" id="sgpeMC" style="width:860px;max-width:96vw;max-height:90vh;
+                overflow:hidden;display:flex;flex-direction:column;">
+      ${/* ⚠️ CABEÇALHO E BUSCA SÃO `flex-shrink:0`, E SÓ O MIOLO ROLA. O `.mc` do sistema tem
+            `overflow-y:auto` no bloco inteiro; aqui ele é sobrescrito para `hidden` e a
+            rolagem desce um nível. Sem isso, num processo de 34 trâmites o cabeçalho, os
+            campos e a identificação do processo saíam da tela junto com o resto — e quem
+            estava lendo o fim da linha do tempo já não via de qual processo aquilo era. */''}
+      <div class="mch" style="background:#F4F8F2;gap:11px;flex-shrink:0;">
+        ${sgpeLogoImg(30)}
         <div style="flex:1;min-width:0;">
           <h3 style="line-height:1.25;">Consultar processo no SGPe</h3>
           <div style="font-size:11.5px;color:var(--ct);margin-top:1px;">Situação e caminho do processo, sem sair do sistema</div>
         </div>
+        <button class="mcx" id="sgpeExp" data-f="exp" title="Expandir" aria-label="Expandir"
+          style="font-size:15px;">⤢</button>
         <button class="mcx" data-f="x" title="Fechar (Esc)">✕</button>
       </div>
-      <div class="mcb">
-        <div style="display:flex;gap:9px;align-items:flex-end;">
+
+      <div style="padding:14px 18px 13px;border-bottom:1px solid var(--cl);flex-shrink:0;">
+        <div style="display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;">
           <div class="mc-campo" style="margin-bottom:0;width:82px;flex-shrink:0;">
             <label>Sigla</label>
             <input id="sgpeSigla" type="text" value="SCC" maxlength="8" autocomplete="off"
@@ -4879,9 +4944,14 @@ function sgpeConsultaAbrir(bruto) {
             onmousedown="this.style.transform='translateY(2px)';this.style.boxShadow='0 0 0 #2A5A0C'"
             onmouseup="this.style.transform='';this.style.boxShadow='0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16)'"
             onmouseout="this.style.transform='';this.style.boxShadow='0 2px 0 #2A5A0C, 0 3px 7px rgba(0,0,0,.16)'">Consultar</button>
+          ${/* A identificação do processo — vazia até haver resposta. Fica na parte fixa, à
+                direita da busca, e é a única coisa da resposta que não rola. */''}
+          <div id="sgpeIdent" style="margin-left:auto;min-width:0;"></div>
         </div>
+      </div>
 
-        <div id="sgpeSaida" style="margin-top:14px;"></div>
+      <div class="mcb" id="sgpeRolagem" style="overflow-y:auto;flex:1;min-height:0;">
+        <div id="sgpeSaida"></div>
         <div id="sgpeRecentes">${sgpeRecentesHtml()}</div>
 
         <div style="margin-top:15px;padding-top:10px;border-top:1px solid var(--cl);font-size:10.5px;color:#9AA8A0;text-align:center;">
@@ -4900,6 +4970,12 @@ function sgpeConsultaAbrir(bruto) {
   const cAno = document.getElementById('sgpeAno')
   const bt   = document.getElementById('sgpeBt')
   const out  = document.getElementById('sgpeSaida')
+  const ident = document.getElementById('sgpeIdent')
+  const mc    = document.getElementById('sgpeMC')
+  const btExp = document.getElementById('sgpeExp')
+  const rol   = document.getElementById('sgpeRolagem')
+  // A janela abre no tamanho em que a pessoa a deixou nesta sessao.
+  sgpeAplicarTamanho(mc, btExp, sgpeCheiaLer())
 
   const fechar = () => {
     document.removeEventListener('keydown', tecla, true)
@@ -4916,6 +4992,7 @@ function sgpeConsultaAbrir(bruto) {
     const n = (cNum.value || '').replace(/\D/g, '')
     const a = (cAno.value || '').replace(/\D/g, '')
     marcarSigla(false)
+    ident.innerHTML = ''
     if(!s || !n || !a) { out.innerHTML = sgpeCaixa('#B45309', '#FEF3C7', '#FCD34D',
       'Faltam dados', 'Informe a sigla, o número e o ano do processo.'); return }
 
@@ -4943,6 +5020,8 @@ function sgpeConsultaAbrir(bruto) {
           'O processo existe, mas os dados dele não são públicos. Consulte pelo SGPe, com o seu login.')
       } else {
         out.innerHTML = sgpeEncontradoHtml(d)
+        ident.innerHTML = sgpeIdentHtml(d)
+        if(rol) rol.scrollTop = 0
         const p = d.processo || {}
         sgpeRecentesGravar(s, n, a, p.assunto || p.titulo || '')
         document.getElementById('sgpeRecentes').innerHTML = sgpeRecentesHtml()
@@ -4961,6 +5040,11 @@ function sgpeConsultaAbrir(bruto) {
     if(f === 'x') return fechar()
     if(f === 'ir') return consultar()
     if(f === 'limpar') return sgpeRecentesLimpar()
+    if(f === 'exp') {
+      const c = !sgpeCheiaLer()
+      sgpeCheiaGravar(c); sgpeAplicarTamanho(mc, btExp, c)
+      return
+    }
     if(f === 'copiar') {
       const t = `${(cSig.value||'').trim().toUpperCase()} ${(cNum.value||'').trim()}/${(cAno.value||'').trim()}`
       try { navigator.clipboard.writeText(t); toast('Processo copiado.', 'ok') }
@@ -5012,7 +5096,7 @@ function sgpeIconeConsulta(bruto) {
            border-radius:6px;vertical-align:middle;display:inline-flex;align-items:center;justify-content:center;
            opacity:.75;transition:opacity 140ms, background 140ms;"
     onmouseover="this.style.opacity='1';this.style.background='var(--cl)'"
-    onmouseout="this.style.opacity='.75';this.style.background='none'">${sgpeLogoSvg(18)}</button>`
+    onmouseout="this.style.opacity='.75';this.style.background='none'">${sgpeLogoImg(18)}</button>`
 }
 
 // ── F4, DE QUALQUER TELA ─────────────────────────────────────────────────────
