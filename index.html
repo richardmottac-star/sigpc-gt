@@ -12052,8 +12052,21 @@ function acIcone(nome, cor) {
     style="display:block;">${AC_ICONES[nome] || AC_ICONES.doc}</svg>`;
 }
 
-let _acLinha = 0;    // a vez da zebra
 let _acSecao = 0;    // quantos títulos de seção já saíram
+
+/**
+ * A ZEBRA É PINTADA DEPOIS DE MONTADO O MENU, percorrendo os itens em sequência.
+ *
+ * ⚠️ O índice conta ITEM, não seção: o título de grupo não entra na conta e não reinicia a
+ * alternância. Contar durante a montagem faria a virada de seção depender de quantos itens
+ * o ramo anterior tinha desenhado.
+ */
+function acZebra(cx) {
+  cx.querySelectorAll('[data-ac-item]').forEach((b, i) => {
+    b.dataset.fundo = (i % 2) ? '#F1F7EA' : 'var(--surface-2, #FAFCFA)';
+    b.style.background = b.dataset.fundo;
+  });
+}
 
 /** O título de um grupo — letra pequena, maiúscula, e divisória a partir do segundo. */
 function acGrupo(titulo) {
@@ -12078,17 +12091,16 @@ function acGrupo(titulo) {
 function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
   const c = ativo ? (AC_CORES[cor] || AC_CORES.situacao) : AC_CORES.inativo;
   const corTexto = ativo ? 'var(--te)' : '#9A9A94';
-  const fundo = (_acLinha++ % 2) ? '#F1F7EA' : 'var(--surface-2, #FAFCFA)';
-  return `<button role="menuitem" ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
+  return `<button role="menuitem" data-ac-item ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
     title="${escHtml(motivo || rotulo)}"
     style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
-           background:${fundo};border:0;padding:9px 14px;font-size:13.5px;font-family:inherit;
+           border:0;padding:9px 14px;font-size:13.5px;font-family:inherit;
            color:${corTexto};cursor:${ativo ? 'pointer' : 'not-allowed'};"
     onmouseover="if(!this.disabled)this.style.background='#EAF3DE'"
-    onmouseout="this.style.background='${fundo}'">
+    onmouseout="this.style.background=this.dataset.fundo">
     <span style="flex:0 0 30px;width:30px;height:30px;border-radius:8px;background:${c.bg};
       display:inline-flex;align-items:center;justify-content:center;">${acIcone(icone, c.fg)}</span>
-    <span style="flex:1;min-width:0;padding-top:4px;">
+    <span style="flex:1 1 auto;min-width:0;width:100%;padding-top:4px;">
       <span style="display:block;font-size:13.5px;font-weight:${destaque && ativo ? '800' : '600'};line-height:1.35;">${escHtml(rotulo)}</span>
       ${motivo ? `<span style="display:block;font-size:11px;color:var(--ct, #8A968F);line-height:1.35;margin-top:2px;white-space:normal;">${escHtml(motivo)}</span>` : ''}
     </span></button>`;
@@ -12113,7 +12125,7 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
   cx.setAttribute('role', 'menu');
   cx.style.cssText = `position:fixed;z-index:9999;background:var(--surface-2, #FAFCFA);
     border:1.5px solid var(--cl);border-radius:11px;box-shadow:0 8px 24px rgba(0,0,0,.14);
-    padding:0;overflow:hidden;min-width:250px;top:-9999px;left:-9999px;`;
+    padding:0;overflow:hidden;box-sizing:border-box;width:280px;top:-9999px;left:-9999px;`;
   cx.innerHTML = `<div style="padding:11px 14px;color:var(--ct);font-size:11px;">
     <span class="spin" style="width:11px;height:11px;display:inline-block;"></span> carregando…</div>`;
   document.body.appendChild(cx);
@@ -12140,7 +12152,7 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     const nm = `'${escHtml(String(parcialNum ?? ''))}'`;
     const semNum = !String(parcialNum ?? '').trim();
     const linhas = [];
-    _acLinha = 0; _acSecao = 0;
+    _acSecao = 0;
 
     // ── GRUPO 1: FLUXO DA ANÁLISE ───────────────────────────────────────────
     // ⚠️ Os três botões que ficavam soltos na linha vivem AQUI desde 18/08/2026 — decisão do
@@ -12223,6 +12235,7 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     linhas.push(acItem('Histórico da parcial', 'historico', `pHistoricoPc(${nm})`, true, 'situacao'));
 
     cx.innerHTML = linhas.join('');
+    acZebra(cx);
     acReposicionar();
   } catch (e) {
     if (_acAberto === cx) {
