@@ -10538,7 +10538,10 @@ function relRenderTabela() {
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
       ${/* A CONFERÊNCIA COM O SIGEF nos relatórios. Aqui a linha é UMA PC, então o componente
             recebe a PC sozinha — e o "?" continua funcionando, com alvo certo para declarar. */''}
-      <td style="white-space:nowrap;">${sigefBadges([r]) + pilulasExtras([r]) || '<span style="color:var(--ct);font-size:10px;">—</span>'}</td>
+      ${/* ⚠️ AQUI `r` É UMA PC, não um grupo — esta linha do relatório é uma prestação. Por isso
+            a pílula da engenharia entra explicitamente: ela saiu do `pilulasExtras`, que hoje
+            serve os níveis agregados. */''}
+      <td style="white-space:nowrap;">${sigefBadges([r]) + pilulaEngenharia([r]) + pilulasExtras([r]) || '<span style="color:var(--ct);font-size:10px;">—</span>'}</td>
     </tr>`
   }).join('')
 
@@ -12283,13 +12286,48 @@ function engAplicarNaLinha(codigoPc, linhaGravada) {
   return achou
 }
 
-async function engAbrir(codigoPc, voltando) {
-  const ok = await moConfirm(ENG_TEXTO_AVISO, {
-    titulo: voltando ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
-    detalhe: voltando
-      ? 'A prestação volta para a sua fila de análise e o parecer fica liberado.'
-      : 'A prestação sai da sua fila de análise enquanto estiver na engenharia. Ela continua sua: não muda de dono nem sai da TR.',
-    okTexto: voltando ? 'Registrar retorno' : 'Registrar envio',
+/**
+ * As três ações, num índice só.
+ *
+ * ⚠️ RETORNAR E DESFAZER NÃO SÃO A MESMA COISA, e a tela precisa deixar isso claro ANTES do
+ * clique — depois não dá para distinguir olhando o resultado:
+ *   · RETORNAR  preserva `eng_enviada_em` e grava `eng_retorno_em`. O período EXISTIU: a PC
+ *     esteve na engenharia, voltou, e o tempo lá é medível.
+ *   · DESFAZER  limpa os três campos. O período NÃO existiu — foi clique por engano, e o que
+ *     se apaga é o registro, não a passagem.
+ * Confundir as duas inventa ou apaga tempo de engenharia no acervo, e ninguém percebe depois.
+ */
+const ENG_ACOES = {
+  enviar: {
+    titulo: 'Registrar envio à engenharia',
+    aviso: ENG_TEXTO_AVISO,
+    detalhe: 'A prestação sai da sua fila de análise enquanto estiver na engenharia. Ela continua sua: não muda de dono nem sai da TR.',
+    ok: 'Registrar envio',
+    sucesso: (pc) => `Envio à engenharia registrado — ${pc} saiu da fila de análise.`,
+  },
+  retornar: {
+    titulo: 'Registrar retorno da engenharia',
+    aviso: ENG_TEXTO_AVISO,
+    detalhe: 'A prestação volta para a sua fila de análise e o parecer fica liberado. A data do envio fica guardada — o período na engenharia continua registrado.',
+    ok: 'Registrar retorno',
+    sucesso: (pc) => `Retorno da engenharia registrado — ${pc} voltou para a sua fila.`,
+  },
+  desfazer: {
+    titulo: 'Desfazer envio à engenharia',
+    aviso: 'Isto apaga o registro de envio à engenharia, como se nunca tivesse sido feito. Use quando o envio foi registrado por engano. Se o processo realmente foi à engenharia e já voltou, use "Registrar retorno da engenharia".',
+    detalhe: 'Os três campos são limpos: não fica registro de envio, de retorno, nem de período na engenharia.',
+    ok: 'Desfazer o envio',
+    sucesso: (pc) => `Registro de envio apagado — ${pc} voltou ao estado anterior.`,
+  },
+};
+
+async function engAbrir(codigoPc, acao) {
+  const a = ENG_ACOES[acao];
+  if (!a) return
+  const ok = await moConfirm(a.aviso, {
+    titulo: a.titulo,
+    detalhe: a.detalhe,
+    okTexto: a.ok,
     cancelarTexto: 'Cancelar',
   })
   if (!ok) return
@@ -12299,7 +12337,7 @@ async function engAbrir(codigoPc, voltando) {
     // nome, a ação de quem dá suporte seria gravada como se fosse do próprio suporte.
     const r = await fetch(`${API_URL}/pc/${encodeURIComponent(codigoPc)}/engenharia`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: voltando ? 'retornar' : 'enviar', usuario_id: U.id })
+      body: JSON.stringify({ acao, usuario_id: U.id })
     })
     const j = await r.json()
     // ⚠️ A MENSAGEM DO 409 É A DA API, palavra por palavra. Ela diz desde quando a PC está na
@@ -12311,9 +12349,7 @@ async function engAbrir(codigoPc, voltando) {
     // afirmando por um instante algo que o banco não tem — e, se a rede cair no meio, ela fica
     // afirmando para sempre.
     engAplicarNaLinha(codigoPc, j.data || {})
-    toast(voltando
-      ? `Retorno da engenharia registrado — ${codigoPc} voltou para a sua fila.`
-      : `Envio à engenharia registrado — ${codigoPc} saiu da fila de análise.`)
+    toast(a.sucesso(codigoPc))
   } catch (e) {
     // A linha fica EXATAMENTE como estava: nada foi tocado no cache antes desta linha.
     toast('Erro: ' + e.message, 'err')
@@ -12440,8 +12476,15 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // nascer cinza; o que sobrou do desenho anterior é o próprio modal, que não mudou.
     linhas.push(acItem(
       naEng ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
-      'engenharia', `engAbrir(${pc},${naEng})`,
+      'engenharia', `engAbrir(${pc},'${naEng ? 'retornar' : 'enviar'}')`,
       true, 'engenharia'));
+
+    // ⚠️ SÓ APARECE COM A PC NA ENGENHARIA. Fora daí não há envio a desfazer, e um item cinza
+    // permanente só ocuparia espaço dizendo que não serve — é o mesmo critério do "Desfazer a
+    // puxada do C.I.", que o servidor só manda quando existe puxada.
+    if (naEng) linhas.push(acItem('Desfazer envio à engenharia', 'desfazer',
+      `engAbrir(${pc},'desfazer')`, true, 'desfaz',
+      'Apaga o registro, como se o envio nunca tivesse sido feito'));
 
     linhas.push(acItem('Registrar parecer', 'parecer', `pAbrirParPc(${nm})`,
       !d.baixada && !semNum && !naEng, 'parecer',
@@ -19324,10 +19367,19 @@ function pilulaEngenharia(pcs, opts) {
     (opts || {}).mini)
 }
 
-/** As três, na ordem em que aparecem ao lado das etiquetas do SIGEF. */
+/**
+ * As pílulas que acompanham um GRUPO de PCs — cabeçalho da TR e cartão da parcela.
+ *
+ * ⚠️ A DA ENGENHARIA SAIU DAQUI em 31/08/2026, por decisão do Richard: ela é ESTADO DE UMA PC,
+ * e aparecia três vezes na mesma TR (cabeçalho, cartão e linha). Agora fica só na linha, que é
+ * onde o estado pertence — e onde está o botão que o muda.
+ *
+ * ⚠️ A pré-GT e a NL com residual CONTINUAM subindo para os dois níveis, de propósito: as duas
+ * são avisos sobre a CONTAGEM, e a pergunta que respondem ("por que este número não fecha?") é
+ * feita olhando o total da TR, não a linha. Se um dia elas também descerem, é decisão à parte.
+ */
 function pilulasExtras(pcs, opts) {
-  return [pilulaEngenharia(pcs, opts), pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)]
-    .filter(Boolean).join(' ')
+  return [pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)].filter(Boolean).join(' ')
 }
 
 /* ⚠️ AQUI EXISTIA `sigefBadgesDeTags` — a variante que desenhava a etiqueta a partir dos
