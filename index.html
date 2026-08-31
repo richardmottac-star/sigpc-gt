@@ -5719,8 +5719,8 @@ function procEdMudou() {
   // saem daqui: formato da sigla, número maior que zero e ano dentro do intervalo. Trocar
   // uma pela outra deixaria passar `SCC 0/2025`, que é o que o servidor recusa depois.
   const v = campoProcValido('procEd')
-  let erro = v.ok ? null : v.motivo
-  if(erro) { /* já tem motivo */ }
+  let erro = null
+  if(!v.ok) erro = v.motivo
   // ⚠️ 11 LETRAS + até 2 dígitos de região, e o teto de 11 vem da caixa. `SCPARCERIAS` tem 11
   // letras e o antigo `{2,10}` a reprovava como "Sigla inválida" — a mensagem certa para uma
   // sigla que existe seria nenhuma, e é a lista das 183 que decide isso, não este formato.

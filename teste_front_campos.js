@@ -286,6 +286,24 @@ gPr.caixas.Num.value = '1a9b7';
 disparar('input', evento(gPr.caixas.Num));
 conf(gPr.caixas.Num.value === '197', 'o numero fica so com digitos');
 
+// ⚠️ `SAPIENS_EXTERNO_INAT` — A UNICA DAS 183 QUE FICA DE FORA, e quem a barra e a CAIXA, nao
+// a lista (Richard, 31/08/2026). Ela ESTA no mapa `ORGAOS` (cdOrgaosetor 15073), entao
+// `campoSiglaOk` a aceitaria se os 20 caracteres chegassem inteiros — e e por isso que este
+// teste existe: o que fecha a porta e o `maxlength` de 11 mais o filtro do `oninput`. Alargar
+// a caixa um dia reabre o caminho para um registro INATIVO, em silencio.
+const _sig = ctx._SIGLAS;
+ctx._SIGLAS = new Set(['SCC', 'SAPIENS', 'SAPIENS_EXTERNO_INAT']);
+gPr.caixas.Sigla.value = 'SAPIENS_EXTERNO_INAT';
+disparar('input', evento(gPr.caixas.Sigla));
+gPr.caixas.Sigla.value = gPr.caixas.Sigla.value.slice(0, 11);   // o corte do navegador
+disparar('input', evento(gPr.caixas.Sigla));
+conf(gPr.caixas.Sigla.value === 'SAPIENSEXTE', 'o "_" cai no filtro e o maxlength corta em 11');
+conf(ctx.campoSiglaOk('SAPIENSEXTE') === false, 'e o que sobra nao esta nas 183 — recusado');
+conf(gPr.caixas.Sigla.classList.contains('erro') === true, 'com a borda vermelha');
+conf(ctx.campoSiglaOk('SAPIENS_EXTERNO_INAT') === true,
+     'a chave inteira ESTA na lista — nao e ela que barra, e a caixa');
+ctx._SIGLAS = _sig;
+
 console.log('\n═══ 8. AO SAIR ═══');
 
 gTr.caixas.Ano.value = '21'; gTr.caixas.Num.value = '411';
