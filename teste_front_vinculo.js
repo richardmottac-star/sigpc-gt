@@ -179,6 +179,67 @@ conf(!/toast\(|sgpeCaixa\(/.test(corpo), 'sem toast e sem caixa de erro');
 conf(/const alvo = document\.getElementById\('sgpeVinculo'\)/.test(corpo),
      'e o alvo e relido depois do await — a janela pode ter fechado');
 
+S('8b. O ASSUNTO E A SITUACAO — AS TRES COMBINACOES');
+{
+  const mi = (a, s) => ctx.sgpeVincMiolo(a, s).replace(/\s+/g, ' ');
+  const italico = (h) => /font-style:italic/.test(h);
+  const verde = (h) => /color:var\(--v\)/.test(h);
+
+  // ── 1. os dois preenchidos ────────────────────────────────────────────────
+  const c1 = mi('PRESTACAO DE CONTAS DE CONVENIO', 'ABERTO');
+  conf(c1.includes('PRESTACAO DE CONTAS DE CONVENIO'), '1) mostra o assunto');
+  conf(/>ABERTO</.test(c1), '1) e a situacao');
+  conf(verde(c1), '1) ABERTO sai em verde');
+  conf(!italico(c1), '1) e sem italico');
+
+  const c1a = mi('CONVENIO', 'ARQUIVADO');
+  conf(/>ARQUIVADO</.test(c1a) && !verde(c1a), '1) ARQUIVADO sai em cinza, nao verde');
+
+  // ── 2. os dois vazios ─────────────────────────────────────────────────────
+  const c2 = mi(null, null);
+  conf(/ainda não sincronizado/.test(c2), '2) os dois null: "ainda nao sincronizado"');
+  conf(italico(c2), '2) em italico');
+  conf(!/>ABERTO<|>ARQUIVADO</.test(c2), '2) e o espaco da situacao fica vazio');
+
+  // ── 3. so a situacao — O ESTADO NORMAL DE HOJE ────────────────────────────
+  // ⚠️ AQUI NAO ENTRA O ITALICO. Escrever "ainda nao sincronizado" ao lado de um ARQUIVADO
+  // preenchido seria a tela se contradizendo na mesma linha: a situacao so existe porque o
+  // processo FOI sincronizado. O que falta e a coluna nova, e isso e historia do banco.
+  // Medido em 31/08/2026: 7.768 linhas com situacao, ZERO com assunto — quase toda linha
+  // da faixa cai neste caso hoje.
+  const c3 = mi(null, 'ARQUIVADO');
+  conf(!/ainda não sincronizado/.test(c3), '3) so situacao: NAO diz "ainda nao sincronizado"');
+  conf(!italico(c3), '3) e nao ha italico nenhum');
+  conf(/>ARQUIVADO</.test(c3), '3) a situacao aparece normalmente');
+  conf(verde(mi(null, 'ABERTO')), '3) e um ABERTO sem assunto segue verde');
+
+  // ⚠️ O ASSUNTO OCUPA O QUE SOBRA E CORTA: ele vem de varchar(120), e sem `min-width:0` um
+  // assunto longo empurraria a situacao e a contagem para fora da linha.
+  conf(/flex:1 1 auto;min-width:0/.test(c1), 'o assunto ocupa o espaco que sobra');
+  conf(/text-overflow:ellipsis/.test(c1), 'e corta com reticencias');
+  conf(/title="PRESTACAO DE CONTAS DE CONVENIO"/.test(c1), 'com o texto inteiro no title');
+  conf(/flex:0 0 auto/.test(c1.slice(c1.indexOf('ABERTO') - 200)), 'e a situacao nao encolhe');
+
+  // ── a ordem na linha, e na mae ────────────────────────────────────────────
+  const hL = ctx.sgpeVincHtml({ ...BLOCO,
+    processos: [{ processo: 'SCC9460/2021', qtd: 3, parciais: ['1'], atual: false,
+                  assunto: 'ASSUNTO DA PARCIAL', situacao_portal: 'ABERTO' }],
+    mae_assunto: 'ASSUNTO DA MAE', mae_situacao_portal: 'ARQUIVADO' });
+  const linha = hL.slice(hL.indexOf('SCC 00009460/2021'));
+  const iAss = linha.indexOf('ASSUNTO DA PARCIAL'), iSit = linha.indexOf('>ABERTO<'), iQtd = linha.indexOf('3 PCs');
+  conf(iAss > 0 && iSit > iAss && iQtd > iSit, 'a ordem e numero · assunto · situacao · PCs',
+       `${iAss} < ${iSit} < ${iQtd}`);
+  // ⚠️ O `margin-left:auto` que empurrava a contagem SAIU: quem ocupa o meio agora e o
+  // assunto, e um `auto` sobrando abriria um vao entre a situacao e a contagem.
+  conf(!/margin-left:auto/.test(linha), 'e o margin-left:auto da contagem saiu');
+  // A mae usa a MESMA funcao, com os campos DELA.
+  const blocoMae = hL.slice(0, hL.indexOf('flex-direction:column'));
+  conf(/ASSUNTO DA MAE/.test(blocoMae) && />ARQUIVADO</.test(blocoMae), 'a mae mostra o assunto e a situacao DELA');
+  conf(!/ASSUNTO DA PARCIAL/.test(blocoMae), 'e nao os do processo da lista');
+  conf(/sgpeVincMiolo\(d\.mae_assunto, d\.mae_situacao_portal\)/.test(semComent),
+       'pela mesma funcao, com os campos proprios');
+}
+
 S('9b. OS NUMEROS SAO LINK');
 {
   const hL = ctx.sgpeVincHtml(BLOCO);            // consultado = SCC11160/2020, papel=parcial

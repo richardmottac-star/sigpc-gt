@@ -5631,6 +5631,41 @@ const sgpeVincSeloAtual = () => `<span style="background:${VINC_RISCADO};color:$
   border-radius:20px;padding:1px 8px;font-size:9.5px;font-weight:800;white-space:nowrap;">consultado</span>`
 
 /**
+ * O MIOLO DA LINHA: o assunto e a situação. Um lugar só, usado pela lista e pela mãe.
+ *
+ * ⚠️ SÃO TRÊS COMBINAÇÕES, E A TERCEIRA É O ESTADO NORMAL DE HOJE. A coluna `assunto` nasceu
+ * em 31/08/2026 e só se preenche quando o rodízio do `job_sgpe_situacao` volta a passar; a
+ * `situacao_portal` já era gravada muito antes. Medido no dia em que isto foi escrito: 7.768
+ * linhas com situação, ZERO com assunto. Então quase toda linha cai no caso 3.
+ *
+ *   assunto + situação  →  mostra os dois
+ *   os dois vazios      →  "ainda não sincronizado", em itálico, no lugar do assunto
+ *   só a situação       →  a situação, e o lugar do assunto VAZIO
+ *
+ * ⚠️ O TERCEIRO CASO NÃO LEVA O ITÁLICO, e é o ponto todo: escrever "ainda não sincronizado"
+ * ao lado de um `ARQUIVADO` preenchido seria a tela se contradizendo na mesma linha. A
+ * situação só existe porque o processo FOI sincronizado — o que falta é a coluna nova, e isso
+ * é história do banco, não estado do processo.
+ */
+function sgpeVincMiolo(assunto, situacao) {
+  const s = String(situacao == null ? '' : situacao).trim().toUpperCase()
+  const semNada = !assunto && !s
+  const meio = assunto
+    ? `<span title="${escHtml(assunto)}">${escHtml(assunto)}</span>`
+    : semNada
+      ? `<span style="font-style:italic;">ainda não sincronizado</span>`
+      : ''
+  // ⚠️ O ASSUNTO OCUPA O QUE SOBRA E CORTA COM RETICÊNCIAS. Ele vem de `varchar(120)`, e sem
+  // o `min-width:0` um assunto longo empurraria a situação e a contagem de PCs para fora da
+  // linha — num flex, o item só encolhe abaixo do conteúdo se o `min-width` deixar.
+  return `
+      <span style="flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--ct);
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meio}</span>
+      <span style="flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.03em;
+        color:${s === 'ABERTO' ? 'var(--v)' : 'var(--ct)'};">${s ? escHtml(s) : ''}</span>`
+}
+
+/**
  * Uma linha da lista.
  *
  * ⚠️ O INVÁLIDO USA O MESMO FUNDO DO CONSULTADO (`#FAEEDA`), por decisão do Richard — e é a
@@ -5654,7 +5689,11 @@ function sgpeVincLinha(p, destacar) {
       border:1px solid var(--cl);border-radius:8px;padding:7px 10px;">
       ${num}
       ${atual ? sgpeVincSeloAtual() : ''}
-      <span style="margin-left:auto;display:flex;align-items:center;gap:11px;font-size:11.5px;color:var(--ct);">
+      ${/* ⚠️ A ORDEM É número · assunto · situação · contagem, e o `margin-left:auto` que
+            empurrava a contagem SAIU: agora quem ocupa o espaço do meio é o assunto, e um
+            `auto` sobrando ali abriria um vão entre a situação e a contagem. */''}
+      ${sgpeVincMiolo(p.assunto, p.situacao_portal)}
+      <span style="flex:0 0 auto;display:flex;align-items:center;gap:11px;font-size:11.5px;color:var(--ct);">
         <span>${p.qtd} ${p.qtd === 1 ? 'PC' : 'PCs'}</span>
         ${parc ? `<span>${escHtml(parc)}</span>` : ''}
       </span>
@@ -5692,6 +5731,9 @@ function sgpeVincHtml(d) {
       ${/* ⚠️ A MÃE TAMBÉM É LINK, menos quando é ela a consultada — mesma regra da lista. */''}
       ${sgpeVincNumero(d.processo_mae, !ehMae)}
       ${ehMae ? sgpeVincSeloAtual() : ''}
+      ${/* A mãe segue o mesmo formato, pela mesma função — e os campos são os DELA
+            (`mae_assunto`/`mae_situacao_portal`), que vêm do join próprio da rota. */''}
+      ${sgpeVincMiolo(d.mae_assunto, d.mae_situacao_portal)}
     </div>`
 
   const linhas = (d.processos || []).map(p => sgpeVincLinha(p, !ehMae)).join('')
