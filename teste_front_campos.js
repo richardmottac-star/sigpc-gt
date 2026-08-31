@@ -44,7 +44,17 @@ if (iNorm < 0 || iComp < 0 || fComp < 0 || fNorm <= iNorm) {
   console.error('FALHA: nao achei o bloco do componente (ou o normalizarProcesso) no index.html.');
   process.exit(1);
 }
-const codigo = (html.slice(iNorm, fNorm) + '\n' + html.slice(iComp, fComp))
+// ⚠️ O `procInvalido` VEM JUNTO, e nao e enfeite: ele pergunta se o `normalizarProcesso`
+// produz algo que casa com a `PROC_RE`, entao mexer na normalizacao mexe NELE — e ele decide
+// o que o analista ve (a etiqueta de processo invalido). Medir um sem o outro deixaria passar
+// exatamente o efeito colateral que a secao 15 registra.
+const iInv = html.indexOf('const PROC_RE =');
+const fInv = html.indexOf('\n}', html.indexOf('function procInvalido(bruto)', iInv)) + 2;
+if (iInv < 0 || fInv <= iInv) {
+  console.error('FALHA: nao achei o PROC_RE / procInvalido no index.html.');
+  process.exit(1);
+}
+const codigo = (html.slice(iNorm, fNorm) + '\n' + html.slice(iInv, fInv) + '\n' + html.slice(iComp, fComp))
   .replace(/^(let|const) /gm, 'var ');
 
 // ── um DOM de mentira, com o minimo que o componente toca ───────────────────
@@ -300,18 +310,18 @@ conf(gPr.caixas.Sigla.value === 'SAPIENS_EXTERNO_INAT', 'entra inteira na caixa,
 conf(gPr.caixas.Sigla.classList.contains('erro') === false, 'sem borda vermelha');
 conf(ctx.campoProcValido('procEd').ok === true, 'e o salvar liberado, mesmo em modo cadastro');
 
-// ⚠️⚠️ DEFEITO CONHECIDO, MEDIDO E **NAO CONSERTADO** — espera decisao do Richard.
-// `campoProcLer` passa pelo `normalizarProcesso`, e a regex de sigla dele e `[A-Za-zÀ-ÿ]+`,
-// que PARA no `_`. Resultado: "SAPIENS_EXTERNO_INAT 1/2020" volta como
-// "SAPIENS _EXTERNO_INAT 1/2020" — que nao e processo nenhum, e e o valor que o cadastro de
-// PC manda ao servidor em `processo_pc`.
-// So aparece nesta unica sigla das 183: e a unica com `_`.
-// ⚠️ NAO CONSERTAR SEM DECIDIR: o `normalizarProcesso` e o normalizador de 11 telas, e o
-// `CLAUDE.md` registra o estrago de 05/08 quando ele divergiu da lib do servidor.
-// Este `conf` guarda o que ACONTECE hoje, nao o que deveria acontecer — se alguem consertar,
-// ele reprova, e e esse o aviso.
-conf(ctx.campoProcLer('procEd') === 'SAPIENS _EXTERNO_INAT 1/2020',
-     'DEFEITO REGISTRADO: campoProcLer quebra a sigla no "_"');
+// ⚠️ ATE 31/08 AQUI HAVIA UM DEFEITO REGISTRADO, e ele foi CONSERTADO na mesma data: o
+// `campoProcLer` devolvia "SAPIENS _EXTERNO_INAT 1/2020", com um espaco no meio da sigla,
+// porque o `normalizarProcesso` REMONTAVA o texto ao desistir de le-lo. Agora ele devolve a
+// entrada como veio (ver a secao 15), e o valor chega inteiro ao servidor.
+//
+// ⚠️ E ELE NAO SAI CANONICO — o numero NAO ganha zero a esquerda. Nao e descuido: a funcao
+// nao consegue LER esta sigla (a classe `[A-Za-zÀ-ÿ]+` para no `_`), e devolver o texto como
+// veio e justamente o que ela faz quando nao le. Preservar vale mais que padronizar; inventar
+// um formato para o que nao se entendeu foi o defeito anterior.
+conf(ctx.campoProcLer('procEd') === 'SAPIENS_EXTERNO_INAT 1/2020',
+     'campoProcLer devolve a sigla INTEIRA, sem espaco no meio', ctx.campoProcLer('procEd'));
+conf(!/ _/.test(ctx.campoProcLer('procEd')), 'e nenhum espaco antes do `_`');
 
 // ⚠️ AGORA ELA SE FORMA NO TECLADO — o `_` entrou no filtro do `oninput` (Richard,
 // 31/08/2026). E a UNICA das 183 que o traz; sem isto os dois underscores caiam e sobrava
@@ -479,6 +489,54 @@ conf(!/^\.cmpi\{/m.test(semComent), 'e nao ha `.cmpi` sozinho, que perderia');
 conf(/\.cmpg \.cmpi\{[^}]*box-sizing:content-box/.test(html), 'com box-sizing:content-box — a caixa mede os caracteres');
 conf(/\.cmpg \.cmpi\.erro\{/.test(html), 'o erro e uma CLASSE');
 conf(!/cmpi'\)\.style\.borderColor|classList[^)]*\)\.style\.border/.test(semComent), 'e nunca style.borderColor');
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ 15. `normalizarProcesso` — DESISTIR É DEVOLVER A ENTRADA ═══');
+//
+// ⚠️ ESTA FUNCAO E A CHAVE DE COMPARACAO COM O BANCO, e mexer nela reabre a conciliacao —
+// e por isso que o que mudou em 31/08/2026 foi SO o que ela devolve nos DOIS ramos em que ela
+// ja desistia. Antes eles remontavam `${siglaBase} ${resto}`, e aquele espaco e o separador
+// entre sigla e numero: nos ramos de desistencia nao ha numero, e ele caia DENTRO da coisa que
+// a regex de cima tinha partido.
+//
+// ⚠️ O CASO QUE PROVOU: `SAPIENS_EXTERNO_INAT` e a unica das 183 com `_`, e `[A-Za-zÀ-ÿ]+`
+// para nele. Sobrava "SAPIENS _EXTERNO_INAT 1/2020" — e `SAPIENS` sozinho e OUTRO orgao das
+// 183 (31525, contra 15073). Texto partido virando nome de orgao que existe e o pior
+// resultado possivel, o mesmo da trava da regiao.
+const norm = ctx.normalizarProcesso;
+
+conf(norm('SAPIENS_EXTERNO_INAT 1/2020') === 'SAPIENS_EXTERNO_INAT 1/2020',
+     'a sigla com `_` volta INTEIRA, sem espaco no meio', norm('SAPIENS_EXTERNO_INAT 1/2020'));
+// ⚠️ O QUE NAO PODE MUDAR: tudo o que a funcao JA normalizava continua igual — sao os ramos
+// que casam, e eles nao foram tocados. Estes sao os quatro formatos que o acervo usa em volume.
+conf(norm('SCC 197/2021') === 'SCC 00000197/2021', 'SCC 197/2021 normaliza como antes');
+conf(norm('SCC19172/2020') === 'SCC 00019172/2020', 'colado sem zeros, idem');
+conf(norm('ADR20 1234/2019') === 'ADR20 00001234/2019', 'ADR20 1234/2019 continua igual');
+conf(norm('SDR13 458/2017') === 'SDR13 00000458/2017', 'a regional continua com a regiao na sigla');
+conf(norm('SST 1234/2020') === 'SST 1234/2020', 'e o SST continua com 4 digitos, nao 8');
+conf(norm('') === '—' && norm('   ') === '—', 'vazio continua devolvendo o travessao');
+
+// Os dois ramos de desistencia, um a um, com valores REAIS do acervo.
+conf(norm('SCC7537') === 'SCC7537', 'ramo `!mNum`: devolve a entrada, sem inventar espaco');
+conf(norm('ADR19 0011181.2017') === 'ADR19 0011181.2017', 'ramo `!mRegiao`: idem');
+conf(norm('adr19 0011181.2017') === 'adr19 0011181.2017', 'e sem forcar maiuscula no que nao leu');
+
+// ⚠️⚠️ EFEITO COLATERAL MEDIDO, RELATADO E **NAO COMPENSADO** — espera decisao do Richard.
+// `procInvalido` pergunta se `normalizarProcesso` produz algo que casa com a `PROC_RE`. Como a
+// desistencia deixou de remontar, UM valor real do acervo mudou de lado: `SCC732 3/2021` —
+// espaco no meio do numero, 2 PCs numa TR. Antes a remontagem virava "SCC 732 3/2021", que a
+// PROC_RE recusava; agora o texto cru "SCC732 3/2021" a satisfaz, porque `[A-Z0-9]+` engole
+// "SCC732" como se fosse sigla. Resultado: essas 2 PCs PERDERAM a etiqueta de invalido.
+// Nenhum outro dos 11 valores malformados do acervo mudou de lado — medido, nao presumido.
+// ⚠️ Compensar isso e mexer na `PROC_RE`, que decide o que o analista ve. E regra, e nao foi
+// pedida. Este `conf` guarda o que ACONTECE hoje: se alguem mudar, ele reprova.
+conf(ctx.procInvalido('SCC732 3/2021') === false,
+     'EFEITO REGISTRADO: `SCC732 3/2021` (2 PCs) deixou de ser marcado invalido');
+conf(ctx.procInvalido('SCC7537') === true && ctx.procInvalido('AR355478172') === true
+  && ctx.procInvalido('ER221202154') === true && ctx.procInvalido('SCC 6579') === true,
+     'e os demais malformados continuam sendo marcados');
+conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/2019') === false,
+     'sem marcar de invalido o que e valido');
 
 // ════════════════════════════════════════════════════════════════════════════
 console.log(`\n=== RESULTADO: ${ok} passaram · ${falhou} falharam ===\n`);

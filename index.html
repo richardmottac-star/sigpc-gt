@@ -4549,16 +4549,30 @@ function normalizarProcesso(str) {
   const siglaBase = mSigla[1].toUpperCase()
   const resto = mSigla[2].trim()
 
+  // ⚠️ DESISTIR É DEVOLVER A ENTRADA, NUNCA REMONTÁ-LA (Richard, 31/08/2026). Os dois `return`
+  // abaixo são os ramos em que a função NÃO conseguiu ler o texto. Até aqui eles devolviam
+  // `${siglaBase} ${resto}` — e esse espaço é o separador entre sigla e número, que só faz
+  // sentido quando há sigla e número. Nestes dois ramos não há: `resto` é o pedaço que a
+  // regex de cima cortou fora, e o espaço caía DENTRO da coisa que foi partida.
+  //
+  // Medido em `SAPIENS_EXTERNO_INAT 1/2020`, a única das 183 com `_`: a classe `[A-Za-zÀ-ÿ]+`
+  // para no underscore, sobra `siglaBase = "SAPIENS"` e `resto = "_EXTERNO_INAT 1/2020"`, e a
+  // remontagem devolvia **"SAPIENS _EXTERNO_INAT 1/2020"**. Não é só malformado: `SAPIENS`
+  // sozinho é OUTRO órgão das 183 (31525, contra 15073) — o texto partido vira o nome de um
+  // órgão que existe, que é o pior resultado possível, o mesmo da trava da região.
+  //
+  // ⚠️ E A FUNÇÃO NÃO NORMALIZA MENOS POR ISSO: os dois ramos já eram de desistência. O que
+  // muda é o que se devolve ao desistir — o texto como veio, em vez de um texto novo.
   if(siglaBase === 'ADR' || siglaBase === 'SDR') {
     const mRegiao = resto.match(/^(\d{2})\s*(\d+)\s*\/\s*(\d+)$/)
-    if(!mRegiao) return `${siglaBase} ${resto}`
+    if(!mRegiao) return s
     const numero = mRegiao[2].padStart(8,'0')
     return `${siglaBase}${mRegiao[1]} ${numero}/${mRegiao[3]}`
   }
 
   const digitos = siglaBase === 'SST' ? 4 : 8
   const mNum = resto.match(/^(\d+)\s*\/\s*(\d+)$/)
-  if(!mNum) return `${siglaBase} ${resto}`
+  if(!mNum) return s
   const numero = mNum[1].padStart(digitos, '0')
   return `${siglaBase} ${numero}/${mNum[2]}`
 }
