@@ -4582,18 +4582,126 @@ function sgpeAbsorver(j) {
 // a recuperação é caso a caso, pelo lápis — e a etiqueta é o que mostra ONDE.
 const procVazio = (b) => { const t = String(b ?? '').trim(); return !t || t === '-1' || t === '-' }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  PROCESSO SGPe INVÁLIDO — 30/08/2026
+//
+//  O número gravado não é processo: veio assim da carga inicial. Medido no acervo: 144 PCs em
+//  47 TRs, em oito grafias — "-1" (63), "AR355478172" (21), "ADR19 0011181.2017" (19),
+//  "ADR34-1028/2017" (18), "ADR34- 1125/2017" (18), "SCC732 3/2021" (2), "SCC7537" (2),
+//  "SCC 6579" (1).
+//
+//  ⚠️ CAMPO VAZIO NÃO É INVÁLIDO — é AUSÊNCIA, e já tem tratamento próprio: a etiqueta
+//  "processo SGPe não localizado" do `procHtml`. São coisas diferentes e a pessoa faz coisas
+//  diferentes com elas: no vazio ninguém informou; no inválido alguém informou errado.
+//
+//  ⚠️ A REGRA REAPROVEITA `normalizarProcesso` — não há segunda normalização. É a mesma
+//  função que desenha o número na tela e que o modal do SGPe usa para preencher sigla, número
+//  e ano; se ela evoluir, o critério evolui junto. Uma cópia divergiria no primeiro ajuste,
+//  como o mapa de nomes curtos, que chegou a ter três versões.
+//
+//  ⚠️ E A PERGUNTA É "SAI SIGLA E NÚMERO?", exatamente a que o `sgpeConsultaAbrir` já faz
+//  para decidir se consegue consultar. Se ela não consegue montar a consulta, o processo não
+//  serve para nada — que é a definição prática de inválido aqui.
+// ══════════════════════════════════════════════════════════════════════════════
+const PROC_RE = /^([A-Z0-9]+)\s+0*(\d+)\s*\/\s*(\d{4})$/i
+
+function procInvalido(bruto) {
+  const t = String(bruto ?? '').trim()
+  if (!t) return false                       // vazio é ausência, não invalidez
+  return !PROC_RE.test(String(normalizarProcesso(t)))
+}
+
+/** Quantas PCs de um conjunto têm processo inválido. */
+const procInvalidasQtd = (pcs) => (pcs || []).filter(p => p && procInvalido(p.processo_pc)).length
+
+const PROC_INV_TEXTO = 'O número gravado nesta prestação não é um processo válido — veio assim da '
+  + 'carga inicial. Sem ele, não dá para consultar a tramitação nem abrir o processo no SGPe. '
+  + 'Localize o processo correto no SGPe e corrija aqui. Se esta prestação realmente não tiver '
+  + 'processo, deixe o campo vazio — é melhor que um número que não existe.'
+
+/** A tag da linha, com o "?" das outras pílulas e o botão que abre o campo de edição. */
+function procInvalidoTag(bruto, codigo_pc, campo) {
+  const id = 'pinv' + Math.random().toString(36).slice(2, 9)
+  window._pilulas = window._pilulas || {}
+  window._pilulas[id] = { titulo: 'Processo SGPe inválido', texto: PROC_INV_TEXTO }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;background:#EF9F27;color:#412402;
+      border-radius:20px;padding:2px 9px;font-size:10px;font-weight:800;white-space:nowrap;margin-left:6px;">
+      Processo SGPe inválido
+      <button type="button" title="O que é isto?" onclick="event.stopPropagation();pilulaAbrir('${id}')"
+        style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
+        border-radius:50%;background:#412402;color:#EF9F27;font-size:9px;font-weight:800;">?</button>
+    </span>${!codigo_pc || !podeEditarProcesso() ? '' : `<button type="button" class="btn-acao"
+      onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
+      title="Corrigir o processo SGPe desta prestação"
+      style="margin-left:6px;padding:2px 10px;font-size:10.5px;font-weight:700;background:#412402;
+             color:#FAEEDA;border-color:#412402;">Corrigir</button>`}`
+}
+
+/**
+ * A FAIXA DO SETORIAL. Só aparece quando há pelo menos uma.
+ *
+ * ⚠️ FAIXA SEPARADA, e não mais um bloco dentro da faixa do SIGEF. Aquela fala de conferência
+ * — pendência que volta a contar quando o analista declara. Esta fala de dado errado na base,
+ * que não volta com declaração nenhuma: alguém tem de achar o processo certo e corrigir.
+ * Somar as duas na mesma faixa misturaria o que se resolve com uma leitura e o que se resolve
+ * com um conserto.
+ */
+function faixaProcInvalido(qtd) {
+  if (!qtd) return ''
+  const id = 'pinv' + Math.random().toString(36).slice(2, 9)
+  window._pilulas = window._pilulas || {}
+  window._pilulas[id] = { titulo: 'Processo SGPe inválido', texto: PROC_INV_TEXTO }
+  return `<div style="margin:0;padding:12px 18px;background:#FAEEDA;border-bottom:1px solid var(--cl);
+      border-left:4px solid #EF9F27;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <span style="display:inline-flex;align-items:center;gap:5px;background:#EF9F27;color:#412402;
+        border-radius:20px;padding:3px 11px;font-size:11px;font-weight:800;white-space:nowrap;">
+      ${qtd} ${qtd === 1 ? 'prestação' : 'prestações'} com processo SGPe inválido
+      <button type="button" title="O que é isto?" onclick="pilulaAbrir('${id}')"
+        style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
+        border-radius:50%;background:#412402;color:#EF9F27;font-size:9px;font-weight:800;">?</button>
+    </span>
+    <div style="font-size:12px;color:#633806;">
+      O número gravado não é um processo — veio assim da carga inicial. Corrija na linha da
+      prestação, pelo botão <b>Corrigir</b>.</div>
+  </div>`
+}
+
+/** A pílula de contagem — cabeçalho da TR e faixa do setorial usam a mesma. */
+function procInvalidoPilula(qtd, prefixo) {
+  if (!qtd) return ''
+  const id = 'pinv' + Math.random().toString(36).slice(2, 9)
+  window._pilulas = window._pilulas || {}
+  window._pilulas[id] = { titulo: 'Processo SGPe inválido', texto: PROC_INV_TEXTO }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;background:#EF9F27;color:#412402;
+      border-radius:20px;padding:2px 9px;font-size:10px;font-weight:800;white-space:nowrap;">
+      ${prefixo || ''}${qtd} ${qtd === 1 ? 'prestação com processo SGPe inválido' : 'prestações com processo SGPe inválido'}
+      <button type="button" title="O que é isto?" onclick="event.stopPropagation();pilulaAbrir('${id}')"
+        style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
+        border-radius:50%;background:#412402;color:#EF9F27;font-size:9px;font-weight:800;">?</button>
+    </span>`
+}
+
 function procHtml(bruto, codigo_pc, campo) {
   const txt = escHtml(normalizarProcesso(bruto))
   const url = _sgpeCache.get(bruto)
   const semLink = !url
   const vazio = procVazio(bruto)
-  const corpo = vazio
+  // ⚠️ O RISCADO ENTRA AQUI, no ponto único de desenho do processo (armadilha 17): são onze
+  // telas, e marcar a invalidez em cada uma seria onze cópias da mesma regra.
+  const invalido = procInvalido(bruto)
+  const corpo = invalido
+    ? `<span style="font-family:ui-monospace,Consolas,monospace;color:#8A5A00;text-decoration:line-through;">${txt}</span>`
+    : vazio
     ? `<span class="proc-sem" title="A CGE entregou esta PC sem o número do processo SGPe. Corrija pelo lápis, com o SGPe aberto."
          style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;border-radius:4px;
                 padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap;">processo SGPe não localizado</span>`
     : url
       ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="proc-link" title="Abrir no SGPe">${txt}</a>`
       : `<span title="Sem link do SGPe" style="${semLink ? 'color:#B8860B;' : ''}">${txt}</span>`
+  // ⚠️ NA LINHA INVÁLIDA O LÁPIS NÃO VEM: a correção ali é o botão "Corrigir" da tag, que é
+  // visível e diz o que faz. Dois caminhos para a mesma edição, um deles escondido no hover,
+  // é a armadilha 13 — dois pontos de entrada, e só um lembrado quando a regra muda.
+  if(invalido) return corpo
   if(!codigo_pc || !podeEditarProcesso()) return corpo
   // ⚠️ No caso vazio o lápis nasce VISÍVEL, não em `opacity:0`. Lápis que só aparece com o
   // mouse em cima é lápis que ninguém acha — e aqui ele é a única saída da etiqueta.
@@ -5110,7 +5218,9 @@ function sgpeConsultaAbrir(bruto) {
 // analista leria "processo não encontrado" sobre um processo que ninguém informou — o que
 // falta ali é o dado, e quem resolve isso é o lápis do `procHtml`, não esta consulta.
 function sgpeIconeConsulta(bruto) {
-  if(procVazio(bruto)) return ''
+  // ⚠️ E TAMBÉM NÃO APARECE NO INVÁLIDO. Sem sigla e número não há consulta a fazer: o ícone
+  // abriria a janela e devolveria "não encontrado" sobre um número que nunca existiu.
+  if(procVazio(bruto) || procInvalido(bruto)) return ''
   return `<button type="button" onclick="event.stopPropagation();sgpeConsultaAbrir('${escHtml(String(bruto))}')"
     title="Consultar este processo no SGPe" aria-label="Consultar no SGPe"
     style="width:26px;height:26px;padding:0;margin-left:5px;background:none;border:0;cursor:pointer;
@@ -8166,7 +8276,7 @@ async function prodCarregar() {
     const mapaStats = {}
     pcs.forEach(p => {
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{},conta:0,descontadas:0,preGt:0}
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{},conta:0,descontadas:0,preGt:0,procInv:0}
       const s = mapaStats[p.analista_id]
       s.total++
       // ⚠️ A CONFERÊNCIA COM O SIGEF, contada à parte de `status` — pela mesma razão do
@@ -8187,6 +8297,10 @@ async function prodCarregar() {
       // volta nunca — o trabalho é de antes do grupo. Misturar as duas prometeria ao analista
       // uma recuperação que não existe.
       if(p.sigef_pre_gt === true) s.preGt++
+      // ⚠️ CONTADO AQUI, e não numa varredura à parte: é a mesma passada que já percorre as
+      // PCs uma vez. Uma segunda varredura sobre 16 mil linhas para somar 144 seria trabalho
+      // repetido para responder a mesma pergunta.
+      if(procInvalido(p.processo_pc)) s.procInv++
       if(p.status==='baixada') s.baixadas++
       else if(p.status==='analise') s.analise++
       else if(p.status==='diligencia') s.dilig++
@@ -8542,10 +8656,11 @@ function prodRender(dados) {
     s.conta += d.conta || 0
     s.descontadas += d.descontadas || 0
     s.preGt += d.preGt || 0
+    s.procInv += d.procInv || 0
     if ((g.SEM_REGISTRO_SIGEF || 0) + (g.VERIFICAR_FINAL || 0) + (g.ABERTA_COM_BAIXA_SIGEF || 0)) s.analistas++
     return s
-  }, { semReg: 0, verFinal: 0, ambar: 0, conta: 0, descontadas: 0, analistas: 0, preGt: 0 })
-  const faixaSetorial = sigefFaixaProdutividade(
+  }, { semReg: 0, verFinal: 0, ambar: 0, conta: 0, descontadas: 0, analistas: 0, preGt: 0, procInv: 0 })
+  const faixaSetorial = faixaProcInvalido(agg.procInv) + sigefFaixaProdutividade(
     { ...agg, seResolver: agg.conta + agg.descontadas + agg.ambar },
     {
       semBotao: true, possessivo: 'a',
@@ -12781,9 +12896,10 @@ function renderPlan(rows) {
 
       // ── parcial em aberto
       const linhasPC = pa.pcs.map(p => {
-        return `<tr>
+        const procInv = procInvalido(p.processo_pc)
+        return `<tr${procInv ? ' style="background:#FAEEDA;"' : ''}>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
-          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}${sgpeIconeConsulta(p.processo_pc)}</td>
+          <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}${sgpeIconeConsulta(p.processo_pc)}${procInv ? procInvalidoTag(p.processo_pc, p.codigo_pc, 'processo_pc') : ''}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
           <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
           <td style="padding:8px 10px;font-size:11px;color:#9AA8A0;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_nl||'—')}</td>
@@ -12886,6 +13002,9 @@ function renderPlan(rows) {
                   pendência só apareceria para quem já abriu o cartão. As PCs vêm de todas as
                   parciais da TR; o componente é o mesmo do cartão da parcela. */''}
             ${sigefBadges(r.parciais.flatMap(pa => pa.pcs))}${pilulasExtras(r.parciais.flatMap(pa => pa.pcs))}
+            ${/* ⚠️ SÓ APARECE QUANDO HÁ. Pílula com zero ocuparia a mesma largura de uma que
+                  importa, e o cabeçalho da TR já tem seis coisas disputando a linha. */''}
+            ${procInvalidoPilula(procInvalidasQtd(r.parciais.flatMap(pa => pa.pcs)))}
           </div>
           <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
             ${escHtml(r.entidade||'—')}${assumida ? ` · assumida em ${planData(assumida)}${trNova ? ` (${planHaQuantoTempo(assumida)})` : ''}` : ''}${planInicioAnalise(r)}
