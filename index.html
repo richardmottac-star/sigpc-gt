@@ -4898,7 +4898,11 @@ function campoTrPartir(txt) {
  */
 function campoProcPartir(txt) {
   const s = String(txt == null ? '' : txt).trim().replace(/\s+/g, ' ')
-  const mL = s.match(/^([A-Za-z]{2,8})(.*)$/)
+  // ⚠️ ATÉ 11 LETRAS, e não 8. A maior sigla real do cadastro é `SCPARCERIAS`, com 11. Com o
+  // teto em 8 este `match` era GULOSO e parava no meio dela: "SCPARCERIAS 197/2021" saía com
+  // sigla `SCPARCER` e número `IAS 197` reduzido a `197` — um processo de outro órgão, montado
+  // em silêncio, que é justamente o resultado que a trava da região existe para impedir.
+  const mL = s.match(/^([A-Za-z]{2,11})(.*)$/)
   if(!mL) return null
   let sigla = mL[1].toUpperCase()
   const mA = mL[2].trim().match(/^(.*?)\s*[\/.]\s*(\d{2,4})$/)
@@ -4940,12 +4944,20 @@ function campoColagemCanonica(txt) {
 const CAMPO_PAD_MODAL  = '8px 10px'
 const CAMPO_PAD_FILTRO = '7px 9px'
 
-function campoCx(id, cp, chars, ml, val, ph, rot, pad, bw, extra) {
+// ⚠️ `larg` É UMA MEDIDA CSS INTEIRA, não um número de caracteres. Os campos de dígito são
+// `4ch`, `6ch`, `9ch` — ali a caixa MEDE o que aceita, e é assim que a tela ensina o formato.
+// A sigla é a exceção, e por decisão do Richard (31/08/2026): `96px` FIXOS, dimensionados pela
+// maior sigla real do cadastro do SGPe — `SCPARCERIAS`, 11 caracteres.
+//
+// ⚠️ FIXA QUER DIZER FIXA: com `SCC` sobra espaço, e é assim mesmo. Uma caixa que encolhesse
+// junto com o conteúdo faria a linha inteira dançar a cada tecla, e o número ao lado mudaria
+// de lugar enquanto a pessoa digita a sigla.
+function campoCx(id, cp, larg, ml, val, ph, rot, pad, bw, extra) {
   return `<input class="cmpi" id="${escHtml(id + cp)}" data-cg="${escHtml(id)}" data-cp="${cp}"
     maxlength="${ml}" autocomplete="off" spellcheck="false" aria-label="${escHtml(rot)}"
     ${cp === 'Sigla' ? '' : 'inputmode="numeric"'}
     value="${escHtml(val || '')}" placeholder="${escHtml(ph)}" title="${escHtml(rot)}"
-    style="width:${chars}ch;padding:${pad};border-width:${bw};${extra || ''}">`
+    style="width:${larg};padding:${pad};border-width:${bw};${extra || ''}">`
 }
 
 /**
@@ -4964,9 +4976,9 @@ function campoTrHtml(id, opc) {
     data-modo="${escHtml(o.modo || 'busca')}" data-muda="${escHtml(o.muda || '')}"
     data-enter="${escHtml(o.enter || '')}">
     <img src="${LOGO_SIGEF_B64}" alt="SIGEF" class="cmp-sigef">
-    ${campoCx(id, 'Ano', 4, 4, p.ano, '2021', 'Ano da TR', pad, bw)}
+    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano da TR', pad, bw)}
     <span class="cmpf">TR</span>
-    ${campoCx(id, 'Num', 6, 6, num, '000411', 'Número da TR', pad, bw)}
+    ${campoCx(id, 'Num', '6ch', 6, num, '000411', 'Número da TR', pad, bw)}
   </span>`
 }
 
@@ -4985,10 +4997,10 @@ function campoProcHtml(id, opc) {
     data-modo="${escHtml(o.modo || 'busca')}" data-muda="${escHtml(o.muda || '')}"
     data-enter="${escHtml(o.enter || '')}">
     <img src="${LOGO_SGPE_B64}" alt="SGPe" class="cmp-sgpe">
-    ${campoCx(id, 'Sigla', 5, 5, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-align:left;text-transform:uppercase;')}
-    ${campoCx(id, 'Num', 9, 9, p.numero, '00000197', 'Número do processo', pad, bw)}
+    ${campoCx(id, 'Sigla', '96px', 11, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-align:left;text-transform:uppercase;')}
+    ${campoCx(id, 'Num', '9ch', 9, p.numero, '00000197', 'Número do processo', pad, bw)}
     <span class="cmpf">/</span>
-    ${campoCx(id, 'Ano', 4, 4, p.ano, '2021', 'Ano do processo', pad, bw)}
+    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano do processo', pad, bw)}
     <span class="cmpe" data-cg="${escHtml(id)}"></span>
   </span>`
 }
@@ -5709,7 +5721,10 @@ function procEdMudou() {
   const v = campoProcValido('procEd')
   let erro = v.ok ? null : v.motivo
   if(erro) { /* já tem motivo */ }
-  else if(!/^[A-Z]{2,10}\d{0,3}$/.test(sigla)) erro = 'Sigla inválida.'
+  // ⚠️ 11 LETRAS + até 2 dígitos de região, e o teto de 11 vem da caixa. `SCPARCERIAS` tem 11
+  // letras e o antigo `{2,10}` a reprovava como "Sigla inválida" — a mensagem certa para uma
+  // sigla que existe seria nenhuma, e é a lista das 183 que decide isso, não este formato.
+  else if(!/^[A-Z]{2,11}\d{0,2}$/.test(sigla)) erro = 'Sigla inválida.'
   else if(parseInt(numero,10) <= 0) erro = 'Informe o número do processo.'
   else if(parseInt(ano,10) < 2000 || parseInt(ano,10) > 2030) erro = 'Ano fora do intervalo esperado.'
 

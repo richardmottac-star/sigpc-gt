@@ -148,6 +148,16 @@ conf(igual(pr('SCC 00000197/2021'), 'SCC', '00000197', '2021'), '"SCC 00000197/2
 conf(igual(pr('SCC197/2021'), 'SCC', '197', '2021'), '"SCC197/2021" — colado, sem zeros');
 conf(igual(pr('scc 197/2021'), 'SCC', '197', '2021'), 'minuscula vira maiuscula');
 conf(igual(pr('FCEE390/2019'), 'FCEE', '390', '2019'), '"FCEE390/2019"');
+// ⚠️ AS SIGLAS LONGAS DO CADASTRO (Richard, 31/08/2026). Sao 27 das 183 que passam de 5
+// caracteres, e a maior real e `SCPARCERIAS`, com 11. Enquanto o `match` das letras parava em
+// 8 ele era GULOSO e cortava no meio: "SCPARCERIAS 197/2021" saia com sigla `SCPARCER` e o
+// resto virava numero — um processo de OUTRO orgao, montado em silencio. E silencio e o pior
+// resultado possivel, a mesma razao da trava da regiao.
+conf(igual(pr('SCPARCERIAS 197/2021'), 'SCPARCERIAS', '197', '2021'), '"SCPARCERIAS" — 11 letras, a maior real');
+conf(igual(pr('SCPARCERIAS197/2021'), 'SCPARCERIAS', '197', '2021'), 'e colada ao numero tambem');
+conf(igual(pr('FESPORTE 1234/2020'), 'FESPORTE', '1234', '2020'), '"FESPORTE" — 8 letras');
+conf(igual(pr('CEASASC 45/2019'), 'CEASASC', '45', '2019'), '"CEASASC" — 7 letras');
+conf(igual(pr('SANTUR 9/2018'), 'SANTUR', '9', '2018'), '"SANTUR" — 6 letras');
 // ⚠️ A REGIAO SO ENTRA NA SIGLA COM SEPARADOR — a mesma trava do lib/sgpe-link.js.
 conf(igual(pr('ADR20 00001233/2017'), 'ADR20', '00001233', '2017'), 'a regiao entra na sigla QUANDO ha separador');
 conf(igual(pr('ADR19 0011181.2017'), 'ADR19', '0011181', '2017'), 'o ponto no lugar da barra tambem serve');
@@ -189,12 +199,19 @@ conf(!/Transfer|Processo|Sigla|N.mero|Ano/i.test(visivel(htmlTr) + visivel(htmlP
      'nenhum rotulo de texto ao lado do logo', visivel(htmlTr) + '|' + visivel(htmlPr));
 conf(/>TR</.test(htmlTr), 'o "TR" fixo esta entre as duas caixas da TR');
 conf(/>\/</.test(htmlPr), 'a "/" fixa esta entre o numero e o ano do processo');
-// ⚠️ A LARGURA E O NUMERO DE CARACTERES. Nunca a linha.
+// ⚠️ NOS CAMPOS DE DIGITO A LARGURA E O NUMERO DE CARACTERES. Nunca a linha.
 conf(/width:4ch/.test(htmlTr) && /width:6ch/.test(htmlTr), 'TR: 4ch para o ano, 6ch para o numero');
-conf(/width:5ch/.test(htmlPr) && /width:9ch/.test(htmlPr) && /width:4ch/.test(htmlPr),
-     'processo: 5ch sigla, 9ch numero, 4ch ano');
+conf(/width:9ch/.test(htmlPr) && /width:4ch/.test(htmlPr), 'processo: 9ch para o numero, 4ch para o ano');
+// ⚠️ A SIGLA E A EXCECAO, E POR DECISAO (Richard, 31/08/2026): 96px FIXOS, dimensionados pela
+// maior sigla real do cadastro do SGPe — `SCPARCERIAS`, com 11 caracteres. Com `SCC` sobra
+// espaco, e e assim mesmo: caixa que encolhe com o conteudo faz o numero ao lado mudar de
+// lugar a cada tecla.
+const cxSigla = htmlPr.match(/id="p1Sigla"[\s\S]*?>/)[0];
+conf(/width:96px/.test(cxSigla), 'a sigla tem 96px fixos');
+conf(!/\dch/.test(cxSigla), 'e nao e medida em caracteres — a largura nao acompanha o conteudo');
 conf(!/width:100%|flex:1/.test(htmlTr + htmlPr), 'nenhuma caixa pede a linha inteira');
 conf(/maxlength="6"/.test(htmlTr) && /maxlength="9"/.test(htmlPr), 'o maxlength acompanha a largura');
+conf(/maxlength="11"/.test(cxSigla), 'e a sigla aceita 11 — o tamanho de SCPARCERIAS');
 conf(/id="t1Ano"/.test(htmlTr) && /id="t1Num"/.test(htmlTr), 'os ids saem do nome do grupo');
 conf(/id="p1Sigla"/.test(htmlPr) && /id="p1Num"/.test(htmlPr) && /id="p1Ano"/.test(htmlPr), 'idem no processo');
 conf(/text-align:left/.test(htmlPr.match(/id="p1Sigla"[\s\S]*?>/)[0]), 'a sigla e o unico campo alinhado a esquerda');
@@ -221,7 +238,7 @@ conf(ctx.campoProcLer('procEd') === '', 'faltando o ano, devolve vazio');
 console.log('\n═══ 5. A SIGLA — AVISA SEMPRE, IMPEDE SO NO CADASTRO ═══');
 
 // A lista chega como o `GET /sgpe/siglas` a entrega.
-ctx._SIGLAS = new Set(['SCC', 'FCEE', 'ADR20', 'SDR13', 'DC']);
+ctx._SIGLAS = new Set(['SCC', 'FCEE', 'ADR20', 'SDR13', 'DC', 'SCPARCERIAS']);
 
 ctx.campoProcPor('procEd', 'SCC', '197', '2021');
 conf(gPr.caixas.Sigla.classList.contains('erro') === false, 'sigla conhecida nao marca');
@@ -243,7 +260,7 @@ ctx._SIGLAS = null;
 ctx.campoProcPor('procEd', 'XPTO', '197', '2021');
 conf(gPr.caixas.Sigla.classList.contains('erro') === false, 'lista ausente: ninguem e reprovado');
 conf(ctx.campoProcValido('procEd').ok === true, 'e o salvar continua liberado');
-ctx._SIGLAS = new Set(['SCC', 'FCEE', 'ADR20', 'SDR13', 'DC']);
+ctx._SIGLAS = new Set(['SCC', 'FCEE', 'ADR20', 'SDR13', 'DC', 'SCPARCERIAS']);
 
 // ⚠️ AS AMBIGUAS CONTAM COMO CONHECIDAS: elas EXISTEM no SGPe, e quem as recusa e o servidor.
 conf(ctx.campoSiglaOk('DC') === true, 'sigla ambigua nao e marcada como erro');
@@ -305,6 +322,11 @@ gPr.caixas.Sigla.value = ''; gPr.caixas.Num.value = ''; gPr.caixas.Ano.value = '
 colar(gPr.caixas.Ano, 'ADR20 1233/17');
 conf(gPr.caixas.Sigla.value === 'ADR20' && gPr.caixas.Num.value === '00001233' && gPr.caixas.Ano.value === '2017',
      'a regional, com ano de 2 digitos, colada na caixa do ANO');
+
+gPr.caixas.Sigla.value = ''; gPr.caixas.Num.value = ''; gPr.caixas.Ano.value = '';
+colar(gPr.caixas.Num, 'SCPARCERIAS 197/2021');
+conf(gPr.caixas.Sigla.value === 'SCPARCERIAS' && gPr.caixas.Num.value === '00000197'
+     && gPr.caixas.Ano.value === '2021', 'a sigla de 11 letras cabe inteira na caixa');
 
 const antes = gPr.caixas.Sigla.value;
 e = colar(gPr.caixas.Sigla, 'CENTRO EDUCACIONAL');
