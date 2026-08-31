@@ -173,5 +173,56 @@ conf(!/toast\(|sgpeCaixa\(/.test(corpo), 'sem toast e sem caixa de erro');
 conf(/const alvo = document\.getElementById\('sgpeVinculo'\)/.test(corpo),
      'e o alvo e relido depois do await — a janela pode ter fechado');
 
-console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
-process.exit(falhou ? 1 : 0);
+S('10. A CORRIDA ENTRE DUAS CONSULTAS');
+//
+// ⚠️ SEM `await`, LIMPAR NAO CANCELA — so apaga o que esta na tela. A resposta que ja estava
+// voltando escreve por cima depois, e a TR do processo ANTERIOR aparece embaixo do resultado
+// do NOVO. E facil de provocar: consultar A, consultar B, e A demorar mais.
+//
+// Este teste roda os dois carregamentos de verdade, com a resposta de A chegando DEPOIS da
+// de B, e exige que o que fique na tela seja o de B.
+(async () => {
+  const respostas = {
+    'A': { ...BLOCO, tr: '2020TR000AAA', entidade: 'ENTIDADE A' },
+    'B': { ...BLOCO, tr: '2020TR000BBB', entidade: 'ENTIDADE B' },
+  };
+  let atrasoDeA = null;
+  els = { sgpeVinculo: { innerHTML: '' } };
+  ctx.fetch = async (url) => {
+    const qual = /A$/.test(url) ? 'A' : 'B';
+    if (qual === 'A') await new Promise(r => { atrasoDeA = r; });   // A fica presa
+    return { json: async () => ({ data: respostas[qual], error: null }) };
+  };
+
+  const pA = ctx.sgpeVincCarregar('A');     // pede A — fica presa
+  const pB = ctx.sgpeVincCarregar('B');     // pede B — volta na hora
+  await pB;
+  conf(/2020TR000BBB/.test(els.sgpeVinculo.innerHTML), 'B chegou e desenhou');
+
+  atrasoDeA();                              // agora A volta, ATRASADA
+  await pA;
+  conf(/2020TR000BBB/.test(els.sgpeVinculo.innerHTML) && !/2020TR000AAA/.test(els.sgpeVinculo.innerHTML),
+       'e a resposta ATRASADA de A NAO escreve por cima de B');
+
+  // ⚠️ E O LIMPAR CANCELA DE VERDADE: quem estiver voltando depois dele nao escreve mais.
+  els.sgpeVinculo.innerHTML = '';
+  let solta = null;
+  ctx.fetch = async () => { await new Promise(r => { solta = r; });
+                            return { json: async () => ({ data: respostas['A'], error: null }) }; };
+  const pC = ctx.sgpeVincCarregar('C');
+  ctx.sgpeVincLimpar();                     // a pessoa consultou outra coisa
+  solta();
+  await pC;
+  conf(els.sgpeVinculo.innerHTML === '', 'depois do limpar, a resposta em voo nao desenha nada',
+       els.sgpeVinculo.innerHTML.slice(0, 60));
+
+  // A janela fechada continua protegida pela segunda guarda.
+  els = {};
+  ctx.fetch = async () => ({ json: async () => ({ data: respostas['A'], error: null }) });
+  let caiu = false;
+  try { await ctx.sgpeVincCarregar('A'); } catch (_) { caiu = true; }
+  conf(!caiu, 'e a janela fechada no meio do caminho nao derruba nada');
+
+  console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
+  process.exit(falhou ? 1 : 0);
+})();

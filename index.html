@@ -5682,7 +5682,20 @@ function sgpeVincHtml(d) {
     </div>`
 }
 
+// ⚠️ A SENHA DA VEZ. Sem ela, LIMPAR NÃO CANCELA — só apaga o que está na tela, e a resposta
+// que já está voltando escreve por cima depois.
+//
+// A corrida é real e fácil de provocar: consultar A, consultar B, e a resposta de A demorar
+// mais que a de B. A ordem fica limpa(A) · pede(A) · limpa(B) · pede(B) · **chega A** · chega
+// B — e por um instante a TR de A aparece embaixo do resultado de B, que é exatamente o que a
+// limpeza existe para impedir. Pior: se A chegar DEPOIS de B, ela fica.
+//
+// Cada consulta tira uma senha; quem volta só escreve se a sua ainda for a da vez. O `limpar`
+// também tira uma, e é isso que o faz cancelar de verdade em vez de só apagar.
+let _sgpeVincSeq = 0
+
 function sgpeVincLimpar() {
+  _sgpeVincSeq++
   const el = document.getElementById('sgpeVinculo')
   if(el) el.innerHTML = ''
 }
@@ -5700,13 +5713,18 @@ function sgpeVincLimpar() {
 async function sgpeVincCarregar(processo) {
   const el = document.getElementById('sgpeVinculo')
   if(!el) return
+  const minhaVez = ++_sgpeVincSeq
   el.innerHTML = ''
   try {
     const r = await fetch(`${API_URL}/sgpe/vinculo?processo=${encodeURIComponent(processo)}`)
     const j = await r.json()
+    // ⚠️ DUAS GUARDAS, E ELAS RESPONDEM COISAS DIFERENTES. A senha diz "outra consulta começou
+    // enquanto eu voltava" — e é ela que impede a TR do processo anterior de aparecer embaixo
+    // do resultado do novo. O `alvo` relido diz "a janela foi fechada": sem ele, o
+    // `innerHTML` cairia num elemento que já saiu do documento.
+    if(minhaVez !== _sgpeVincSeq) return
     const d = j && j.data
     if(!d || !d.encontrado) return
-    // A janela pode ter sido fechada, ou outra consulta ter começado, enquanto isto voltava.
     const alvo = document.getElementById('sgpeVinculo')
     if(alvo) alvo.innerHTML = sgpeVincHtml(d)
   } catch(_) { /* silêncio, de propósito — ver o aviso acima */ }
