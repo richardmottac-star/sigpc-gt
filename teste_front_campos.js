@@ -637,6 +637,29 @@ for (const bloco of LINHAS)
   conf(!/btn-acao|btn-limpar|btn-secundario|BTN_BUSCAR/.test(bloco),
        'e a linha das caixas nao leva botao nenhum');
 
+// ⚠️⚠️ O PAI DE CADA `.cmp-linha` TEM DE SER `flex-wrap:wrap`, E ISTO E O QUE FALTAVA
+// CONFERIR. O `flex:0 0 100%` so QUEBRA a linha dentro de um contêiner que embrulha; num
+// `display:flex` sem `wrap` ele nao quebra nada — espreme todo o resto da barra contra a
+// borda e a tela fica pior do que antes, sem erro nenhum e sem teste reprovando.
+// Medido em 31/08: cinco barras nascem dentro de `.filtros` (que tem `flex-wrap:wrap`) e
+// duas — Acompanhamento e Controle Interno — dentro de um flex proprio, tambem com `wrap`.
+{
+  const cru = html.split(/\r?\n/);
+  const iLinhas = cru.map((l, n) => (/class="cmp-linha"/.test(l) ? n : -1)).filter(n => n >= 0);
+  conf(iLinhas.length === BARRAS.length, 'as sete barras usam a classe', iLinhas.length);
+  for (const n of iLinhas) {
+    let pai = null;
+    for (let i = n - 1; i >= 0 && i >= n - 40; i--) {
+      if (/<div[^>]*class="filtros"/.test(cru[i])) { pai = 'filtros'; break; }
+      const m = cru[i].match(/<div[^>]*style="([^"]*display:flex[^"]*)"/);
+      if (m) { pai = m[1]; break; }
+    }
+    const embrulha = pai === 'filtros' || /flex-wrap:\s*wrap/.test(pai || '');
+    conf(embrulha, `linha ${n + 1}: o contêiner da barra embrulha (flex-wrap)`, pai || 'nao achei o pai');
+  }
+  conf(/\.filtros\{[^}]*flex-wrap:wrap/.test(html), 'e a `.filtros`, que hospeda cinco delas, embrulha');
+}
+
 // ⚠️ AS QUATRO DE SERVIDOR MANDAM OS DOIS PARAMETROS. Sao quatro pares de `set`: Estoque,
 // Minha Planilha, Relatorios e C.I. — o Acompanhamento monta pelo `_acmpF`, logo abaixo.
 conf((semComent.match(/set\('tr', /g) || []).length === 4,
