@@ -215,7 +215,13 @@ S('8b. O ASSUNTO E A SITUACAO — AS TRES COMBINACOES');
 
   // ⚠️ O ASSUNTO OCUPA O QUE SOBRA E CORTA: ele vem de varchar(120), e sem `min-width:0` um
   // assunto longo empurraria a situacao e a contagem para fora da linha.
-  conf(/flex:1 1 auto;min-width:0/.test(c1), 'o assunto ocupa o espaco que sobra');
+  // ⚠️ `flex:1 1 0`, E NAO `1 1 auto` — a diferenca e a BASE, e ela decide se a linha
+  // QUEBRA. O conteiner e `flex-wrap:wrap`, e o flexbox decide a quebra pela largura base de
+  // cada item: com `basis:auto` a base do assunto e o conteudo inteiro, entao um assunto de
+  // 120 caracteres empurra a situacao e a contagem para uma segunda linha — e as reticencias
+  // nunca aparecem, porque o item nunca precisou encolher.
+  conf(/flex:1 1 0;min-width:0/.test(c1), 'o assunto nasce com base 0 e cresce no que sobra');
+  conf(!/flex:1 1 auto/.test(c1), 'e NAO com base auto, que faria a linha quebrar');
   conf(/text-overflow:ellipsis/.test(c1), 'e corta com reticencias');
   conf(/title="PRESTACAO DE CONTAS DE CONVENIO"/.test(c1), 'com o texto inteiro no title');
   conf(/flex:0 0 auto/.test(c1.slice(c1.indexOf('ABERTO') - 200)), 'e a situacao nao encolhe');

@@ -5655,11 +5655,17 @@ function sgpeVincMiolo(assunto, situacao) {
     : semNada
       ? `<span style="font-style:italic;">ainda não sincronizado</span>`
       : ''
-  // ⚠️ O ASSUNTO OCUPA O QUE SOBRA E CORTA COM RETICÊNCIAS. Ele vem de `varchar(120)`, e sem
-  // o `min-width:0` um assunto longo empurraria a situação e a contagem de PCs para fora da
-  // linha — num flex, o item só encolhe abaixo do conteúdo se o `min-width` deixar.
+  // ⚠️ `flex:1 1 0`, E NÃO `1 1 auto` — a diferença é a base, e ela decide se a linha QUEBRA.
+  // O contêiner da linha é `flex-wrap:wrap`, e o flexbox decide a quebra pela largura BASE de
+  // cada item: com `basis:auto` a base do assunto é o conteúdo inteiro, então um assunto de
+  // 120 caracteres empurra a situação e a contagem para uma segunda linha — e as reticências
+  // nunca aparecem, porque o item nunca precisou encolher. Com `basis:0` ele nasce com zero e
+  // cresce só no espaço que sobrou: um item só, uma linha só.
+  //
+  // ⚠️ E o `min-width:0` continua sendo necessário ao lado disso: o padrão `min-width:auto` de
+  // um item flex proíbe encolher abaixo do conteúdo, e é ele que mataria o `ellipsis`.
   return `
-      <span style="flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--ct);
+      <span style="flex:1 1 0;min-width:0;font-size:11.5px;color:var(--ct);
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meio}</span>
       <span style="flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.03em;
         color:${s === 'ABERTO' ? 'var(--v)' : 'var(--ct)'};">${s ? escHtml(s) : ''}</span>`
