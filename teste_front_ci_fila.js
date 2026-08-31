@@ -106,7 +106,12 @@ const sg = corpo('ciBuscarSgpe'), ge = corpo('ciBuscarGeral');
 // ⚠️ Combinar os dois pareceria mais poderoso e devolveria vazio silencioso toda vez que o
 // processo digitado não fosse o da entidade digitada — e a pessoa leria "não existe" para
 // uma PC que existe.
-conf(/_ciGeral = \{ q:'', analista_id:'', espera:'' \}/.test(sg), 'buscar o processo limpa os filtros de baixo');
+// ⚠️ O `_ciGeral` GANHOU `tr` e `processo` em 31/08/2026 — as duas caixas da barra da fila.
+// A regra nao mudou: buscar POR PROCESSO no bloco de cima zera o de baixo INTEIRO, e agora
+// "inteiro" inclui as caixas. Manter a lista antiga aqui deixaria passar duas caixas
+// sobrevivendo a um recorte que deveria ter apagado tudo.
+conf(/_ciGeral = \{ q:'', tr:'', processo:'', analista_id:'', espera:'' \}/.test(sg),
+     'buscar o processo limpa os filtros de baixo, caixas inclusive');
 conf(/ciQ'\); if\(q\) q\.value = ''/.test(sg), 'e apaga o campo de texto na tela');
 conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| CI_SIGLA_PADRAO, num:'', ano:'' \}/.test(ge),
      'buscar na fila limpa o numero e o ano do processo');

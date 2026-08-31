@@ -276,7 +276,12 @@ console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR
   const sg = (html.match(/function ciBuscarSgpe\(\)[\s\S]*?\n\}/) || [''])[0];
   const ge = (html.match(/function ciBuscarGeral\(\)[\s\S]*?\n\}/) || [''])[0];
   conf(sg.length > 0 && ge.length > 0, 'os dois blocos tem cada um a sua funcao');
-  conf(/_ciGeral = \{ q:'', analista_id:'', espera:'' \}/.test(sg), 'buscar por processo limpa o bloco de baixo');
+  // ⚠️ O `_ciGeral` GANHOU `tr` e `processo` em 31/08/2026 — sao as duas caixas da barra da
+  // fila. O que esta checagem guarda nao mudou: buscar POR PROCESSO no bloco de cima zera o
+  // bloco de baixo INTEIRO, e agora "inteiro" inclui as caixas novas. Deixar a lista antiga
+  // aqui faria o teste passar com duas caixas sobrevivendo ao recorte.
+  conf(/_ciGeral = \{ q:'', tr:'', processo:'', analista_id:'', espera:'' \}/.test(sg),
+       'buscar por processo limpa o bloco de baixo, caixas inclusive');
   conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| CI_SIGLA_PADRAO, num:'', ano:'' \}/.test(ge),
        'e buscar na fila limpa o numero e o ano do processo');
   conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um dos dois modos vale por vez');

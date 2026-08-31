@@ -596,6 +596,72 @@ conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/
      'sem marcar de invalido o que e valido');
 
 // ════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ 14b. AS SETE BARRAS COMBINADAS ═══');
+//
+// ⚠️ SETE TELAS, E CADA UMA MANDA O FILTRO PARA ONDE ELE TEM DE IR. Quatro conversam com o
+// servidor (as rotas passaram a aceitar `tr` e `processo` separados em 31/08); tres filtram a
+// lista que JA carregaram, e sempre filtraram. Misturar os dois modos e o que a armadilha 16
+// proibe: recortar no navegador uma lista que o servidor pagina faz o contador contar a
+// pagina, nao o acervo.
+const BARRAS = [
+  ['Estoque de TRs',       'fTr',      'fPr',      'servidor'],
+  ['Minha Planilha',       'plTr',     'plPr',     'servidor'],
+  ['Relatorios / CGE',     'relTr',    'relPr',    'servidor'],
+  ['Acompanhamento',       'acmpTr',   'acmpPr',   'servidor'],
+  ['Controle Interno',     'ciFTr',    'ciFPr',    'servidor'],
+  ['Estornar Baixas',      'estTr',    'estPr',    'cliente'],
+  ['Estornos Realizados',  'estLogTr', 'estLogPr', 'cliente'],
+];
+for (const [tela, idTr, idPr] of BARRAS) {
+  conf(new RegExp("campoTrHtml\\('" + idTr + "'").test(semComent), `${tela}: tem a caixa de TR`);
+  conf(new RegExp("campoProcHtml\\('" + idPr + "'").test(semComent), `${tela}: tem a caixa de processo`);
+}
+// ⚠️ AS QUATRO DE SERVIDOR MANDAM OS DOIS PARAMETROS. Sao quatro pares de `set`: Estoque,
+// Minha Planilha, Relatorios e C.I. — o Acompanhamento monta pelo `_acmpF`, logo abaixo.
+conf((semComent.match(/set\('tr', /g) || []).length === 4,
+     'quatro telas mandam `tr` a rota', (semComent.match(/set\('tr', /g) || []).length);
+conf((semComent.match(/set\('processo', /g) || []).length === 4,
+     'e as mesmas quatro mandam `processo`', (semComent.match(/set\('processo', /g) || []).length);
+conf(/tr:campoTrTermo\('acmpTr'\), processo:campoProcTermo\('acmpPr'\)/.test(semComent),
+     'e o Acompanhamento leva os dois no `_acmpF`');
+
+// ⚠️ AS BARRAS LEEM POR `campoTrTermo`/`campoProcTermo`, NUNCA pelo `campoProcLer`. Aquele
+// exige o campo inteiro e devolve '' se faltar parte — numa barra de filtro isso faria a
+// caixa aceitar "2020" e devolver a lista toda, calada.
+for (const [tela, idTr, idPr] of BARRAS) {
+  conf(new RegExp("campoTrTermo\\('" + idTr + "'").test(semComent), `${tela}: le a TR por campoTrTermo`);
+  conf(new RegExp("campoProcTermo\\('" + idPr + "'").test(semComent), `${tela}: le o processo por campoProcTermo`);
+}
+conf(!/campoProcLer\('(f|pl|rel|acmp|ciF|est|estLog)P?r?'\)/.test(semComent),
+     'e nenhuma barra usa o leitor de cadastro');
+
+// ⚠️ O CAMPO LIVRE PERDEU TR E SGPe DO PLACEHOLDER — deixa-lo prometendo o que agora tem
+// caixa propria mandaria a pessoa digitar no lugar errado, e a busca ficaria pior que antes.
+for (const id of ['fBusca', 'plBusca', 'estBusca', 'estLogBusca', 'relTR']) {
+  const m = semComent.match(new RegExp('id="' + id + '"[^>]*placeholder="([^"]*)"'))
+        || semComent.match(new RegExp('placeholder="([^"]*)"[^>]*id="' + id + '"'));
+  conf(!!m && !/TR|SGPe/.test(m[1]), `${id}: placeholder sem TR nem SGPe`, m && m[1]);
+}
+
+// ⚠️ E CADA BARRA TEM UM LIMPAR QUE ZERA AS CAIXAS. Um Limpar que esvaziasse so o campo livre
+// deixaria o filtro de TR de pe, invisivel para quem acabou de clicar nele.
+//
+// ⚠️ O ACOMPANHAMENTO ZERA POR OUTRO CAMINHO, e esta certo assim: o `acmpLimpar` zera o
+// `_acmpF` e manda REDESENHAR a barra, que nasce do proprio `_acmpF` — as caixas voltam
+// vazias sozinhas. Uma lista de ids ali seria uma segunda descricao do mesmo estado, e
+// divergiria no dia em que uma caixa entrasse ou saisse.
+for (const [tela, idTr] of BARRAS) {
+  if (tela === 'Acompanhamento') continue;
+  conf(new RegExp("'" + idTr + "Ano'").test(semComent), `${tela}: o Limpar zera as caixas`);
+}
+{
+  const corpo = (semComent.match(/function acmpLimpar\(\)[\s\S]*?\n\}/) || [''])[0];
+  conf(/_acmpF = \{[^}]*tr:''[^}]*processo:''/.test(corpo), 'Acompanhamento: o Limpar zera tr e processo no estado');
+  conf(/acmpRenderFiltros\(\)/.test(corpo), 'e manda redesenhar — as caixas nascem do estado');
+  conf(/campoTrHtml\('acmpTr', \{ valor: _acmpF\.tr/.test(semComent.replace(/\n\s*/g, ' ')),
+       'e a barra le o valor do estado, e por isso devolve o filtro que esta valendo');
+}
+
 console.log('\n═══ 15b. NENHUMA CAIXA NASCE COM VALOR ═══');
 //
 // ⚠️ PLACEHOLDER CINZA, NUNCA VALOR (Richard, 31/08/2026). Ate aqui a caixa da sigla nascia

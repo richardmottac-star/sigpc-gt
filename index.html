@@ -10158,9 +10158,14 @@ function irRel() {
           <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>
-      <div class="fg" id="relFiltTR" style="display:none"><label>Busca</label>
-        <input data-colagem type="text" id="relTR" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;">
+      ${/* ⚠️ O `id` CONTINUA `relTR` embora ele já não receba TR — mudá-lo mexeria no
+            `relFiltTR` que mostra e esconde este bloco, e em `relMudaTipo`. O nome ficou
+            historicamente errado; renomear é outra frente, e não esta. */''}
+      <div class="fg" id="relFiltTR" style="display:none"><label>Entidade, NL ou PC</label>
+        <input data-colagem type="text" id="relTR" placeholder="Entidade, NL ou PC" style="width:190px;">
       </div>
+      <div id="relFiltTrCx" style="display:none">${campoTrHtml('relTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}</div>
+      <div id="relFiltPrCx" style="display:none">${campoProcHtml('relPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}</div>
       <div class="fg" id="relFiltStatus" style="display:none"><label>Status</label>
         <select id="relStatus">
           <option value="">Todos</option>
@@ -11008,7 +11013,11 @@ function relMudaTipo() {
   const tipo = document.getElementById('relTipo')?.value
   document.getElementById('relFiltAnalista').style.display = ['analista','geral'].includes(tipo) ? '' : 'none'
   document.getElementById('relFiltGrupo').style.display = ['grupo','geral'].includes(tipo) ? '' : 'none'
-  document.getElementById('relFiltTR').style.display = tipo==='tr' ? '' : 'none'
+  // ⚠️ AS DUAS CAIXAS APARECEM E SOMEM COM O CAMPO LIVRE — são a mesma barra. Deixar as
+  // caixas visíveis num tipo de relatório que não filtra por TR ofereceria um filtro que o
+  // Gerar ignoraria em silêncio.
+  for(const id of ['relFiltTR','relFiltTrCx','relFiltPrCx'])
+    document.getElementById(id).style.display = tipo==='tr' ? '' : 'none'
   document.getElementById('relFiltStatus').style.display = ['status','geral'].includes(tipo) ? '' : 'none'
 }
 
@@ -11024,6 +11033,8 @@ async function relBuscar() {
   const analistaId = document.getElementById('relAnalista')?.value||''
   const grupo = document.getElementById('relGrupo')?.value||''
   const tr = document.getElementById('relTR')?.value.trim()||''
+  const trCx = campoTrTermo('relTr')
+  const prCx = campoProcTermo('relPr')
   const status = document.getElementById('relStatus')?.value||''
   const sid = U.setorialFiltro || 'FCEE'
   // O quadro de pessoal, para a tag e a observação da dispensa na linha do relatório.
@@ -11039,7 +11050,12 @@ async function relBuscar() {
     if(analistaId) params.set('analista_id', analistaId)
     if(grupo) params.set('grupo', grupo)
     if(status) params.set('status', status)
+    // ⚠️ O `tr` DAQUI É O CAMPO LIVRE, e vai como `busca` — o nome da variável ficou do tempo
+    // em que aquele campo recebia TR. As caixas mandam `tr` e `processo`, que a rota soma com
+    // AND desde 31/08.
     if(tr) params.set('busca', tr)
+    if(trCx) params.set('tr', trCx)
+    if(prCx) params.set('processo', prCx)
     const r = await fetch(`${API_URL}/prestacoes_contas?${params}`)
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
@@ -11129,9 +11145,12 @@ function relRenderTabela() {
 
 function relPg(d) { _relPag += d; relRenderTabela() }
 function relLimpar() {
-  ['relTipo','relAnalista','relGrupo','relTR','relStatus'].forEach(id => {
+  // As caixas entram na mesma lista: um Limpar que deixasse o filtro de TR de pé mentiria.
+  ['relTipo','relAnalista','relGrupo','relTR','relStatus',
+   'relTrAno','relTrNum','relPrSigla','relPrNum','relPrAno'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value=''
   })
+  campoMarcar(campoGrupo('relPr'))
   _relDados=[]; _relPag=0
   document.getElementById('relTblWrap').style.display='none'
   document.getElementById('relSumario').style.display='none'
@@ -11373,8 +11392,14 @@ async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
     <div id="planAlertas" style="margin-bottom:12px;"></div>
     <!-- Filtros -->
     <div class="filtros" style="margin-bottom:12px;">
-      <div class="fg"><label>Buscar Entidade / TR</label>
-        <input data-colagem type="text" id="plBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:220px;" onkeydown="if(event.key==='Enter')buscarPlan()">
+      ${/* ⚠️ TR E PROCESSO TÊM CAIXA PRÓPRIA, e o campo livre ficou só com entidade, NL e PC
+            (31/08/2026). Os três vão separados para a `GET /prestacoes_contas`, que os soma
+            com AND. O rótulo mudou junto: "Buscar Entidade / TR" mandaria digitar ali a TR
+            que agora tem caixa. */''}
+      ${campoTrHtml('plTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
+      ${campoProcHtml('plPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
+      <div class="fg"><label>Entidade, NL ou PC</label>
+        <input data-colagem type="text" id="plBusca" placeholder="Entidade, NL ou PC" style="width:190px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
       ${/* ⚠️ HAVIA DOIS "Buscar" NA MESMA LINHA (18/08/2026), e eles NÃO eram o mesmo botão:
             um vinha do helper BTN_BUSCAR, compartilhado com outras cinco telas, e o outro
@@ -11676,6 +11701,8 @@ async function buscarPlan() {
 
   // Vai CRU para a API, que normaliza acento e caixa. A tela não filtra mais nada.
   const busca = (document.getElementById('plBusca')?.value||'').trim()
+  const trF   = campoTrTermo('plTr')
+  const prF   = campoProcTermo('plPr')
   const sit   = document.getElementById('plSit')?.value||''
   const prazo = document.getElementById('plPrazo')?.value||''
 
@@ -11683,6 +11710,11 @@ async function buscarPlan() {
     const params = new URLSearchParams({ analista_id: alvo().id, limit: 9999, offset: 0 })
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
     if(busca) params.set('busca', busca)
+    // ⚠️ TRÊS PARÂMETROS, E QUEM COMBINA É O SERVIDOR. A rota soma os três com AND desde
+    // 31/08. Recortar aqui o que o termo único não pegou seria a tela decidindo o que o banco
+    // sabe — armadilha 16.
+    if(trF) params.set('tr', trF)
+    if(prF) params.set('processo', prF)
 
     // As respostas de diligência vêm em paralelo, numa rota leve — de propósito NÃO na
     // consulta pesada da planilha. Se falhar, a tela carrega igual, só sem o selo.
@@ -13908,7 +13940,13 @@ function planPg(d) {
   planAplicar()
   document.getElementById('planConteudo')?.scrollIntoView({behavior:'smooth',block:'start'})
 }
+// ⚠️ AS CAIXAS ENTRAM NO LIMPAR. Esvaziar só o campo livre deixaria o filtro de TR de pé,
+// invisível para quem acabou de clicar em "Limpar", e a lista voltaria recortada sem dizer
+// por quê.
 function limparPlan() {
+  ;['plTrAno','plTrNum','plPrSigla','plPrNum','plPrAno']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = '' })
+  campoMarcar(campoGrupo('plPr'))
   document.getElementById('plBusca').value=''
   document.getElementById('plSit').value=''
   const pz = document.getElementById('plPrazo'); if(pz) pz.value=''
@@ -15510,7 +15548,7 @@ let _acmpDados = []
 let _acmpTotal = 0, _acmpPagina = 1, _acmpTamanho = 20, _acmpPaginas = 1
 let _acmpTamanhos = [10,20,30,40,50]
 let _acmpPessoas = [], _acmpEventos = [], _acmpFamilias = {}, _acmpRotAlerta = {}, _acmpNaoCobre = []
-let _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', q:'' }
+let _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', processo:'', q:'' }
 
 // As cores por família. O evento é o que a pessoa varre com o olho, e a cor é o que separa
 // "análise" de "correção" antes de ela ler a frase.
@@ -15579,7 +15617,12 @@ function acmpRenderFiltros() {
             caixa custa uma linha inteira de altura para dizer o que a marca já diz. */''}
       <div style="flex:0 0 auto;">${campoTrHtml('acmpTr', { valor: _acmpF.tr,
         pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}</div>
-      <div style="flex:1 1 230px;min-width:180px;">${rot('Processo, PC, TR ou entidade')}
+      ${/* ⚠️ A CAIXA DO PROCESSO ENTRA AQUI, ao lado da de TR que já existia. O `valor` é o
+            filtro que está valendo — esta barra se redesenha a cada busca, e nascer vazia
+            faria o filtro continuar aplicado e sumir da tela, como no `acmpTr`. */''}
+      <div style="flex:0 0 auto;">${campoProcHtml('acmpPr', { valor: _acmpF.processo,
+        modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}</div>
+      <div style="flex:1 1 200px;min-width:160px;">${rot('PC ou entidade')}
         <input data-colagem id="acmpQ" value="${escHtml(_acmpF.q)}" style="${inp}"
           onkeydown="if(event.key==='Enter')acmpBuscar()"></div>
       <button class="btn-acao" onclick="acmpBuscar()" style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Filtrar</button>
@@ -15598,14 +15641,18 @@ function acmpBuscar() {
   // ⚠️ A TR SAI DO CAMPO JÁ CANÔNICA (`2021TR000411`), e não do `v()`: não existe mais um
   // `<input id="acmpTr">` — são duas caixas, e `getElementById` devolveria `null`, o que
   // apagaria o filtro em silêncio a cada clique em Filtrar.
+  // ⚠️ A TR SAI POR `campoTrTermo`, e não pelo `campoTrLer`. Aquele exige o campo inteiro e
+  // devolveria '' com só o ano digitado — numa barra de filtro o pedaço é o uso normal, e a
+  // caixa aceitaria o que a pessoa escreveu para depois devolver a lista toda, calada.
   _acmpF = { de:v('acmpDe'), ate:v('acmpAte'), pessoa_id:v('acmpPessoa'), perfil:v('acmpPerfil'),
-           evento:v('acmpEvento'), tr:campoTrLer('acmpTr'), q:v('acmpQ') }
+           evento:v('acmpEvento'), tr:campoTrTermo('acmpTr'), processo:campoProcTermo('acmpPr'),
+           q:v('acmpQ') }
   _acmpPagina = 1
   acmpCarregar()
 }
 
 function acmpLimpar() {
-  _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', q:'' }
+  _acmpF = { de:'', ate:'', pessoa_id:'', perfil:'', evento:'', tr:'', processo:'', q:'' }
   _acmpPagina = 1
   acmpRenderFiltros()
   acmpCarregar()
@@ -15838,7 +15885,7 @@ let _ciDecisao = null         // 'de_acordo' | 'ressalva' — a escolha na PC ab
 // processo digitado não fosse o da entidade digitada — e a pessoa leria "não existe" para uma
 // PC que existe.
 let _ciSgpe = { sigla:'', num:'', ano:'' }   // nenhuma caixa nasce com valor (31/08/2026)
-let _ciGeral = { q:'', analista_id:'', espera:'' }
+let _ciGeral = { q:'', tr:'', processo:'', analista_id:'', espera:'' }
 let _ciModo = 'geral'          // qual dos dois blocos está valendo
 
 // ⚠️ O DESTAQUE É DA LINHA ENCONTRADA, e vale para QUALQUER busca — a do processo e a de
@@ -15959,7 +16006,13 @@ function ciBuscaHtml() {
     <div style="font-size:11.5px;font-weight:700;color:var(--te);margin-bottom:9px;">
       Ou procurar na fila</div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-      <div style="flex:2 1 240px;min-width:180px;">${rot('PC, TR, entidade ou analista')}
+      ${/* ⚠️ AS CAIXAS SOMAM COM O `q`, e não com o bloco de cima. O de cima é o "localizar
+            pelo processo SGPe", que salta para o processo IGNORANDO o chip — decisão de
+            25/08, e o servidor a preserva com um `return` antecipado. Estas estreitam o
+            recorte que está aberto, que é outra pergunta. */''}
+      ${campoTrHtml('ciFTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
+      ${campoProcHtml('ciFPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
+      <div style="flex:1 1 190px;min-width:150px;">${rot('PC, entidade ou analista')}
         <input data-colagem id="ciQ" placeholder="Digite parte do nome ou do código" style="${inp}"
                onkeydown="if(event.key==='Enter')ciBuscarGeral()"></div>
       <div style="flex:1 1 175px;min-width:150px;">${rot('Analista')}
@@ -15972,6 +16025,7 @@ function ciBuscaHtml() {
           <option value="critica">Mais de 30 dias</option>
         </select></div>
       <button class="btn-acao" onclick="ciBuscarGeral()" style="padding:8px 17px;font-size:13px;">Buscar</button>
+      <button class="btn-secundario" onclick="ciLimparGeral()" style="padding:8px 17px;font-size:13px;">Limpar</button>
     </div>
   </div>`
 }
@@ -16044,7 +16098,7 @@ function ciBuscarSgpe() {
   _ciSgpe = { sigla:v('ciSgSigla'), num:v('ciSgNum'), ano:v('ciSgAno') }
   if(!_ciSgpe.sigla || !_ciSgpe.num || !_ciSgpe.ano) return
   _ciModo = 'sgpe'
-  _ciGeral = { q:'', analista_id:'', espera:'' }
+  _ciGeral = { q:'', tr:'', processo:'', analista_id:'', espera:'' }
   const q = document.getElementById('ciQ'); if(q) q.value = ''
   const an = document.getElementById('ciAnalista'); if(an) an.value = ''
   const es = document.getElementById('ciEspera'); if(es) es.value = ''
@@ -16054,9 +16108,25 @@ function ciBuscarSgpe() {
   ciCarregar()
 }
 
+/**
+ * O Limpar da barra da fila: as duas caixas, o campo livre e os dois selects.
+ *
+ * ⚠️ ELE NÃO TOCA NO BLOCO DE CIMA. Aquele tem o seu próprio Limpar (`ciLimparSgpe`), e os
+ * dois blocos são excludentes por decisão de 25/08: usar um limpa o outro. Um Limpar que
+ * varresse os dois apagaria a busca por processo de quem só quis desfazer o recorte da fila.
+ */
+function ciLimparGeral() {
+  ;['ciQ','ciAnalista','ciEspera','ciFTrAno','ciFTrNum','ciFPrSigla','ciFPrNum','ciFPrAno']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = '' })
+  campoMarcar(campoGrupo('ciFPr'))
+  ciBuscarGeral()
+}
+
 function ciBuscarGeral() {
   _ciGeral = {
     q: (document.getElementById('ciQ')?.value || '').trim(),
+    tr: campoTrTermo('ciFTr'),
+    processo: campoProcTermo('ciFPr'),
     analista_id: document.getElementById('ciAnalista')?.value || '',
     espera: document.getElementById('ciEspera')?.value || '',
   }
@@ -16313,6 +16383,10 @@ async function ciCarregar() {
     p.set('sgpe_sigla', _ciSgpe.sigla); p.set('sgpe_num', _ciSgpe.num); p.set('sgpe_ano', _ciSgpe.ano)
   } else {
     if(_ciGeral.q) p.set('q', _ciGeral.q)
+    // ⚠️ Somam com o `q` no servidor, com AND — e NAO com o bloco do processo de cima,
+    // que tem `return` antecipado de proposito (decisao de 25/08).
+    if(_ciGeral.tr) p.set('tr', _ciGeral.tr)
+    if(_ciGeral.processo) p.set('processo', _ciGeral.processo)
     if(_ciGeral.analista_id) p.set('analista_id', _ciGeral.analista_id)
     if(_ciGeral.espera) p.set('espera', _ciGeral.espera)
   }
