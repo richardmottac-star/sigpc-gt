@@ -4898,11 +4898,12 @@ function campoTrPartir(txt) {
  */
 function campoProcPartir(txt) {
   const s = String(txt == null ? '' : txt).trim().replace(/\s+/g, ' ')
-  // ⚠️ ATÉ 11 LETRAS, e não 8. A maior sigla real do cadastro é `SCPARCERIAS`, com 11. Com o
-  // teto em 8 este `match` era GULOSO e parava no meio dela: "SCPARCERIAS 197/2021" saía com
-  // sigla `SCPARCER` e número `IAS 197` reduzido a `197` — um processo de outro órgão, montado
-  // em silêncio, que é justamente o resultado que a trava da região existe para impedir.
-  const mL = s.match(/^([A-Za-z]{2,11})(.*)$/)
+  // ⚠️ ATÉ 20 LETRAS. O teto acompanha a caixa, e a caixa acompanha a MAIOR das 183 —
+  // `SAPIENS_EXTERNO_INAT`, com 20. Um teto curto aqui não dá erro: este `match` é GULOSO e
+  // para no meio da sigla, então "SCPARCERIAS 197/2021" saía com sigla `SCPARCER` e o resto
+  // virava número — um processo de outro órgão, montado em silêncio, que é justamente o
+  // resultado que a trava da região existe para impedir.
+  const mL = s.match(/^([A-Za-z]{2,20})(.*)$/)
   if(!mL) return null
   let sigla = mL[1].toUpperCase()
   const mA = mL[2].trim().match(/^(.*?)\s*[\/.]\s*(\d{2,4})$/)
@@ -4946,8 +4947,9 @@ const CAMPO_PAD_FILTRO = '7px 9px'
 
 // ⚠️ `larg` É UMA MEDIDA CSS INTEIRA, não um número de caracteres. Os campos de dígito são
 // `4ch`, `6ch`, `9ch` — ali a caixa MEDE o que aceita, e é assim que a tela ensina o formato.
-// A sigla é a exceção, e por decisão do Richard (31/08/2026): `96px` FIXOS, dimensionados pela
-// maior sigla real do cadastro do SGPe — `SCPARCERIAS`, 11 caracteres.
+// A sigla é a exceção, e por decisão do Richard (31/08/2026): `150px` FIXOS, dimensionados
+// pela MAIOR das 183 do cadastro do SGPe — `SAPIENS_EXTERNO_INAT`, com 20 caracteres. Nenhuma
+// das 183 fica de fora da caixa.
 //
 // ⚠️ FIXA QUER DIZER FIXA: com `SCC` sobra espaço, e é assim mesmo. Uma caixa que encolhesse
 // junto com o conteúdo faria a linha inteira dançar a cada tecla, e o número ao lado mudaria
@@ -4997,7 +4999,7 @@ function campoProcHtml(id, opc) {
     data-modo="${escHtml(o.modo || 'busca')}" data-muda="${escHtml(o.muda || '')}"
     data-enter="${escHtml(o.enter || '')}">
     <img src="${LOGO_SGPE_B64}" alt="SGPe" class="cmp-sgpe">
-    ${campoCx(id, 'Sigla', '96px', 11, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-align:left;text-transform:uppercase;')}
+    ${campoCx(id, 'Sigla', '150px', 20, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-align:left;text-transform:uppercase;')}
     ${campoCx(id, 'Num', '9ch', 9, p.numero, '00000197', 'Número do processo', pad, bw)}
     <span class="cmpf">/</span>
     ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano do processo', pad, bw)}
@@ -5721,10 +5723,10 @@ function procEdMudou() {
   const v = campoProcValido('procEd')
   let erro = null
   if(!v.ok) erro = v.motivo
-  // ⚠️ 11 LETRAS + até 2 dígitos de região, e o teto de 11 vem da caixa. `SCPARCERIAS` tem 11
-  // letras e o antigo `{2,10}` a reprovava como "Sigla inválida" — a mensagem certa para uma
-  // sigla que existe seria nenhuma, e é a lista das 183 que decide isso, não este formato.
-  else if(!/^[A-Z]{2,11}\d{0,2}$/.test(sigla)) erro = 'Sigla inválida.'
+  // ⚠️ 20 LETRAS + até 2 dígitos de região, e o teto de 20 vem da caixa. Um teto curto aqui
+  // reprovava como "Sigla inválida" uma sigla que EXISTE — e a mensagem certa para essa seria
+  // nenhuma. Quem decide se a sigla vale é a lista das 183, não este formato.
+  else if(!/^[A-Z]{2,20}\d{0,2}$/.test(sigla)) erro = 'Sigla inválida.'
   else if(parseInt(numero,10) <= 0) erro = 'Informe o número do processo.'
   else if(parseInt(ano,10) < 2000 || parseInt(ano,10) > 2030) erro = 'Ano fora do intervalo esperado.'
 

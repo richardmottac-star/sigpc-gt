@@ -202,16 +202,16 @@ conf(/>\/</.test(htmlPr), 'a "/" fixa esta entre o numero e o ano do processo');
 // ⚠️ NOS CAMPOS DE DIGITO A LARGURA E O NUMERO DE CARACTERES. Nunca a linha.
 conf(/width:4ch/.test(htmlTr) && /width:6ch/.test(htmlTr), 'TR: 4ch para o ano, 6ch para o numero');
 conf(/width:9ch/.test(htmlPr) && /width:4ch/.test(htmlPr), 'processo: 9ch para o numero, 4ch para o ano');
-// ⚠️ A SIGLA E A EXCECAO, E POR DECISAO (Richard, 31/08/2026): 96px FIXOS, dimensionados pela
-// maior sigla real do cadastro do SGPe — `SCPARCERIAS`, com 11 caracteres. Com `SCC` sobra
-// espaco, e e assim mesmo: caixa que encolhe com o conteudo faz o numero ao lado mudar de
-// lugar a cada tecla.
+// ⚠️ A SIGLA E A EXCECAO, E POR DECISAO (Richard, 31/08/2026): 150px FIXOS, dimensionados pela
+// MAIOR das 183 do cadastro do SGPe — `SAPIENS_EXTERNO_INAT`, com 20 caracteres. NENHUMA das
+// 183 fica de fora da caixa. Com `SCC` sobra espaco, e e assim mesmo: caixa que encolhe com o
+// conteudo faz o numero ao lado mudar de lugar a cada tecla.
 const cxSigla = htmlPr.match(/id="p1Sigla"[\s\S]*?>/)[0];
-conf(/width:96px/.test(cxSigla), 'a sigla tem 96px fixos');
+conf(/width:150px/.test(cxSigla), 'a sigla tem 150px fixos');
 conf(!/\dch/.test(cxSigla), 'e nao e medida em caracteres — a largura nao acompanha o conteudo');
 conf(!/width:100%|flex:1/.test(htmlTr + htmlPr), 'nenhuma caixa pede a linha inteira');
 conf(/maxlength="6"/.test(htmlTr) && /maxlength="9"/.test(htmlPr), 'o maxlength acompanha a largura');
-conf(/maxlength="11"/.test(cxSigla), 'e a sigla aceita 11 — o tamanho de SCPARCERIAS');
+conf(/maxlength="20"/.test(cxSigla), 'e a sigla aceita 20 — o tamanho da maior das 183');
 conf(/id="t1Ano"/.test(htmlTr) && /id="t1Num"/.test(htmlTr), 'os ids saem do nome do grupo');
 conf(/id="p1Sigla"/.test(htmlPr) && /id="p1Num"/.test(htmlPr) && /id="p1Ano"/.test(htmlPr), 'idem no processo');
 conf(/text-align:left/.test(htmlPr.match(/id="p1Sigla"[\s\S]*?>/)[0]), 'a sigla e o unico campo alinhado a esquerda');
@@ -286,22 +286,42 @@ gPr.caixas.Num.value = '1a9b7';
 disparar('input', evento(gPr.caixas.Num));
 conf(gPr.caixas.Num.value === '197', 'o numero fica so com digitos');
 
-// ⚠️ `SAPIENS_EXTERNO_INAT` — A UNICA DAS 183 QUE FICA DE FORA, e quem a barra e a CAIXA, nao
-// a lista (Richard, 31/08/2026). Ela ESTA no mapa `ORGAOS` (cdOrgaosetor 15073), entao
-// `campoSiglaOk` a aceitaria se os 20 caracteres chegassem inteiros — e e por isso que este
-// teste existe: o que fecha a porta e o `maxlength` de 11 mais o filtro do `oninput`. Alargar
-// a caixa um dia reabre o caminho para um registro INATIVO, em silencio.
+// ⚠️ `SAPIENS_EXTERNO_INAT` PASSA, E CABE — decisao do Richard em 31/08/2026, corrigindo o
+// que ele mesmo tinha dito antes. Ela E uma das 183 (cdOrgaosetor 15073) e e a MAIOR delas,
+// com 20 caracteres: a caixa foi dimensionada por ela, e nenhuma das 183 fica de fora.
+// A asserção anterior deste bloco dizia o contrário, e estava errada.
 const _sig = ctx._SIGLAS;
 ctx._SIGLAS = new Set(['SCC', 'SAPIENS', 'SAPIENS_EXTERNO_INAT']);
+conf(ctx.campoSiglaOk('SAPIENS_EXTERNO_INAT') === true, 'esta na lista das 183 — PASSA');
+conf('SAPIENS_EXTERNO_INAT'.length === 20 && /maxlength="20"/.test(cxSigla),
+     'e cabe: 20 caracteres, e a caixa aceita 20');
+ctx.campoProcPor('procEd', 'SAPIENS_EXTERNO_INAT', '1', '2020');
+conf(gPr.caixas.Sigla.value === 'SAPIENS_EXTERNO_INAT', 'entra inteira na caixa, sem corte');
+conf(gPr.caixas.Sigla.classList.contains('erro') === false, 'sem borda vermelha');
+conf(ctx.campoProcValido('procEd').ok === true, 'e o salvar liberado, mesmo em modo cadastro');
+
+// ⚠️⚠️ DEFEITO CONHECIDO, MEDIDO E **NAO CONSERTADO** — espera decisao do Richard.
+// `campoProcLer` passa pelo `normalizarProcesso`, e a regex de sigla dele e `[A-Za-zÀ-ÿ]+`,
+// que PARA no `_`. Resultado: "SAPIENS_EXTERNO_INAT 1/2020" volta como
+// "SAPIENS _EXTERNO_INAT 1/2020" — que nao e processo nenhum, e e o valor que o cadastro de
+// PC manda ao servidor em `processo_pc`.
+// So aparece nesta unica sigla das 183: e a unica com `_`.
+// ⚠️ NAO CONSERTAR SEM DECIDIR: o `normalizarProcesso` e o normalizador de 11 telas, e o
+// `CLAUDE.md` registra o estrago de 05/08 quando ele divergiu da lib do servidor.
+// Este `conf` guarda o que ACONTECE hoje, nao o que deveria acontecer — se alguem consertar,
+// ele reprova, e e esse o aviso.
+conf(ctx.campoProcLer('procEd') === 'SAPIENS _EXTERNO_INAT 1/2020',
+     'DEFEITO REGISTRADO: campoProcLer quebra a sigla no "_"');
+
+// ⚠️ MEDICAO, NAO REGRA. Digitada no teclado ela nao se forma: o filtro do `oninput` tira
+// tudo o que nao e letra nem digito, e os dois `_` caem — sobra `SAPIENSEXTERNOINAT`, de 18,
+// que nao e a chave. Quem a produz inteira e o caminho programatico (`campoProcPor`, a
+// abertura do lapis sobre um valor ja gravado). Fica REGISTRADO, nao consertado: mexer no
+// filtro seria decisao de regra, e nao foi pedida.
 gPr.caixas.Sigla.value = 'SAPIENS_EXTERNO_INAT';
 disparar('input', evento(gPr.caixas.Sigla));
-gPr.caixas.Sigla.value = gPr.caixas.Sigla.value.slice(0, 11);   // o corte do navegador
-disparar('input', evento(gPr.caixas.Sigla));
-conf(gPr.caixas.Sigla.value === 'SAPIENSEXTE', 'o "_" cai no filtro e o maxlength corta em 11');
-conf(ctx.campoSiglaOk('SAPIENSEXTE') === false, 'e o que sobra nao esta nas 183 — recusado');
-conf(gPr.caixas.Sigla.classList.contains('erro') === true, 'com a borda vermelha');
-conf(ctx.campoSiglaOk('SAPIENS_EXTERNO_INAT') === true,
-     'a chave inteira ESTA na lista — nao e ela que barra, e a caixa');
+conf(gPr.caixas.Sigla.value === 'SAPIENSEXTERNOINAT', 'digitada, o filtro do oninput derruba os "_"');
+conf(ctx.campoSiglaOk('SAPIENSEXTERNOINAT') === false, 'e o que sobra nao e a chave');
 ctx._SIGLAS = _sig;
 
 console.log('\n═══ 8. AO SAIR ═══');
