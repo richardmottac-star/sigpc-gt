@@ -1140,7 +1140,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         <div class="mc-campo"><label>O parecer estava registrado no SIGEF? *</label>
           <div id="sigefRespostas" style="display:flex;flex-direction:column;gap:2px;"></div>
         </div>
-        <div class="mc-campo"><label>Data do registro no SIGEF *</label>
+        <div class="mc-campo" id="sigefDataBox"><label>Data do registro no SIGEF *</label>
           <input type="date" id="sigefData" onchange="sigefPintarBotao()" style="width:100%;">
           <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">
             A data em que o parecer foi registrado no SIGEF — não a data de hoje, se for outra.</div>
@@ -19199,12 +19199,25 @@ function sigefAbrir(tag, ctx) {
   document.getElementById('moSigef').classList.add('open')
 }
 
-/** ⚠️ O botão NASCE DESABILITADO e só acende com resposta E data (armadilha 15). */
+/**
+ * ⚠️ O botão NASCE DESABILITADO e só acende com o que a resposta escolhida exige
+ * (armadilha 15).
+ *
+ * ⚠️ NA TERCEIRA RESPOSTA NÃO HÁ DATA, e o campo SOME — não fica cinza nem opcional. O
+ * analista está dizendo que o SIGEF **não** baixou a prestação: não existe registro, logo não
+ * existe data de registro. Deixar o campo à vista pediria uma informação que a própria
+ * resposta acabou de negar.
+ */
+const SIGEF_SEM_DATA = 'nao_baixada'
+
 function sigefPintarBotao() {
   const btn = document.getElementById('btnSigefDecl')
+  const semData = _sigefResp === SIGEF_SEM_DATA
+  const box = document.getElementById('sigefDataBox')
+  if (box) box.style.display = semData ? 'none' : ''
   const dt = (document.getElementById('sigefData') || {}).value
-  const falta = !_sigefResp ? 'Escolha uma das duas respostas.'
-    : !dt ? 'Informe a data do registro no SIGEF.' : ''
+  const falta = !_sigefResp ? 'Escolha uma das respostas.'
+    : (!semData && !dt) ? 'Informe a data do registro no SIGEF.' : ''
   btn.disabled = !!falta
   btn.title = falta
 }
@@ -19324,8 +19337,11 @@ function sigefIrParaParcela() {
 async function sigefDeclarar() {
   const btn = document.getElementById('btnSigefDecl')
   const resposta = _sigefResp
-  const data_registro = document.getElementById('sigefData').value
-  if (!resposta || !data_registro || !_sigefCtx.tr || _sigefCtx.parcial == null) return
+  // ⚠️ SEM DATA NA TERCEIRA RESPOSTA. A guarda de baixo pedia `data_registro` sempre, e com
+  // o campo escondido ela barraria em silêncio o único caminho que a terceira opção tem.
+  const semData = resposta === SIGEF_SEM_DATA
+  const data_registro = semData ? null : document.getElementById('sigefData').value
+  if (!resposta || (!semData && !data_registro) || !_sigefCtx.tr || _sigefCtx.parcial == null) return
   btn.disabled = true; btn.textContent = 'Declarando...'
 
   try {
