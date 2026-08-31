@@ -37,9 +37,15 @@ const iV = html.indexOf('const VINC_AMBAR');
 const fV = html.indexOf('function sgpeConsultaAbrir(bruto) {');
 if (iV < 0 || fV < 0) { console.error('FALHA: nao achei o bloco da faixa no index.html.'); process.exit(1); }
 
+// ⚠️ `campoProcPartir` E `campoAno4` VEM JUNTO, e nao como dubles: sao elas que quebram o
+// processo nos tres pedacos que o link carrega (`data-s`/`data-n`/`data-a`). Um duble aqui
+// faria o teste provar que o link tem OS ATRIBUTOS, e nao que eles levam os valores certos —
+// que e a unica coisa que importa quando o clique preenche as caixas do topo.
 const codigo = (
   fatia('function normalizarProcesso(str) {', 'return `${siglaBase} ${numero}/${mNum[2]}`') + '\n' +
   fatia('const PROC_RE =', 'function procInvalido(bruto)').replace(/\n\}[\s\S]*$/, '\n}') + '\n' +
+  fatia('function campoProcPartir(txt) {', 'return { sigla, numero, ano: mA[2] }') + '\n' +
+  fatia('function campoAno4(a) {', "return d.length === 2 ? '20' + d : d") + '\n' +
   html.slice(iV, fV)
 ).replace(/^(let|const) /gm, 'var ');
 
@@ -172,6 +178,70 @@ conf(!/toast\(|sgpeCaixa\(/.test(corpo), 'sem toast e sem caixa de erro');
 // A janela pode ter fechado enquanto a resposta voltava.
 conf(/const alvo = document\.getElementById\('sgpeVinculo'\)/.test(corpo),
      'e o alvo e relido depois do await — a janela pode ter fechado');
+
+S('9b. OS NUMEROS SAO LINK');
+{
+  const hL = ctx.sgpeVincHtml(BLOCO);            // consultado = SCC11160/2020, papel=parcial
+  const link = (txt) => {
+    const i = hL.indexOf(ctx.normalizarProcesso(txt));
+    return hL.slice(Math.max(0, i - 420), i + 60);
+  };
+  // ⚠️ NAO SAO `<a href>`: um href navegaria, e a regra e "tudo dentro do modal". Sao botoes
+  // com `data-f`, atendidos pelo MESMO ouvinte das consultas recentes.
+  conf(/data-f="vinc"/.test(hL), 'os links saem com data-f="vinc"');
+  conf(!/<a [^>]*href/.test(hL), 'e NAO sao <a href> — nada navega para fora');
+  conf(!/target="_blank"/.test(hL), 'nem abre aba nova');
+
+  const l1 = link('SCC9460/2021');
+  conf(/data-f="vinc"/.test(l1), 'um processo qualquer da lista e link');
+  conf(/class="proc-link"/.test(l1), 'com o estilo azul sublinhado que ja existe');
+  conf(/cursor:pointer/.test(l1), 'e cursor de mao');
+  // ⚠️ OS TRES PEDACOS TEM DE CHEGAR CERTOS — e o que o clique poe nas caixas do topo.
+  conf(/data-s="SCC"/.test(l1) && /data-n="9460"/.test(l1) && /data-a="2021"/.test(l1),
+       'e leva sigla, numero e ano separados', l1.match(/data-[sna]="[^"]*"/g));
+
+  // ⚠️ O CONSULTADO NAO E LINK: ele ja e o que esta na tela.
+  const lAtual = link('SCC11160/2020');
+  conf(!/data-f="vinc"/.test(lAtual), 'o consultado NAO e link');
+  conf(!/proc-link/.test(lAtual), 'e sai em texto normal, sem sublinhado');
+
+  // ⚠️ O INVALIDO NAO E LINK: nao ha o que consultar. Fica com o bege que ja tinha.
+  const iInv = hL.indexOf('AR355478172');
+  const lInv = hL.slice(Math.max(0, iInv - 420), iInv + 200);
+  conf(!/data-f="vinc"/.test(lInv), 'o invalido NAO e link');
+  conf(/line-through/.test(lInv) && /#FAEEDA/.test(lInv), 'e mantem o tratamento bege riscado');
+
+  // ⚠️ A MAE E LINK QUANDO NAO E A CONSULTADA, e deixa de ser quando e.
+  const maeParcial = hL.slice(0, hL.indexOf('flex-direction:column'));
+  conf(/data-f="vinc"/.test(maeParcial), 'a mae e link quando o consultado e um parcial');
+  const maeMae = ctx.sgpeVincHtml(comPapel('mae'));
+  conf(!/data-f="vinc"/.test(maeMae.slice(0, maeMae.indexOf('flex-direction:column'))),
+       'e deixa de ser link quando ela mesma e a consultada');
+
+  // ⚠️ CONSULTANDO PELA MAE, a lista inteira vira link — nenhuma linha e a consultada.
+  const listaMae2 = maeMae.slice(maeMae.indexOf('flex-direction:column'));
+  conf((listaMae2.match(/data-f="vinc"/g) || []).length === 2,
+       'e as duas linhas validas da lista viram link (a invalida nao)',
+       (listaMae2.match(/data-f="vinc"/g) || []).length);
+}
+
+S('9c. O CLIQUE NAO TEM CAMINHO PROPRIO');
+// ⚠️ UM RAMO SO PARA `rec` E `vinc`. Sao o mesmo pedido — "preencha os tres campos e
+// consulte" —, e o que a `consultar()` faz depois (limpar a faixa, gravar a recente, rolar ao
+// topo, tratar os quatro erros da rota) nao se copia sem esquecer um pedaco.
+conf(/if\(f === 'rec' \|\| f === 'vinc'\) \{/.test(semComent), 'rec e vinc dividem UM ramo');
+conf(!/if\(f === 'vinc'\) \{/.test(semComent), 'e nao ha um segundo ramo so para o vinc');
+{
+  const ramo = semComent.slice(semComent.indexOf("if(f === 'rec' || f === 'vinc')"));
+  const fim = ramo.indexOf('}');
+  const corpo = ramo.slice(0, fim + 1);
+  conf(/cSig\.value = alvo\.getAttribute\('data-s'\)/.test(corpo), 'ele preenche a sigla');
+  conf(/cNum\.value/.test(corpo) && /cAno\.value/.test(corpo), 'o numero e o ano');
+  conf(/return consultar\(\)/.test(corpo), 'e chama a MESMA `consultar` do botao Consultar');
+}
+// E a faixa se redesenha porque a `consultar` ja limpa e recarrega — nada novo para isso.
+conf(/sgpeVincLimpar\(\)/.test(semComent) && /sgpeVincCarregar\(/.test(semComent),
+     'e a faixa se redesenha pelo caminho que ja existia');
 
 S('10. A CORRIDA ENTRE DUAS CONSULTAS');
 //

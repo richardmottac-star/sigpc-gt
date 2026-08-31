@@ -5601,6 +5601,31 @@ function sgpeVincParciais(lista) {
   return `${rotulo} ${txt}${temFinal ? ', final' : ''}`
 }
 
+/**
+ * O número de um processo na faixa — link ou texto, e o ÚNICO lugar que decide isso.
+ *
+ * ⚠️ O CLIQUE NÃO TEM CAMINHO PRÓPRIO. Ele sai como `data-f="vinc"` com a sigla, o número e o
+ * ano, e quem o atende é o MESMO ouvinte que já atende as consultas recentes — o que preenche
+ * as três caixas do topo e chama a `consultar()`. Escrever aqui um segundo "preencher e
+ * consultar" seria a segunda resposta para a mesma pergunta, e um dia elas divergiriam: a
+ * `consultar` limpa a faixa, guarda a recente, rola o miolo para o topo e trata os quatro
+ * erros da rota. Nada disso se copia sem esquecer um pedaço.
+ *
+ * ⚠️ INVÁLIDO NÃO VIRA LINK — não há o que consultar. Ele fica com o tratamento bege, e o
+ * `procInvalido` é o mesmo das listas: um segundo critério de validade aqui faria a faixa
+ * chamar de inválido o que a lista chama de bom.
+ */
+function sgpeVincNumero(processo, ehLink) {
+  const mono = 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;'
+  const txt = escHtml(normalizarProcesso(processo))
+  const p = ehLink && !procInvalido(processo) ? campoProcPartir(processo) : null
+  if(!p) return `<span style="${mono}color:var(--te);">${txt}</span>`
+  return `<button type="button" class="proc-link" data-f="vinc"
+    data-s="${escHtml(p.sigla)}" data-n="${escHtml(p.numero)}" data-a="${escHtml(campoAno4(p.ano))}"
+    title="Consultar este processo aqui mesmo"
+    style="${mono}background:none;border:0;padding:0;cursor:pointer;">${txt}</button>`
+}
+
 /** A etiqueta "consultado" — a mesma nos dois lugares que a usam. */
 const sgpeVincSeloAtual = () => `<span style="background:${VINC_RISCADO};color:${VINC_AMBAR};
   border-radius:20px;padding:1px 8px;font-size:9.5px;font-weight:800;white-space:nowrap;">consultado</span>`
@@ -5621,8 +5646,9 @@ function sgpeVincLinha(p, destacar) {
     ? `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
          color:${VINC_RISCADO};text-decoration:line-through;">${escHtml(p.processo)}</span>
        <span style="font-size:10px;font-weight:800;color:${VINC_RISCADO};">processo inválido</span>`
-    : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
-         color:var(--te);">${escHtml(normalizarProcesso(p.processo))}</span>`
+    // ⚠️ O CONSULTADO NÃO É LINK: ele já é o que está na tela, e clicar nele recarregaria a
+    // mesma consulta. Texto normal, sem sublinhado — é o que diz "você está aqui".
+    : sgpeVincNumero(p.processo, !atual)
   const parc = sgpeVincParciais(p.parciais)
   return `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:${fundo};
       border:1px solid var(--cl);border-radius:8px;padding:7px 10px;">
@@ -5663,8 +5689,8 @@ function sgpeVincHtml(d) {
       border-radius:8px;padding:7px 10px;margin-bottom:8px;">
       <span style="background:${VINC_AZUL_BORDA};color:#fff;border-radius:20px;padding:1px 9px;
         font-size:9.5px;font-weight:800;">mãe</span>
-      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
-        color:var(--te);">${escHtml(normalizarProcesso(d.processo_mae))}</span>
+      ${/* ⚠️ A MÃE TAMBÉM É LINK, menos quando é ela a consultada — mesma regra da lista. */''}
+      ${sgpeVincNumero(d.processo_mae, !ehMae)}
       ${ehMae ? sgpeVincSeloAtual() : ''}
     </div>`
 
@@ -5895,7 +5921,12 @@ function sgpeConsultaAbrir(bruto) {
       catch(_) { toast('Não deu para copiar.', 'err') }
       return
     }
-    if(f === 'rec') {
+    // ⚠️ `rec` E `vinc` SÃO O MESMO PEDIDO — "preencha os três campos com estes valores e
+    // consulte" —, e por isso dividem UM ramo. Os dois nomes existem só para o markup dizer
+    // de onde o clique veio: `rec` das consultas recentes, `vinc` da faixa de vinculação.
+    // Dois ramos iguais divergiriam no primeiro ajuste, e o que a `consultar()` faz depois
+    // (limpar a faixa, gravar a recente, rolar ao topo) não se copia sem esquecer um pedaço.
+    if(f === 'rec' || f === 'vinc') {
       cSig.value = alvo.getAttribute('data-s')
       cNum.value = alvo.getAttribute('data-n')
       cAno.value = alvo.getAttribute('data-a')
