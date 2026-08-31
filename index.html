@@ -340,8 +340,16 @@ tr:last-child td{border-bottom:none;}
 .cmpg .cmpf{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;font-weight:700;color:var(--ct);}
 .cmpg .cmpe{flex:0 0 auto;font-size:11px;color:var(--r);white-space:nowrap;}
 .cmpg .cmpe:empty{display:none;}
-.cmp-sigef{height:14px;width:auto;flex:0 0 auto;display:block;}
-.cmp-sgpe{height:20px;width:auto;flex:0 0 auto;display:block;}
+/* ⚠️ A PRIMEIRA LINHA DA BARRA — SGPe e depois SIGEF, e o resto dos filtros embaixo.
+   O `flex:0 0 100%` e o que QUEBRA a linha: as sete barras sao `flex-wrap:wrap`, e um filho
+   que ocupa a largura inteira empurra tudo o que vem depois para a linha seguinte. E fazer
+   isso por CSS, e nao por dois conteineres separados, e o que mantem UMA barra: os botoes
+   Buscar e Limpar continuam sendo um par so, valendo para as duas linhas.
+   ⚠️ O SGPe VEM PRIMEIRO por ser o mais consultado (Richard, 31/08/2026) — a ordem esta na
+   marcacao, nao aqui: esta classe so reserva a linha. */
+.cmp-linha{flex:0 0 100%;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:2px;}
+.cmp-sigef{height:18px;width:auto;flex:0 0 auto;display:block;}
+.cmp-sgpe{height:22px;width:auto;flex:0 0 auto;display:block;}
 .nl-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--cb);font-size:12px;}
 .nl-row:last-child{border-bottom:none;}
 
@@ -3883,8 +3891,10 @@ function irEst() {
             vão separados para a rota e se somam com AND lá — ver o aviso no `resumo_tr`.
             ⚠️ E o placeholder do livre MUDOU junto. Deixá-lo prometendo "TR, SGPe" mandaria a
             pessoa digitar ali o que agora tem caixa, e a busca ficaria pior do que era. */''}
-      ${campoTrHtml('fTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
-      ${campoProcHtml('fPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
+      <div class="cmp-linha">
+        ${campoProcHtml('fPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
+        ${campoTrHtml('fTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
+      </div>
       <div class="fg"><label>Entidade, NL ou PC</label><input data-colagem type="text" id="fBusca" placeholder="Entidade, NL ou PC" style="width:200px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
@@ -4989,11 +4999,20 @@ const CAMPO_PAD_FILTRO = '7px 9px'
 // ⚠️ FIXA QUER DIZER FIXA: com `SCC` sobra espaço, e é assim mesmo. Uma caixa que encolhesse
 // junto com o conteúdo faria a linha inteira dançar a cada tecla, e o número ao lado mudaria
 // de lugar enquanto a pessoa digita a sigla.
+// ⚠️ SEM PLACEHOLDER, DESDE 31/08/2026 (Richard). As caixas traziam um exemplo cinza dentro —
+// "SCC", "00000197", "2021". Num campo de 4 caracteres, um exemplo do TAMANHO do campo se lê
+// como conteúdo: a pessoa olha a barra e não sabe se aquilo é filtro aplicado ou sugestão.
+// Caixa vazia é caixa vazia. Quem diz o que cada uma quer é a POSIÇÃO — o logo, o "TR", a
+// "/" — mais o `aria-label`/`title`, que ficam e são o que o leitor de tela usa.
+//
+// ⚠️ O ATRIBUTO É OMITIDO, e não posto vazio: `placeholder=""` no HTML é um atributo que
+// existe e não diz nada, e a próxima pessoa que procurar por "placeholder" aqui vai achar
+// sete deles e concluir que a decisão foi outra.
 function campoCx(id, cp, larg, ml, val, ph, rot, pad, bw, extra) {
   return `<input class="cmpi" id="${escHtml(id + cp)}" data-cg="${escHtml(id)}" data-cp="${cp}"
     maxlength="${ml}" autocomplete="off" spellcheck="false" aria-label="${escHtml(rot)}"
     ${cp === 'Sigla' ? '' : 'inputmode="numeric"'}
-    value="${escHtml(val || '')}" placeholder="${escHtml(ph)}" title="${escHtml(rot)}"
+    value="${escHtml(val || '')}"${ph ? ` placeholder="${escHtml(ph)}"` : ''} title="${escHtml(rot)}"
     style="width:${larg};padding:${pad};border-width:${bw};${extra || ''}">`
 }
 
@@ -5013,9 +5032,9 @@ function campoTrHtml(id, opc) {
     data-modo="${escHtml(o.modo || 'busca')}" data-muda="${escHtml(o.muda || '')}"
     data-enter="${escHtml(o.enter || '')}">
     <img src="${LOGO_SIGEF_B64}" alt="SIGEF" class="cmp-sigef">
-    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano da TR', pad, bw)}
+    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '', 'Ano da TR', pad, bw)}
     <span class="cmpf">TR</span>
-    ${campoCx(id, 'Num', '6ch', 6, num, '000411', 'Número da TR', pad, bw)}
+    ${campoCx(id, 'Num', '6ch', 6, num, '', 'Número da TR', pad, bw)}
   </span>`
 }
 
@@ -5037,10 +5056,10 @@ function campoProcHtml(id, opc) {
     ${/* ⚠️ A SIGLA ALINHA À DIREITA, como as caixas de número (Richard, 31/08/2026). Ela era a
           única à esquerda; a `.cmpi` já manda `text-align:right`, então o que havia aqui era
           um `text-align:left` que a desalinhava das vizinhas. Só o `text-transform` fica. */''}
-    ${campoCx(id, 'Sigla', '150px', 20, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-transform:uppercase;')}
-    ${campoCx(id, 'Num', '9ch', 9, p.numero, '00000197', 'Número do processo', pad, bw)}
+    ${campoCx(id, 'Sigla', '150px', 20, p.sigla, '', 'Sigla do órgão', pad, bw, 'text-transform:uppercase;')}
+    ${campoCx(id, 'Num', '9ch', 9, p.numero, '', 'Número do processo', pad, bw)}
     <span class="cmpf">/</span>
-    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano do processo', pad, bw)}
+    ${campoCx(id, 'Ano', '4ch', 4, p.ano, '', 'Ano do processo', pad, bw)}
     <span class="cmpe" data-cg="${escHtml(id)}"></span>
   </span>`
 }
@@ -10161,11 +10180,16 @@ function irRel() {
       ${/* ⚠️ O `id` CONTINUA `relTR` embora ele já não receba TR — mudá-lo mexeria no
             `relFiltTR` que mostra e esconde este bloco, e em `relMudaTipo`. O nome ficou
             historicamente errado; renomear é outra frente, e não esta. */''}
+      ${/* ⚠️ AS DUAS CAIXAS NUM CONTÊINER SÓ — eram dois, cada um com o seu `display`. Duas
+            coisas para ligar e desligar juntas é uma para esquecer, e esquecer aqui deixaria
+            meia primeira linha aparecendo num relatório que não filtra por TR. */''}
+      <div class="cmp-linha" id="relFiltCx" style="display:none">
+        ${campoProcHtml('relPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}
+        ${campoTrHtml('relTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}
+      </div>
       <div class="fg" id="relFiltTR" style="display:none"><label>Entidade, NL ou PC</label>
         <input data-colagem type="text" id="relTR" placeholder="Entidade, NL ou PC" style="width:190px;">
       </div>
-      <div id="relFiltTrCx" style="display:none">${campoTrHtml('relTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}</div>
-      <div id="relFiltPrCx" style="display:none">${campoProcHtml('relPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'relBuscar()' })}</div>
       <div class="fg" id="relFiltStatus" style="display:none"><label>Status</label>
         <select id="relStatus">
           <option value="">Todos</option>
@@ -11016,8 +11040,12 @@ function relMudaTipo() {
   // ⚠️ AS DUAS CAIXAS APARECEM E SOMEM COM O CAMPO LIVRE — são a mesma barra. Deixar as
   // caixas visíveis num tipo de relatório que não filtra por TR ofereceria um filtro que o
   // Gerar ignoraria em silêncio.
-  for(const id of ['relFiltTR','relFiltTrCx','relFiltPrCx'])
-    document.getElementById(id).style.display = tipo==='tr' ? '' : 'none'
+  // ⚠️ `relFiltCx` É A PRIMEIRA LINHA INTEIRA, e por isso volta com `flex` e não com `''`:
+  // o `display` vazio devolveria o valor do CSS da classe, que é `flex` — mas só porque a
+  // classe existe. Escrever `flex` aqui é dizer o que se quer, e não torcer para a folha de
+  // estilo continuar concordando.
+  document.getElementById('relFiltCx').style.display = tipo==='tr' ? 'flex' : 'none'
+  document.getElementById('relFiltTR').style.display = tipo==='tr' ? '' : 'none'
   document.getElementById('relFiltStatus').style.display = ['status','geral'].includes(tipo) ? '' : 'none'
 }
 
@@ -11396,8 +11424,10 @@ async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
             (31/08/2026). Os três vão separados para a `GET /prestacoes_contas`, que os soma
             com AND. O rótulo mudou junto: "Buscar Entidade / TR" mandaria digitar ali a TR
             que agora tem caixa. */''}
-      ${campoTrHtml('plTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
-      ${campoProcHtml('plPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
+      <div class="cmp-linha">
+        ${campoProcHtml('plPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
+        ${campoTrHtml('plTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscarPlan()' })}
+      </div>
       <div class="fg"><label>Entidade, NL ou PC</label>
         <input data-colagem type="text" id="plBusca" placeholder="Entidade, NL ou PC" style="width:190px;" onkeydown="if(event.key==='Enter')buscarPlan()">
       </div>
@@ -15603,6 +15633,16 @@ function acmpRenderFiltros() {
   <div style="background:var(--surface-2, #F7FAF8);border:1px solid var(--cl);border-radius:10px;
     padding:12px 13px;margin-bottom:12px;">
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+      ${/* ⚠️ A PRIMEIRA LINHA: SGPe e depois SIGEF. Os dois `valor` são o filtro que está
+            VALENDO — esta barra se redesenha a cada busca, e nascer vazia faria o filtro
+            continuar aplicado e sumir da tela. É a única das sete em que as caixas trazem
+            valor, e é por isso: aqui a barra é estado, não formulário em branco. */''}
+      <div class="cmp-linha">
+        ${campoProcHtml('acmpPr', { valor: _acmpF.processo, modo: 'busca',
+          pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}
+        ${campoTrHtml('acmpTr', { valor: _acmpF.tr,
+          pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}
+      </div>
       <div style="flex:0 0 138px;">${rot('De')}
         <input id="acmpDe" type="date" value="${escHtml(_acmpF.de)}" style="${inp}"></div>
       <div style="flex:0 0 138px;">${rot('Até')}
@@ -15613,15 +15653,6 @@ function acmpRenderFiltros() {
         <select id="acmpPerfil" style="${inp}"><option value="">Todos</option>${optPf}</select></div>
       <div style="flex:1 1 220px;min-width:170px;">${rot('Tipo de evento')}
         <select id="acmpEvento" style="${inp}"><option value="">Todos</option>${optEv}</select></div>
-      ${/* O logo do SIGEF é o rótulo: numa barra com sete filtros, "TR" escrito por cima da
-            caixa custa uma linha inteira de altura para dizer o que a marca já diz. */''}
-      <div style="flex:0 0 auto;">${campoTrHtml('acmpTr', { valor: _acmpF.tr,
-        pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}</div>
-      ${/* ⚠️ A CAIXA DO PROCESSO ENTRA AQUI, ao lado da de TR que já existia. O `valor` é o
-            filtro que está valendo — esta barra se redesenha a cada busca, e nascer vazia
-            faria o filtro continuar aplicado e sumir da tela, como no `acmpTr`. */''}
-      <div style="flex:0 0 auto;">${campoProcHtml('acmpPr', { valor: _acmpF.processo,
-        modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'acmpBuscar()' })}</div>
       <div style="flex:1 1 200px;min-width:160px;">${rot('PC ou entidade')}
         <input data-colagem id="acmpQ" value="${escHtml(_acmpF.q)}" style="${inp}"
           onkeydown="if(event.key==='Enter')acmpBuscar()"></div>
@@ -16010,8 +16041,10 @@ function ciBuscaHtml() {
             pelo processo SGPe", que salta para o processo IGNORANDO o chip — decisão de
             25/08, e o servidor a preserva com um `return` antecipado. Estas estreitam o
             recorte que está aberto, que é outra pergunta. */''}
-      ${campoTrHtml('ciFTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
-      ${campoProcHtml('ciFPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
+      <div class="cmp-linha">
+        ${campoProcHtml('ciFPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
+        ${campoTrHtml('ciFTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'ciBuscarGeral()' })}
+      </div>
       <div style="flex:1 1 190px;min-width:150px;">${rot('PC, entidade ou analista')}
         <input data-colagem id="ciQ" placeholder="Digite parte do nome ou do código" style="${inp}"
                onkeydown="if(event.key==='Enter')ciBuscarGeral()"></div>
@@ -19170,8 +19203,10 @@ async function irEstornar() {
           <option value="">Todos</option>
         </select>
       </div>` : ''}
-      ${campoTrHtml('estTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
-      ${campoProcHtml('estPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
+      <div class="cmp-linha">
+        ${campoProcHtml('estPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
+        ${campoTrHtml('estTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
+      </div>
       <div class="fg"><label>Entidade, NL ou PC</label>
         <input data-colagem type="text" id="estBusca" placeholder="Entidade, NL ou PC" oninput="estBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estBuscarAgora()" style="min-width:180px;">
       </div>
@@ -19572,8 +19607,10 @@ async function irEstornosRealizados() {
           <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>`:''}
-      ${campoTrHtml('estLogTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
-      ${campoProcHtml('estLogPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
+      <div class="cmp-linha">
+        ${campoProcHtml('estLogPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
+        ${campoTrHtml('estLogTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
+      </div>
       <div class="fg"><label>Entidade, NL ou PC</label>
         <input data-colagem type="text" id="estLogBusca" placeholder="Entidade, NL ou PC" style="width:190px;" oninput="estLogBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estLogBuscarAgora()">
       </div>

@@ -483,8 +483,11 @@ conf(/const SGPE_LOGO = LOGO_SGPE_B64/.test(html), 'SGPE_LOGO virou apelido — 
 conf((html.match(/'data:image\/png;base64,/g) || []).length === 2,
      'ha exatamente DOIS base64 de PNG no arquivo — um por logo',
      (html.match(/'data:image\/png;base64,/g) || []).length);
-conf(/\.cmp-sigef\{height:14px;width:auto/.test(html), 'o do SIGEF sai a 14px de altura, largura automatica');
-conf(/\.cmp-sgpe\{height:20px;width:auto/.test(html), 'o do SGPe sai a 20px');
+// ⚠️ 18px E 22px DESDE 31/08/2026 (Richard): a 14px a marca do SIGEF ficava ilegivel — ela e
+// deitada (433x161), entao a altura que serve para uma marca quase quadrada nao serve para
+// ela. As duas continuam com `width:auto`: igualar a LARGURA esmagaria uma das duas.
+conf(/\.cmp-sigef\{height:18px;width:auto/.test(html), 'o do SIGEF sai a 18px de altura, largura automatica');
+conf(/\.cmp-sgpe\{height:22px;width:auto/.test(html), 'o do SGPe sai a 22px');
 
 // ⚠️ A LISTA DAS 183 NAO PODE ESTAR AQUI. Ela vem do GET /sgpe/siglas, que a le do
 // lib/sgpe-link.js. Uma copia neste arquivo seria a quarta do mapa ORGAOS.
@@ -616,6 +619,24 @@ for (const [tela, idTr, idPr] of BARRAS) {
   conf(new RegExp("campoTrHtml\\('" + idTr + "'").test(semComent), `${tela}: tem a caixa de TR`);
   conf(new RegExp("campoProcHtml\\('" + idPr + "'").test(semComent), `${tela}: tem a caixa de processo`);
 }
+// ⚠️ AS DUAS CAIXAS MORAM NUMA LINHA PROPRIA, E O SGPe VEM PRIMEIRO (Richard, 31/08/2026).
+// A `.cmp-linha` tem `flex:0 0 100%`: as sete barras sao `flex-wrap:wrap`, e um filho que
+// ocupa a largura inteira empurra o resto para a linha de baixo. E fazer isso por CSS, e nao
+// por dois conteineres, e o que mantem UMA barra — os botoes continuam sendo um par so.
+conf(/\.cmp-linha\{flex:0 0 100%/.test(html), 'a primeira linha ocupa a largura inteira');
+const LINHAS = [...semComent.matchAll(/cmp-linha[\s\S]{0,700}?<\/div>/g)].map(m => m[0]);
+conf(LINHAS.length === BARRAS.length, `ha uma linha propria por barra`, LINHAS.length);
+for (const bloco of LINHAS) {
+  const id = (bloco.match(/campoProcHtml\('(\w+)'/) || [])[1] || '?';
+  const iPr = bloco.indexOf('campoProcHtml'), iTr = bloco.indexOf('campoTrHtml');
+  conf(iPr > -1 && iTr > -1 && iPr < iTr, `${id}: SGPe antes do SIGEF — e o mais consultado`);
+}
+// ⚠️ E OS BOTOES FICAM DE FORA DELA. Um par por barra, valendo para as duas linhas: postos
+// dentro da `.cmp-linha` eles subiriam para a primeira e a segunda ficaria sem Buscar.
+for (const bloco of LINHAS)
+  conf(!/btn-acao|btn-limpar|btn-secundario|BTN_BUSCAR/.test(bloco),
+       'e a linha das caixas nao leva botao nenhum');
+
 // ⚠️ AS QUATRO DE SERVIDOR MANDAM OS DOIS PARAMETROS. Sao quatro pares de `set`: Estoque,
 // Minha Planilha, Relatorios e C.I. — o Acompanhamento monta pelo `_acmpF`, logo abaixo.
 conf((semComent.match(/set\('tr', /g) || []).length === 4,
@@ -676,8 +697,19 @@ for (const cp of ['Ano', 'Num'])
   conf(vazio(ctx.campoTrHtml('v1', {}), cp), `TR: a caixa ${cp} nasce vazia`);
 for (const cp of ['Sigla', 'Num', 'Ano'])
   conf(vazio(ctx.campoProcHtml('v2', {}), cp), `processo: a caixa ${cp} nasce vazia`);
-// A dica NAO some — ela muda de lugar.
-conf(/placeholder="SCC"/.test(ctx.campoProcHtml('v3', {})), 'e o `SCC` continua na tela, como placeholder');
+// ⚠️ E NEM PLACEHOLDER SOBROU (Richard, 31/08/2026). O `SCC` cinza dentro da caixa foi o
+// meio-termo da rodada anterior, e caiu: num campo de 4 caracteres, um exemplo do TAMANHO do
+// campo se le como conteudo — a pessoa olha a barra e nao sabe se aquilo e filtro aplicado ou
+// sugestao. Caixa vazia e caixa vazia.
+const semPh = ctx.campoTrHtml('v3', {}) + ctx.campoProcHtml('v4', {});
+conf(!/placeholder/.test(semPh), 'nenhuma caixa tem placeholder — nem o atributo vazio');
+// ⚠️ MAS O `aria-label` E O `title` FICAM: e por eles que um leitor de tela sabe qual caixa e
+// qual, e tira-los junto trocaria um problema de leitura por um de acessibilidade.
+conf(/aria-label="Sigla do órgão"/.test(semPh) && /aria-label="Ano da TR"/.test(semPh),
+     'e o aria-label continua dizendo o que cada uma e');
+// Quem ensina o formato passa a ser a POSICAO: o logo, o "TR" fixo e a "/".
+conf(/>TR</.test(ctx.campoTrHtml('v5', {})) && />\/</.test(ctx.campoProcHtml('v6', {})),
+     'quem ensina o formato e o texto fixo entre as caixas');
 
 // ⚠️ NOS TRES PONTOS QUE PRE-ENCHIAM, o valor saiu da chamada.
 conf(!/campoProcHtml\('sgpe', \{ modo: 'busca', sigla: 'SCC' \}\)/.test(semComent), 'o modal do F4 nao pre-enche mais');
