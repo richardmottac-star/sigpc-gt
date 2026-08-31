@@ -234,7 +234,12 @@ conf(/maxlength="6"/.test(htmlTr) && /maxlength="9"/.test(htmlPr), 'o maxlength 
 conf(/maxlength="20"/.test(cxSigla), 'e a sigla aceita 20 — o tamanho da maior das 183');
 conf(/id="t1Ano"/.test(htmlTr) && /id="t1Num"/.test(htmlTr), 'os ids saem do nome do grupo');
 conf(/id="p1Sigla"/.test(htmlPr) && /id="p1Num"/.test(htmlPr) && /id="p1Ano"/.test(htmlPr), 'idem no processo');
-conf(/text-align:left/.test(htmlPr.match(/id="p1Sigla"[\s\S]*?>/)[0]), 'a sigla e o unico campo alinhado a esquerda');
+// ⚠️ A SIGLA ALINHA A DIREITA COMO AS DEMAIS (Richard, 31/08/2026). Ela era a unica a
+// esquerda, e desalinhava do numero e do ano ao lado. A `.cmpi` ja manda `text-align:right`,
+// entao o certo aqui e NAO ter `text-align` nenhum: um `left` inline venceria a classe.
+conf(!/text-align/.test(cxSigla), 'a sigla nao carrega alinhamento proprio — herda o `right` da .cmpi');
+conf(/text-transform:uppercase/.test(cxSigla), 'e mantem so a maiuscula automatica');
+conf(/\.cmpg \.cmpi\{[^}]*text-align:right/.test(html), 'e a classe alinha a direita, para as duas familias');
 conf(/data-modo="cadastro"/.test(htmlPr), 'o modo vai na marcacao do grupo');
 
 console.log('\n═══ 4. LER E ESCREVER ═══');
@@ -591,6 +596,36 @@ conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/
      'sem marcar de invalido o que e valido');
 
 // ════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ 15b. NENHUMA CAIXA NASCE COM VALOR ═══');
+//
+// ⚠️ PLACEHOLDER CINZA, NUNCA VALOR (Richard, 31/08/2026). Ate aqui a caixa da sigla nascia
+// com `SCC` escrito dentro, em tres telas — o modal do F4, a fila do C.I. e a caixa do F2.
+// Era a dica certa no lugar errado: quem ia digitar `FCEE` tinha de apagar antes. A dica
+// continua, como `placeholder`; o campo comeca limpo.
+const vazio = (h, cp) => {
+  const cx = h.match(new RegExp('data-cp="' + cp + '"[\\s\\S]*?>'))[0];
+  return /value=""/.test(cx);
+};
+for (const cp of ['Ano', 'Num'])
+  conf(vazio(ctx.campoTrHtml('v1', {}), cp), `TR: a caixa ${cp} nasce vazia`);
+for (const cp of ['Sigla', 'Num', 'Ano'])
+  conf(vazio(ctx.campoProcHtml('v2', {}), cp), `processo: a caixa ${cp} nasce vazia`);
+// A dica NAO some — ela muda de lugar.
+conf(/placeholder="SCC"/.test(ctx.campoProcHtml('v3', {})), 'e o `SCC` continua na tela, como placeholder');
+
+// ⚠️ NOS TRES PONTOS QUE PRE-ENCHIAM, o valor saiu da chamada.
+conf(!/campoProcHtml\('sgpe', \{ modo: 'busca', sigla: 'SCC' \}\)/.test(semComent), 'o modal do F4 nao pre-enche mais');
+conf(!/sigla: CI_SIGLA_PADRAO/.test(semComent), 'nem a fila do C.I., nem a caixa do F2');
+conf(/const CI_SIGLA_PADRAO = ''/.test(semComent), 'e o padrao do C.I. virou vazio');
+// ⚠️ A CONSTANTE FICA, mesmo vazia: e dela que saem o reset do Limpar e o "ja esta no inicio".
+conf(/põe\('ciSgSigla', CI_SIGLA_PADRAO\)/.test(semComent), 'o Limpar da fila continua lendo dela');
+conf(!/_ciSgpe\.sigla \|\| 'SCC'/.test(semComent), 'e a copia solta do SCC no ciBuscarGeral sumiu');
+
+// ⚠️ A EXCECAO E O LAPIS: ali as caixas vem preenchidas com o que ESTA GRAVADO.
+ctx.campoProcPor('procEd', 'SCC', '00014778', '2021');
+conf(ctx.campoVal('procEd', 'Sigla') === 'SCC' && ctx.campoVal('procEd', 'Num') === '00014778',
+     'o lapis abre preenchido — e a unica tela que edita algo que ja existe');
+
 console.log('\n═══ 16. `procPartes` — O PROCESSO GRUDADO NO LAPIS ═══');
 //
 // ⚠️ A VERSAO ANTERIOR QUEBRAVA TODO PROCESSO GRUDADO. A regex era

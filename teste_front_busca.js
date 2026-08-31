@@ -271,7 +271,7 @@ console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR
   const ge = (html.match(/function ciBuscarGeral\(\)[\s\S]*?\n\}/) || [''])[0];
   conf(sg.length > 0 && ge.length > 0, 'os dois blocos tem cada um a sua funcao');
   conf(/_ciGeral = \{ q:'', analista_id:'', espera:'' \}/.test(sg), 'buscar por processo limpa o bloco de baixo');
-  conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| 'SCC', num:'', ano:'' \}/.test(ge),
+  conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| CI_SIGLA_PADRAO, num:'', ano:'' \}/.test(ge),
        'e buscar na fila limpa o numero e o ano do processo');
   conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um dos dois modos vale por vez');
 
@@ -283,12 +283,12 @@ console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR
        'e o cinza DIZ o que falta, no title (armadilha 15)');
   for (const c of ['a sigla', 'o número', 'o ano'])
     conf(ch.includes(`'${c}'`), `falta "${c}" quando o campo esta vazio`);
-  // A sigla nasce preenchida com SCC — o caso comum — e continua editavel. Desde 31/08 quem
-  // desenha as tres caixas e o componente unico (`campoProcHtml`), e o padrao chega por
-  // parametro: um literal 'SCC' a mais aqui seria a quarta copia do mesmo valor.
-  conf(/campoProcHtml\('ciSg', \{ sigla: CI_SIGLA_PADRAO/.test(html.replace(/\n\s*/g, ' ')),
-       'a sigla nasce no padrao, e o campo continua editavel');
-  conf(/const CI_SIGLA_PADRAO = 'SCC'/.test(html), 'e o padrao continua sendo SCC');
+  // ⚠️ A SIGLA NAO NASCE MAIS PREENCHIDA (Richard, 31/08/2026): nenhuma caixa nasce com valor
+  // dentro, e o `SCC` que ficava ali virou PLACEHOLDER cinza, no componente. A dica continua
+  // na tela; o campo comeca limpo, e quem vai digitar FCEE nao precisa apagar antes.
+  conf(/campoProcHtml\('ciSg', \{ modo: 'busca'/.test(html.replace(/\n\s*/g, ' ')),
+       'a sigla nao e mais pre-enchida na chamada');
+  conf(/const CI_SIGLA_PADRAO = ''/.test(html), 'e o padrao do C.I. virou vazio');
 }
 
 console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');

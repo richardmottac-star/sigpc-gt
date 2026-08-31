@@ -5013,7 +5013,10 @@ function campoProcHtml(id, opc) {
     data-modo="${escHtml(o.modo || 'busca')}" data-muda="${escHtml(o.muda || '')}"
     data-enter="${escHtml(o.enter || '')}">
     <img src="${LOGO_SGPE_B64}" alt="SGPe" class="cmp-sgpe">
-    ${campoCx(id, 'Sigla', '150px', 20, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-align:left;text-transform:uppercase;')}
+    ${/* ⚠️ A SIGLA ALINHA À DIREITA, como as caixas de número (Richard, 31/08/2026). Ela era a
+          única à esquerda; a `.cmpi` já manda `text-align:right`, então o que havia aqui era
+          um `text-align:left` que a desalinhava das vizinhas. Só o `text-transform` fica. */''}
+    ${campoCx(id, 'Sigla', '150px', 20, p.sigla, 'SCC', 'Sigla do órgão', pad, bw, 'text-transform:uppercase;')}
     ${campoCx(id, 'Num', '9ch', 9, p.numero, '00000197', 'Número do processo', pad, bw)}
     <span class="cmpf">/</span>
     ${campoCx(id, 'Ano', '4ch', 4, p.ano, '2021', 'Ano do processo', pad, bw)}
@@ -5499,7 +5502,7 @@ function sgpeConsultaAbrir(bruto) {
                 lado da marca é dizer duas vezes o que o formato da caixa já ensina. Os ids
                 continuam `sgpeSigla`, `sgpeNum` e `sgpeAno` — o componente os monta a partir
                 do nome do grupo, e o resto desta função não precisou mudar. */''}
-          ${campoProcHtml('sgpe', { modo: 'busca', sigla: 'SCC' })}
+          ${campoProcHtml('sgpe', { modo: 'busca' })}
           ${/* O relevo é o que faz este botão ser o próximo passo óbvio da janela — os campos
                 à esquerda são planos, e ele é a única coisa em pé na linha. */''}
           <button type="button" id="sgpeBt" data-f="ir" class="mcok"
@@ -15765,7 +15768,7 @@ let _ciDecisao = null         // 'de_acordo' | 'ressalva' — a escolha na PC ab
 // outro. Combiná-los pareceria mais poderoso e devolveria vazio silencioso toda vez que o
 // processo digitado não fosse o da entidade digitada — e a pessoa leria "não existe" para uma
 // PC que existe.
-let _ciSgpe = { sigla:'SCC', num:'', ano:'' }   // a sigla nasce preenchida, e é editável
+let _ciSgpe = { sigla:'', num:'', ano:'' }   // nenhuma caixa nasce com valor (31/08/2026)
 let _ciGeral = { q:'', analista_id:'', espera:'' }
 let _ciModo = 'geral'          // qual dos dois blocos está valendo
 
@@ -15867,7 +15870,7 @@ function ciBuscaHtml() {
     <div style="font-size:11.5px;font-weight:700;color:var(--te);margin-bottom:9px;">
       Localizar pelo processo SGPe</div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-      ${campoProcHtml('ciSg', { sigla: CI_SIGLA_PADRAO, modo: 'busca',
+      ${campoProcHtml('ciSg', { modo: 'busca',
           pad: CAMPO_PAD_FILTRO, borda: '1px', muda: 'ciSgpeMudou()', enter: 'ciBuscarSgpe()' })}
       <button id="ciSgBt" class="btn-acao" onclick="ciBuscarSgpe()" disabled
         style="padding:8px 17px;font-size:13px;flex:0 0 auto;">Buscar</button>
@@ -15905,9 +15908,16 @@ function ciBuscaHtml() {
 }
 
 /** Acende o botão do SGPe só com os três campos, e diz no `title` o que falta. */
-// A sigla nasce e volta a este valor. Um lugar só: o `value` do campo, o reset do Limpar e o
-// estado "já está no início" leem daqui, e três literais divergiriam no primeiro ajuste.
-const CI_SIGLA_PADRAO = 'SCC'
+// A sigla volta a este valor. Um lugar só: o reset do Limpar e o estado "já está no início"
+// leem daqui, e três literais divergiriam no primeiro ajuste.
+//
+// ⚠️ VAZIO DESDE 31/08/2026 (Richard): NENHUMA CAIXA NASCE COM VALOR DENTRO. O `SCC` que
+// ficava aqui era um valor de verdade na caixa, e virou PLACEHOLDER cinza, no componente — a
+// dica continua na tela, mas o campo começa limpo e ninguém precisa apagar antes de digitar.
+// ⚠️ E a constante FICA, mesmo vazia: ela continua sendo o único lugar de onde saem o reset
+// e o "já está no início". Este mesmo valor já teve uma cópia solta no `ciBuscarGeral`, e é
+// assim que duas respostas para a mesma pergunta nascem.
+const CI_SIGLA_PADRAO = ''
 
 function ciSgpeMudou() {
   const v = (id) => (document.getElementById(id)?.value || '').trim()
@@ -15982,7 +15992,7 @@ function ciBuscarGeral() {
     espera: document.getElementById('ciEspera')?.value || '',
   }
   _ciModo = 'geral'
-  _ciSgpe = { sigla:_ciSgpe.sigla || 'SCC', num:'', ano:'' }
+  _ciSgpe = { sigla:_ciSgpe.sigla || CI_SIGLA_PADRAO, num:'', ano:'' }
   const n = document.getElementById('ciSgNum'); if(n) n.value = ''
   const a = document.getElementById('ciSgAno'); if(a) a.value = ''
   ciSgpeMudou()
@@ -16021,7 +16031,7 @@ function ciBuscaAbrir() {
         ${/* ⚠️ SEM `enter` AQUI, de propósito: quem trata o Enter nesta caixa é o
               `d.onkeydown` do próprio modal, logo abaixo. Definir os dois faria o Localizar
               rodar DUAS vezes por tecla — duas cargas da fila e dois destaques. */''}
-        ${campoProcHtml('ciBusca', { sigla: CI_SIGLA_PADRAO, modo: 'busca',
+        ${campoProcHtml('ciBusca', { modo: 'busca',
             pad: '9px 10px', borda: '1px', muda: 'ciBuscaMudou()' })}
         <div class="mcbt">
           <button class="btn-neutro" onclick="ciBuscaFechar()">Cancelar</button>

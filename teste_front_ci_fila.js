@@ -108,12 +108,15 @@ const sg = corpo('ciBuscarSgpe'), ge = corpo('ciBuscarGeral');
 // uma PC que existe.
 conf(/_ciGeral = \{ q:'', analista_id:'', espera:'' \}/.test(sg), 'buscar o processo limpa os filtros de baixo');
 conf(/ciQ'\); if\(q\) q\.value = ''/.test(sg), 'e apaga o campo de texto na tela');
-conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| 'SCC', num:'', ano:'' \}/.test(ge),
+conf(/_ciSgpe = \{ sigla:_ciSgpe\.sigla \|\| CI_SIGLA_PADRAO, num:'', ano:'' \}/.test(ge),
      'buscar na fila limpa o numero e o ano do processo');
 conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um modo vale por vez');
-// A sigla NÃO é apagada pela outra busca: ela é a única com um padrão útil, e reescrever
-// "SCC" toda vez seria atrito sem resposta a dar.
-conf(/sigla:_ciSgpe\.sigla \|\| 'SCC'/.test(ge), 'a sigla sobrevive — e o unico campo com padrao');
+// ⚠️ A SIGLA DIGITADA SOBREVIVE A OUTRA BUSCA — o que mudou em 31/08/2026 foi o valor de
+// PARTIDA, que virou vazio: nenhuma caixa nasce preenchida, e o `SCC` e placeholder. A regra
+// de nao apagar o que a pessoa escreveu continua, e agora le do CI_SIGLA_PADRAO em vez de um
+// literal solto — era a segunda copia do mesmo valor.
+conf(/sigla:_ciSgpe\.sigla \|\| CI_SIGLA_PADRAO/.test(ge), 'a sigla digitada sobrevive a busca da fila');
+conf(!/\|\| 'SCC'/.test(ge), 'e nao ha mais um SCC literal aqui');
 
 S('6. OS TRES CAMPOS DO SGPe — O COMPONENTE UNICO (31/08/2026)');
 // ⚠️ AS TRES CAIXAS ESCRITAS A MAO SAIRAM. Viraram `campoProcHtml('ciSg', ...)` — a MESMA
@@ -123,7 +126,7 @@ S('6. OS TRES CAMPOS DO SGPe — O COMPONENTE UNICO (31/08/2026)');
 // SGPe le com 9, e so ele nao sabia dividir um processo colado inteiro.
 conf(!/id="ciSgSigla" value=/.test(B), 'as tres caixas escritas a mao sairam');
 conf(/campoProcHtml\('ciSg'/.test(B), 'e o bloco chama o componente');
-conf(/sigla: CI_SIGLA_PADRAO/.test(B1), 'a sigla continua nascendo no padrao');
+conf(!/sigla: CI_SIGLA_PADRAO/.test(B1), 'a sigla NAO nasce preenchida — placeholder, nao valor');
 // Os ids nao mudaram — `ciSgSigla`, `ciSgNum`, `ciSgAno` saem do nome do grupo —, e e por
 // isso que `ciLimparSgpe`, `ciBuscarSgpe` e `ciBuscarGeral` nao precisaram ser tocadas.
 conf(/muda: 'ciSgpeMudou\(\)'/.test(B1), 'o botao continua acendendo com os tres, pelo `muda`');
