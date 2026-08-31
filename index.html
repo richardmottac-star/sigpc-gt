@@ -5461,10 +5461,10 @@ function bgCard(c) {
     </div>
 
     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-around;padding:12px 17px;background:#FAFCFB;border-bottom:1px solid var(--cl);">
-      ${contador(c.total_parciais, 'parciais')}
-      ${contador(c.total_pcs, 'PCs')}
-      ${contador(c.baixadas, 'baixadas', 'var(--v)')}
-      ${contador(c.faltam, 'faltam', c.faltam ? 'var(--am)' : 'var(--v)')}
+      ${contador(c.total_parciais, 'parciais<br><span style="font-size:9px;">agrupamento</span>')}
+      ${contador(c.total_pcs, 'PCs<br><span style="font-size:9px;">prestações</span>')}
+      ${contador(c.baixadas, 'baixadas<br><span style="font-size:9px;">PCs</span>', 'var(--v)')}
+      ${contador(c.faltam, 'faltam<br><span style="font-size:9px;">PCs</span>', c.faltam ? 'var(--am)' : 'var(--v)')}
     </div>
 
     ${bgTabela(c)}
@@ -10387,7 +10387,7 @@ function relRenderTabela() {
       <td style="text-align:center;">${r.status==='baixada'?'<span style="color:var(--v);font-weight:700;">✓</span>':'<span style="color:var(--ct);">—</span>'}</td>
       ${/* A CONFERÊNCIA COM O SIGEF nos relatórios. Aqui a linha é UMA PC, então o componente
             recebe a PC sozinha — e o "?" continua funcionando, com alvo certo para declarar. */''}
-      <td style="white-space:nowrap;">${sigefBadges([r]) || '<span style="color:var(--ct);font-size:10px;">—</span>'}</td>
+      <td style="white-space:nowrap;">${sigefBadges([r]) + pilulasExtras([r]) || '<span style="color:var(--ct);font-size:10px;">—</span>'}</td>
     </tr>`
   }).join('')
 
@@ -12719,7 +12719,7 @@ function renderPlan(rows) {
               ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}
               ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro
                     lugares, e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
-              ${sigefBadges(pa.pcs)}</span>
+              ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
             <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>
               ${/* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
@@ -12777,7 +12777,7 @@ function renderPlan(rows) {
             ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}
             ${/* A âmbar mora AQUI: "baixada no SIGEF, aberta aqui" só existe em parcial
                   aberta. As outras três aparecem no ramo de cima, o das baixadas. */''}
-            ${sigefBadges(pa.pcs)}</span>
+            ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${/* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
                   "Registrar parecer" e "Encaminhar ao C.I." saíram da linha e viraram os
@@ -12852,7 +12852,7 @@ function renderPlan(rows) {
             ${/* A CONFERÊNCIA COM O SIGEF na FILA — a TR recolhida também mostra, senão a
                   pendência só apareceria para quem já abriu o cartão. As PCs vêm de todas as
                   parciais da TR; o componente é o mesmo do cartão da parcela. */''}
-            ${sigefBadges(r.parciais.flatMap(pa => pa.pcs))}
+            ${sigefBadges(r.parciais.flatMap(pa => pa.pcs))}${pilulasExtras(r.parciais.flatMap(pa => pa.pcs))}
           </div>
           <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
             ${escHtml(r.entidade||'—')}${assumida ? ` · assumida em ${planData(assumida)}${trNova ? ` (${planHaQuantoTempo(assumida)})` : ''}` : ''}${planInicioAnalise(r)}
@@ -18853,7 +18853,9 @@ const SIGEF_TAGS = {
     texto: 'Esta prestação consta como baixada no sistema, mas não aparece no extrato do SIGEF enviado pela CGE. Verifique se o parecer foi registrado no SIGEF, e não apenas anexado ao SGPe. Depois de registrar, declare abaixo — a conferência acontece na próxima extração.'
   },
   ABERTA_COM_BAIXA_SIGEF: {
-    rotulo: 'Baixada no SIGEF, aberta aqui', cor: '#8A6100', fundo: '#FDF6E7', borda: '#EFDCA6', declara: false,
+    // ⚠️ PASSOU A DECLARAR em 30/08/2026, junto com a resposta `nao_baixada`: era a única das
+    // três sem saída, e a PC ficava na tag mesmo quando o SIGEF não a tinha baixado.
+    rotulo: 'Baixada no SIGEF, aberta aqui', cor: '#8A6100', fundo: '#FDF6E7', borda: '#EFDCA6', declara: true,
     titulo: 'Baixada no SIGEF, aberta aqui',
     texto: 'O SIGEF registra esta prestação como baixada, mas ela continua aberta aqui. Confirme o parecer no sistema para que a baixa e a produtividade fiquem registradas.'
   },
@@ -18876,6 +18878,12 @@ const SIGEF_TAGS = {
 const SIGEF_RESPOSTAS = [
   { cod: 'ja_estava',       rotulo: 'Já estava registrado no SIGEF' },
   { cod: 'registrei_agora', rotulo: 'Não estava; registrei agora' },
+  // ⚠️ A TERCEIRA — Richard, 30/08/2026. As duas de cima assumem que a PC ESTÁ baixada no
+  // SIGEF e só perguntam QUANDO foi registrada. Esta é a saída de quem abre o SIGEF e vê
+  // outra coisa: em análise, diligência, reanálise. Sem ela o analista não tinha como dizer
+  // que a premissa da pergunta estava errada, e a PC ficava na tag para sempre.
+  // ⚠️ ELA NÃO BAIXA NADA: tira a PC da tag e devolve ao fluxo normal.
+  { cod: 'nao_baixada',     rotulo: 'Não está baixada — está em análise, diligência ou outra situação' },
 ]
 
 /** As tags distintas de um conjunto de PCs, na ordem em que devem aparecer. */
@@ -18932,6 +18940,83 @@ function sigefBadges(pcs, opts) {
       parcial: alvo.length ? alvo[0].parcial_num : null,
     })
   }).join(' ')
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  AS DUAS PÍLULAS QUE NÃO SÃO TAG DO SIGEF (30/08/2026)
+//
+//  ⚠️ ELAS NÃO ENTRAM NO `SIGEF_TAGS`, e não é descuido. Aquele índice é o contrato de
+//  `sigef_tag`, que o servidor devolve com UM valor por PC; estas duas são condições
+//  independentes, e uma PC pode ter as duas ao mesmo tempo (baixa pré-GT numa NL repetida).
+//  Enfiá-las lá quebraria o "um valor por PC" na primeira PC que tivesse as duas.
+//
+//  ⚠️ QUEM DECIDE É O SERVIDOR: `sigef_pre_gt`, `nl_residual` e `nl_primeira_parcela` chegam
+//  prontos de `lib/sigef.js`. A tela pinta — não classifica. É a mesma regra do `sigef_tag`.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** A pílula genérica das duas. O `?` abre a explicação no mesmo modal de sempre. */
+function _pilula(rot, cor, fundo, borda, titulo, texto, mini) {
+  const id = 'pil' + Math.random().toString(36).slice(2, 9)
+  window._pilulas = window._pilulas || {}
+  window._pilulas[id] = { titulo, texto }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;background:${fundo};
+    color:${cor};border:1px solid ${borda};border-radius:20px;padding:${mini ? '1px 7px' : '2px 9px'};
+    font-size:${mini ? '9.5px' : '10.5px'};font-weight:700;white-space:nowrap;">${escHtml(rot)}${mini ? '' : `
+    <button type="button" title="${escHtml(titulo)}" onclick="pilulaAbrir('${id}')"
+      style="all:unset;cursor:pointer;width:13px;height:13px;line-height:13px;text-align:center;
+      border-radius:50%;background:${cor};color:${fundo};font-size:9px;font-weight:800;">?</button>`}</span>`
+}
+
+// ⚠️ `moConfirm` COM UM BOTÃO SÓ, e não um modal novo. A explicação é leitura, não decisão —
+// `okTexto:'Entendi'` e `semCancelar` deixam o diálogo que já existe fazer o papel. Um modal
+// próprio seria mais um lugar para o Esc, o clique fora e o foco divergirem.
+function pilulaAbrir(id) {
+  const p = (window._pilulas || {})[id]
+  if (p) moConfirm(p.texto, { titulo: p.titulo, okTexto: 'Entendi', semCancelar: true })
+}
+
+/**
+ * "Baixa anterior ao GT · [data]" — cinza.
+ *
+ * O Grupo de Trabalho começou em 12/08/2025 (Portaria FCEE nº 227). PC baixada no SIGEF antes
+ * disso consta como baixada e **não entra na produtividade do grupo** — o trabalho foi feito
+ * antes. São 108 PCs, e 76 delas estão sem analista.
+ */
+function pilulaPreGt(pcs, opts) {
+  const alvo = (pcs || []).filter(p => p && p.sigef_pre_gt)
+  if (!alvo.length) return ''
+  const d = planDataTs(alvo[0].data_baixa_sigef)
+  const total = (pcs || []).length
+  const fr = (total > 1 && alvo.length < total) ? ` ${alvo.length}/${total}` : ''
+  return _pilula(`Baixa anterior ao GT · ${d}${fr}`, '#5B6B62', '#F1F4F2', '#D8DFDB',
+    'Baixa anterior ao Grupo de Trabalho',
+    `Esta prestação foi baixada no SIGEF em ${d}, antes de o Grupo de Trabalho começar, em `
+    + `12/08/2025. Ela consta como baixada, mas não entra na produtividade do grupo.`,
+    (opts || {}).mini)
+}
+
+/**
+ * "NL com residual" — âmbar.
+ *
+ * ⚠️ ELA NÃO DESCONTA NADA. Decisão do Richard, 30/08/2026: PC com código diferente conta como
+ * baixa mesmo repetindo a NL, e a produtividade continua contando PC distinta. A pílula é só
+ * para o analista não achar que o sistema contou o mesmo pagamento duas vezes.
+ */
+function pilulaNlResidual(pcs, opts) {
+  const alvo = (pcs || []).filter(p => p && p.nl_residual)
+  if (!alvo.length) return ''
+  const p0 = alvo[0]
+  return _pilula('NL com residual', '#8A6100', '#FDF6E7', '#EFDCA6',
+    'NL com residual',
+    `Esta prestação usa a nota de liquidação ${p0.codigo_nl || '—'}, que também aparece na `
+    + `parcela ${p0.nl_primeira_parcela || '—'}. É o mesmo pagamento, quitado em partes. `
+    + `Cada prestação tem código próprio e conta separadamente na produtividade.`,
+    (opts || {}).mini)
+}
+
+/** As duas, na ordem em que aparecem ao lado das etiquetas do SIGEF. */
+function pilulasExtras(pcs, opts) {
+  return [pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)].filter(Boolean).join(' ')
 }
 
 /**
