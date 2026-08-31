@@ -5555,6 +5555,163 @@ let _sgpeModal = null
  * Abre a janela de consulta. Sem argumento, no estado inicial; com um processo, já consultado.
  * @param bruto  'SCC 9622/2024' — o texto como está na PC. Opcional.
  */
+// ── A FAIXA DE VINCULAÇÃO MÃE/PARCIAIS ──────────────────────────────────────
+//
+// Ela responde, dentro do próprio modal do F4, o que o analista pergunta em seguida: "este
+// processo é a mãe ou uma parcial — e o que mais tem nessa TR?". Os dados vêm inteiros do
+// `GET /sgpe/vinculo`; esta parte da tela não conta, não agrupa e não decide nada.
+//
+// ⚠️ A TELA NÃO SOMA NADA AQUI. `total_pcs`, `total_processos_parciais` e `pcs_sem_processo`
+// chegam prontos, e é de propósito: a rota vê TODAS as PCs da TR, e a tela veria só o que
+// coube na resposta. Recontar aqui daria um número plausível e menor — o defeito da
+// armadilha 16 na sua forma mais fácil de não perceber.
+//
+// ⚠️ E O `atual` VEM DO SERVIDOR, pela chave normalizada. Comparar texto aqui faria quem
+// consultou "SCC 3538/2020" não ver marcado o "SCC3538/2020" que está gravado.
+
+const VINC_AMBAR = '#FAEEDA'      // o destaque do consultado, e o fundo do inválido
+const VINC_AZUL  = '#EAF1F9'      // só da mãe
+const VINC_AZUL_BORDA = '#1A4E8A'
+const VINC_RISCADO = '#8A5A00'
+
+/**
+ * "parciais 1 a 12" · "parciais 41 a 44, final" · "parciais 1, 3, 7" · "parcial 5" · "final"
+ *
+ * ⚠️ O INTERVALO SÓ APARECE QUANDO A SEQUÊNCIA É CONTÍGUA. "1 a 12" sobre um conjunto que
+ * pula a 7 diria que a 7 está ali, e a faixa existe justamente para mostrar o que a TR tem.
+ * Fora disso, lista como está.
+ */
+function sgpeVincParciais(lista) {
+  const itens = (lista || []).map(String)
+  const temFinal = itens.includes('final')
+  const resto = itens.filter(x => x !== 'final')
+  if(!resto.length) return temFinal ? 'final' : ''
+
+  const nums = resto.map(x => parseInt(x, 10))
+  const todosNum = nums.every(n => Number.isFinite(n))
+  let txt
+  if(todosNum) {
+    const ord = [...nums].sort((a, b) => a - b)
+    const contiguo = ord.length > 1 && ord.every((n, i) => i === 0 || n === ord[i - 1] + 1)
+    txt = contiguo ? `${ord[0]} a ${ord[ord.length - 1]}` : ord.join(', ')
+  } else {
+    txt = resto.join(', ')
+  }
+  const rotulo = resto.length === 1 ? 'parcial' : 'parciais'
+  return `${rotulo} ${txt}${temFinal ? ', final' : ''}`
+}
+
+/** A etiqueta "consultado" — a mesma nos dois lugares que a usam. */
+const sgpeVincSeloAtual = () => `<span style="background:${VINC_RISCADO};color:${VINC_AMBAR};
+  border-radius:20px;padding:1px 8px;font-size:9.5px;font-weight:800;white-space:nowrap;">consultado</span>`
+
+/**
+ * Uma linha da lista.
+ *
+ * ⚠️ O INVÁLIDO USA O MESMO FUNDO DO CONSULTADO (`#FAEEDA`), por decisão do Richard — e é a
+ * ETIQUETA que os separa, não a cor. Um inválido que também seja o consultado mostra as duas.
+ * ⚠️ E ele entra com o VALOR CRU, riscado: a rota não julga validade, e a tela não conserta
+ * texto. Quem corrige é o lápis, na tela da PC.
+ */
+function sgpeVincLinha(p, destacar) {
+  const invalido = procInvalido(p.processo)
+  const atual = destacar && p.atual
+  const fundo = (atual || invalido) ? VINC_AMBAR : '#fff'
+  const num = invalido
+    ? `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+         color:${VINC_RISCADO};text-decoration:line-through;">${escHtml(p.processo)}</span>
+       <span style="font-size:10px;font-weight:800;color:${VINC_RISCADO};">processo inválido</span>`
+    : `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+         color:var(--te);">${escHtml(normalizarProcesso(p.processo))}</span>`
+  const parc = sgpeVincParciais(p.parciais)
+  return `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:${fundo};
+      border:1px solid var(--cl);border-radius:8px;padding:7px 10px;">
+      ${num}
+      ${atual ? sgpeVincSeloAtual() : ''}
+      <span style="margin-left:auto;display:flex;align-items:center;gap:11px;font-size:11.5px;color:var(--ct);">
+        <span>${p.qtd} ${p.qtd === 1 ? 'PC' : 'PCs'}</span>
+        ${parc ? `<span>${escHtml(parc)}</span>` : ''}
+      </span>
+    </div>`
+}
+
+/** A faixa inteira. Recebe o `data` da rota, já com `encontrado: true`. */
+function sgpeVincHtml(d) {
+  // ⚠️ CONSULTANDO PELA MÃE, NENHUMA LINHA DA LISTA SE DESTACA — o âmbar vai para a faixa
+  // azul (decisão do Richard). Sem isto, uma TR em que a mãe também é processo de uma parcial
+  // mostraria o selo nos dois lugares, e a pessoa leria dois "consultado" para um processo.
+  const ehMae = d.papel === 'mae'
+  const semProc = d.pcs_sem_processo || 0
+
+  const cabecalho = `
+    <div style="margin-bottom:9px;">
+      <div style="font-size:13.5px;font-weight:800;color:var(--te);">
+        ${escHtml(d.tr || '—')}${d.entidade ? ` <span style="font-weight:600;color:var(--ct);">· ${escHtml(d.entidade)}</span>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--ct);margin-top:2px;">
+        ${d.total_pcs} ${d.total_pcs === 1 ? 'PC' : 'PCs'} ·
+        ${d.total_processos_parciais} ${d.total_processos_parciais === 1 ? 'processo' : 'processos'}${
+        semProc ? ` · ${semProc} sem processo` : ''}
+      </div>
+    </div>`
+
+  // ⚠️ SEM `processo_mae`, A FAIXA AZUL NÃO EXISTE — e não vira um "—" cinza. Uma faixa vazia
+  // ocupa a mesma altura e não diz nada; a ausência da faixa já diz que não há mãe gravada.
+  const mae = !d.processo_mae ? '' : `
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+      background:${ehMae ? VINC_AMBAR : VINC_AZUL};border:1.5px solid ${VINC_AZUL_BORDA};
+      border-radius:8px;padding:7px 10px;margin-bottom:8px;">
+      <span style="background:${VINC_AZUL_BORDA};color:#fff;border-radius:20px;padding:1px 9px;
+        font-size:9.5px;font-weight:800;">mãe</span>
+      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+        color:var(--te);">${escHtml(normalizarProcesso(d.processo_mae))}</span>
+      ${ehMae ? sgpeVincSeloAtual() : ''}
+    </div>`
+
+  const linhas = (d.processos || []).map(p => sgpeVincLinha(p, !ehMae)).join('')
+
+  const rodape = !semProc ? '' : `
+    <div style="margin-top:8px;font-size:11px;color:var(--ct);">
+      ${semProc} ${semProc === 1 ? 'PC sem processo gravado' : 'PCs sem processo gravado'}
+    </div>`
+
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cl);">
+      ${cabecalho}${mae}
+      <div style="display:flex;flex-direction:column;gap:5px;">${linhas}</div>
+      ${rodape}
+    </div>`
+}
+
+function sgpeVincLimpar() {
+  const el = document.getElementById('sgpeVinculo')
+  if(el) el.innerHTML = ''
+}
+
+/**
+ * Busca e desenha. Chamada pela consulta que deu certo — a pessoa não pede.
+ *
+ * ⚠️ `encontrado: false` APAGA A FAIXA E NÃO DIZ NADA (decisão do Richard). O processo pode
+ * ser de outro órgão e simplesmente não estar no acervo do GT: escrever "não encontrado" ali
+ * afirmaria uma ausência que esta rota não tem como conhecer.
+ * ⚠️ E FALHA DE REDE TAMBÉM É SILÊNCIO. A consulta ao SGPe, que é o assunto da janela, já
+ * respondeu; derrubar um erro vermelho por causa da faixa faria a pessoa desconfiar do
+ * resultado que está certo logo acima.
+ */
+async function sgpeVincCarregar(processo) {
+  const el = document.getElementById('sgpeVinculo')
+  if(!el) return
+  el.innerHTML = ''
+  try {
+    const r = await fetch(`${API_URL}/sgpe/vinculo?processo=${encodeURIComponent(processo)}`)
+    const j = await r.json()
+    const d = j && j.data
+    if(!d || !d.encontrado) return
+    // A janela pode ter sido fechada, ou outra consulta ter começado, enquanto isto voltava.
+    const alvo = document.getElementById('sgpeVinculo')
+    if(alvo) alvo.innerHTML = sgpeVincHtml(d)
+  } catch(_) { /* silêncio, de propósito — ver o aviso acima */ }
+}
+
 function sgpeConsultaAbrir(bruto) {
   if(_sgpeModal) { const c = document.getElementById('sgpeNum'); if(c) c.focus(); return }
 
@@ -5607,6 +5764,10 @@ function sgpeConsultaAbrir(bruto) {
 
       <div class="mcb" id="sgpeRolagem" style="overflow-y:auto;flex:1;min-height:0;">
         <div id="sgpeSaida"></div>
+        ${/* ⚠️ A FAIXA DE VINCULAÇÃO FICA ABAIXO DO RESULTADO, e dentro do MESMO miolo que
+              rola. Posta fora do `#sgpeRolagem` ela viraria uma segunda área fixa, e numa TR
+              de 58 processos empurraria a linha do tempo do processo para fora da janela. */''}
+        <div id="sgpeVinculo"></div>
         <div id="sgpeRecentes">${sgpeRecentesHtml()}</div>
 
         <div style="margin-top:15px;padding-top:10px;border-top:1px solid var(--cl);font-size:10.5px;color:#9AA8A0;text-align:center;">
@@ -5648,6 +5809,10 @@ function sgpeConsultaAbrir(bruto) {
     const a = (cAno.value || '').replace(/\D/g, '')
     marcarSigla(false)
     ident.innerHTML = ''
+    // ⚠️ A FAIXA SAI JUNTO COM A IDENTIFICAÇÃO, no começo de CADA consulta. Deixá-la de pé
+    // enquanto a próxima carrega mostraria a TR do processo anterior embaixo do resultado do
+    // novo — dois processos na mesma janela, um deles sem aviso de que é o antigo.
+    sgpeVincLimpar()
     if(!s || !n || !a) { out.innerHTML = sgpeCaixa('#B45309', '#FEF3C7', '#FCD34D',
       'Faltam dados', 'Informe a sigla, o número e o ano do processo.'); return }
 
@@ -5680,6 +5845,10 @@ function sgpeConsultaAbrir(bruto) {
         const p = d.processo || {}
         sgpeRecentesGravar(s, n, a, p.assunto || p.titulo || '')
         document.getElementById('sgpeRecentes').innerHTML = sgpeRecentesHtml()
+        // ⚠️ SEM `await`: a faixa é o segundo assunto da janela, e o primeiro — a situação do
+        // processo no SGPe — já está desenhado. Esperar por ela deixaria o resultado que a
+        // pessoa pediu preso atrás de uma consulta que ela nem sabe que existe.
+        sgpeVincCarregar(`${s} ${n}/${a}`)
       }
     } catch(e) {
       out.innerHTML = sgpeCaixa('#B91C1C', '#FEF2F2', '#FCA5A5', 'Não deu para consultar', escHtml(e.message))
