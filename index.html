@@ -12254,6 +12254,35 @@ const ENG_TEXTO_AVISO = 'Encaminhe o processo para FCEE/DIAD/SEENG no SGPe. Aqui
  * registrar um encaminhamento que já aconteceu no SGPe seria pedir duas vezes a mesma
  * informação, e a segunda sem ninguém para lê-la.
  */
+/**
+ * Escreve o novo estado da PC no cache da Minha Planilha e redesenha.
+ *
+ * ⚠️ SÓ A LINHA, e não a tela inteira. `buscarPlan()` refaz a consulta pesada das 54 TRs para
+ * mudar três campos de uma PC — e, pior, joga a pessoa de volta ao topo da lista, longe da
+ * parcela em que ela estava. `planAplicar` redesenha do cache que já está na memória.
+ *
+ * ⚠️ E O ESTADO VEM DA RESPOSTA, não do que a tela supôs. O servidor devolve a linha gravada
+ * com `RETURNING`; copiar de lá é o que garante que a pílula mostre o que está no banco, e não
+ * o que o clique pretendia.
+ */
+function engAplicarNaLinha(codigoPc, linhaGravada) {
+  let achou = false
+  for (const t of (window._planDadosCache || [])) {
+    for (const pa of (t.parciais || [])) {
+      for (const p of (pa.pcs || [])) {
+        if (p && p.codigo_pc === codigoPc) {
+          p.eng_situacao   = linhaGravada.eng_situacao ?? null
+          p.eng_enviada_em = linhaGravada.eng_enviada_em ?? null
+          p.eng_retorno_em = linhaGravada.eng_retorno_em ?? null
+          achou = true
+        }
+      }
+    }
+  }
+  if (achou && typeof planAplicar === 'function') planAplicar()
+  return achou
+}
+
 async function engAbrir(codigoPc, voltando) {
   const ok = await moConfirm(ENG_TEXTO_AVISO, {
     titulo: voltando ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
@@ -12264,9 +12293,31 @@ async function engAbrir(codigoPc, voltando) {
     cancelarTexto: 'Cancelar',
   })
   if (!ok) return
-  // ⚠️ A ROTA AINDA NÃO EXISTE. Este caminho é inalcançável nesta rodada — o item do menu nasce
-  // desabilitado — e fica pronto para a rodada da rota ligar sem redesenhar o modal.
-  toast('O registro da engenharia entra junto com a rota. Nada foi gravado.', 'err')
+
+  try {
+    // ⚠️ `usuario_id` VAI NO CORPO porque é ele que o carimbo do "agir como" troca — sem esse
+    // nome, a ação de quem dá suporte seria gravada como se fosse do próprio suporte.
+    const r = await fetch(`${API_URL}/pc/${encodeURIComponent(codigoPc)}/engenharia`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: voltando ? 'retornar' : 'enviar', usuario_id: U.id })
+    })
+    const j = await r.json()
+    // ⚠️ A MENSAGEM DO 409 É A DA API, palavra por palavra. Ela diz desde quando a PC está na
+    // engenharia; um texto genérico da tela ("não foi possível") mandaria o analista tentar de
+    // novo o que nunca vai funcionar.
+    if (j.error) throw new Error(j.error.message || j.error)
+
+    // ⚠️ A PÍLULA SÓ É PINTADA DEPOIS DA RESPOSTA. Pintar antes e desfazer no erro deixa a tela
+    // afirmando por um instante algo que o banco não tem — e, se a rede cair no meio, ela fica
+    // afirmando para sempre.
+    engAplicarNaLinha(codigoPc, j.data || {})
+    toast(voltando
+      ? `Retorno da engenharia registrado — ${codigoPc} voltou para a sua fila.`
+      : `Envio à engenharia registrado — ${codigoPc} saiu da fila de análise.`)
+  } catch (e) {
+    // A linha fica EXATAMENTE como estava: nada foi tocado no cache antes desta linha.
+    toast('Erro: ' + e.message, 'err')
+  }
 }
 
 let _acSecao = 0;    // quantos títulos de seção já saíram
@@ -12385,14 +12436,12 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // vai à engenharia ANTES de o analista dar o parecer. Item fora de ordem numa lista curta
     // faz a pessoa procurar.
     const naEng = d.eng_situacao === ENG_NA;
+    // ⚠️ LIGADO DESDE 31/08/2026 — a rota POST /pc/:id/engenharia está no ar. O item deixou de
+    // nascer cinza; o que sobrou do desenho anterior é o próprio modal, que não mudou.
     linhas.push(acItem(
       naEng ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
       'engenharia', `engAbrir(${pc},${naEng})`,
-      // ⚠️ CINZA COM O MOTIVO AO LADO, no padrão dos outros itens indisponíveis: a rota de
-      // registro ainda não existe. Item aceso que não conclui é a armadilha 12 — pior que o
-      // cinza, porque só se descobre depois de clicar.
-      false, 'engenharia',
-      'Em implantação — o registro entra junto com a rota'));
+      true, 'engenharia'));
 
     linhas.push(acItem('Registrar parecer', 'parecer', `pAbrirParPc(${nm})`,
       !d.baixada && !semNum && !naEng, 'parecer',
