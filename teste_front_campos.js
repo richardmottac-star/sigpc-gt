@@ -313,16 +313,34 @@ conf(ctx.campoProcValido('procEd').ok === true, 'e o salvar liberado, mesmo em m
 conf(ctx.campoProcLer('procEd') === 'SAPIENS _EXTERNO_INAT 1/2020',
      'DEFEITO REGISTRADO: campoProcLer quebra a sigla no "_"');
 
-// ⚠️ MEDICAO, NAO REGRA. Digitada no teclado ela nao se forma: o filtro do `oninput` tira
-// tudo o que nao e letra nem digito, e os dois `_` caem — sobra `SAPIENSEXTERNOINAT`, de 18,
-// que nao e a chave. Quem a produz inteira e o caminho programatico (`campoProcPor`, a
-// abertura do lapis sobre um valor ja gravado). Fica REGISTRADO, nao consertado: mexer no
-// filtro seria decisao de regra, e nao foi pedida.
-gPr.caixas.Sigla.value = 'SAPIENS_EXTERNO_INAT';
+// ⚠️ AGORA ELA SE FORMA NO TECLADO — o `_` entrou no filtro do `oninput` (Richard,
+// 31/08/2026). E a UNICA das 183 que o traz; sem isto os dois underscores caiam e sobrava
+// `SAPIENSEXTERNOINAT`, de 18, que nao e a chave e caia como sigla desconhecida.
+// ⚠️ O `_` ENTROU SO NO FILTRO. A colagem (`campoProcPartir`) e a normalizacao
+// (`normalizarProcesso`) continuam exatamente como estavam — ordem do Richard: aquela regex e
+// a chave de comparacao com o banco, validada em 95,8%, e mexer nela reabre a conciliacao.
+gPr.caixas.Sigla.value = 'sapiens_externo_inat';
 disparar('input', evento(gPr.caixas.Sigla));
-conf(gPr.caixas.Sigla.value === 'SAPIENSEXTERNOINAT', 'digitada, o filtro do oninput derruba os "_"');
-conf(ctx.campoSiglaOk('SAPIENSEXTERNOINAT') === false, 'e o que sobra nao e a chave');
+conf(gPr.caixas.Sigla.value === 'SAPIENS_EXTERNO_INAT', 'digitada, o "_" SOBREVIVE ao filtro');
+conf(ctx.campoSiglaOk(gPr.caixas.Sigla.value) === true, 'e o que fica E a chave das 183');
+conf(gPr.caixas.Sigla.classList.contains('erro') === false, 'sem borda vermelha');
+// ⚠️ E o `_` entrou so na SIGLA. Nos campos de numero ele continua caindo, como todo o resto
+// que nao e digito — sao caixas de numero do SIGEF, e ali `_` nunca quis dizer nada.
+gPr.caixas.Num.value = '19_7';
+disparar('input', evento(gPr.caixas.Num));
+conf(gPr.caixas.Num.value === '197', 'e no campo de numero o "_" continua caindo');
 ctx._SIGLAS = _sig;
+
+// ⚠️ O FORMATO DO LAPIS E A QUARTA PORTA, e ela tambem tinha de abrir. Sao quatro em serie:
+// filtro do `oninput` · `maxlength` · lista das 183 · formato do `procEdMudou`. Com `[A-Z]`
+// sem o `_`, a sigla atravessava as tres primeiras, chegava inteira, e a quarta a reprovava
+// como "Sigla invalida" com o Salvar apagado — no UNICO modal que existe para consertar o
+// acervo. Liberar so o filtro teria entregue a metade que nao se ve.
+const RE_LAPIS = /^[A-Z_]{2,20}\d{0,2}$/;
+conf(html.includes('/^[A-Z_]{2,20}\\d{0,2}$/'), 'o formato do lapis aceita `_` na sigla');
+conf(RE_LAPIS.test('SAPIENS_EXTERNO_INAT'), 'e a sigla de 20 com `_` passa por ele');
+conf(RE_LAPIS.test('ADR20') && RE_LAPIS.test('SCC') && RE_LAPIS.test('SCPARCERIAS'),
+     'sem soltar o que ja passava — ADR20, SCC, SCPARCERIAS');
 
 console.log('\n═══ 8. AO SAIR ═══');
 

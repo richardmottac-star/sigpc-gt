@@ -5100,8 +5100,14 @@ document.addEventListener('input', (e) => {
   const antes = c.el.value
   // ⚠️ A SIGLA ACEITA DÍGITO — ADR20 e SDR13 são órgãos distintos no SGPe, e a região faz
   // parte da sigla. Filtrar para letras aqui apagaria os dois dígitos enquanto se digita.
+  //
+  // ⚠️ E ACEITA `_`, por uma sigla só: `SAPIENS_EXTERNO_INAT` é a única das 183 que o traz, e
+  // sem isto ela era INDIGITÁVEL — o filtro derrubava os dois underscores e sobrava
+  // `SAPIENSEXTERNOINAT`, que não é a chave e caía como sigla desconhecida. Decisão do Richard
+  // em 31/08/2026. O `_` entra AQUI e em nenhum outro lugar: a colagem e a normalização
+  // continuam exatamente como estavam.
   c.el.value = c.cp === 'Sigla'
-    ? antes.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    ? antes.replace(/[^A-Za-z0-9_]/g, '').toUpperCase()
     : antes.replace(/[^0-9]/g, '')
   campoMarcar(c.g)
   campoRodar(c.g, 'data-muda')
@@ -5726,7 +5732,12 @@ function procEdMudou() {
   // ⚠️ 20 LETRAS + até 2 dígitos de região, e o teto de 20 vem da caixa. Um teto curto aqui
   // reprovava como "Sigla inválida" uma sigla que EXISTE — e a mensagem certa para essa seria
   // nenhuma. Quem decide se a sigla vale é a lista das 183, não este formato.
-  else if(!/^[A-Z]{2,20}\d{0,2}$/.test(sigla)) erro = 'Sigla inválida.'
+  //
+  // ⚠️ E O `_` ENTRA NA CLASSE PELO MESMO MOTIVO, não por outro. Liberado o `_` no filtro de
+  // digitação, `SAPIENS_EXTERNO_INAT` chegava inteira até aqui e ESTE formato a reprovava —
+  // "Sigla inválida" numa sigla das 183, com o Salvar apagado, no único modal que existe para
+  // consertar o acervo. É o mesmo defeito que levou `{2,10}` a `{2,11}` e a `{2,20}`.
+  else if(!/^[A-Z_]{2,20}\d{0,2}$/.test(sigla)) erro = 'Sigla inválida.'
   else if(parseInt(numero,10) <= 0) erro = 'Informe o número do processo.'
   else if(parseInt(ano,10) < 2000 || parseInt(ano,10) > 2030) erro = 'Ano fora do intervalo esperado.'
 
