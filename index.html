@@ -5575,7 +5575,10 @@ function bgMontarDoc(c) {
   const linhas = c.parciais.map(pa => pa.pcs.map((pc, idx) => `
     <tr${pc.casou ? ' class="casou"' : ''}>
       <td class="tc">${idx === 0 ? (pa.final ? 'PC final' : escHtml(pa.num) + ' de ' + c.total_parciais) : ''}</td>
-      <td class="cod">${escHtml(pc.codigo_pc)}</td>
+      ${/* ⚠️ A MARCA VAI NO CÓDIGO DA PC, e não numa coluna nova: o documento é impresso, e
+            uma coluna a mais espremeria as seis que já existem. O asterisco e a cruz são
+            explicados ao pé — marca sem legenda é ruído. */''}
+      <td class="cod">${escHtml(pc.codigo_pc)}${pc.nl_residual ? '<b>*</b>' : ''}${pc.sigef_pre_gt ? '<b>†</b>' : ''}</td>
       <td class="cod">${pc.codigo_nl ? escHtml(pc.codigo_nl) : '—'}</td>
       <td>${idx === 0 ? escHtml(normalizarProcesso(pa.processo_pc) || '—') : ''}</td>
       <td class="tc">${pc.baixada ? 'baixada' : escHtml(pc.status || '—')}</td>
@@ -5595,6 +5598,25 @@ function bgMontarDoc(c) {
         <td class="tc">${p.ci.encerrado_em ? bgData(p.ci.encerrado_em) : '—'}</td>
       </tr>`).join('')}</tbody>
     </table>` : ''
+
+  // ⚠️ OS DOIS TOTAIS SAEM DAS MESMAS LINHAS QUE FORAM IMPRESSAS, e não de uma segunda
+  // consulta: um relatório que conta por um caminho e lista por outro é um relatório que
+  // pode divergir de si mesmo — e ninguém confere um documento assinado contra o banco.
+  const todasPcs = c.parciais.flatMap(pa => pa.pcs)
+  const resid = todasPcs.filter(p => p.nl_residual)
+  const preGt = todasPcs.filter(p => p.sigef_pre_gt)
+  const trsResid = new Set(resid.map(p => p.tr || c.tr)).size
+  const obsMarcas = (!resid.length && !preGt.length) ? '' : `
+    <div class="obs">
+      ${!resid.length ? '' : `<p><b>*</b> ${resid.length} prestaç${resid.length === 1 ? 'ão marcada usa' : 'ões marcadas usam'}
+        nota de liquidação que também aparece em outra parcela da mesma transferência
+        ${trsResid === 1 ? '' : '(' + trsResid + ' transferências)'} — é o mesmo pagamento,
+        quitado em partes. Cada prestação tem código próprio e conta separadamente.</p>`}
+      ${!preGt.length ? '' : `<p><b>†</b> ${preGt.length} prestaç${preGt.length === 1 ? 'ão foi baixada' : 'ões foram baixadas'}
+        no SIGEF antes de 12/08/2025, quando o Grupo de Trabalho começou, e por isso
+        ${preGt.length === 1 ? 'sai' : 'saem'} da contagem: não
+        ${preGt.length === 1 ? 'integra' : 'integram'} a produtividade do grupo.</p>`}
+    </div>`
 
   const linkSgpe = _sgpeCache.get(c.processo_mae) || ''
 
@@ -5633,6 +5655,8 @@ td{padding:3px 5px;border:1px solid #000;vertical-align:top;}
 .cont div{flex:1;border:1px solid #000;padding:5px;text-align:center;}
 .cont b{display:block;font-size:15px;}
 .rodape{border-top:1px solid #000;margin-top:12px;padding-top:6px;font-size:8.5px;color:#333;}
+.obs{margin-top:10px;font-size:9px;color:#333;line-height:1.45;}
+.obs p{margin:3px 0;}
 .acoes{max-width:900px;margin:12px auto 0;text-align:right;}
 .acoes button{font-family:Arial;font-size:12px;font-weight:700;padding:9px 18px;margin-left:7px;
   border:none;border-radius:6px;cursor:pointer;background:#006B3C;color:#fff;}
@@ -5691,6 +5715,7 @@ td{padding:3px 5px;border:1px solid #000;vertical-align:top;}
   </table>
   ${blocoCi}
 
+  ${obsMarcas}
   <div class="rodape">
     Emitido por <b>${escHtml(U.nome)}</b> em ${carimbo} · SIGPC-GT
     ${c.parciais_casaram ? ' · destacadas em amarelo as ' + c.parciais_casaram + ' parciais localizadas pela busca' : ''}
@@ -8141,7 +8166,7 @@ async function prodCarregar() {
     const mapaStats = {}
     pcs.forEach(p => {
       if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{},conta:0,descontadas:0}
+      if(!mapaStats[p.analista_id]) mapaStats[p.analista_id] = {total:0,baixadas:0,analise:0,dilig:0,reanalise:0,noCi:0,sigef:{},conta:0,descontadas:0,preGt:0}
       const s = mapaStats[p.analista_id]
       s.total++
       // ⚠️ A CONFERÊNCIA COM O SIGEF, contada à parte de `status` — pela mesma razão do
@@ -8157,6 +8182,11 @@ async function prodCarregar() {
       // e o anel mostrava o menor — ninguém tinha percebido porque nada os comparava.
       if(p.sigef_conta === true) s.conta++
       if(p.sigef_descontada === true) s.descontadas++
+      // ⚠️ CONTADA À PARTE DAS PENDÊNCIAS, e não somada a elas: pendência é conferência em
+      // andamento, que volta a contar quando o analista declara. A baixa anterior ao GT não
+      // volta nunca — o trabalho é de antes do grupo. Misturar as duas prometeria ao analista
+      // uma recuperação que não existe.
+      if(p.sigef_pre_gt === true) s.preGt++
       if(p.status==='baixada') s.baixadas++
       else if(p.status==='analise') s.analise++
       else if(p.status==='diligencia') s.dilig++
@@ -8256,11 +8286,13 @@ function prodCardGrande(d) {
   // ciclo achou.
   const conta = d.conta == null ? baixadas : d.conta
   const descontadas = d.descontadas || 0
+  const preGt = d.preGt || 0
   const sig = d.sigef || {}
   const semReg = sig.SEM_REGISTRO_SIGEF || 0
   const verFinal = sig.VERIFICAR_FINAL || 0
   const ambar = sig.ABERTA_COM_BAIXA_SIGEF || 0
   const pendencias = semReg + verFinal + ambar
+
   // "sobe de X para Y": Y é a contagem com as pendências resolvidas — as descontadas voltam,
   // e as âmbar entram quando o parecer for registrado aqui.
   const seResolver = conta + descontadas + ambar
@@ -8315,7 +8347,7 @@ function prodCardGrande(d) {
           meta". Dizia errado: a PC pendente sai da contagem enquanto não for declarada,
           porque a CGE também não a considera. Trocar a frase sem trocar a conta teria
           deixado a tela mentindo dos dois jeitos. */''}
-    ${sigefFaixaProdutividade({ semReg, verFinal, ambar, pendencias, conta, seResolver, descontadas })}
+    ${sigefFaixaProdutividade({ semReg, verFinal, ambar, pendencias, conta, seResolver, descontadas, preGt })}
 
     ${/* A FAIXA DA PORTARIA — logo abaixo do cabeçalho, no mesmo lugar da linha do SIGEF.
           ⚠️ Ela diz "congelados", e não "encerrados": as PCs continuam com ele e o C.I. ainda
@@ -8509,9 +8541,10 @@ function prodRender(dados) {
     s.ambar += g.ABERTA_COM_BAIXA_SIGEF || 0
     s.conta += d.conta || 0
     s.descontadas += d.descontadas || 0
+    s.preGt += d.preGt || 0
     if ((g.SEM_REGISTRO_SIGEF || 0) + (g.VERIFICAR_FINAL || 0) + (g.ABERTA_COM_BAIXA_SIGEF || 0)) s.analistas++
     return s
-  }, { semReg: 0, verFinal: 0, ambar: 0, conta: 0, descontadas: 0, analistas: 0 })
+  }, { semReg: 0, verFinal: 0, ambar: 0, conta: 0, descontadas: 0, analistas: 0, preGt: 0 })
   const faixaSetorial = sigefFaixaProdutividade(
     { ...agg, seResolver: agg.conta + agg.descontadas + agg.ambar },
     {
@@ -19189,9 +19222,19 @@ function sigefPintarBotao() {
  */
 function sigefFaixaProdutividade(x, opts) {
   const o = opts || {}
-  const { semReg = 0, verFinal = 0, ambar = 0, conta = 0, seResolver = 0 } = x || {}
+  const { semReg = 0, verFinal = 0, ambar = 0, conta = 0, seResolver = 0, preGt = 0 } = x || {}
   const pendencias = semReg + verFinal + ambar
-
+  // ⚠️ A LINHA DA BAIXA ANTERIOR AO GT APARECE NOS DOIS CAMINHOS da faixa — com pendência e
+  // sem. Posta só no caminho de baixo, ela sumiria justamente para quem está com tudo
+  // conferido, que é quem mais olha o próprio número.
+  //
+  // ⚠️ E ELA NÃO ENTRA NA CONTA DE `seResolver`: não há o que resolver. O Grupo de Trabalho
+  // começou em 12/08/2025 (Portaria FCEE nº 227) e a prestação foi baixada antes disso.
+  const linhaPreGt = !preGt ? '' : `<div style="margin-top:10px;padding:9px 12px;background:#F1F4F2;
+      border-left:3px solid #9A9A94;border-radius:0 8px 8px 0;font-size:11.5px;color:#5B6B62;">
+      <b>${preGt}</b> prestaç${preGt === 1 ? 'ão baixada' : 'ões baixadas'} no SIGEF antes de
+      12/08/2025, quando o Grupo de Trabalho começou — não integra${preGt === 1 ? '' : 'm'} a
+      produtividade do período.</div>`
   // Sem pendência: a faixa vira confirmação. Ela NÃO some — sumir deixaria o analista sem
   // saber se foi conferido ou se a conferência não rodou.
   if (!pendencias) {
@@ -19200,7 +19243,7 @@ function sigefFaixaProdutividade(x, opts) {
       <span style="font-size:17px;line-height:1;">✅</span>
       <div style="font-size:12.5px;color:#27500A;font-weight:600;">
         ${o.titulo || 'Seus números estão conferidos com o extrato do SIGEF. Nenhuma pendência.'}</div>
-    </div>`
+    </div>${linhaPreGt}`
   }
 
   // ⚠️ BLOCO COM ZERO NÃO APARECE. Um "0 finais a verificar" ocuparia a mesma largura de um
@@ -19235,6 +19278,7 @@ function sigefFaixaProdutividade(x, opts) {
       ${o.semBotao ? '' : `<button class="btn-acao" style="margin-left:auto;background:#3B6D11;color:#fff;font-weight:700;"
         onclick="sigefVerPendencias()">Ver minhas pendências</button>`}
     </div>
+    ${linhaPreGt}
   </div>`
 }
 
