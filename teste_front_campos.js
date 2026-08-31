@@ -530,11 +530,53 @@ conf(norm('adr19 0011181.2017') === 'adr19 0011181.2017', 'e sem forcar maiuscul
 // Nenhum outro dos 11 valores malformados do acervo mudou de lado — medido, nao presumido.
 // ⚠️ Compensar isso e mexer na `PROC_RE`, que decide o que o analista ve. E regra, e nao foi
 // pedida. Este `conf` guarda o que ACONTECE hoje: se alguem mudar, ele reprova.
-conf(ctx.procInvalido('SCC732 3/2021') === false,
-     'EFEITO REGISTRADO: `SCC732 3/2021` (2 PCs) deixou de ser marcado invalido');
-conf(ctx.procInvalido('SCC7537') === true && ctx.procInvalido('AR355478172') === true
-  && ctx.procInvalido('ER221202154') === true && ctx.procInvalido('SCC 6579') === true,
-     'e os demais malformados continuam sendo marcados');
+// ⚠️ OS ONZE, UM A UM — nao uma amostra. A frase "nenhum outro mudou de lado" so vale se os
+// onze forem conferidos; conferir quatro e afirmar onze e a armadilha 27 na sua forma de
+// teste (lista cortada mente). A contagem de PCs vem do PROCESSOS_MALFORMADOS.csv, medida em
+// 30/08/2026, e conta so o campo `processo_pc`.
+const MALFORMADOS = [
+  ['-1',                   63, true,  'marcador de ausencia'],
+  ['AR355478172',          21, true,  'nao forma processo'],
+  ['ADR19 0011181.2017',   19, true,  'ponto no lugar da barra'],
+  // ⚠️ FALSO NEGATIVO ANTERIOR A TUDO ISTO, e NAO tocado: o ramo ADR le "1181/2017" como
+  // regiao 11 + numero 81, entao a `PROC_RE` casa e ele nunca foi marcado. Sao 19 PCs, e a
+  // sigla `ADR` sem regiao nem esta nas 183. Fica registrado; consertar e outra frente.
+  ['ADR 1181/2017',        19, false, 'FALSO NEGATIVO ANTIGO — lido como regiao 11'],
+  // ⚠️ O UNICO QUE MUDOU DE LADO com a correcao dos ramos de desistencia.
+  ['SCC732 3/2021',         2, false, 'MUDOU: era true, virou false'],
+  ['SCC7537',               2, true,  'sem ano'],
+  ['SCC 6579',              1, true,  'sem ano'],
+  ['ar355478172',           0, true,  'idem, em minuscula, no processo_mae'],
+  ['ER221202154',           0, true,  'nao forma processo'],
+  ['adr19 0011181.2017',    0, true,  'idem, em minuscula'],
+  ['Adr 1181/2017',         0, false, 'mesmo falso negativo, no processo_mae'],
+];
+conf(MALFORMADOS.length === 11, 'os 11 valores malformados distintos do acervo estao na tabela');
+for (const [valor, , esperado, nota] of MALFORMADOS) {
+  conf(ctx.procInvalido(valor) === esperado,
+       `procInvalido(${JSON.stringify(valor)}) === ${esperado}  — ${nota}`);
+}
+
+// ⚠️ E A PROVA DE QUE SO UM MUDOU E FEITA RODANDO AS DUAS VERSOES, nao afirmada em prosa.
+// O "antes" e reconstruido desfazendo as duas linhas no proprio codigo extraido — se alguem
+// mexer nos ramos de desistencia de novo, esta contagem muda e o teste avisa.
+const ANTES = (() => {
+  const src = (html.slice(iNorm, fNorm) + '\n' + html.slice(iInv, fInv))
+    .replace('if(!mRegiao) return s', 'if(!mRegiao) return `${siglaBase} ${resto}`')
+    .replace('if(!mNum) return s', 'if(!mNum) return `${siglaBase} ${resto}`');
+  const c = { console }; vm.createContext(c); vm.runInContext(src, c); return c;
+})();
+conf(ANTES.normalizarProcesso('SCC7537') === 'SCC 7537',
+     'a versao ANTERIOR foi reconstruida — ela remonta, como remontava');
+
+const viraram = MALFORMADOS.filter(([v]) => ANTES.procInvalido(v) !== ctx.procInvalido(v));
+conf(viraram.length === 1, `exatamente UM dos 11 mudou de lado`, viraram.map(x => x[0]).join(', '));
+conf(viraram.length === 1 && viraram[0][0] === 'SCC732 3/2021', 'e e o `SCC732 3/2021`');
+
+const somaPCs = (ctxo) => MALFORMADOS.reduce((n, [v, pcs]) => n + (ctxo.procInvalido(v) ? pcs : 0), 0);
+conf(somaPCs(ANTES) === 108, 'PCs marcadas invalidas ANTES: 108', somaPCs(ANTES));
+conf(somaPCs(ctx) === 106, 'PCs marcadas invalidas DEPOIS: 106', somaPCs(ctx));
+
 conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/2019') === false,
      'sem marcar de invalido o que e valido');
 
