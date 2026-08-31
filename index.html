@@ -3877,7 +3877,15 @@ function irEst() {
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:12px;">Estoque de TRs</div>
     <div class="filtros">
-      <div class="fg"><label>Busca</label><input data-colagem type="text" id="fBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:260px;" onkeydown="if(event.key==='Enter')buscar()"></div>
+      ${/* ⚠️ TR E PROCESSO TÊM CAIXA PRÓPRIA, e o campo livre ficou SÓ com entidade, NL e PC
+            (31/08/2026). Antes os cinco disputavam um campo só, e quem quisesse "a TR X com o
+            processo Y" não tinha como pedir: o termo único casava um OU outro. Agora os três
+            vão separados para a rota e se somam com AND lá — ver o aviso no `resumo_tr`.
+            ⚠️ E o placeholder do livre MUDOU junto. Deixá-lo prometendo "TR, SGPe" mandaria a
+            pessoa digitar ali o que agora tem caixa, e a busca ficaria pior do que era. */''}
+      ${campoTrHtml('fTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
+      ${campoProcHtml('fPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'buscar()' })}
+      <div class="fg"><label>Entidade, NL ou PC</label><input data-colagem type="text" id="fBusca" placeholder="Entidade, NL ou PC" style="width:200px;" onkeydown="if(event.key==='Enter')buscar()"></div>
       <div class="fg"><label>Status</label>
         <select id="fSt">
           <option value="">Todos</option>
@@ -3947,6 +3955,8 @@ async function buscar() {
   tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spin"></div>Carregando...</div></td></tr>'
 
   const busca = document.getElementById('fBusca')?.value.trim()||''
+  const trF = campoTrTermo('fTr')
+  const prF = campoProcTermo('fPr')
   const st = document.getElementById('fSt')?.value||''
   const secF = document.getElementById('fSec')?.value||''
   const sid = U.setorialFiltro
@@ -3956,6 +3966,12 @@ async function buscar() {
     if(sid) p.set('setorial_id', sid)
     else if(secF) p.set('setorial_id', secF)
     if(busca) p.set('busca', busca)
+    // ⚠️ TRÊS PARÂMETROS, e QUEM COMBINA É O SERVIDOR. A rota soma os três com AND
+    // (`GET /prestacoes_contas/resumo_tr`, 31/08/2026). Recortar aqui o que o termo único não
+    // pegou seria filtrar UMA PÁGINA de uma lista paginada, e os contadores da tela passariam
+    // a contar o pedaço — armadilha 16, na sua forma mais fácil de não perceber.
+    if(trF) p.set('tr', trF)
+    if(prF) p.set('processo', prF)
 
     // As reservas vêm em paralelo, numa rota própria e leve — de propósito NÃO no
     // `resumo_tr`, que é a consulta mais pesada da tela. Se falhar, o Estoque carrega
@@ -4172,8 +4188,13 @@ function renderPag() {
 }
 
 function pg(d) { PAG+=d; buscar() }
+// ⚠️ UM LIMPAR PARA A BARRA INTEIRA — as caixas de TR e de processo entram na mesma lista.
+// Um Limpar que esvaziasse só o campo livre deixaria o filtro de TR de pé, invisível para
+// quem acabou de clicar em "Limpar", e a lista voltaria recortada sem dizer por quê.
 function limparF() {
-  ['fBusca','fSt','fSec'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
+  ;['fBusca','fSt','fSec','fTrAno','fTrNum','fPrSigla','fPrNum','fPrAno']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='' })
+  campoMarcar(campoGrupo('fPr'))
   PAG=0; buscar()
 }
 
@@ -5048,6 +5069,54 @@ function campoProcLer(id) {
   const p = campoProcPartes(id)
   if(!p.sigla || !p.numero || p.ano.length !== 4) return ''
   return normalizarProcesso(`${p.sigla} ${p.numero}/${p.ano}`)
+}
+
+// ── OS TERMOS DE FILTRO ─────────────────────────────────────────────────────
+//
+// ⚠️ FILTRAR NÃO É CADASTRAR, e por isso estas duas NÃO são o `campoTrLer`/`campoProcLer`.
+// Aquelas exigem o campo inteiro e devolvem '' se faltar parte — é o certo para gravar. Numa
+// BARRA DE FILTRO o pedaço é o uso normal: digitar só o ano para ver as TRs de 2020, ou só a
+// sigla para ver os processos da FCEE. Se o filtro exigisse tudo, a caixa aceitaria o que
+// digitassem e devolveria a lista inteira, calada.
+//
+// O servidor casa por `ILIKE '%termo%'` (TR) e pela chave (processo), então o pedaço funciona
+// dos dois lados sem regra nova.
+
+/** '2020' -> "2020TR" · '411' -> "TR000411" · os dois -> "2020TR000411" · nada -> '' */
+function campoTrTermo(id) {
+  const p = campoTrPartes(id)
+  const a = p.ano.replace(/\D/g, ''), n = p.numero.replace(/\D/g, '')
+  if(!a && !n) return ''
+  if(!n) return a + 'TR'
+  return (a || '') + 'TR' + n.padStart(6, '0')
+}
+
+/** 'SCC' -> "SCC" · 'SCC'+'197' -> "SCC 197" · os três -> "SCC 197/2021" · nada -> '' */
+function campoProcTermo(id) {
+  const p = campoProcPartes(id)
+  if(!p.sigla && !p.numero && !p.ano) return ''
+  let t = p.sigla
+  if(p.numero) t += (t ? ' ' : '') + p.numero
+  if(p.ano) t += '/' + p.ano
+  return t
+}
+
+/**
+ * A MESMA pergunta do servidor, para as telas que filtram lista já carregada.
+ *
+ * ⚠️ ELA EXISTE PARA AS TELAS QUE **JÁ** FILTRAVAM NO NAVEGADOR — Estornar Baixas e Estornos
+ * Realizados carregam a lista inteira e recortam aqui desde sempre. Não é licença para
+ * filtrar no cliente o que o servidor pagina: ali a conta sairia de uma página só, e os
+ * contadores mentiriam (armadilha 16). O Estoque e a Minha Planilha mandam os termos à API.
+ */
+function casaFiltroCampos(p, trTermo, procTermo) {
+  if(trTermo && !String(p.tr || '').toUpperCase().includes(trTermo.toUpperCase())) return false
+  if(procTermo) {
+    const k = chaveProcesso(procTermo)
+    if(k && !(chaveProcesso(p.processo_pc).includes(k) || chaveProcesso(p.processo_mae).includes(k)))
+      return false
+  }
+  return true
 }
 
 function campoTrPor(id, bruto) {
@@ -18992,6 +19061,9 @@ let _estDados = []
 let _estSelecionados = new Set()
 let _estNomePorId = {}
 let _estBusca = ''
+// As duas caixas da barra. Guardadas ao lado do termo livre porque os três se somam com AND.
+let _estTr = ''
+let _estPr = ''
 let _estPag = 0
 const EST_PP = 50
 
@@ -19024,11 +19096,17 @@ async function irEstornar() {
           <option value="">Todos</option>
         </select>
       </div>` : ''}
-      <div class="fg"><label>Buscar</label>
-        <input data-colagem type="text" id="estBusca" placeholder="TR, SGPe, entidade, NL ou PC" oninput="estBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estBuscarAgora()" style="min-width:220px;">
+      ${campoTrHtml('estTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
+      ${campoProcHtml('estPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estBuscarAgora()' })}
+      <div class="fg"><label>Entidade, NL ou PC</label>
+        <input data-colagem type="text" id="estBusca" placeholder="Entidade, NL ou PC" oninput="estBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estBuscarAgora()" style="min-width:180px;">
       </div>
-      <div style="display:flex;align-items:flex-end;">
+      ${/* ⚠️ UM PAR DE BOTÕES PARA A BARRA INTEIRA, e o Limpar é NOVO aqui: esta tela só tinha
+            Buscar. Com três grupos na linha, sem ele a pessoa teria de apagar caixa por caixa
+            — e esquecer uma deixa a lista recortada por um filtro que ela já não vê. */''}
+      <div style="display:flex;align-items:flex-end;gap:8px;">
         ${BTN_BUSCAR('estBuscarAgora()')}
+        <button class="btn-limpar" onclick="estLimparFiltros()">✕ Limpar</button>
       </div>
     </div>
 
@@ -19110,7 +19188,7 @@ async function estCarregar() {
     }
 
     _estSelecionados = new Set()
-    _estBusca = ''
+    _estBusca = ''; _estTr = ''; _estPr = ''
     _estPag = 0
     const inpBusca = document.getElementById('estBusca')
     if(inpBusca) inpBusca.value = ''
@@ -19130,11 +19208,24 @@ async function estCarregar() {
 //
 // Os dados já estão todos em memória; filtrar aqui é instantâneo e não gera rede.
 // Os campos são os mesmos sete da API, para as duas buscas acharem a mesma coisa.
+// ⚠️ OS TRÊS SE SOMAM COM AND, como no servidor. Esta tela SEMPRE filtrou a lista já
+// carregada — não é o navegador recortando página de lista paginada (armadilha 16); é o
+// recorte local que ela faz desde que nasceu, agora com três perguntas em vez de uma.
 function estDadosFiltrados() {
-  if(!_estBusca) return _estDados
-  const b = prepararBusca(_estBusca)
-  if(!b.q) return _estDados
-  return _estDados.filter(p => casaBusca(p, b))
+  if(!_estBusca && !_estTr && !_estPr) return _estDados
+  const b = _estBusca ? prepararBusca(_estBusca) : null
+  return _estDados.filter(p =>
+    (!b || !b.q || casaBusca(p, b)) && casaFiltroCampos(p, _estTr, _estPr))
+}
+
+/** O Limpar da barra inteira: as duas caixas, o campo livre e o recorte. */
+function estLimparFiltros() {
+  ;['estBusca','estTrAno','estTrNum','estPrSigla','estPrNum','estPrAno']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = '' })
+  campoMarcar(campoGrupo('estPr'))
+  _estBusca = ''; _estTr = ''; _estPr = ''
+  _estPag = 0
+  estRender()
 }
 
 // Agrupa por NL e distribui em páginas de até EST_PP registros,
@@ -19191,6 +19282,8 @@ function estBuscarInput(v) {
 // O botão e o Enter aplicam na hora, sem esperar o debounce.
 function estBuscarAgora() {
   _estBusca = document.getElementById('estBusca')?.value || ''
+  _estTr = campoTrTermo('estTr')
+  _estPr = campoProcTermo('estPr')
   _estPag = 0
   clearTimeout(_estBuscaTimer)
   estRender()
@@ -19405,8 +19498,10 @@ async function irEstornosRealizados() {
           <option value="3">Grupo 3 — Gustavo</option>
         </select>
       </div>`:''}
-      <div class="fg"><label>Busca</label>
-        <input data-colagem type="text" id="estLogBusca" placeholder="TR, SGPe, entidade, NL ou PC" style="width:240px;" oninput="estLogBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estLogBuscarAgora()">
+      ${campoTrHtml('estLogTr', { pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
+      ${campoProcHtml('estLogPr', { modo: 'busca', pad: CAMPO_PAD_FILTRO, borda: '1px', enter: 'estLogFiltrar()' })}
+      <div class="fg"><label>Entidade, NL ou PC</label>
+        <input data-colagem type="text" id="estLogBusca" placeholder="Entidade, NL ou PC" style="width:190px;" oninput="estLogBuscarInput(this.value)" onkeydown="if(event.key==='Enter')estLogBuscarAgora()">
       </div>
       <div class="fg"><label>Analista</label>
         <select id="estLogAnalista" onchange="estLogFiltrar()">
@@ -19510,12 +19605,20 @@ function estLogFiltrar() {
   const dtIni = document.getElementById('estLogDtIni')?.value || ''
   const dtFim = document.getElementById('estLogDtFim')?.value || ''
   const b = prepararBusca(document.getElementById('estLogBusca')?.value)
+  const trT = campoTrTermo('estLogTr')
+  const prT = campoProcTermo('estLogPr')
 
   let lista = _estLogEventos
   // `_busca` e `_chaves` foram montados no carregamento com os seis campos das PCs do evento
   // — procurar por entidade ou SGPe aqui só é possível por causa deles.
   if(b.q) lista = lista.filter(ev =>
     (ev._busca||'').includes(b.q) || (!!b.chave && (ev._chaves||'').includes(b.chave)))
+  // ⚠️ AS DUAS CAIXAS USAM O MESMO `_busca`/`_chaves`, e não uma leitura própria do evento.
+  // Um evento agrupa VÁRIAS PCs, e pode ter mais de uma TR: `ev.tr` não existe, e inventar um
+  // "a primeira TR do evento" faria o filtro esconder estorno que a TR procurada tem dentro.
+  // Passar pelo mesmo texto agregado é o que mantém a resposta igual à do campo livre.
+  if(trT) { const t = termoBusca(trT); lista = lista.filter(ev => (ev._busca||'').includes(t)) }
+  if(prT) { const k = chaveProcesso(prT); if(k) lista = lista.filter(ev => (ev._chaves||'').includes(k)) }
   if(analista) lista = lista.filter(ev => String(ev.analista_id) === String(analista))
   if(dtIni) lista = lista.filter(ev => new Date(ev.data_estorno) >= new Date(dtIni+'T00:00:00'))
   if(dtFim) lista = lista.filter(ev => new Date(ev.data_estorno) <= new Date(dtFim+'T23:59:59'))
@@ -19565,8 +19668,13 @@ function estLogBuscarAgora() {
   estLogFiltrar()
 }
 
+// ⚠️ AS CAIXAS ENTRAM NA MESMA LISTA DO LIMPAR. Um Limpar que esvaziasse só o campo livre
+// deixaria o filtro de TR de pé, invisível para quem acabou de clicar em "Limpar".
 function estLogLimpar() {
-  ['estLogBusca','estLogAnalista','estLogDtIni','estLogDtFim'].forEach(id => { const el=document.getElementById(id); if(el) el.value='' })
+  ['estLogBusca','estLogAnalista','estLogDtIni','estLogDtFim',
+   'estLogTrAno','estLogTrNum','estLogPrSigla','estLogPrNum','estLogPrAno']
+    .forEach(id => { const el=document.getElementById(id); if(el) el.value='' })
+  campoMarcar(campoGrupo('estLogPr'))
   clearTimeout(_estLogBuscaTimer)
   const g = document.getElementById('estLogGrupo')
   if(g) { g.value=''; estLogCarregar(); return }

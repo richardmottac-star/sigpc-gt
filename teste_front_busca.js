@@ -26,12 +26,18 @@ if (ini < 0 || fim < 0) {
 // `addEventListener` deles — codigo que TOCA O DOM no momento em que e avaliado. Sem estes
 // cocos o `vm` derruba tudo antes da primeira checagem, e o que se ve no terminal e um
 // `ReferenceError`, nunca um "falhou": um teste que nao roda nao reprova nada.
+// ⚠️ O DOM DESTE CONTEXTO E APONTAVEL, e nao um `() => null` fixo. As funcoes do componente
+// (`campoTrTermo`, `campoProcTermo`) sao compiladas AQUI, entao o `document` que elas enxergam
+// e este — passa-las para outro contexto sem isto faz elas lerem sempre `null` e devolverem
+// vazio, e o teste "passa" medindo nada. Quem precisa delas aponta o `ctxEls` para os seus
+// campos antes de chamar.
+let ctxEls = {};
 const ctx = {
   console, Set, Map, URLSearchParams, window: {},
   API_URL: '', LOGO_SIGEF_B64: '', LOGO_SGPE_B64: '',
   fetch: async () => ({ json: async () => ({ data: {} }) }),
   document: {
-    getElementById: () => null, querySelector: () => null,
+    getElementById: (id) => ctxEls[id] || null, querySelector: () => null,
     querySelectorAll: () => [], addEventListener: () => {},
   },
 };
@@ -300,16 +306,38 @@ console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
   if (iniL < 0 || fimL < 0) {
     conf(false, 'nao achei estLogFiltrar no index.html');
   } else {
-    const ev = (id, texto) => ({ analista_id: id, data_estorno: '2026-08-01T10:00:00Z', pcs: ['x'], _busca: termoBusca(texto) });
+    // ⚠️ `_chaves` VAI JUNTO. A tela monta os dois no carregamento: `_busca` e o texto dos seis
+    // campos e `_chaves` sao as chaves de processo. A caixa do SGPe procura no SEGUNDO — um
+    // evento de fixture so com `_busca` faria o filtro de processo achar zero sempre, e o
+    // teste "passaria" provando o contrario do que se quer.
+    const ev = (id, texto, procs) => ({
+      analista_id: id, data_estorno: '2026-08-01T10:00:00Z', pcs: ['x'],
+      _busca: termoBusca(texto),
+      _chaves: (procs || []).map(p => ctx.chaveProcesso(p)).join(' '),
+    });
     const eventos = [
-      ev(4, '2020TR000657 SCC2070/2020 SCC9692/2020 APAE DE SAO JOSE 2020NL007584 2020PC000520 Richard'),
-      ev(7, '2019TR000111 FCEE1/2019 FCEE111/2019 APAE DE ICARA 2019NL000222 2019PC000333 Nayara'),
+      ev(4, '2020TR000657 SCC2070/2020 SCC9692/2020 APAE DE SAO JOSE 2020NL007584 2020PC000520 Richard',
+         ['SCC2070/2020', 'SCC9692/2020']),
+      ev(7, '2019TR000111 FCEE1/2019 FCEE111/2019 APAE DE ICARA 2019NL000222 2019PC000333 Nayara',
+         ['FCEE1/2019', 'FCEE111/2019']),
     ];
     let recebeu = null;
-    const els = { estLogBusca: { value: '' }, estLogAnalista: { value: '' }, estLogDtIni: { value: '' }, estLogDtFim: { value: '' } };
+    // ⚠️ AS DUAS CAIXAS DA BARRA ENTRAM AQUI (31/08/2026). O `estLogFiltrar` passou a somar o
+    // filtro de TR e o de processo ao termo livre, e sem estes campos no DOM de mentira ele
+    // quebrava — nao por defeito, mas porque o teste desenhava metade da tela.
+    const els = {
+      estLogBusca: { value: '' }, estLogAnalista: { value: '' },
+      estLogDtIni: { value: '' }, estLogDtFim: { value: '' },
+      estLogTrAno: { value: '' }, estLogTrNum: { value: '' },
+      estLogPrSigla: { value: '' }, estLogPrNum: { value: '' }, estLogPrAno: { value: '' },
+    };
     const ctxL = {
       console, window: {}, _estLogEventos: eventos,
       termoBusca: ctx.termoBusca, prepararBusca: ctx.prepararBusca,
+      // As funcoes REAIS do componente, nao dublês — sao elas que montam o termo parcial.
+      campoTrTermo: ctx.campoTrTermo, campoProcTermo: ctx.campoProcTermo,
+      campoTrPartes: ctx.campoTrPartes, campoProcPartes: ctx.campoProcPartes,
+      chaveProcesso: ctx.chaveProcesso,
       document: { getElementById: (id) => els[id] || null },
       estLogRenderCards: (l) => { recebeu = l; },
       estLogRenderTabela: () => {},
@@ -332,6 +360,37 @@ console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
     els.estLogAnalista.value = '4';
     conf(filtrar('APAE') === 1, 'busca combina com o filtro de analista');
     els.estLogAnalista.value = '';
+
+    // ── AS DUAS CAIXAS DA BARRA (31/08/2026) ──────────────────────────────────
+    // ⚠️ O CAMPO LIVRE NAO PERDEU NADA: as checagens de cima continuam valendo, e sao a
+    // prova de que entidade, NL e PC seguem sendo achadas por ele. O que as caixas
+    // acrescentam e poder pedir TR **e** processo ao mesmo tempo, que o termo unico nao fazia.
+    const limpar = () => { els.estLogBusca.value = '';
+      for (const k of ['estLogTrAno','estLogTrNum','estLogPrSigla','estLogPrNum','estLogPrAno'])
+        els[k].value = ''; };
+    const filtrarCampos = (o) => {
+      limpar();
+      for (const [k, v] of Object.entries(o)) els[k].value = v;
+      ctxEls = els;                 // as funcoes do componente leem o DOM do contexto de cima
+      ctxL.estLogFiltrar(); return recebeu.length;
+    };
+    conf(filtrarCampos({}) === 2, 'caixas vazias nao filtram');
+    conf(filtrarCampos({ estLogTrAno: '2020' }) === 1, 'so o ano da TR ja recorta');
+    conf(filtrarCampos({ estLogTrAno: '2020', estLogTrNum: '657' }) === 1, 'ano + numero da TR');
+    conf(filtrarCampos({ estLogPrSigla: 'FCEE' }) === 1, 'so a sigla do processo ja recorta');
+    conf(filtrarCampos({ estLogPrSigla: 'SCC', estLogPrNum: '2070', estLogPrAno: '2020' }) === 1,
+         'o processo inteiro');
+    // ⚠️ AND, NUNCA OR — a mesma regra do servidor. TR de um evento com processo do OUTRO tem
+    // de devolver ZERO; num OR devolveria dois, e a tela mostraria o contrario do pedido.
+    conf(filtrarCampos({ estLogTrAno: '2020', estLogPrSigla: 'FCEE' }) === 0,
+         'TR de um com processo do outro devolve zero — e AND, nao OR');
+    conf(filtrarCampos({ estLogTrAno: '2020', estLogPrSigla: 'SCC' }) === 1, 'e os dois do mesmo evento acham');
+    conf(filtrarCampos({ estLogBusca: 'APAE', estLogTrAno: '2019' }) === 1,
+         'o campo livre soma com as caixas');
+    conf(filtrarCampos({ estLogBusca: 'ICARA', estLogTrAno: '2020' }) === 0,
+         'e some junto quando discordam');
+    limpar();
+    ctxEls = {};   // devolve o DOM de cima ao estado neutro, para as secoes seguintes
   }
 }
 
