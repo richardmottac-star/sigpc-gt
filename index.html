@@ -12236,6 +12236,29 @@ const ENG_NA = 'na_engenharia'
 const engNaEngenharia = (p) => !!p && p.eng_situacao === ENG_NA
 
 /**
+ * O estado de engenharia de UMA PC, lido do mesmo lugar que a pílula lê.
+ *
+ * ⚠️ POR QUE ISTO EXISTE — o defeito de 31/08/2026. O menu de Ações perguntava
+ * `d.eng_situacao`, onde `d` é a resposta de `GET /parcela/acoes`; e aquela rota tem uma LISTA
+ * EXPLÍCITA de colunas no SELECT, que não inclui as três da engenharia. O campo chegava
+ * `undefined` SEMPRE, então "Registrar envio" nunca virava "Registrar retorno" e o "Desfazer"
+ * nunca aparecia — enquanto a pílula, que lê de `GET /prestacoes_contas` (`SELECT p.*`),
+ * mostrava "Na engenharia · 1 d" na mesma linha. Duas fontes para a mesma pergunta, e só uma
+ * sabia a resposta.
+ *
+ * ⚠️ A CORREÇÃO É LER DA MESMA FONTE DA PÍLULA, e não repetir a pergunta ao servidor: assim as
+ * duas não podem divergir. Isto NÃO é a tela decidindo regra (armadilha 16) — é a tela lendo um
+ * dado que o servidor já mandou, exatamente como a pílula faz.
+ */
+function engEstadoDaPc(codigoPc) {
+  for (const t of (window._planDadosCache || []))
+    for (const pa of (t.parciais || []))
+      for (const p of (pa.pcs || []))
+        if (p && p.codigo_pc === codigoPc) return p.eng_situacao || null
+  return null
+}
+
+/**
  * Dias desde o registro do envio. Devolve null sem data — não se inventa "0 dias".
  *
  * ⚠️ OS DOIS LADOS ANCORADOS AO MEIO-DIA, e o arredondamento é . Comparar a data do
@@ -12471,20 +12494,18 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // ⚠️ ENTRE A SITUAÇÃO E O PARECER, e não no fim da lista: é a ordem do fluxo real — a obra
     // vai à engenharia ANTES de o analista dar o parecer. Item fora de ordem numa lista curta
     // faz a pessoa procurar.
-    const naEng = d.eng_situacao === ENG_NA;
-    // ⚠️ LIGADO DESDE 31/08/2026 — a rota POST /pc/:id/engenharia está no ar. O item deixou de
-    // nascer cinza; o que sobrou do desenho anterior é o próprio modal, que não mudou.
+    // ⚠️ O ESTADO SAI DO CACHE DA PLANILHA, e não de `d` — ver `engEstadoDaPc`. A rota
+    // `GET /parcela/acoes` tem lista explícita de colunas e NÃO devolve as da engenharia, então
+    // `d.eng_situacao` é sempre `undefined`: era isso que deixava o menu dizendo "Registrar
+    // envio" numa PC que a pílula, ao lado, mostrava como "Na engenharia".
+    const naEng = (d.eng_situacao || engEstadoDaPc(codigoPc)) === ENG_NA;
+    // ⚠️ `d.eng_situacao` PRIMEIRO, mesmo hoje sendo sempre undefined: no dia em que a rota
+    // passar a devolver o campo, ele é a fonte melhor — vem do banco, não de um cache que pode
+    // estar velho — e esta linha não precisa mudar.
     linhas.push(acItem(
       naEng ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
       'engenharia', `engAbrir(${pc},'${naEng ? 'retornar' : 'enviar'}')`,
       true, 'engenharia'));
-
-    // ⚠️ SÓ APARECE COM A PC NA ENGENHARIA. Fora daí não há envio a desfazer, e um item cinza
-    // permanente só ocuparia espaço dizendo que não serve — é o mesmo critério do "Desfazer a
-    // puxada do C.I.", que o servidor só manda quando existe puxada.
-    if (naEng) linhas.push(acItem('Desfazer envio à engenharia', 'desfazer',
-      `engAbrir(${pc},'desfazer')`, true, 'desfaz',
-      'Apaga o registro, como se o envio nunca tivesse sido feito'));
 
     linhas.push(acItem('Registrar parecer', 'parecer', `pAbrirParPc(${nm})`,
       !d.baixada && !semNum && !naEng, 'parecer',
@@ -12507,6 +12528,19 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
 
     // ── GRUPO 2: CORREÇÕES ──────────────────────────────────────────────────
     linhas.push(acGrupo('Correções'));
+
+    // ⚠️ O DESFAZER MORA EM CORREÇÕES, não no fluxo — decisão do Richard, 31/08/2026. Ele não é
+    // um passo da análise: é o conserto de um clique errado, e é ao lado dos outros consertos
+    // que a pessoa vai procurá-lo.
+    //
+    // ⚠️ E APARECE SEMPRE, CINZA COM O MOTIVO quando não cabe. A primeira versão só o desenhava
+    // com a PC na engenharia, e item que some não ensina que existe — quem clicou por engano
+    // não descobre que dá para desfazer. É a mesma razão do "Puxar de volta do C.I.", que fica
+    // cinza dizendo "esta parcial não está no Controle Interno".
+    linhas.push(acItem('Desfazer envio à engenharia', 'desfazer',
+      `engAbrir(${pc},'desfazer')`, naEng, 'desfaz',
+      naEng ? 'Apaga o registro, como se o envio nunca tivesse sido feito'
+            : 'Esta parcial não está na engenharia.'));
 
     const c = d.corrigir_situacao || {};
     if (c.pendente)
