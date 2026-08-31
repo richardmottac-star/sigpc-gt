@@ -4110,11 +4110,14 @@ function renderEst(rows) {
       <td class="est-ent" title="${t.entidade||''}">${t.entidade||'—'}</td>
       <td style="text-align:center;">${t.total_pcs}</td>
       <td style="text-align:center;">${t.total_nls}</td>
-      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span>${
-        /* A CONFERÊNCIA COM O SIGEF no setorial. Aqui a linha é a TR agregada, então vêm os
-           CÓDIGOS das tags e a contagem — ver `sigefBadgesDeTags`. */''
-        }${(t.sigef_tags||[]).length ? `<div style="margin-top:3px;">${
-          sigefBadgesDeTags(t.sigef_tags, t.sigef_pendentes)}</div>` : ''}</td>
+      ${/* ⚠️ SÓ A PÍLULA DE SITUAÇÃO DA TR AQUI — Richard, 30/08/2026.
+            A conferência com o SIGEF é sobre a PC, e o Estoque é a lista de TRs LIVRES PARA
+            ASSUMIR: quem lê esta tela está escolhendo trabalho, não conferindo baixa. A
+            etiqueta ainda vazava da célula, encavalava no botão Assumir e quebrava a altura
+            da linha, porque esta coluna é estreita e tem `table-layout:fixed` (armadilha 24).
+            ⚠️ A conferência NÃO SUMIU DO SISTEMA: continua na Minha Planilha e no cartão da
+            parcela, que é onde há PC na mão para declarar. */''}
+      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span></td>
       <td>${acoes}</td>
     </tr>`
   })
@@ -19171,19 +19174,14 @@ function pilulasExtras(pcs, opts) {
   return [pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)].filter(Boolean).join(' ')
 }
 
-/**
- * O mesmo componente a partir dos CÓDIGOS já agregados — é como o Estoque recebe, porque
- * `GET /prestacoes_contas/resumo_tr` agrupa por TR e não devolve PC nenhuma.
- *
- * ⚠️ SEM O "?" AQUI, de propósito: sem os `codigo_pc` não há o que declarar, e um botão que
- * abrisse o modal sem alvo seria botão que aceita clique e não responde (armadilha 15). A
- * explicação continua a um clique, no cartão da parcela.
- */
-function sigefBadgesDeTags(tags, n) {
-  const lista = Object.keys(SIGEF_TAGS).filter(t => (tags || []).includes(t))
-  if (!lista.length) return ''
-  return lista.map(t => _sigefBadge(t, { mini: true, conta: lista.length === 1 && n ? ` ${n}` : '' })).join(' ')
-}
+/* ⚠️ AQUI EXISTIA `sigefBadgesDeTags` — a variante que desenhava a etiqueta a partir dos
+   CÓDIGOS agregados por TR. Ela tinha UM chamador só, a coluna STATUS do Estoque, e saiu junto
+   com ele em 30/08/2026.
+   ⚠️ REMOVIDA, NÃO COMENTADA: função sem chamador é função que ninguém revisa — é a mesma
+   regra que tirou o bloco de voz do `avisar.ps1`. Se o Estoque um dia voltar a precisar, o
+   componente é o `_sigefBadge`, que continua inteiro e é usado pelas outras duas telas.
+   ⚠️ E A CONFERÊNCIA NÃO MUDOU EM LUGAR NENHUM: `sigefBadges` (Minha Planilha e cartão da
+   parcela) e `sigefBadgesContagem` (Produtividade) seguem como estavam. */
 
 /**
  * O mesmo componente a partir de um mapa { TAG: quantas } — é como a Produtividade recebe,
