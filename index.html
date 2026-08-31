@@ -12178,6 +12178,10 @@ const AC_CORES = {
   parecer:  { fg: '#3B6D11', bg: '#EAF3DE' },
   correcao: { fg: '#BA7517', bg: '#FAEEDA' },
   desfaz:   { fg: '#C62828', bg: '#FDEBEC' },
+  // ⚠️ ENGENHARIA É NATUREZA PRÓPRIA, e não uma variação do azul de situação: o parecer da
+  // FCEE/DIAD/SEENG é de OUTRA equipe, e a PC sai da fila do analista sem sair da TR dele.
+  // Cor própria é o que faz o analista ver, na lista, que aquela linha não é com ele agora.
+  engenharia: { fg: '#5B3A8E', bg: '#F0E8FA' },
   inativo:  { fg: '#9A9A94', bg: 'var(--surface-1, #E9EDEA)' },
 };
 
@@ -12194,6 +12198,7 @@ const AC_ICONES = {
   desfazer:  '<polyline points="1 4 1 10 7 10"></polyline><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path>',
   relogio:   '<circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline>',
   mais:      '<rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>',
+  engenharia: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.7-3.7a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"></path>',
   historico: '<path d="M3 3v6h6"></path><path d="M3.5 9a9 9 0 1 0 2.1-3.4L3 9"></path><polyline points="12 8 12 12.5 15 14"></polyline>',
 };
 
@@ -12201,6 +12206,67 @@ function acIcone(nome, cor) {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${cor}"
     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
     style="display:block;">${AC_ICONES[nome] || AC_ICONES.doc}</svg>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PARECER DA ENGENHARIA — FCEE/DIAD/SEENG (30/08/2026)
+//
+//  Prestação de obra passa pelo parecer da engenharia ANTES do parecer do analista.
+//
+//  ⚠️ TRÊS REGRAS QUE NÃO SE DISCUTEM (Richard):
+//    1. A PC CONTINUA COM O ANALISTA. Não muda de dono, não sai da TR dele — some da fila de
+//       análise, não do acervo.
+//    2. Enquanto estiver na engenharia, NÃO CONTA PRODUTIVIDADE. ⚠️ O desconto NÃO está nesta
+//       rodada: entra junto com a coluna. Aqui é só desenho.
+//    3. O SISTEMA NÃO MOVE PROCESSO. Quem move é o SGPe. Aqui se REGISTRA que foi movido —
+//       por isso o modal manda encaminhar lá antes de confirmar aqui.
+//
+//  ⚠️ O ESTADO AINDA NÃO EXISTE NO BANCO. As três colunas estão aprovadas — eng_situacao,
+//  eng_enviada_em e eng_retorno_em — e vêm na rodada da rota. Até lá o servidor devolve
+//  undefined nos dois campos lidos aqui, e NADA APARECE NA TELA: é o esperado, não defeito.
+//
+//  ⚠️ E NADA É GRAVADO EM CAMPO EXISTENTE. A situacao_atual é sobrescrita pelo Salvar situação,
+//  a ci_situacao é de outra fila com dono próprio, e a sigef_declaracao é a trilha que responde
+//  à CGE. Empilhar engenharia em qualquer um desses perderia o dado no primeiro salvamento.
+// ══════════════════════════════════════════════════════════════════════════════
+const ENG_NA = 'na_engenharia'
+const engNaEngenharia = (p) => !!p && p.eng_situacao === ENG_NA
+
+/**
+ * Dias desde o registro do envio. Devolve null sem data — não se inventa "0 dias".
+ *
+ * ⚠️ OS DOIS LADOS ANCORADOS AO MEIO-DIA, e o arredondamento é . Comparar a data do
+ * envio ao meio-dia contra  fazia o contador mostrar um dia a menos toda manhã: a
+ * diferença dava 9,6 dias e o  virava 9. Diferença entre datas civis não tem hora.
+ */
+function engDias(p) {
+  const d = p && p.eng_enviada_em ? diaBr(p.eng_enviada_em) : null
+  if (!d) return null
+  const hoje = new Date(); hoje.setHours(12, 0, 0, 0)
+  return Math.max(0, Math.round((hoje.getTime() - Date.parse(d + 'T12:00:00')) / 86400000))
+}
+
+const ENG_TEXTO_AVISO = 'Encaminhe o processo para FCEE/DIAD/SEENG no SGPe. Aqui você registra '
+  + 'que fez isso, para a prestação sair da sua fila de análise.'
+
+/**
+ * O modal. ⚠️ SEM CAMPO OBRIGATÓRIO nesta versão — decisão do Richard. Pedir justificativa para
+ * registrar um encaminhamento que já aconteceu no SGPe seria pedir duas vezes a mesma
+ * informação, e a segunda sem ninguém para lê-la.
+ */
+async function engAbrir(codigoPc, voltando) {
+  const ok = await moConfirm(ENG_TEXTO_AVISO, {
+    titulo: voltando ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
+    detalhe: voltando
+      ? 'A prestação volta para a sua fila de análise e o parecer fica liberado.'
+      : 'A prestação sai da sua fila de análise enquanto estiver na engenharia. Ela continua sua: não muda de dono nem sai da TR.',
+    okTexto: voltando ? 'Registrar retorno' : 'Registrar envio',
+    cancelarTexto: 'Cancelar',
+  })
+  if (!ok) return
+  // ⚠️ A ROTA AINDA NÃO EXISTE. Este caminho é inalcançável nesta rodada — o item do menu nasce
+  // desabilitado — e fica pronto para a rodada da rota ligar sem redesenhar o modal.
+  toast('O registro da engenharia entra junto com a rota. Nada foi gravado.', 'err')
 }
 
 let _acSecao = 0;    // quantos títulos de seção já saíram
@@ -12315,9 +12381,23 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
       semNum ? 'Esta parcial não tem número — não é possível registrar'
              : (d.baixada ? 'A parcial já está baixada' : null)));
 
+    // ⚠️ ENTRE A SITUAÇÃO E O PARECER, e não no fim da lista: é a ordem do fluxo real — a obra
+    // vai à engenharia ANTES de o analista dar o parecer. Item fora de ordem numa lista curta
+    // faz a pessoa procurar.
+    const naEng = d.eng_situacao === ENG_NA;
+    linhas.push(acItem(
+      naEng ? 'Registrar retorno da engenharia' : 'Registrar envio à engenharia',
+      'engenharia', `engAbrir(${pc},${naEng})`,
+      // ⚠️ CINZA COM O MOTIVO AO LADO, no padrão dos outros itens indisponíveis: a rota de
+      // registro ainda não existe. Item aceso que não conclui é a armadilha 12 — pior que o
+      // cinza, porque só se descobre depois de clicar.
+      false, 'engenharia',
+      'Em implantação — o registro entra junto com a rota'));
+
     linhas.push(acItem('Registrar parecer', 'parecer', `pAbrirParPc(${nm})`,
-      !d.baixada && !semNum, 'parecer',
+      !d.baixada && !semNum && !naEng, 'parecer',
       semNum ? 'Esta parcial não tem número — não é possível registrar'
+             : naEng ? 'Esta prestação está na engenharia — o parecer fica liberado quando ela voltar'
              : (d.baixada ? 'A parcial já está baixada' : null)));
 
     linhas.push(acItem('Ver parecer', 'doc', `pVerParecerPc(${nm})`, !!d.baixada, 'parecer',
@@ -12900,8 +12980,14 @@ function renderPlan(rows) {
       // ── parcial em aberto
       const linhasPC = pa.pcs.map(p => {
         const procInv = procInvalido(p.processo_pc)
-        return `<tr${procInv ? ' style="background:#FAEEDA;"' : ''}>
-          <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}</td>
+        // ⚠️ A ENGENHARIA PINTA POR CIMA DO INVÁLIDO quando as duas coincidem: uma é estado do
+        // fluxo (onde a PC está agora) e a outra é defeito de cadastro. O estado manda na cor da
+        // linha; a tag do processo inválido continua visível na célula do processo.
+        const naEng = engNaEngenharia(p)
+        const fundoLinha = naEng ? ' style="background:#F0E8FA;border-left:3px solid #8E6BC4;"'
+          : procInv ? ' style="background:#FAEEDA;"' : ''
+        return `<tr${fundoLinha}>
+          <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;">${escHtml(p.codigo_pc||'—')}${naEng ? ' ' + pilulaEngenharia([p]) : ''}</td>
           <td class="proc-sgpe" style="padding:8px 10px;font-size:12px;white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}${sgpeIconeConsulta(p.processo_pc)}${procInv ? procInvalidoTag(p.processo_pc, p.codigo_pc, 'processo_pc') : ''}</td>
           <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;">${planMoedaPC(p)}</td>
           <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${prazoCelula(p.dt_limite_pc)}</td>
@@ -19169,9 +19255,30 @@ function pilulaNlResidual(pcs, opts) {
     (opts || {}).mini)
 }
 
-/** As duas, na ordem em que aparecem ao lado das etiquetas do SIGEF. */
+/**
+ * "Na engenharia · N d" — a PC está com a FCEE/DIAD/SEENG.
+ *
+ * ⚠️ O CONTADOR SÓ APARECE COM DATA. Sem eng_enviada_em a pílula sai sem o "· N d", em vez de
+ * dizer "0 d" — que afirmaria que o envio foi hoje.
+ */
+function pilulaEngenharia(pcs, opts) {
+  const alvo = (pcs || []).filter(engNaEngenharia)
+  if (!alvo.length) return ''
+  const dias = engDias(alvo[0])
+  const total = (pcs || []).length
+  const fr = (total > 1 && alvo.length < total) ? ` ${alvo.length}/${total}` : ''
+  return _pilula(`Na engenharia${dias === null ? '' : ` · ${dias} d`}${fr}`, '#3D2560', '#C9B3E8', '#8E6BC4',
+    'Na engenharia — FCEE/DIAD/SEENG',
+    'Esta prestação é de obra e está com o parecer da engenharia. Ela continua sua — não mudou '
+    + 'de dono nem saiu da TR —, mas sai da sua fila de análise e não conta produtividade '
+    + 'enquanto estiver lá. O parecer fica liberado quando o retorno for registrado.',
+    (opts || {}).mini)
+}
+
+/** As três, na ordem em que aparecem ao lado das etiquetas do SIGEF. */
 function pilulasExtras(pcs, opts) {
-  return [pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)].filter(Boolean).join(' ')
+  return [pilulaEngenharia(pcs, opts), pilulaPreGt(pcs, opts), pilulaNlResidual(pcs, opts)]
+    .filter(Boolean).join(' ')
 }
 
 /* ⚠️ AQUI EXISTIA `sigefBadgesDeTags` — a variante que desenhava a etiqueta a partir dos

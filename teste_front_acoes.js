@@ -30,7 +30,10 @@ conf(!/⋯ Ações/.test(html), 'sem os tres pontinhos no rotulo');
 // identificador nao declarado lanca ReferenceError. O `|| []` nao protegia, porque o erro
 // acontece ANTES do `||`. Isso cortava TRES itens do menu de uma vez, em silencio: Ver
 // parecer, Encaminhar ao C.I. e Historico, os tres que passavam por aquela funcao.
-conf(/async function acAbrir\(ev, codigoPc, tr, parcialNum\)/.test(html),
+// ⚠️ O `nPcs` ENTROU NA ASSINATURA em 26/08 — o modal de desfazer a puxada precisa saber
+// quantas PCs a parcela tem. O que esta checagem protege continua sendo o mesmo: que o menu
+// abra por `codigo_pc` e receba o numero da parcial do proprio cartao, sem procura-lo depois.
+conf(/async function acAbrir\(ev, codigoPc, tr, parcialNum, nPcs\)/.test(html),
      'o menu abre por codigo_pc E recebe o numero da parcial do proprio cartao');
 // ⚠️ Mede o PADRAO que quebrava, nao o nome: `(_planDados || [])`. Procurar so pelo nome
 // daria falso positivo em qualquer comentario que conte esta historia — e este arquivo conta.
@@ -65,7 +68,11 @@ conf(/title="\$\{escHtml\(motivo \|\| rotulo\)\}"/.test(html), 'todo item leva o
 // ⚠️ O MOTIVO SAIU DO TEXTO SOLTO DA LINHA e virou letra pequena SOB O ROTULO — pedido do
 // Richard, 18/08/2026. Item cinza sem explicacao e o que faz a pessoa procurar o botao que
 // sumiu; o motivo tem de estar onde o item esta.
-conf(/!ativo && motivo \? `<span style="display:block;font-size:10\.5px/.test(html),
+// ⚠️ MUDOU EM 30/08/2026: o motivo passou a 11px e a sair TAMBEM no item ativo — ha item que
+// pode ser clicado e ainda assim precisa explicar o estado (a puxada do C.I. e o caso). O que
+// esta checagem protege e o mesmo: que o motivo esteja SOB O ROTULO, em letra pequena, e nao
+// so no `title`, que so aparece para quem passa o mouse e espera.
+conf(/\$\{motivo \? `<span style="display:block;font-size:11px/.test(html),
      'e o item indisponivel mostra o motivo embaixo do rotulo, em letra pequena');
 conf(/Já existe um pedido pendente com o coordenador/.test(html),
      'pedido pendente aparece como motivo, e o item nao repete o convite');
@@ -130,15 +137,22 @@ conf(/const \[jv, jd, jc\] = await Promise\.all/.test(html),
 S('9. O QUE NAO PODE REGREDIR');
 // ⚠️ O botao do C.I. na linha da parcial foi a correcao de 13/08 que devolveu caminho a
 // 2.181 parciais. Ele esta TAMBEM no menu, mas nao pode SAIR da linha.
-const bRP = html.slice(html.indexOf('function renderPlan(rows) {'), html.indexOf('function renderPlan(rows) {') + 9000);
+// ⚠️ A JANELA E DE CARACTERES, e por isso ela CRESCE quando a funcao cresce. Ficou em 9000 ate
+// 30/08/2026, quando a linha da PC ganhou a faixa da engenharia e a segunda chamada de
+// `pBotaoAcoes` caiu para fora do recorte — o teste acusou uma regressao que nao existia.
+// Janela curta demais mede o tamanho do arquivo, nao a regra.
+const bRP = html.slice(html.indexOf('function renderPlan(rows) {'), html.indexOf('function renderPlan(rows) {') + 12000);
 // ⚠️ A DECISAO MUDOU EM 18/08/2026: o C.I. saiu da linha e foi para o menu, EM DESTAQUE.
 // O que esta secao protege continua sendo o mesmo — que ele nao suma SEM SUBSTITUTO, que foi
 // o defeito de 13/08 (2.181 parciais baixadas sem caminho para o C.I.).
 conf(!/pBotaoCI/.test(bRP), 'o botao solto do C.I. saiu da linha');
-conf(/acItem\('Encaminhar ao C\.I\.', '🏛'/.test(html), 'e o C.I. virou item do menu');
+// ⚠️ O ICONE DEIXOU DE SER EMOJI em 30/08/2026: os itens do menu passaram a usar SVG de linha,
+// nomeado por chave em `AC_ICONES` — emoji muda de forma e de tamanho a cada sistema. O que se
+// protege aqui e que o C.I. continue sendo item do menu, nao qual desenho ele tem.
+conf(/acItem\('Encaminhar ao C\.I\.', 'enviar'/.test(html), 'e o C.I. virou item do menu');
 conf((bRP.match(/pBotaoAcoes\(pa, r\.tr\)/g) || []).length === 2,
      'e o menu de acoes tambem');
-conf(/'Encaminhar ao C\.I\.', '🏛'/.test(html), 'e o C.I. tambem esta DENTRO do menu');
+conf(/'Encaminhar ao C\.I\.', 'enviar'/.test(html), 'e o C.I. tambem esta DENTRO do menu');
 // Os cinco eventos novos precisam de rotulo, senao a trilha mostra o codigo cru.
 for (const ev of ['correcao_situacao', 'puxar_ci', 'pc_nova', 'solicitacao_correcao', 'correcao_negada'])
   conf(new RegExp(`${ev}:'`).test(html), `o evento '${ev}' tem rotulo no historico`);
