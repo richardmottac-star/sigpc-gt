@@ -5727,23 +5727,25 @@ function sgpeVincLinha(p, destacar) {
   // quando elas eram blocos soltos; numa tabela, cada caixa desenha uma coluna falsa por cima
   // das de verdade e o olho perde o alinhamento. Fica o `border-top`, que é o que separa.
   //
-  // ⚠️ E O SELO "consultado" VAI NA COLUNA PARCIAIS, não ao lado do número. Em 158px o número
-  // normalizado já ocupa ~128px: o selo ali seria cortado em silêncio, ou obrigaria o número
-  // a truncar — e um processo pela metade é pior que um selo deslocado. Na mãe a coluna está
-  // vazia (foi a sua regra); na lista ele divide o espaço com os números da parcial.
+  // ⚠️ NA LISTA O SELO "consultado" FICA LOGO DEPOIS DO NÚMERO, dentro da coluna PROCESSO —
+  // decisão do Richard, e ele tem razão: em PARCIAIS o selo tomaria o lugar dos NÚMEROS DAS
+  // PARCIAIS, que é a informação daquela coluna. Na mãe é o contrário: lá PARCIAIS está
+  // vazia, e o selo tem onde ficar sem empurrar nada.
+  //
+  // ⚠️ E ELE CABE AQUI POR CAUSA DO `flex-wrap` DA CÉLULA: em 158px o número normalizado já
+  // leva ~128px, então o selo desce para a segunda linha DENTRO da coluna, em vez de vazar
+  // por cima do assunto. Sem o wrap, esta escolha cortaria o selo em silêncio.
   return `<div style="${VINC_LINHA}background:${fundo};border-top:1px solid var(--cl);">
       ${/* ⚠️ A CÉLULA QUEBRA, e isto é a armadilha 24 de novo. Com `flex:0 0 158px` ela perde a
             licença de esticar, e conteúdo que não cabe NÃO é cortado: escapa por cima da
-            coluna vizinha. E o que entra aqui é de tamanho variável — o número normalizado
-            leva ~128px dos 158, e num processo inválido vem o rótulo "processo inválido"
-            junto, e na mãe vem a etiqueta antes. Sem o `wrap`, os três casos vazam. */''}
-      <span style="${VINC_COL.processo}display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;">${num}</span>
+            coluna vizinha. E o que entra aqui é de tamanho variável — o número, mais o selo
+            do consultado, mais o rótulo "processo inválido" quando for o caso. */''}
+      <span style="${VINC_COL.processo}display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;">
+        ${num}${atual ? sgpeVincSeloAtual() : ''}
+      </span>
       ${sgpeVincMiolo(p.assunto, p.situacao_portal)}
       <span style="${VINC_COL.pcs}${VINC_CENTRO}font-size:11.5px;color:var(--ct);">${p.qtd}</span>
-      <span style="${VINC_COL.parciais}${VINC_CENTRO}font-size:11.5px;color:var(--ct);
-        display:flex;align-items:center;justify-content:center;gap:5px;">
-        ${parc ? `<span>${escHtml(parc)}</span>` : ''}${atual ? sgpeVincSeloAtual() : ''}
-      </span>
+      <span style="${VINC_COL.parciais}${VINC_CENTRO}font-size:11.5px;color:var(--ct);">${parc ? escHtml(parc) : ''}</span>
     </div>`
 }
 

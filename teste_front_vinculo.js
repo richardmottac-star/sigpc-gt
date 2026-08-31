@@ -135,7 +135,16 @@ conf(h.includes(alvoAtual), 'o processo valido sai normalizado', alvoAtual);
 // selo ao lado seria cortado em silencio ou obrigaria o numero a truncar.
 const linhaAtual = partes(h).lista.find(x => x.includes(alvoAtual)) || '';
 conf(/#FAEEDA/.test(linhaAtual), 'a linha do consultado tem o fundo bege');
-conf(/>consultado</.test(linhaAtual), 'e o selo, na mesma linha');
+// ⚠️ NA LISTA O SELO FICA NA COLUNA PROCESSO, logo depois do numero — em PARCIAIS ele
+// tomaria o lugar dos numeros das parciais, que e a informacao daquela coluna (Richard).
+// A checagem recorta a CELULA, e nao a linha: 'esta na linha' passaria com o selo em
+// qualquer uma das cinco colunas, que e o que se quer distinguir aqui.
+const celProc = (linha) => linha.slice(linha.indexOf('flex:0 0 158px'), linha.indexOf('flex:1 1 0'));
+const celPar  = (linha) => linha.slice(linha.indexOf('flex:0 0 110px'));
+conf(/>consultado</.test(celProc(linhaAtual)), 'e o selo fica na coluna PROCESSO, com o numero');
+conf(!/>consultado</.test(celPar(linhaAtual)), 'e NAO na PARCIAIS, que ali tem os numeros');
+conf(/1 a 12/.test(celPar(linhaAtual)), 'os numeros das parciais seguem inteiros na coluna deles',
+     celPar(linhaAtual).replace(/<[^>]*>/g,'').trim());
 conf((h.match(/>consultado</g) || []).length === 1, 'so UM "consultado" na faixa inteira',
      (h.match(/>consultado</g) || []).length);
 
@@ -145,6 +154,32 @@ const hm = ctx.sgpeVincHtml(comPapel('mae'));
 const blocoMae = partes(hm).mae;
 conf(/#FAEEDA/.test(blocoMae) && />mãe</.test(blocoMae), 'a faixa da mae fica ambar');
 conf(/>consultado</.test(blocoMae), 'e ganha a etiqueta "consultado" junto com a de "mãe"');
+// ⚠️ NA MAE E O CONTRARIO DA LISTA: o selo vai na coluna PARCIAIS, porque ali ela esta
+// VAZIA — a mae nao tem parcial nem PC. E o que faz as duas escolhas conviverem.
+// A checagem recorta a CELULA, como na lista — "esta na linha" passaria com o selo em
+// qualquer uma das cinco colunas, que e exatamente o que se quer distinguir.
+const celProcMae = blocoMae.slice(blocoMae.indexOf('flex:0 0 158px'), blocoMae.indexOf('flex:1 1 0'));
+const celPcsMae  = blocoMae.slice(blocoMae.indexOf('flex:0 0 52px'), blocoMae.indexOf('flex:0 0 110px'));
+const celParMae  = blocoMae.slice(blocoMae.indexOf('flex:0 0 110px'));
+conf(/>consultado</.test(celParMae), 'na mae o selo fica na coluna PARCIAIS');
+conf(!/>consultado</.test(celProcMae), 'e NAO na PROCESSO, ao contrario da lista');
+// ⚠️ E as duas colunas da direita ficam VAZIAS de conteudo proprio: a mae nao tem PC nem
+// parcial. E por estarem vazias que o selo cabe ali sem empurrar informacao nenhuma.
+//
+// ⚠️ O TEXTO DA CELULA E O QUE ESTA ENTRE AS TAGS, e nao um recorte por posicao. Cortar da
+// marca `flex:...` ate a marca seguinte termina no MEIO do `style` da celula vizinha, e o
+// residuo (`<span style="`, `52px`, `#8A5A00`) faria um `[0-9]` cru reprovar uma celula vazia.
+const textoCelula = (linha, marca) => {
+  const i = linha.indexOf(marca);
+  if (i < 0) return null;
+  const ini = linha.indexOf('>', i) + 1;
+  return linha.slice(ini, linha.indexOf('</span>', ini)).replace(/<[^>]*>/g, '').trim();
+};
+conf(textoCelula(blocoMae, 'flex:0 0 52px') === '', 'e a coluna PCS da mae fica vazia',
+     JSON.stringify(textoCelula(blocoMae, 'flex:0 0 52px')));
+conf(!/[0-9]/.test(String(textoCelula(blocoMae, 'flex:0 0 110px')).replace('consultado', '')),
+     'e a PARCIAIS nao traz numero de parcial',
+     JSON.stringify(textoCelula(blocoMae, 'flex:0 0 110px')));
 conf((hm.match(/>consultado</g) || []).length === 1, 'e ha UM so na faixa toda',
      (hm.match(/>consultado</g) || []).length);
 // O `atual: true` do SCC11160 continua vindo da rota, e mesmo assim a linha nao se destaca.
@@ -273,7 +308,7 @@ S('8b. O ASSUNTO E A SITUACAO — AS TRES COMBINACOES');
        `${iAss} < ${iSit} < ${iQtd} < ${iPar}`);
   // ⚠️ A COLUNA PCS MOSTRA SO O NUMERO — a palavra ja esta no cabecalho.
   conf(/flex:0 0 52px[^>]*>s*3s*</.test(linha), 'e PCS mostra so o numero, sem "PC"/"PCs"',
-       (linha.match(/flex:0 0 52px[sS]{0,90}/) || [''])[0]);
+       (linha.match(/flex:0 0 52px[\s\S]{0,90}/) || [''])[0]);
   // ⚠️ O `margin-left:auto` que empurrava a contagem SAIU: quem ocupa o meio agora e o
   // assunto, e um `auto` sobrando abriria um vao entre a situacao e a contagem.
   conf(!/margin-left:auto/.test(linha), 'e o margin-left:auto da contagem saiu');
