@@ -21,7 +21,20 @@ if (ini < 0 || fim < 0) {
   console.error('FALHA: nao achei o bloco de funcoes no index.html.');
   process.exit(1);
 }
-const ctx = { console };
+// ⚠️ O TRECHO EXTRAIDO CRESCEU, E A SUITE MORREU EM SILENCIO. Entre `escHtml` e
+// `carregarAnotacoes` moram hoje o logo do SGPe, os dois campos de TR/processo e os
+// `addEventListener` deles — codigo que TOCA O DOM no momento em que e avaliado. Sem estes
+// cocos o `vm` derruba tudo antes da primeira checagem, e o que se ve no terminal e um
+// `ReferenceError`, nunca um "falhou": um teste que nao roda nao reprova nada.
+const ctx = {
+  console, Set, Map, URLSearchParams, window: {},
+  API_URL: '', LOGO_SIGEF_B64: '', LOGO_SGPE_B64: '',
+  fetch: async () => ({ json: async () => ({ data: {} }) }),
+  document: {
+    getElementById: () => null, querySelector: () => null,
+    querySelectorAll: () => [], addEventListener: () => {},
+  },
+};
 vm.createContext(ctx);
 vm.runInContext(html.slice(ini, fim), ctx);
 const { semAcento, termoBusca, prepararBusca } = ctx;
@@ -221,7 +234,11 @@ console.log('\n═══ 4d. fetchListaCompleta — teto de limit nao trunca em 
     },
   };
   const iniF = html.indexOf('async function fetchListaCompleta');
-  const fimF = html.indexOf('async function carregarAnotacoes');
+  // ⚠️ O RECORTE PARA NA PROXIMA FUNCAO, E NAO LA NO `carregarAnotacoes` (31/08/2026). Este
+  // bloco CONTA requisicoes: um recorte largo passou a arrastar junto o `siglasCarregar()`
+  // dos campos novos, que tambem faz um `fetch` — e a contagem virou 3 onde a regra fala de
+  // 2. O teste nao estava errado sobre o `fetchListaCompleta`; ele estava medindo outra coisa.
+  const fimF = html.indexOf('function normalizarProcesso(str)');
   vm.createContext(ctxF);
   vm.runInContext(html.slice(iniF, fimF), ctxF);
 
@@ -266,8 +283,12 @@ console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR
        'e o cinza DIZ o que falta, no title (armadilha 15)');
   for (const c of ['a sigla', 'o número', 'o ano'])
     conf(ch.includes(`'${c}'`), `falta "${c}" quando o campo esta vazio`);
-  // A sigla nasce preenchida com SCC — o caso comum — e continua editavel.
-  conf(/id="ciSgSigla" value="SCC"/.test(html), 'a sigla nasce SCC, e o campo continua editavel');
+  // A sigla nasce preenchida com SCC — o caso comum — e continua editavel. Desde 31/08 quem
+  // desenha as tres caixas e o componente unico (`campoProcHtml`), e o padrao chega por
+  // parametro: um literal 'SCC' a mais aqui seria a quarta copia do mesmo valor.
+  conf(/campoProcHtml\('ciSg', \{ sigla: CI_SIGLA_PADRAO/.test(html.replace(/\n\s*/g, ' ')),
+       'a sigla nasce no padrao, e o campo continua editavel');
+  conf(/const CI_SIGLA_PADRAO = 'SCC'/.test(html), 'e o padrao continua sendo SCC');
 }
 
 console.log('\n═══ 4f. LOG DE ESTORNOS — busca nova ═══');
@@ -346,7 +367,15 @@ console.log('\n═══ 4g. BOTAO BUSCAR EM TODAS AS TELAS ═══');
   }
   // ⚠️ NO C.I. A BUSCA E NO ENTER OU NO BOTAO, nunca ao digitar. Cada tecla dispararia uma
   // consulta ao banco sobre 2.928 PCs — e o bloco do processo so faz sentido completo.
-  for (const id of ['ciQ', 'ciSgNum', 'ciSgAno']) {
+  //
+  // ⚠️ E O CAMPO DO PROCESSO RESPONDE AO ENTER PELO `data-enter` DO GRUPO, nao por um
+  // `onkeydown` em cada caixa (31/08/2026). Sao tres caixas: tres `onkeydown` iguais eram
+  // tres lugares para esquecer um. Quem escuta e um ouvinte delegado no `document` — por isso
+  // a conferencia mudou de forma, mas nao de conteudo: continua sendo "busca no Enter".
+  conf(/campoProcHtml\('ciSg',[\s\S]{0,220}enter: 'ciBuscarSgpe\(\)'/.test(html),
+       'ciSg busca no Enter, nao ao digitar');
+  conf(!/campoProcHtml\('ciSg',[\s\S]{0,220}oninput/.test(html), 'e nao ha busca ao digitar no processo');
+  for (const id of ['ciQ']) {
     conf(new RegExp(`id="${id}"[^>]*onkeydown=`).test(html), `${id} busca no Enter, nao ao digitar`);
   }
   for (const id of ['fBusca', 'plBusca']) {

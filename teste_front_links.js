@@ -24,7 +24,20 @@ if (ini < 0 || fimMarca < 0) {
 }
 const codigo = html.slice(ini, fimMarca);
 
-const ctx = { console };
+// ⚠️ O TRECHO EXTRAIDO CRESCEU, E A SUITE MORREU EM SILENCIO. Entre `escHtml` e
+// `carregarAnotacoes` moram hoje o logo do SGPe, os dois campos de TR/processo e os
+// `addEventListener` deles — codigo que TOCA O DOM no momento em que e avaliado. Sem estes
+// cocos o `vm` derruba tudo antes da primeira checagem, e o que se ve no terminal e um
+// `ReferenceError`, nunca um "falhou": um teste que nao roda nao reprova nada.
+const ctx = {
+  console, Set, Map, URLSearchParams, window: {},
+  API_URL: '', LOGO_SIGEF_B64: '', LOGO_SGPE_B64: '',
+  fetch: async () => ({ json: async () => ({ data: {} }) }),
+  document: {
+    getElementById: () => null, querySelector: () => null,
+    querySelectorAll: () => [], addEventListener: () => {},
+  },
+};
 vm.createContext(ctx);
 vm.runInContext(codigo, ctx);
 // `function` vira propriedade do contexto; `const` NÃO — para o Map é preciso avaliar

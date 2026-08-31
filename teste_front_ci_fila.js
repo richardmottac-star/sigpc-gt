@@ -115,20 +115,25 @@ conf(/_ciModo = 'sgpe'/.test(sg) && /_ciModo = 'geral'/.test(ge), 'e so um modo 
 // "SCC" toda vez seria atrito sem resposta a dar.
 conf(/sigla:_ciSgpe\.sigla \|\| 'SCC'/.test(ge), 'a sigla sobrevive — e o unico campo com padrao');
 
-S('6. OS TRES CAMPOS DO SGPe — CURTOS, LADO A LADO, E OS TRES OBRIGATORIOS');
-conf(/id="ciSgSigla" value="SCC" maxlength="10"/.test(B), 'a sigla nasce SCC');
-conf(/text-transform:uppercase/.test(B1), 'e sobe para maiusculas na tela');
-conf(/id="ciSgNum" maxlength="10"/.test(B), 'o numero aceita 10 digitos');
-conf(/id="ciSgAno" maxlength="4"/.test(B), 'e o ano, 4');
-// ⚠️ AS LARGURAS SAO FIXAS, E O QUE SOBRA DA LINHA FICA VAZIO (Richard, 26/08/2026).
-// Antes o Numero esticava com `flex:1 1 190px` ate ocupar a linha inteira: um campo de dez
-// digitos com 400px de largura promete um texto longo que ele nao aceita, e some com a
-// relacao entre os tres. A tela ensina o formato pelo TAMANHO de cada caixa.
-conf(/flex:0 0 80px;">\$\{rot\('Sigla'\)\}/.test(B1), 'sigla em 80px');
-conf(/flex:0 0 120px;">\$\{rot\('Número'\)\}/.test(B1), 'numero em 120px');
-conf(/flex:0 0 90px;">\$\{rot\('Ano'\)\}/.test(B1), 'ano em 90px');
-// ⚠️ SÓ NO BLOCO DO SGPe: a explicação de POR QUE o Número deixou de esticar cita a largura
-// antiga do campo, e uma busca no bloco inteiro acharia o próprio comentário.
+S('6. OS TRES CAMPOS DO SGPe — O COMPONENTE UNICO (31/08/2026)');
+// ⚠️ AS TRES CAIXAS ESCRITAS A MAO SAIRAM. Viraram `campoProcHtml('ciSg', ...)` — a MESMA
+// funcao que desenha o modal do F4, o lapis da correcao, o cadastro de PC e a caixa do F2.
+// Enquanto havia cinco escritas da mesma pergunta, o que faltasse numa delas sumia da tela
+// sem ninguem ver; era por isso que so este bloco tinha `maxlength="10"` num campo que o
+// SGPe le com 9, e so ele nao sabia dividir um processo colado inteiro.
+conf(!/id="ciSgSigla" value=/.test(B), 'as tres caixas escritas a mao sairam');
+conf(/campoProcHtml\('ciSg'/.test(B), 'e o bloco chama o componente');
+conf(/sigla: CI_SIGLA_PADRAO/.test(B1), 'a sigla continua nascendo no padrao');
+// Os ids nao mudaram — `ciSgSigla`, `ciSgNum`, `ciSgAno` saem do nome do grupo —, e e por
+// isso que `ciLimparSgpe`, `ciBuscarSgpe` e `ciBuscarGeral` nao precisaram ser tocadas.
+conf(/muda: 'ciSgpeMudou\(\)'/.test(B1), 'o botao continua acendendo com os tres, pelo `muda`');
+conf(/enter: 'ciBuscarSgpe\(\)'/.test(B1), 'e o Enter continua buscando');
+// A altura e a do vizinho: os `<select>` desta barra usam 7px 9px com borda de 1px.
+conf(/pad: CAMPO_PAD_FILTRO/.test(B1) && /borda: '1px'/.test(B1), 'com a altura dos controles desta barra');
+// ⚠️ E O QUE SOBRA DA LINHA CONTINUA VAZIO (Richard, 26/08/2026). Agora por construcao: a
+// caixa mede o numero de caracteres que aceita, e nenhuma delas pode esticar.
+// ⚠️ A busca do `flex:1 1 190px` e SO NO BLOCO DO SGPe: a explicacao de por que o Numero
+// deixou de esticar cita a largura antiga, e uma busca no bloco inteiro acharia o comentario.
 const blocoSgpe = B1.slice(B1.indexOf('Localizar pelo processo SGPe'), B1.indexOf('Ou procurar na fila'));
 conf(!/flex:1 1 190px;/.test(blocoSgpe), 'e nenhum deles estica');
 conf(/<div style="flex:1 1 0;min-width:0;"><\/div>/.test(B1), 'o espaco que sobra fica vazio');
