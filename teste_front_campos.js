@@ -54,7 +54,17 @@ if (iInv < 0 || fInv <= iInv) {
   console.error('FALHA: nao achei o PROC_RE / procInvalido no index.html.');
   process.exit(1);
 }
-const codigo = (html.slice(iNorm, fNorm) + '\n' + html.slice(iInv, fInv) + '\n' + html.slice(iComp, fComp))
+// ⚠️ O `procPartes` TAMBEM VEM JUNTO. Ele e quem preenche as tres caixas do lapis ao abrir,
+// e depende do `campoSiglaOk` do componente — testa-lo fora daqui exigiria uma segunda copia
+// da lista de siglas, que e justamente o que este arquivo inteiro existe para nao ter.
+const iPar = html.indexOf('function procPartes(bruto) {');
+const fPar = html.indexOf('\n}', html.indexOf('return { sigla: campoSiglaOk(letras)', iPar)) + 2;
+if (iPar < 0 || fPar <= iPar) {
+  console.error('FALHA: nao achei o procPartes no index.html.');
+  process.exit(1);
+}
+const codigo = (html.slice(iNorm, fNorm) + '\n' + html.slice(iInv, fInv) + '\n'
+              + html.slice(iComp, fComp) + '\n' + html.slice(iPar, fPar))
   .replace(/^(let|const) /gm, 'var ');
 
 // ── um DOM de mentira, com o minimo que o componente toca ───────────────────
@@ -579,6 +589,79 @@ conf(somaPCs(ctx) === 106, 'PCs marcadas invalidas DEPOIS: 106', somaPCs(ctx));
 
 conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/2019') === false,
      'sem marcar de invalido o que e valido');
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ 16. `procPartes` — O PROCESSO GRUDADO NO LAPIS ═══');
+//
+// ⚠️ A VERSAO ANTERIOR QUEBRAVA TODO PROCESSO GRUDADO. A regex era
+// `^([A-Za-z]+\d{0,3})...` e o `\d{0,3}` e GULOSO: comia tres digitos do NUMERO e os colava
+// na sigla. Medido no navegador em 31/08/2026, na versao publicada — `SCC14778/2021` abria o
+// lapis com sigla "SCC147" e numero "78", e com a caixa da sigla VERMELHA, acusando erro numa
+// sigla que a pessoa nunca digitou. De 55 valores reais do acervo, 31 abriam vermelhos.
+//
+// A regra: no grudado a sigla e o MAIOR PREFIXO DE LETRAS QUE ESTA NA LISTA DAS 183, e o
+// resto e o numero. Quem decide onde a sigla termina e a lista — a mesma que pinta a borda.
+ctx._SIGLAS = new Set(['SCC', 'FCEE', 'SST', 'ADR20', 'SDR13', 'SDR02', 'SCPARCERIAS',
+                       'SAPIENS', 'SAPIENS_EXTERNO_INAT']);
+const pp = (v) => { const p = ctx.procPartes(v); return `${p.sigla}|${p.numero}|${p.ano}`; };
+
+// GRUDADO — o caso que motivou tudo, e os irmaos dele no acervo.
+conf(pp('SCC14778/2021') === 'SCC|00014778|2021', 'SCC14778/2021 -> SCC · 00014778 · 2021', pp('SCC14778/2021'));
+conf(pp('SCC3538/2020') === 'SCC|00003538|2020', 'SCC3538/2020 nao vira SCC353 · 8', pp('SCC3538/2020'));
+conf(pp('FCEE390/2019') === 'FCEE|00000390|2019', 'FCEE390/2019 nao vira FCEE39 · 0', pp('FCEE390/2019'));
+conf(pp('SST1234/2020') === 'SST|00001234|2020', 'SST1234/2020 nao vira SST123 · 4', pp('SST1234/2020'));
+conf(pp('SCPARCERIAS14778/2021') === 'SCPARCERIAS|00014778|2021', 'e a sigla de 11 letras, grudada');
+
+// COM SEPARADOR — o que ja funcionava tem de continuar igual.
+conf(pp('SCC 197/2021') === 'SCC|00000197|2021', 'com espaco: SCC · 00000197 · 2021');
+conf(pp('SCC 00019172/2020') === 'SCC|00019172|2020', 'com zeros ja postos, idem');
+conf(pp('ADR20 1233/2017') === 'ADR20|00001233|2017', 'a regional mantem a regiao na sigla');
+conf(pp('SDR02 00001076/2013') === 'SDR02|00001076|2013', 'idem para SDR');
+conf(pp('SAPIENS_EXTERNO_INAT 1/2020') === 'SAPIENS_EXTERNO_INAT|00000001|2020', 'e a sigla com `_`');
+
+// ⚠️ NENHUM PREFIXO NA LISTA: sigla VAZIA, numero inteiro, e SEM vermelho. `ADR` sozinho nao
+// esta nas 183, e `AR` nao e sigla nenhuma — inventar uma seria pior que deixar a pessoa
+// completar.
+conf(pp('ADR2226792017') === '|2226792017|', 'ADR2226792017: sigla vazia, numero inteiro');
+conf(pp('AR355478172') === '|355478172|', 'AR355478172: idem');
+conf(ctx.procPartes('ADR2226792017').sigla === '', 'e sigla vazia NAO pinta vermelho (campoMarcar so marca preenchida)');
+
+// ⚠️ E NAO SE INVENTA NUMERO. "SCC732 3/2021" tem espaco no meio do numero; juntar os digitos
+// daria "7323", que nao e o numero de processo nenhum.
+conf(pp('SCC732 3/2021') === 'SCC||2021', 'texto que nao forma numero: a caixa do meio fica vazia');
+conf(pp('-1') === '||', 'o marcador de ausencia nao vira numero');
+
+// ⚠️ SEM A LISTA, degrada para o comportamento antigo do caso comum: as letras viram a sigla.
+const _s16 = ctx._SIGLAS;
+ctx._SIGLAS = null;
+conf(pp('SCC14778/2021') === 'SCC|00014778|2021', 'lista fora do ar: as letras viram a sigla, e o numero fica certo');
+ctx._SIGLAS = _s16;
+
+// ⚠️ E NENHUM DELES ABRE VERMELHO — que era o defeito relatado.
+const GRUDADOS = ['SCC14778/2021','SCC3538/2020','SCC19836/2021','FCEE390/2019','SST1234/2020',
+                  'SCC9460/2021','SCC702/2022','SCC13297/2020','ADR2226792017','AR355478172'];
+const vermelhos = GRUDADOS.filter(v => { const p = ctx.procPartes(v); return p.sigla && !ctx.campoSiglaOk(p.sigla); });
+conf(vermelhos.length === 0, 'nenhum grudado abre com a sigla vermelha', vermelhos.join(', '));
+
+console.log('\n═══ 17. O EXPANDIR DO MODAL DO SGPe (F4) ═══');
+//
+// ⚠️ MEDIDO NO NAVEGADOR, na versao publicada: o botao FUNCIONA quando o `sessionStorage`
+// responde (860px -> 1711px e de volta). Com ele bloqueado — janela anonima, cookies de
+// terceiros barrados — o `sgpeCheiaLer()` devolve `false` para sempre, o `!` do clique da
+// `true` toda vez, e a janela expande no primeiro clique e NUNCA MAIS volta: quatro cliques
+// seguidos, 1711px nos quatro.
+// O estado passou a sair do proprio elemento (`data-cheia`), que e quem sabe o tamanho que
+// tem. O `sessionStorage` continua, e continua sendo lido NA ABERTURA — que e onde ele serve.
+conf(/mc\.dataset\.cheia\s*=\s*cheia \? '1' : '0'/.test(semComent),
+     'quem aplica o tamanho carimba o estado no elemento');
+conf(/function sgpeEstaCheia\(mc\)\s*\{\s*return !!mc && mc\.dataset\.cheia === '1'/.test(semComent),
+     'e ha uma funcao que le esse estado de volta');
+conf(/const c = !sgpeEstaCheia\(mc\)/.test(semComent), 'o clique alterna a partir do ELEMENTO');
+conf(!/const c = !sgpeCheiaLer\(\)/.test(semComent), 'e nao a partir do sessionStorage');
+// ⚠️ O sessionStorage NAO saiu: ele lembra o tamanho entre janelas na mesma sessao.
+conf(/sgpeCheiaGravar\(c\)/.test(semComent), 'a escolha continua sendo gravada');
+conf(/sgpeAplicarTamanho\(mc, btExp, sgpeCheiaLer\(\)\)/.test(semComent),
+     'e continua sendo lida na ABERTURA da janela');
 
 // ════════════════════════════════════════════════════════════════════════════
 console.log(`\n=== RESULTADO: ${ok} passaram · ${falhou} falharam ===\n`);

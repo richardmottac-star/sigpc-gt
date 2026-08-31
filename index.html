@@ -5282,8 +5282,24 @@ function sgpeCheiaGravar(v) { try { sessionStorage.setItem(SGPE_CHEIA_CHAVE, v ?
 /** Aplica o tamanho à caixa e acerta o botão. UMA função, chamada na abertura e na troca — se
  *  cada caminho escrevesse o seu, a janela abriria de um jeito e alternaria para outro, e a
  *  divergência só apareceria em quem expandiu numa consulta e voltou noutra. */
+/**
+ * O estado ATUAL da janela, lido DELA MESMA — nunca do `sessionStorage`.
+ *
+ * ⚠️ MEDIDO NO NAVEGADOR EM 31/08/2026, na versão publicada: com o `sessionStorage`
+ * inacessível (janela anônima, cookies de terceiros bloqueados), o `sgpeCheiaLer()` devolve
+ * `false` PARA SEMPRE e o `sgpeCheiaGravar()` engole a escrita. O `!sgpeCheiaLer()` do clique
+ * dava `true` toda vez: a janela expandia no primeiro clique e NUNCA MAIS voltava — quatro
+ * cliques seguidos, 1711px nos quatro. O botão trocava de ícone e não fazia nada.
+ *
+ * ⚠️ O `sessionStorage` CONTINUA, e continua sendo lido — na ABERTURA, que é onde ele serve:
+ * lembrar o tamanho que a pessoa deixou. O que ele não pode mais é ser a fonte do estado de
+ * um elemento que está na tela: quem sabe se a janela está grande é a janela.
+ */
+function sgpeEstaCheia(mc) { return !!mc && mc.dataset.cheia === '1' }
+
 function sgpeAplicarTamanho(mc, bt, cheia) {
   if(!mc) return
+  mc.dataset.cheia   = cheia ? '1' : '0'
   mc.style.width     = cheia ? '98vw' : '860px'
   mc.style.maxWidth  = cheia ? '98vw' : '96vw'
   mc.style.height    = cheia ? '96vh' : ''
@@ -5589,7 +5605,9 @@ function sgpeConsultaAbrir(bruto) {
     if(f === 'ir') return consultar()
     if(f === 'limpar') return sgpeRecentesLimpar()
     if(f === 'exp') {
-      const c = !sgpeCheiaLer()
+      // ⚠️ O ESTADO SAI DA JANELA, NÃO DO `sessionStorage` — ver `sgpeEstaCheia`. Com o
+      // armazenamento bloqueado, ler dali travava o botão em "expandir" para sempre.
+      const c = !sgpeEstaCheia(mc)
       sgpeCheiaGravar(c); sgpeAplicarTamanho(mc, btExp, c)
       return
     }
@@ -5717,15 +5735,62 @@ async function procEditar(codigo_pc, campo, atual) {
   setTimeout(() => document.getElementById('procEdSigla').focus(), 60)
 }
 
-/** Quebra o texto atual nos três campos — o melhor palpite, para não digitar do zero. */
+/**
+ * Quebra o texto atual nos três campos — o melhor palpite, para não digitar do zero.
+ *
+ * ⚠️ O PROCESSO GRUDADO É A MAIORIA DO ACERVO, e a versão anterior quebrava TODOS eles.
+ * A regex era `^([A-Za-z]+\d{0,3})...` e o `\d{0,3}` é GULOSO: comia três dígitos do NÚMERO
+ * e os colava na sigla. Medido no navegador em 31/08/2026, na versão publicada:
+ *
+ *     SCC14778/2021  ->  sigla "SCC147"   numero "78"
+ *     SCC3538/2020   ->  sigla "SCC353"   numero "8"
+ *     FCEE390/2019   ->  sigla "FCEE39"   numero "0"
+ *     SST1234/2020   ->  sigla "SST123"   numero "4"
+ *
+ * E como `SCC147` não está nas 183, o lápis abria com a caixa da sigla VERMELHA, acusando um
+ * erro numa sigla que a pessoa nunca digitou — no único modal que existe para consertar o
+ * acervo. O levantamento de 30/08 conta 5.430 valores gravados na forma grudada.
+ *
+ * ⚠️ A REGRA, decidida pelo Richard: no grudado a sigla é o MAIOR PREFIXO DE LETRAS QUE ESTÁ
+ * NA LISTA DAS 183, e o resto é o número. Não é "as letras até o primeiro dígito" nem uma
+ * contagem fixa: é a lista que decide onde a sigla termina — a mesma que pinta a borda.
+ *
+ * ⚠️ E SEM A LISTA (rota fora do ar) o `campoSiglaOk` aceita tudo, então o laço casa no
+ * primeiro passo e a sigla vira o bloco inteiro de letras — que é exatamente o comportamento
+ * antigo para o caso comum. Degradar para o que já existia é melhor que degradar para nada.
+ */
 function procPartes(bruto) {
   const t = String(bruto ?? '').trim()
-  const m = /^([A-Za-z]+\d{0,3})\s*[/:. -]*\s*(\d+)\s*[/. -]\s*(\d{4})$/.exec(t)
-  if(m) return { sigla: m[1].toUpperCase(), numero: String(parseInt(m[2],10)), ano: m[3] }
-  const letras = (/^[A-Za-z]+/.exec(t)||[''])[0].toUpperCase()
-  const digitos = (t.match(/\d+/g)||[]).join('')
-  if(digitos.length > 4) return { sigla: letras, numero: '', ano: digitos.slice(-4) }
-  return { sigla: letras, numero: '', ano: '' }
+  if(!t) return { sigla: '', numero: '', ano: '' }
+
+  // O ano é o que vem depois da barra (ou do ponto usado como barra).
+  const mAno  = t.match(/^(.*?)\s*[\/.]\s*(\d{2,4})$/)
+  const corpo = (mAno ? mAno[1] : t).trim()
+  const ano   = mAno ? campoAno4(mAno[2]) : ''
+
+  // 1) COM SEPARADOR a sigla é o que vem antes dele — a região colada inclusive (ADR20 1233).
+  const mSep = corpo.match(/^([A-Za-z_]{2,20}\d{0,2})[\s.:\-]+(\d+)$/)
+  if(mSep) return { sigla: mSep[1].toUpperCase(), numero: mSep[2].padStart(8,'0'), ano }
+
+  // 2) GRUDADO: o maior prefixo que está na lista, e o resto tem de ser SÓ dígito.
+  const letras = (corpo.match(/^[A-Za-z_]+/) || [''])[0].toUpperCase()
+  for(let n = letras.length; n >= 2; n--) {
+    const resto = corpo.slice(n)
+    if(/^\d+$/.test(resto) && campoSiglaOk(letras.slice(0, n)))
+      return { sigla: letras.slice(0, n), numero: resto.padStart(8,'0'), ano }
+  }
+
+  // 3) NENHUM PREFIXO CASOU, e o texto tinha a forma letras+dígitos: a caixa da sigla fica
+  //    VAZIA e o número inteiro vai para a do meio. Vazia não pinta vermelho (o `campoMarcar`
+  //    só marca sigla preenchida), e é o certo: a pessoa completa o que falta em vez de
+  //    apagar uma sigla inventada.
+  if(letras && /^\d+$/.test(corpo.slice(letras.length)))
+    return { sigla: '', numero: corpo.slice(letras.length), ano }
+
+  // 4) O resto — texto que não forma nem sigla+número. Devolve o que dá para afirmar e NÃO
+  //    inventa número: juntar os dígitos soltos de "SCC732 3/2021" daria "7323", que não é
+  //    o número de processo nenhum.
+  return { sigla: campoSiglaOk(letras) ? letras : '', numero: '', ano }
 }
 
 /** Prévia e estado do botão. O botão nasce cinza e só acende com os três campos (armadilha 15). */
