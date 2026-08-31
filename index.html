@@ -5574,6 +5574,35 @@ const VINC_AZUL  = '#EAF1F9'      // só da mãe
 const VINC_AZUL_BORDA = '#1A4E8A'
 const VINC_RISCADO = '#8A5A00'
 
+// ── AS COLUNAS DA TABELA ────────────────────────────────────────────────────
+//
+// ⚠️ AS LARGURAS MORAM AQUI, E O CABEÇALHO E AS LINHAS LEEM DAQUI. Escrever `158px` no
+// cabeçalho e de novo em cada célula seria a mesma medida em dois lugares — e uma tabela cujo
+// título não fica em cima da coluna é pior que uma sem título nenhum, porque parece certa.
+//
+// ⚠️ E A LINHA É `flex` SEM `wrap`. Com larguras fixas e uma coluna elástica, quebrar é sempre
+// defeito: as colunas deixariam de se alinhar entre as linhas, que é a razão de a faixa ter
+// virado tabela.
+const VINC_COL = {
+  processo: 'flex:0 0 158px;',
+  assunto:  'flex:1 1 0;min-width:0;',
+  situacao: 'flex:0 0 88px;',
+  pcs:      'flex:0 0 52px;',
+  parciais: 'flex:0 0 110px;',
+}
+const VINC_LINHA = 'display:flex;align-items:center;gap:8px;padding:6px 8px;'
+const VINC_CENTRO = 'text-align:center;'
+
+/** O cabeçalho — todos os títulos centrados sobre a sua coluna, e uma linha embaixo. */
+function sgpeVincCabecalho() {
+  const th = (col, txt) => `<span style="${col}${VINC_CENTRO}font-size:10px;font-weight:700;
+    color:var(--ct);text-transform:uppercase;letter-spacing:.4px;">${txt}</span>`
+  return `<div style="${VINC_LINHA}padding-bottom:5px;border-bottom:1.5px solid var(--cb);">
+      ${th(VINC_COL.processo, 'Processo')}${th(VINC_COL.assunto, 'Assunto')}
+      ${th(VINC_COL.situacao, 'Situação')}${th(VINC_COL.pcs, 'PCs')}${th(VINC_COL.parciais, 'Parciais')}
+    </div>`
+}
+
 /**
  * "parciais 1 a 12" · "parciais 41 a 44, final" · "parciais 1, 3, 7" · "parcial 5" · "final"
  *
@@ -5597,8 +5626,11 @@ function sgpeVincParciais(lista) {
   } else {
     txt = resto.join(', ')
   }
-  const rotulo = resto.length === 1 ? 'parcial' : 'parciais'
-  return `${rotulo} ${txt}${temFinal ? ', final' : ''}`
+  // ⚠️ SÓ OS NÚMEROS, SEM A PALAVRA "parcial" (31/08/2026). Ela existia quando a informação
+  // vinha solta no meio da linha e precisava se explicar; agora há uma coluna chamada
+  // PARCIAIS em cima, e repetir a palavra em cada célula é dizer duas vezes a mesma coisa —
+  // num espaço de 110px, é a palavra ocupando o lugar dos números.
+  return `${txt}${temFinal ? ', final' : ''}`
 }
 
 /**
@@ -5665,10 +5697,10 @@ function sgpeVincMiolo(assunto, situacao) {
   // ⚠️ E o `min-width:0` continua sendo necessário ao lado disso: o padrão `min-width:auto` de
   // um item flex proíbe encolher abaixo do conteúdo, e é ele que mataria o `ellipsis`.
   return `
-      <span style="flex:1 1 0;min-width:0;font-size:11.5px;color:var(--ct);
+      <span style="${VINC_COL.assunto}font-size:11.5px;color:var(--ct);
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meio}</span>
-      <span style="flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.03em;
-        color:${s === 'ABERTO' ? 'var(--v)' : 'var(--ct)'};">${s ? escHtml(s) : ''}</span>`
+      <span style="${VINC_COL.situacao}${VINC_CENTRO}font-size:10px;font-weight:800;
+        letter-spacing:.03em;color:${s === 'ABERTO' ? 'var(--v)' : 'var(--ct)'};">${s ? escHtml(s) : ''}</span>`
 }
 
 /**
@@ -5691,17 +5723,26 @@ function sgpeVincLinha(p, destacar) {
     // mesma consulta. Texto normal, sem sublinhado — é o que diz "você está aqui".
     : sgpeVincNumero(p.processo, !atual)
   const parc = sgpeVincParciais(p.parciais)
-  return `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:${fundo};
-      border:1px solid var(--cl);border-radius:8px;padding:7px 10px;">
-      ${num}
-      ${atual ? sgpeVincSeloAtual() : ''}
-      ${/* ⚠️ A ORDEM É número · assunto · situação · contagem, e o `margin-left:auto` que
-            empurrava a contagem SAIU: agora quem ocupa o espaço do meio é o assunto, e um
-            `auto` sobrando ali abriria um vão entre a situação e a contagem. */''}
+  // ⚠️ SEM CAIXA, E COM UMA DIVISÓRIA SÓ. As bordas arredondadas de cada linha faziam sentido
+  // quando elas eram blocos soltos; numa tabela, cada caixa desenha uma coluna falsa por cima
+  // das de verdade e o olho perde o alinhamento. Fica o `border-top`, que é o que separa.
+  //
+  // ⚠️ E O SELO "consultado" VAI NA COLUNA PARCIAIS, não ao lado do número. Em 158px o número
+  // normalizado já ocupa ~128px: o selo ali seria cortado em silêncio, ou obrigaria o número
+  // a truncar — e um processo pela metade é pior que um selo deslocado. Na mãe a coluna está
+  // vazia (foi a sua regra); na lista ele divide o espaço com os números da parcial.
+  return `<div style="${VINC_LINHA}background:${fundo};border-top:1px solid var(--cl);">
+      ${/* ⚠️ A CÉLULA QUEBRA, e isto é a armadilha 24 de novo. Com `flex:0 0 158px` ela perde a
+            licença de esticar, e conteúdo que não cabe NÃO é cortado: escapa por cima da
+            coluna vizinha. E o que entra aqui é de tamanho variável — o número normalizado
+            leva ~128px dos 158, e num processo inválido vem o rótulo "processo inválido"
+            junto, e na mãe vem a etiqueta antes. Sem o `wrap`, os três casos vazam. */''}
+      <span style="${VINC_COL.processo}display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;">${num}</span>
       ${sgpeVincMiolo(p.assunto, p.situacao_portal)}
-      <span style="flex:0 0 auto;display:flex;align-items:center;gap:11px;font-size:11.5px;color:var(--ct);">
-        <span>${p.qtd} ${p.qtd === 1 ? 'PC' : 'PCs'}</span>
-        ${parc ? `<span>${escHtml(parc)}</span>` : ''}
+      <span style="${VINC_COL.pcs}${VINC_CENTRO}font-size:11.5px;color:var(--ct);">${p.qtd}</span>
+      <span style="${VINC_COL.parciais}${VINC_CENTRO}font-size:11.5px;color:var(--ct);
+        display:flex;align-items:center;justify-content:center;gap:5px;">
+        ${parc ? `<span>${escHtml(parc)}</span>` : ''}${atual ? sgpeVincSeloAtual() : ''}
       </span>
     </div>`
 }
@@ -5728,18 +5769,29 @@ function sgpeVincHtml(d) {
 
   // ⚠️ SEM `processo_mae`, A FAIXA AZUL NÃO EXISTE — e não vira um "—" cinza. Uma faixa vazia
   // ocupa a mesma altura e não diz nada; a ausência da faixa já diz que não há mãe gravada.
+  // ⚠️ A MÃE É UMA LINHA DA MESMA TABELA, e lê das mesmas `VINC_COL`. Ela guarda o fundo azul
+  // e a etiqueta, mas as colunas são as de baixo — com largura própria, o número dela não
+  // ficaria em cima do número das outras, e a tabela deixaria de ser tabela.
+  // ⚠️ PCS e PARCIAIS ficam VAZIAS: a mãe não tem PC nem parcial. É na PARCIAIS que entra o
+  // selo "consultado" quando é ela a consultada — foi a sua regra, e ali há espaço.
   const mae = !d.processo_mae ? '' : `
-    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;
-      background:${ehMae ? VINC_AMBAR : VINC_AZUL};border:1.5px solid ${VINC_AZUL_BORDA};
-      border-radius:8px;padding:7px 10px;margin-bottom:8px;">
-      <span style="background:${VINC_AZUL_BORDA};color:#fff;border-radius:20px;padding:1px 9px;
-        font-size:9.5px;font-weight:800;">mãe</span>
-      ${/* ⚠️ A MÃE TAMBÉM É LINK, menos quando é ela a consultada — mesma regra da lista. */''}
-      ${sgpeVincNumero(d.processo_mae, !ehMae)}
-      ${ehMae ? sgpeVincSeloAtual() : ''}
-      ${/* A mãe segue o mesmo formato, pela mesma função — e os campos são os DELA
-            (`mae_assunto`/`mae_situacao_portal`), que vêm do join próprio da rota. */''}
+    <div style="${VINC_LINHA}background:${ehMae ? VINC_AMBAR : VINC_AZUL};
+      border-top:1px solid var(--cl);border-left:3px solid ${VINC_AZUL_BORDA};">
+      ${/* ⚠️ A CÉLULA QUEBRA, e isto é a armadilha 24 de novo. Com `flex:0 0 158px` ela perde a
+            licença de esticar, e conteúdo que não cabe NÃO é cortado: escapa por cima da
+            coluna vizinha. E o que entra aqui é de tamanho variável — o número normalizado
+            leva ~128px dos 158, e num processo inválido vem o rótulo "processo inválido"
+            junto, e na mãe vem a etiqueta antes. Sem o `wrap`, os três casos vazam. */''}
+      <span style="${VINC_COL.processo}display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;">
+        <span style="flex:0 0 auto;background:${VINC_AZUL_BORDA};color:#fff;border-radius:20px;
+          padding:1px 8px;font-size:9.5px;font-weight:800;">mãe</span>
+        ${/* ⚠️ A MÃE TAMBÉM É LINK, menos quando é ela a consultada — mesma regra da lista. */''}
+        ${sgpeVincNumero(d.processo_mae, !ehMae)}
+      </span>
+      ${/* Os campos são os DELA (`mae_*`), que vêm do join próprio da rota. */''}
       ${sgpeVincMiolo(d.mae_assunto, d.mae_situacao_portal)}
+      <span style="${VINC_COL.pcs}"></span>
+      <span style="${VINC_COL.parciais}${VINC_CENTRO}">${ehMae ? sgpeVincSeloAtual() : ''}</span>
     </div>`
 
   const linhas = (d.processos || []).map(p => sgpeVincLinha(p, !ehMae)).join('')
@@ -5749,9 +5801,13 @@ function sgpeVincHtml(d) {
       ${semProc} ${semProc === 1 ? 'PC sem processo gravado' : 'PCs sem processo gravado'}
     </div>`
 
+  // ⚠️ O `gap` ENTRE AS LINHAS SAIU. Com um `border-top` em cada uma, o espaço abriria um vão
+  // claro entre a divisória e a linha seguinte — a divisória deixaria de dividir duas linhas e
+  // passaria a flutuar entre elas. Numa tabela, as linhas se encostam.
   return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cl);">
-      ${cabecalho}${mae}
-      <div style="display:flex;flex-direction:column;gap:5px;">${linhas}</div>
+      ${cabecalho}
+      ${sgpeVincCabecalho()}
+      <div style="display:flex;flex-direction:column;">${mae}${linhas}</div>
       ${rodape}
     </div>`
 }

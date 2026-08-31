@@ -60,6 +60,24 @@ const ctx = {
 vm.createContext(ctx);
 vm.runInContext(codigo, ctx);
 
+// ── A FAIXA VIROU TABELA (31/08/2026), E O TESTE PRECISA SEPARAR AS LINHAS ──
+//
+// ⚠️ ANTES BASTAVA CORTAR NO `flex-direction:column`, porque a mae ficava FORA do contentor
+// das linhas. Agora ela e uma linha da MESMA tabela — e um recorte que ainda a deixasse de
+// fora mediria o bloco errado, passando ou reprovando por acidente.
+//
+// Aqui as linhas sao separadas pelo estilo que TODAS compartilham, e classificadas pelo que
+// as distingue: o cabecalho tem `uppercase`, a mae tem a etiqueta.
+const LINHA_INI = 'display:flex;align-items:center;gap:8px;padding:6px 8px;';
+const partes = (h) => {
+  const bl = h.split(LINHA_INI).slice(1);
+  return {
+    cabecalho: bl.find((x) => /text-transform:uppercase/.test(x)) || '',
+    mae: bl.find((x) => />mãe</.test(x)) || '',
+    lista: bl.filter((x) => !/text-transform:uppercase/.test(x) && !/>mãe</.test(x)),
+  };
+};
+
 // ── o `data` da rota, como ela devolve ──────────────────────────────────────
 const BLOCO = {
   encontrado: true, papel: 'parcial', tr: '2020TR000623', entidade: 'APAE DE PINHALZINHO',
@@ -74,12 +92,16 @@ const comPapel = (p) => ({ ...BLOCO, papel: p });
 
 S('1. AS PARCIAIS');
 const pp = ctx.sgpeVincParciais;
-conf(pp(['1','2','3','4','5','6','7','8','9','10','11','12']) === 'parciais 1 a 12', 'contiguas viram intervalo', pp(['1','2','3']));
-conf(pp(['41','42','43','44','final']) === 'parciais 41 a 44, final', 'e a final vai depois do intervalo', pp(['41','42','43','44','final']));
+// ⚠️ SO OS NUMEROS, SEM A PALAVRA (31/08/2026): ha uma coluna chamada PARCIAIS em cima, e
+// repetir a palavra em cada celula e dizer duas vezes a mesma coisa — em 110px, e a palavra
+// ocupando o lugar dos numeros.
+conf(pp(['1','2','3','4','5','6','7','8','9','10','11','12']) === '1 a 12', 'contiguas viram intervalo', pp(['1','2','3']));
+conf(pp(['41','42','43','44','final']) === '41 a 44, final', 'e a final vai depois do intervalo', pp(['41','42','43','44','final']));
 // ⚠️ NAO CONTIGUAS SAO LISTADAS, e nao viram "1 a 7": o intervalo afirmaria que a 3 esta la.
-conf(pp(['1','3','7']) === 'parciais 1, 3, 7', 'nao contiguas saem como estao', pp(['1','3','7']));
-conf(pp(['10','2','1']) === 'parciais 1, 2, 10', 'e saem ordenadas por NUMERO, nao por texto', pp(['10','2','1']));
-conf(pp(['5']) === 'parcial 5', 'uma so vira singular', pp(['5']));
+conf(pp(['1','3','7']) === '1, 3, 7', 'nao contiguas saem como estao', pp(['1','3','7']));
+conf(pp(['10','2','1']) === '1, 2, 10', 'e saem ordenadas por NUMERO, nao por texto', pp(['10','2','1']));
+conf(pp(['5']) === '5', 'uma so sai sozinha', pp(['5']));
+conf(!/parcia/i.test(pp(['1','2']) + pp(['5']) + pp(['final'])), 'e a palavra nao aparece em lugar nenhum');
 conf(pp(['final']) === 'final', 'so a final');
 conf(pp([]) === '' && pp(null) === '', 'lista vazia nao escreve nada');
 
@@ -100,8 +122,7 @@ conf(/>mãe</.test(h), 'tem a etiqueta "mãe"');
 conf(h.includes('#EAF1F9'), 'e fundo azul claro quando o consultado e um parcial');
 conf(!/>mãe</.test(ctx.sgpeVincHtml({ ...BLOCO, processo_mae: null })), 'sem processo_mae, a faixa NAO aparece');
 // ⚠️ AZUL E SO DA MAE — nenhuma linha da lista o usa.
-const linhasSo = h.slice(h.indexOf('flex-direction:column'));
-conf(!linhasSo.includes('#EAF1F9'), 'e o azul nao vaza para a lista');
+conf(partes(h).lista.every(x => !x.includes('#EAF1F9')), 'e o azul nao vaza para a lista');
 
 S('4. O CONSULTADO');
 conf(h.includes('#FAEEDA') && />consultado</.test(h), 'o atual leva fundo ambar e a etiqueta');
@@ -110,22 +131,24 @@ conf(h.includes('#FAEEDA') && />consultado</.test(h), 'o atual leva fundo ambar 
 // (secao 6), porque ali normalizar seria a tela consertando texto que ela nao entendeu.
 const alvoAtual = ctx.normalizarProcesso('SCC11160/2020');
 conf(h.includes(alvoAtual), 'o processo valido sai normalizado', alvoAtual);
-const iAtual = h.indexOf(alvoAtual);
-const linhaAtual = h.slice(Math.max(0, iAtual - 400), iAtual + 400);
-conf(/#FAEEDA/.test(linhaAtual) && />consultado</.test(linhaAtual), 'e e a linha do processo consultado');
+// ⚠️ O SELO FOI PARA A COLUNA PARCIAIS: em 158px o numero normalizado ja ocupa ~128px, e o
+// selo ao lado seria cortado em silencio ou obrigaria o numero a truncar.
+const linhaAtual = partes(h).lista.find(x => x.includes(alvoAtual)) || '';
+conf(/#FAEEDA/.test(linhaAtual), 'a linha do consultado tem o fundo bege');
+conf(/>consultado</.test(linhaAtual), 'e o selo, na mesma linha');
 conf((h.match(/>consultado</g) || []).length === 1, 'so UM "consultado" na faixa inteira',
      (h.match(/>consultado</g) || []).length);
 
 S('5. CONSULTANDO PELA MAE');
 // ⚠️ O AMBAR VAI PARA A FAIXA AZUL, e NENHUMA linha da lista se destaca (decisao do Richard).
 const hm = ctx.sgpeVincHtml(comPapel('mae'));
-const blocoMae = hm.slice(0, hm.indexOf('flex-direction:column'));
+const blocoMae = partes(hm).mae;
 conf(/#FAEEDA/.test(blocoMae) && />mãe</.test(blocoMae), 'a faixa da mae fica ambar');
 conf(/>consultado</.test(blocoMae), 'e ganha a etiqueta "consultado" junto com a de "mãe"');
 conf((hm.match(/>consultado</g) || []).length === 1, 'e ha UM so na faixa toda',
      (hm.match(/>consultado</g) || []).length);
 // O `atual: true` do SCC11160 continua vindo da rota, e mesmo assim a linha nao se destaca.
-const listaMae = hm.slice(hm.indexOf('flex-direction:column'));
+const listaMae = partes(hm).lista.join('');
 conf(!/>consultado</.test(listaMae), 'nenhuma linha da lista fica destacada, mesmo com atual=true');
 
 S('6. O PROCESSO INVALIDO');
@@ -136,6 +159,13 @@ conf(/line-through/.test(linhaInv), 'o numero sai riscado');
 conf(/#8A5A00/.test(linhaInv), 'em #8A5A00');
 conf(/processo inválido/.test(linhaInv), 'com o texto "processo inválido"');
 conf(/#FAEEDA/.test(linhaInv), 'e fundo #FAEEDA');
+// ⚠️ A CELULA DO PROCESSO QUEBRA — armadilha 24. Com `flex:0 0 158px` ela perde a licenca de
+// esticar, e o que nao cabe NAO e cortado: escapa por cima da coluna vizinha. O numero ja
+// leva ~128px dos 158, e aqui vem o rotulo "processo invalido" junto.
+conf(/flex:0 0 158px[^"]*flex-wrap:wrap/.test(linhaInv), 'e a celula do processo pode quebrar');
+conf((h.match(/flex:0 0 158px[^"]*flex-wrap:wrap/g) || []).length === 4,
+     'nas quatro celulas de processo — mae e as tres linhas',
+     (h.match(/flex:0 0 158px[^"]*flex-wrap:wrap/g) || []).length);
 conf(linhaInv.includes('AR355478172'), 'e o valor CRU, sem a tela tentar consertar');
 // ⚠️ INVALIDO QUE TAMBEM E O CONSULTADO MOSTRA AS DUAS COISAS — o fundo e o mesmo, e e a
 // ETIQUETA que separa (decisao do Richard).
@@ -224,22 +254,31 @@ S('8b. O ASSUNTO E A SITUACAO — AS TRES COMBINACOES');
   conf(!/flex:1 1 auto/.test(c1), 'e NAO com base auto, que faria a linha quebrar');
   conf(/text-overflow:ellipsis/.test(c1), 'e corta com reticencias');
   conf(/title="PRESTACAO DE CONTAS DE CONVENIO"/.test(c1), 'com o texto inteiro no title');
-  conf(/flex:0 0 auto/.test(c1.slice(c1.indexOf('ABERTO') - 200)), 'e a situacao nao encolhe');
+  // ⚠️ AS LARGURAS SAO AS DA TABELA, e saem do VINC_COL — nao ha px escrito na celula.
+  conf(/flex:0 0 88px/.test(c1.slice(c1.indexOf('ABERTO') - 260)), 'a situacao tem os 88px da coluna');
+  conf(/text-align:center/.test(c1.slice(c1.indexOf('ABERTO') - 260)), 'e vem centrada');
 
   // ── a ordem na linha, e na mae ────────────────────────────────────────────
   const hL = ctx.sgpeVincHtml({ ...BLOCO,
     processos: [{ processo: 'SCC9460/2021', qtd: 3, parciais: ['1'], atual: false,
                   assunto: 'ASSUNTO DA PARCIAL', situacao_portal: 'ABERTO' }],
     mae_assunto: 'ASSUNTO DA MAE', mae_situacao_portal: 'ARQUIVADO' });
-  const linha = hL.slice(hL.indexOf('SCC 00009460/2021'));
-  const iAss = linha.indexOf('ASSUNTO DA PARCIAL'), iSit = linha.indexOf('>ABERTO<'), iQtd = linha.indexOf('3 PCs');
-  conf(iAss > 0 && iSit > iAss && iQtd > iSit, 'a ordem e numero · assunto · situacao · PCs',
-       `${iAss} < ${iSit} < ${iQtd}`);
+  const linha = partes(hL).lista.find(x => x.includes('SCC 00009460/2021')) || '';
+  const iAss = linha.indexOf('ASSUNTO DA PARCIAL');
+  const iSit = linha.indexOf('>ABERTO<');
+  const iQtd = linha.indexOf('flex:0 0 52px');
+  const iPar = linha.indexOf('flex:0 0 110px');
+  conf(iAss > 0 && iSit > iAss && iQtd > iSit && iPar > iQtd,
+       'a ordem e processo · assunto · situacao · PCs · parciais',
+       `${iAss} < ${iSit} < ${iQtd} < ${iPar}`);
+  // ⚠️ A COLUNA PCS MOSTRA SO O NUMERO — a palavra ja esta no cabecalho.
+  conf(/flex:0 0 52px[^>]*>s*3s*</.test(linha), 'e PCS mostra so o numero, sem "PC"/"PCs"',
+       (linha.match(/flex:0 0 52px[sS]{0,90}/) || [''])[0]);
   // ⚠️ O `margin-left:auto` que empurrava a contagem SAIU: quem ocupa o meio agora e o
   // assunto, e um `auto` sobrando abriria um vao entre a situacao e a contagem.
   conf(!/margin-left:auto/.test(linha), 'e o margin-left:auto da contagem saiu');
   // A mae usa a MESMA funcao, com os campos DELA.
-  const blocoMae = hL.slice(0, hL.indexOf('flex-direction:column'));
+  const blocoMae = partes(hL).mae;
   conf(/ASSUNTO DA MAE/.test(blocoMae) && />ARQUIVADO</.test(blocoMae), 'a mae mostra o assunto e a situacao DELA');
   conf(!/ASSUNTO DA PARCIAL/.test(blocoMae), 'e nao os do processo da lista');
   conf(/sgpeVincMiolo\(d\.mae_assunto, d\.mae_situacao_portal\)/.test(semComent),
@@ -279,14 +318,13 @@ S('9b. OS NUMEROS SAO LINK');
   conf(/line-through/.test(lInv) && /#FAEEDA/.test(lInv), 'e mantem o tratamento bege riscado');
 
   // ⚠️ A MAE E LINK QUANDO NAO E A CONSULTADA, e deixa de ser quando e.
-  const maeParcial = hL.slice(0, hL.indexOf('flex-direction:column'));
+  const maeParcial = partes(hL).mae;
   conf(/data-f="vinc"/.test(maeParcial), 'a mae e link quando o consultado e um parcial');
   const maeMae = ctx.sgpeVincHtml(comPapel('mae'));
-  conf(!/data-f="vinc"/.test(maeMae.slice(0, maeMae.indexOf('flex-direction:column'))),
-       'e deixa de ser link quando ela mesma e a consultada');
+  conf(!/data-f="vinc"/.test(partes(maeMae).mae), 'e deixa de ser link quando ela mesma e a consultada');
 
   // ⚠️ CONSULTANDO PELA MAE, a lista inteira vira link — nenhuma linha e a consultada.
-  const listaMae2 = maeMae.slice(maeMae.indexOf('flex-direction:column'));
+  const listaMae2 = partes(maeMae).lista.join('');
   conf((listaMae2.match(/data-f="vinc"/g) || []).length === 2,
        'e as duas linhas validas da lista viram link (a invalida nao)',
        (listaMae2.match(/data-f="vinc"/g) || []).length);
