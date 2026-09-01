@@ -799,25 +799,34 @@ const GRUDADOS = ['SCC14778/2021','SCC3538/2020','SCC19836/2021','FCEE390/2019',
 const vermelhos = GRUDADOS.filter(v => { const p = ctx.procPartes(v); return p.sigla && !ctx.campoSiglaOk(p.sigla); });
 conf(vermelhos.length === 0, 'nenhum grudado abre com a sigla vermelha', vermelhos.join(', '));
 
-console.log('\n═══ 17. O EXPANDIR DO MODAL DO SGPe (F4) ═══');
+console.log('\n═══ 17. O EXPANDIR DO MODAL DO SGPe VIROU O MAXIMIZAR DA JANELA ═══');
 //
-// ⚠️ MEDIDO NO NAVEGADOR, na versao publicada: o botao FUNCIONA quando o `sessionStorage`
-// responde (860px -> 1711px e de volta). Com ele bloqueado — janela anonima, cookies de
-// terceiros barrados — o `sgpeCheiaLer()` devolve `false` para sempre, o `!` do clique da
-// `true` toda vez, e a janela expande no primeiro clique e NUNCA MAIS volta: quatro cliques
-// seguidos, 1711px nos quatro.
-// O estado passou a sair do proprio elemento (`data-cheia`), que e quem sabe o tamanho que
-// tem. O `sessionStorage` continua, e continua sendo lido NA ABERTURA — que e onde ele serve.
-conf(/mc\.dataset\.cheia\s*=\s*cheia \? '1' : '0'/.test(semComent),
-     'quem aplica o tamanho carimba o estado no elemento');
-conf(/function sgpeEstaCheia\(mc\)\s*\{\s*return !!mc && mc\.dataset\.cheia === '1'/.test(semComent),
-     'e ha uma funcao que le esse estado de volta');
-conf(/const c = !sgpeEstaCheia\(mc\)/.test(semComent), 'o clique alterna a partir do ELEMENTO');
-conf(!/const c = !sgpeCheiaLer\(\)/.test(semComent), 'e nao a partir do sessionStorage');
-// ⚠️ O sessionStorage NAO saiu: ele lembra o tamanho entre janelas na mesma sessao.
-conf(/sgpeCheiaGravar\(c\)/.test(semComent), 'a escolha continua sendo gravada');
-conf(/sgpeAplicarTamanho\(mc, btExp, sgpeCheiaLer\(\)\)/.test(semComent),
-     'e continua sendo lida na ABERTURA da janela');
+// ⚠️ ESTA SECAO TESTAVA O BOTAO ⤢ DO SGPe, E ELE SAIU EM 31/08/2026 — no mesmo dia em que
+// foi consertado. O modal virou JANELA FLUTUANTE e ganhou os tres botoes que as cinco
+// janelas tem; dois botoes de maximizar na mesma barra de titulo seriam dois estados a
+// manter em acordo, e o segundo estaria errado no dia seguinte.
+//
+// ⚠️ MAS A LICAO QUE ELE CUSTOU CONTINUA VALENDO, e e ela que sobrou aqui. Medido no
+// navegador, na versao publicada: com o `sessionStorage` bloqueado — janela anonima, cookies
+// de terceiros barrados — o `lerEstado()` devolvia `false` para sempre, o `!` do clique dava
+// `true` toda vez, e a janela expandia no primeiro clique e NUNCA MAIS voltava: quatro
+// cliques seguidos, 1711px nos quatro. Quem sabe se a janela esta grande e A JANELA.
+//
+// O gerenciador inteiro e testado em `teste_front_janelas.js`. O que fica aqui e o pedaco
+// que nasceu nesta tela: que o SGPe nao tem mais o botao proprio, e que o substituto le o
+// estado do elemento.
+conf(!/sgpeAplicarTamanho|sgpeEstaCheia|sgpeCheiaLer|sgpeCheiaGravar/.test(semComent),
+     'as quatro funcoes do expandir proprio do SGPe sairam');
+conf(!/id="sgpeExp"/.test(semComent) && !/data-f="exp"/.test(semComent),
+     'e o botao ⤢ e o ramo dele no clique tambem');
+conf(/function jfEstaMax\(mc\)\s*\{\s*return !!mc && mc\.dataset\.jfMax === '1'/.test(semComent),
+     'quem responde "esta maximizada?" le do ELEMENTO');
+conf(/if\(jfEstaMax\(mc\)\)/.test(semComent), 'e o clique alterna a partir dele');
+conf(!/!jfLerDisco\(\)|= !sgpeCheiaLer/.test(semComent), 'nunca a partir do armazenamento');
+// ⚠️ E A JANELA DO SGPe PASSA PELO GERENCIADOR, senao ela abre no meio da tela com o fundo
+// escuro — como um modal comum — e nada acusa.
+conf(/jfAbrir\('sgpeMo', el\)/.test(semComent), 'a abertura do SGPe passa pelo gerenciador');
+conf(/jfEncerrar\('sgpeMo'\)/.test(semComent), 'e o fechar dele grava a posicao');
 
 // ════════════════════════════════════════════════════════════════════════════
 console.log(`\n=== RESULTADO: ${ok} passaram · ${falhou} falharam ===\n`);

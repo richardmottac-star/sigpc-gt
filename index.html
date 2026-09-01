@@ -296,18 +296,81 @@ tr:last-child td{border-bottom:none;}
 .repo-card a:hover{text-decoration:underline;}
 
 /* ══ MODAIS ══ */
-.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;}
+/* ⚠️ O MODAL QUE TRAVA SUBIU DE 200 PARA 1400, e o motivo é a janela flutuante. Uma janela
+   flutuante fica em 1250+ para passar por cima das faixas fixas do topo (1199 e 1200) — e o
+   "Detalhe da TR", que flutua, tem DENTRO dele os botões "Registrar parecer" e "Enviar ao
+   CI". Com o modal em 200, a confirmação que ele abre nasceria ATRÁS da janela que a pediu:
+   um clique que escurece a tela e não mostra nada. */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1400;align-items:center;justify-content:center;}
 .mo.open{display:flex;}
 .mc{background:#fff;border-radius:14px;width:480px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .mc.lg{width:580px;}
 #moTR .mc{width:min(1100px,95vw);}
-.mch{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--cb);}
+/* ⚠️ O background:#fff ENTROU PARA O sticky DA JANELA FLUTUANTE, e não muda nada na
+   aparência: a .mch já se desenha sobre o .mc, que é branco. Sem ele, a barra de título
+   presa no topo fica TRANSPARENTE e o conteúdo passa por cima do título ao rolar. As
+   variantes .v/.am/.rv continuam vencendo — elas têm duas classes, esta tem uma. */
+.mch{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--cb);background:#fff;}
 .mch.v{background:var(--vbg);}
 .mch.am{background:var(--ambg);}
 .mch.rv{background:#FFEBEE;}
 .mch h3{font-size:15px;font-weight:700;color:var(--te);}
 .mcx{background:none;border:none;font-size:18px;cursor:pointer;color:var(--ct);line-height:1;}
 .mcb{padding:16px 18px;}
+
+/* ══ JANELA FLUTUANTE (31/08/2026) ═══════════════════════════════════════════
+   Os modais de CONSULTA E TRABALHO viram janela: sem fundo escuro, arrastáveis,
+   com minimizar / maximizar / fechar. Os de CONFIRMAÇÃO não entram aqui — eles
+   continuam travando a tela, que é o que a confirmação existe para fazer.
+
+   ⚠️ pointer-events:none NA CAMADA, auto NA CAIXA. É isto que deixa a tela de trás
+   clicável: a camada continua cobrindo a tela inteira (ela é inset:0), e sem isso
+   ela engoliria todo clique do sistema com um retângulo transparente. */
+/* ⚠️ O .jf NÃO PODE DECLARAR display, e isto é um defeito que eu mesmo escrevi e peguei
+   antes de publicar. A classe .jf fica no elemento PARA SEMPRE — ela entra na primeira
+   abertura, e as três janelas permanentes (moTR, moNL, moNovImg) nunca saem do documento.
+   Com display:block aqui, a regra (0,2,0) venceria o .mo{display:none} (0,1,0) e a janela
+   FECHADA continuaria desenhada na tela: fechar deixaria de fechar. Só o .open declara
+   display, e aí ele vence o .mo.open{display:flex} por ter uma classe a mais. */
+.mo.jf{background:none;pointer-events:none;}
+.mo.jf.open{display:block;}
+.mo.jf .mc{position:fixed;pointer-events:auto;margin:0;border:1px solid var(--cb);
+  box-shadow:0 14px 44px rgba(0,0,0,.30);}
+
+/* ⚠️ A BARRA DE TÍTULO FICA PRESA, e é por causa dela que a rolagem interna pôde sair.
+   Quem rola é a janela toda (o .mc), como em qualquer modal do sistema — mas aí a barra
+   sairia da tela junto com o resto, e ela é a alça de arrastar e o lugar dos três botões.
+   Presa no topo do próprio .mc, ela fica; o conteúdo passa por baixo. */
+.mo.jf .mch{position:sticky;top:0;z-index:5;cursor:move;user-select:none;}
+.mo.jf .mch h3{cursor:move;}
+
+/* ⚠️ O #sgpeRolagem É A ÚNICA ROLAGEM INTERNA DO SISTEMA, e ela SAI na janela flutuante.
+   O modal do SGPe prendia o cabeçalho e a busca e rolava só o miolo; a janela prende a
+   barra de título e rola o resto — duas rolagens aninhadas dariam duas barras na mesma
+   caixa. O !important é porque o overflow-y:auto dele é inline, e inline vence classe. */
+.mo.jf #sgpeRolagem{overflow:visible !important;flex:none !important;}
+
+.jf-bts{display:flex;align-items:center;gap:2px;flex-shrink:0;}
+.jf-bt{background:none;border:none;cursor:pointer;color:var(--ct);line-height:1;
+  font-size:14px;font-family:'Barlow',sans-serif;padding:3px 7px;border-radius:5px;}
+.jf-bt:hover{background:rgba(0,0,0,.09);}
+.jf-bt[data-jf="x"]{font-size:17px;}
+.jf-bt[data-jf="x"]:hover{background:#FFEBEE;color:var(--r);}
+
+/* ══ A BARRA DAS MINIMIZADAS ══
+   Só existe enquanto houver janela minimizada — uma barra vazia presa no rodapé comeria
+   altura da tela para não dizer nada. */
+.jf-barra{position:fixed;left:0;right:0;bottom:0;z-index:1240;display:flex;gap:7px;
+  align-items:center;padding:6px 10px;background:#173404;box-shadow:0 -3px 14px rgba(0,0,0,.22);
+  overflow-x:auto;}
+.jf-barra-item{display:flex;align-items:center;gap:6px;background:#fff;border-radius:7px;
+  padding:5px 6px 5px 11px;max-width:290px;flex-shrink:0;}
+.jf-barra-tit{background:none;border:none;cursor:pointer;font-family:'Barlow',sans-serif;
+  font-size:12px;font-weight:600;color:var(--te);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:230px;padding:0;text-align:left;}
+.jf-barra-x{background:none;border:none;cursor:pointer;color:var(--ct);font-size:14px;
+  line-height:1;padding:1px 4px;border-radius:4px;}
+.jf-barra-x:hover{background:#FFEBEE;color:var(--r);}
 .mci{background:var(--cl);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.8;color:var(--ct);}
 .mci.am{background:var(--ambg);}
 .mci strong{color:var(--te);}
@@ -354,7 +417,10 @@ tr:last-child td{border-bottom:none;}
 .nl-row:last-child{border-bottom:none;}
 
 /* ══ TOAST ══ */
-.toast{position:fixed;bottom:20px;right:20px;background:#222;color:#fff;padding:11px 16px;border-radius:10px;font-size:12px;z-index:999;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+/* ⚠️ O TOAST SOBE JUNTO, de 999 para 1500. Ele estava acima do modal (999 > 200) e precisa
+   continuar: é ele que diz "Erro:" quando a gravação do modal falha. Subir só o modal
+   esconderia a mensagem atrás da caixa que a provocou. */
+.toast{position:fixed;bottom:20px;right:20px;background:#222;color:#fff;padding:11px 16px;border-radius:10px;font-size:12px;z-index:1500;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);}
 .toast.ok{background:var(--v);}
 .toast.err{background:var(--r);}
 .toast.vis{display:flex;}
@@ -4315,6 +4381,370 @@ async function confirmarAssumirTR() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  JANELAS FLUTUANTES — os modais de consulta e trabalho (31/08/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// CINCO janelas, e só elas. A lista é fechada e mora aqui:
+//
+//   sgpeMo     Consultar processo no SGPe (F4)
+//   ciBuscaMo  Localizar processo no C.I. (F2)
+//   moTR       Detalhe da TR
+//   moNL       ver parecer · histórico da parcial · NLs Anexo IV · produtividade
+//   moNovImg   a imagem da novidade, ampliada
+//
+// ⚠️ O `moNL` É UMA CAIXA SÓ COM TRÊS DONOS. `pVerParecer`, `pHistoricoPc` e
+// `verProdDetalhe` escrevem no mesmo `#moNLB` e só trocam o título. Logo a posição e o
+// tamanho salvos são UM para os três — decisão do Richard em 31/08. Guardar três estados
+// exigiria partir a caixa em três, e não há três caixas.
+// (O "NLs — Anexo IV" do HTML é só o título de estreia: não há mais quem o abra por esse
+// caminho, e ele aparece apenas se alguém abrir a caixa sem trocar o título.)
+//
+// ⚠️ NENHUM MODAL DE CONFIRMAÇÃO ENTRA AQUI. Registrar parecer, encerrar, transferir,
+// estornar e todos os "tem certeza?" continuam travando a tela — travar É a função deles.
+// Quem quiser acrescentar uma janela acrescenta a chave em `JF_TITULO` e chama `jfAbrir`.
+
+const JF_CHAVE_LS = 'sigpc_janelas_v1'
+
+// O título de fallback da barra do rodapé. O título de verdade é lido do `h3` da janela na
+// hora de minimizar — o `moNL` tem quatro, e um rótulo fixo mentiria em três deles.
+const JF_TITULO = {
+  sgpeMo:    'Consultar processo no SGPe',
+  ciBuscaMo: 'Localizar processo no C.I.',
+  moTR:      'Detalhe da TR',
+  moNL:      'Consulta',
+  moNovImg:  'Imagem',
+}
+
+// Tamanho de estreia, quando não há nada salvo. Só vale na PRIMEIRA abertura de cada uma.
+const JF_TAMANHO = {
+  sgpeMo:    { w: 860,  h: 620 },
+  ciBuscaMo: { w: 420,  h: 300 },
+  moTR:      { w: 1100, h: 680 },
+  moNL:      { w: 720,  h: 560 },
+  moNovImg:  { w: 900,  h: 620 },
+}
+
+// O estado VIVO das janelas abertas: { chave: { el, mc, min, max, restaurar } }.
+const JF_ABERTAS = {}
+let _jfFoco = null      // a chave da última janela que recebeu clique — é ela que o Esc fecha
+
+// ── O disco ─────────────────────────────────────────────────────────────────
+//
+// ⚠️ O `localStorage` LANÇA no modo anônimo e com cookies de terceiros bloqueados — foi
+// medido no navegador em 31/08, no `sessionStorage` do expandir do SGPe. Sem o `try`, a janela
+// deixaria de abrir por causa de uma preferência de posição.
+function jfLerDisco() {
+  try { const j = JSON.parse(localStorage.getItem(JF_CHAVE_LS) || '{}'); return (j && typeof j === 'object') ? j : {} }
+  catch(_) { return {} }
+}
+function jfGravarDisco(chave, geo) {
+  try { const m = jfLerDisco(); m[chave] = geo; localStorage.setItem(JF_CHAVE_LS, JSON.stringify(m)) }
+  catch(_) {}
+}
+
+// ── A TRAVA OBRIGATÓRIA: posição salva que caiu fora da tela ─────────────────
+//
+// ⚠️ SEM ELA A JANELA SOME E PARECE QUEBRADA. A posição é salva em pixels absolutos; quem
+// arrasta a janela para a ponta de um monitor de 2560px e no dia seguinte abre o sistema no
+// notebook de 1366 recebe uma janela inteira fora da área visível — o F4 "não faz nada", e
+// não há nada na tela que explique por quê.
+//
+// O critério é a BARRA DE TÍTULO, não a janela: é ela que se agarra e é por ela que se
+// traz a janela de volta. Basta `JF_MARGEM` px dela dentro da tela, nos dois eixos.
+const JF_MARGEM = 64
+
+function jfNaTela(g, W, H) {
+  if(!g) return false
+  const num = v => typeof v === 'number' && Number.isFinite(v)
+  if(!num(g.x) || !num(g.y) || !(g.w > 0) || !(g.h > 0)) return false
+  // ⚠️ `y` NEGATIVO É SEMPRE FORA, mesmo com a janela enorme: a barra de título fica ACIMA do
+  // topo, e é justamente ela que não se alcança. Em `x` não é assim — uma janela meio para
+  // fora à esquerda ainda mostra a ponta direita da barra, e dá para arrastá-la de volta.
+  if(g.y < 0 || g.y > H - 40) return false
+  if(g.x + g.w < JF_MARGEM) return false
+  if(g.x > W - JF_MARGEM) return false
+  return true
+}
+
+/** A geometria de abertura: a salva quando ela cabe, senão o padrão CENTRALIZADO. */
+function jfGeometria(chave, W, H) {
+  const pad = JF_TAMANHO[chave] || { w: 720, h: 560 }
+  const g = jfLerDisco()[chave]
+  // O tamanho nunca passa da tela: uma janela salva em 1600px num monitor de 1280 nasceria
+  // com as duas pontas fora, e a da direita leva os três botões.
+  const cap = (val, max) => Math.max(240, Math.min(val, max))
+  if(jfNaTela(g, W, H)) return { x: g.x, y: g.y, w: cap(g.w, W - 20), h: cap(g.h, H - 20), salva: true }
+  const w = cap(pad.w, W - 40), h = cap(pad.h, H - 60)
+  return { x: Math.round((W - w) / 2), y: Math.max(16, Math.round((H - h) / 2)), w, h, salva: false }
+}
+
+// ── A pilha ─────────────────────────────────────────────────────────────────
+//
+// ⚠️ AS JANELAS SÃO REEMPILHADAS, e não incrementadas. Um contador que só sobe passa de 1400
+// depois de 150 cliques e a janela começa a cobrir os modais de confirmação — que é o defeito
+// que o z-index 1400 existe para impedir. Reordenar cinco janelas é barato e não deriva.
+const JF_Z_BASE = 1250
+
+function jfFocar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  _jfFoco = chave
+  const abertas = Object.keys(JF_ABERTAS)
+  abertas.sort((a, b) => {
+    if(a === chave) return 1
+    if(b === chave) return -1
+    return (Number(JF_ABERTAS[a].el.style.zIndex) || 0) - (Number(JF_ABERTAS[b].el.style.zIndex) || 0)
+  })
+  abertas.forEach((k, i) => { JF_ABERTAS[k].el.style.zIndex = String(JF_Z_BASE + i) })
+}
+
+// ── Geometria aplicada ao elemento ──────────────────────────────────────────
+function jfAplicar(mc, g) {
+  mc.style.position  = 'fixed'
+  mc.style.left      = g.x + 'px'
+  mc.style.top       = g.y + 'px'
+  mc.style.width     = g.w + 'px'
+  mc.style.height    = g.h + 'px'
+  mc.style.maxWidth  = 'none'
+  mc.style.maxHeight = 'none'
+  // ⚠️ QUEM ROLA É A JANELA TODA. O `display:block` desfaz o `flex` inline do SGPe, que existia
+  // para prender o cabeçalho e rolar só o miolo — na janela quem fica presa é a barra de
+  // título, pelo `sticky` do CSS, e a rolagem é uma só.
+  mc.style.display   = 'block'
+  mc.style.overflow  = 'auto'
+}
+
+/** O que está na tela agora, lido do ELEMENTO. */
+function jfGeoAtual(mc) {
+  return { x: Math.round(parseFloat(mc.style.left) || 0), y: Math.round(parseFloat(mc.style.top) || 0),
+           w: Math.round(parseFloat(mc.style.width) || mc.offsetWidth),
+           h: Math.round(parseFloat(mc.style.height) || mc.offsetHeight) }
+}
+
+/** O que deve ir para o disco: maximizada, é a geometria de ANTES de maximizar. */
+function jfGeoParaSalvar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return null
+  return jfEstaMax(st.mc) ? st.restaurar : jfGeoAtual(st.mc)
+}
+function jfSalvar(chave) {
+  const g = jfGeoParaSalvar(chave)
+  if(g) jfGravarDisco(chave, g)
+}
+
+// ── Maximizar ───────────────────────────────────────────────────────────────
+//
+// ⚠️ O ESTADO SAI DO ELEMENTO, NUNCA DO ARMAZENAMENTO — é a lição que o expandir do SGPe
+// custou em 31/08, medida no navegador: com o `sessionStorage` bloqueado, o `!lerEstado()` do
+// clique dava `true` toda vez, e a janela expandia no primeiro clique e NUNCA MAIS voltava.
+// Quem sabe se a janela está grande é a janela.
+function jfEstaMax(mc) { return !!mc && mc.dataset.jfMax === '1' }
+
+function jfMaximizar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  const mc = st.mc, W = window.innerWidth, H = window.innerHeight
+  if(jfEstaMax(mc)) {
+    mc.dataset.jfMax = '0'
+    jfAplicar(mc, st.restaurar)
+  } else {
+    st.restaurar = jfGeoAtual(mc)
+    mc.dataset.jfMax = '1'
+    jfAplicar(mc, { x: Math.round(W * 0.01), y: Math.round(H * 0.01),
+                    w: Math.round(W * 0.98), h: Math.round(H * 0.96) })
+  }
+  jfPintarBotoes(chave)
+  jfFocar(chave)
+}
+
+function jfPintarBotoes(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  const b = st.el.querySelector('.jf-bt[data-jf="max"]'); if(!b) return
+  const max = jfEstaMax(st.mc)
+  b.textContent = max ? '❐' : '▢'
+  b.title = max ? 'Restaurar o tamanho anterior' : 'Maximizar'
+  b.setAttribute('aria-label', b.title)
+}
+
+// ── Minimizar, restaurar e a barra do rodapé ────────────────────────────────
+function jfMinimizar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  // O título vai congelado no momento de minimizar: o `moNL` troca de nome a cada dono, e o
+  // item da barra tem de dizer qual dos quatro está ali embaixo.
+  const h3 = st.el.querySelector('.mch h3')
+  st.titulo = (h3 && h3.textContent.trim()) || JF_TITULO[chave] || 'Janela'
+  st.min = true
+  st.mc.style.display = 'none'
+  if(_jfFoco === chave) _jfFoco = null
+  jfBarraDesenhar()
+}
+
+function jfRestaurar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  st.min = false
+  // ⚠️ RESTAURA ONDE ESTAVA: minimizar só escondeu o `.mc`, e `left`/`top`/`width`/`height`
+  // continuaram escritos nele. Recalcular a posição aqui faria a janela pular de lugar a cada
+  // ida e volta à barra.
+  st.mc.style.display = 'block'
+  jfFocar(chave)
+  jfBarraDesenhar()
+}
+
+function jfBarraDesenhar() {
+  let barra = document.getElementById('jfBarra')
+  const mins = Object.keys(JF_ABERTAS).filter(k => JF_ABERTAS[k].min)
+  if(!mins.length) { if(barra) barra.remove(); return }
+  if(!barra) {
+    barra = document.createElement('div')
+    barra.id = 'jfBarra'; barra.className = 'jf-barra'
+    document.body.appendChild(barra)
+  }
+  barra.innerHTML = mins.map(k => {
+    const t = escHtml(JF_ABERTAS[k].titulo || JF_TITULO[k] || 'Janela')
+    return '<span class="jf-barra-item">' +
+      '<button class="jf-barra-tit" data-jfb="abrir" data-k="' + escHtml(k) + '" title="' + t + '">' + t + '</button>' +
+      '<button class="jf-barra-x" data-jfb="x" data-k="' + escHtml(k) + '" title="Fechar" aria-label="Fechar">✕</button>' +
+      '</span>'
+  }).join('')
+  barra.onclick = (e) => {
+    const bt = e.target.closest && e.target.closest('[data-jfb]'); if(!bt) return
+    const k = bt.getAttribute('data-k')
+    if(bt.getAttribute('data-jfb') === 'x') jfFechar(k); else jfRestaurar(k)
+  }
+}
+
+// ── Fechar ──────────────────────────────────────────────────────────────────
+//
+// ⚠️ FECHAR É CLICAR NO ✕ QUE A JANELA JÁ TINHA. Cada uma fecha de um jeito — `fm('moTR')`,
+// `ciBuscaFechar()` (que ainda apaga o destaque da fila), e o `fechar()` interno do SGPe (que
+// tira o ouvinte de tecla e remove o elemento). Reimplementar aqui seria uma segunda regra de
+// fechamento, e ela esqueceria justamente o que é específico de cada uma.
+function jfFechar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  jfSalvar(chave)
+  const x = st.el.querySelector('.mcx')
+  if(x) x.click(); else jfEncerrar(chave)
+}
+
+/** A limpeza — chamada por quem realmente fechou a janela, seja qual for o caminho. */
+function jfEncerrar(chave) {
+  const st = JF_ABERTAS[chave]; if(!st) return
+  jfSalvar(chave)
+  delete JF_ABERTAS[chave]
+  if(_jfFoco === chave) _jfFoco = null
+  jfBarraDesenhar()
+}
+
+// ── Arrastar ────────────────────────────────────────────────────────────────
+function jfArrastar(chave, ev) {
+  const st = JF_ABERTAS[chave]; if(!st || jfEstaMax(st.mc)) return
+  const mc = st.mc
+  const g0 = jfGeoAtual(mc)
+  const px = ev.clientX, py = ev.clientY
+  const mover = (e) => {
+    const W = window.innerWidth, H = window.innerHeight
+    let x = g0.x + (e.clientX - px), y = g0.y + (e.clientY - py)
+    // ⚠️ A MESMA TRAVA DA ABERTURA, agora ao vivo: não se solta a janela num lugar de onde
+    // ela não voltaria. Sem isto o arrasto criaria, com as mãos, a posição inválida que a
+    // `jfNaTela` existe para recusar na abertura seguinte.
+    x = Math.max(JF_MARGEM - g0.w, Math.min(x, W - JF_MARGEM))
+    y = Math.max(0, Math.min(y, H - 40))
+    mc.style.left = Math.round(x) + 'px'
+    mc.style.top  = Math.round(y) + 'px'
+  }
+  const soltar = () => {
+    document.removeEventListener('pointermove', mover)
+    document.removeEventListener('pointerup', soltar)
+    jfSalvar(chave)
+  }
+  document.addEventListener('pointermove', mover)
+  document.addEventListener('pointerup', soltar)
+}
+
+// ── A abertura ──────────────────────────────────────────────────────────────
+/**
+ * Transforma um `.mo` em janela flutuante e a posiciona. Chamada por quem abre a janela,
+ * logo depois de ela existir no documento.
+ *
+ * ⚠️ É IDEMPOTENTE de propósito: o `moNL` e o `moTR` são elementos permanentes do HTML e
+ * reabrem dezenas de vezes na mesma sessão. Os botões e o ouvinte de arrasto entram uma vez
+ * só (`dataset.jf`); a geometria é reaplicada a cada abertura, que é onde a posição salva
+ * volta a valer.
+ */
+function jfAbrir(chave, el) {
+  el = el || document.getElementById(chave)
+  if(!el) return null
+  const mc = el.querySelector('.mc'); if(!mc) return null
+  el.classList.add('jf')
+
+  if(el.dataset.jf !== '1') {
+    el.dataset.jf = '1'
+    const mch = el.querySelector('.mch')
+    if(mch) {
+      // O ✕ da janela continua existindo e continua sendo quem fecha — ele só sai da vista,
+      // porque o ✕ dos três botões é o que a pessoa vê agora. Ver `jfFechar`.
+      const x = mch.querySelector('.mcx'); if(x) x.style.display = 'none'
+      const bts = document.createElement('span')
+      bts.className = 'jf-bts'
+      bts.innerHTML =
+        '<button type="button" class="jf-bt" data-jf="min" title="Minimizar" aria-label="Minimizar">–</button>' +
+        '<button type="button" class="jf-bt" data-jf="max" title="Maximizar" aria-label="Maximizar">▢</button>' +
+        '<button type="button" class="jf-bt" data-jf="x" title="Fechar" aria-label="Fechar">✕</button>'
+      mch.appendChild(bts)
+      bts.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-jf]'); if(!b) return
+        e.stopPropagation()
+        const f = b.getAttribute('data-jf')
+        if(f === 'min') return jfMinimizar(chave)
+        if(f === 'max') return jfMaximizar(chave)
+        return jfFechar(chave)
+      })
+      // ⚠️ O ARRASTO NÃO COMEÇA EM CIMA DE BOTÃO. Sem esta guarda, clicar em Minimizar com a
+      // mão trêmula arrasta a janela um pixel e o clique vira arrasto — o botão "não funciona"
+      // de vez em quando, que é a pior forma de um botão não funcionar (armadilha 15).
+      mch.addEventListener('pointerdown', (e) => {
+        if(e.button !== 0) return
+        if(e.target.closest('button, input, select, textarea, a')) return
+        e.preventDefault()
+        jfFocar(chave)
+        jfArrastar(chave, e)
+      })
+    }
+    // Clicar em qualquer lugar da janela traz ela para a frente — e é isso que define quem o
+    // Esc fecha quando há várias abertas.
+    mc.addEventListener('pointerdown', () => jfFocar(chave), true)
+  }
+
+  JF_ABERTAS[chave] = JF_ABERTAS[chave] || { el, mc, min: false, restaurar: null, titulo: JF_TITULO[chave] }
+  const st = JF_ABERTAS[chave]
+  st.el = el; st.mc = mc; st.min = false
+  mc.style.display = 'block'
+
+  const g = jfGeometria(chave, window.innerWidth, window.innerHeight)
+  mc.dataset.jfMax = '0'
+  st.restaurar = { x: g.x, y: g.y, w: g.w, h: g.h }
+  jfAplicar(mc, g)
+  jfPintarBotoes(chave)
+  jfFocar(chave)
+  jfBarraDesenhar()
+  return st
+}
+
+// ── Esc ─────────────────────────────────────────────────────────────────────
+//
+// ⚠️ NA FASE DE BOLHA, DE PROPÓSITO. O SGPe e a busca do C.I. já têm o Esc DELES, registrado
+// na captura e com `stopPropagation` — o evento nem chega aqui, e cada uma segue fechando
+// pelo caminho próprio, que faz mais coisa que fechar (o da busca apaga o destaque da fila).
+// Este ouvinte serve às três janelas que nunca tiveram Esc: moTR, moNL e moNovImg.
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'Escape') return
+  // Um modal de confirmação aberto por cima manda no Esc — ele é quem está travando a tela.
+  if(document.querySelector('.mo.open:not(.jf)')) return
+  const k = _jfFoco
+  if(!k || !JF_ABERTAS[k] || JF_ABERTAS[k].min) return
+  e.preventDefault()
+  jfFechar(k)
+})
+
 // ══════════════════════════════════════
 //  DETALHE DA TR / REGISTRAR PARECER
 // ══════════════════════════════════════
@@ -4323,6 +4753,7 @@ let TR_DETALHE_ATUAL = null
 async function abrirTR(tr) {
   TR_DETALHE_ATUAL = tr
   document.getElementById('moTR').classList.add('open')
+  jfAbrir('moTR')
   document.getElementById('moTRT').textContent = `Detalhe da TR ${tr}`
   document.getElementById('moTRB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
@@ -5360,47 +5791,24 @@ function sgpeRecentesHtml() {
 }
 
 // ── O TAMANHO DA JANELA ──────────────────────────────────────────────────────
-// ⚠️ A ESCOLHA VIVE NA SESSÃO, NÃO NO `localStorage`. Quem expande está expandindo para o
-// processo de 34 trâmites que tem na frente AGORA; guardar isso para sempre faria a janela
-// abrir em tela cheia semanas depois, para uma consulta de duas linhas. O `sessionStorage`
-// morre com a aba, que é exatamente o tempo de vida da decisão.
-// ⚠️ E ele também LANÇA no modo anônimo do navegador — mesmo cuidado das recentes: sem o
-// `try`, a janela deixaria de abrir por causa de uma preferência de tamanho.
-const SGPE_CHEIA_CHAVE = 'sigpc_sgpe_tela_cheia'
-function sgpeCheiaLer() { try { return sessionStorage.getItem(SGPE_CHEIA_CHAVE) === '1' } catch(_) { return false } }
-function sgpeCheiaGravar(v) { try { sessionStorage.setItem(SGPE_CHEIA_CHAVE, v ? '1' : '0') } catch(_) {} }
-
-/** Aplica o tamanho à caixa e acerta o botão. UMA função, chamada na abertura e na troca — se
- *  cada caminho escrevesse o seu, a janela abriria de um jeito e alternaria para outro, e a
- *  divergência só apareceria em quem expandiu numa consulta e voltou noutra. */
-/**
- * O estado ATUAL da janela, lido DELA MESMA — nunca do `sessionStorage`.
- *
- * ⚠️ MEDIDO NO NAVEGADOR EM 31/08/2026, na versão publicada: com o `sessionStorage`
- * inacessível (janela anônima, cookies de terceiros bloqueados), o `sgpeCheiaLer()` devolve
- * `false` PARA SEMPRE e o `sgpeCheiaGravar()` engole a escrita. O `!sgpeCheiaLer()` do clique
- * dava `true` toda vez: a janela expandia no primeiro clique e NUNCA MAIS voltava — quatro
- * cliques seguidos, 1711px nos quatro. O botão trocava de ícone e não fazia nada.
- *
- * ⚠️ O `sessionStorage` CONTINUA, e continua sendo lido — na ABERTURA, que é onde ele serve:
- * lembrar o tamanho que a pessoa deixou. O que ele não pode mais é ser a fonte do estado de
- * um elemento que está na tela: quem sabe se a janela está grande é a janela.
- */
-function sgpeEstaCheia(mc) { return !!mc && mc.dataset.cheia === '1' }
-
-function sgpeAplicarTamanho(mc, bt, cheia) {
-  if(!mc) return
-  mc.dataset.cheia   = cheia ? '1' : '0'
-  mc.style.width     = cheia ? '98vw' : '860px'
-  mc.style.maxWidth  = cheia ? '98vw' : '96vw'
-  mc.style.height    = cheia ? '96vh' : ''
-  mc.style.maxHeight = cheia ? '96vh' : '90vh'
-  if(bt) {
-    bt.textContent = cheia ? '⤡' : '⤢'
-    bt.title = cheia ? 'Voltar ao tamanho normal' : 'Expandir'
-    bt.setAttribute('aria-label', bt.title)
-  }
-}
+//
+// ⚠️ O EXPANDIR PRÓPRIO DO SGPe SAIU EM 31/08/2026, no mesmo dia em que foi consertado —
+// `sgpeCheiaLer`, `sgpeCheiaGravar`, `sgpeEstaCheia` e `sgpeAplicarTamanho` foram removidas.
+// Ele virou o MAXIMIZAR das janelas flutuantes, que é o mesmo botão nas cinco, e dois botões
+// de maximizar na mesma barra de título seriam dois estados a manter em acordo.
+//
+// ⚠️ O QUE ELE ENSINOU CONTINUA DE PÉ, e está escrito na `jfEstaMax`: o estado de um elemento
+// que está na tela sai DELE (`dataset`), nunca do armazenamento. Medido no navegador na
+// versão publicada — com o `sessionStorage` bloqueado (janela anônima, cookies de terceiros
+// barrados), o `!lerEstado()` do clique dava `true` toda vez: a janela expandia no primeiro
+// clique e NUNCA MAIS voltava. Quatro cliques seguidos, 1711px nos quatro.
+//
+// ⚠️ E A ESCOLHA MUDOU DE PRAZO, de propósito. Era `sessionStorage` porque quem expandia
+// estava expandindo para o processo de 34 trâmites que tinha na frente AGORA. Agora é
+// `localStorage`, porque a janela guarda POSIÇÃO E TAMANHO, e quem arrastou a janela para o
+// canto direito quer encontrá-la ali amanhã — a trava da `jfNaTela` é que impede essa
+// memória de virar uma janela fora da tela. O `try` continua obrigatório: o armazenamento
+// LANÇA no modo anônimo, e sem ele a janela deixaria de abrir por causa de uma preferência.
 
 // ── O BLOCO DO ENCONTRADO ────────────────────────────────────────────────────
 
@@ -5903,11 +6311,12 @@ function sgpeConsultaAbrir(bruto) {
   if(_sgpeModal) { const c = document.getElementById('sgpeNum'); if(c) c.focus(); return }
 
   const el = document.createElement('div')
+  el.id = 'sgpeMo'
   el.className = 'mo open'
-  // ⚠️ z-index ACIMA DO CABEÇALHO. O `.mo` do sistema é 200 e o cabeçalho fixo sobe mais que
-  // isso em algumas telas; o modal apareceria por baixo da barra verde. E o F4 abre de
-  // QUALQUER tela — não dá para depender do empilhamento de uma só.
-  el.style.zIndex = '1300'
+  // ⚠️ O z-index SAIU DAQUI e passou a ser da pilha das janelas flutuantes (`jfFocar`), que
+  // reempilha todas a cada clique. O 1300 escrito à mão resolvia o cabeçalho fixo (1199/1200)
+  // e mais nada: com duas janelas abertas, as duas ficavam em 1300 e a ordem passava a ser a
+  // do documento — quem clicasse na de baixo continuaria vendo a de cima.
   el.innerHTML = `
     <div class="mc" id="sgpeMC" style="width:860px;max-width:96vw;max-height:90vh;
                 overflow:hidden;display:flex;flex-direction:column;">
@@ -5922,8 +6331,11 @@ function sgpeConsultaAbrir(bruto) {
           <h3 style="line-height:1.25;">Consultar processo no SGPe</h3>
           <div style="font-size:11.5px;color:var(--ct);margin-top:1px;">Situação e caminho do processo, sem sair do sistema</div>
         </div>
-        <button class="mcx" id="sgpeExp" data-f="exp" title="Expandir" aria-label="Expandir"
-          style="font-size:15px;">⤢</button>
+        ${/* ⚠️ O ⤢ SAIU EM 31/08/2026: ele era o "maximizar" desta janela, e agora o maximizar
+              é um dos três botões que a barra de título ganha de graça, igual nas cinco
+              janelas. Dois botões de maximizar na mesma barra seriam dois estados a manter em
+              acordo, e o segundo estaria errado no dia seguinte. O ✕ continua e continua sendo
+              quem fecha — ele só fica escondido, e o ✕ dos três botões clica NELE. */''}
         <button class="mcx" data-f="x" title="Fechar (Esc)">✕</button>
       </div>
 
@@ -5975,13 +6387,17 @@ function sgpeConsultaAbrir(bruto) {
   const out  = document.getElementById('sgpeSaida')
   const ident = document.getElementById('sgpeIdent')
   const mc    = document.getElementById('sgpeMC')
-  const btExp = document.getElementById('sgpeExp')
   const rol   = document.getElementById('sgpeRolagem')
-  // A janela abre no tamanho em que a pessoa a deixou nesta sessao.
-  sgpeAplicarTamanho(mc, btExp, sgpeCheiaLer())
+  // A janela abre na posição e no tamanho em que a pessoa a deixou — e centralizada se o que
+  // estava salvo caiu fora da tela (`jfNaTela`).
+  jfAbrir('sgpeMo', el)
 
   const fechar = () => {
     document.removeEventListener('keydown', tecla, true)
+    // ⚠️ AVISA O GERENCIADOR ANTES DE REMOVER O ELEMENTO. É a `jfEncerrar` que grava a posição
+    // e o tamanho — depois do `remove()` não há mais de onde lê-los, e a janela reabriria
+    // sempre no lugar da vez anterior à última.
+    jfEncerrar('sgpeMo')
     el.remove(); _sgpeModal = null
   }
 
@@ -6051,13 +6467,6 @@ function sgpeConsultaAbrir(bruto) {
     if(f === 'x') return fechar()
     if(f === 'ir') return consultar()
     if(f === 'limpar') return sgpeRecentesLimpar()
-    if(f === 'exp') {
-      // ⚠️ O ESTADO SAI DA JANELA, NÃO DO `sessionStorage` — ver `sgpeEstaCheia`. Com o
-      // armazenamento bloqueado, ler dali travava o botão em "expandir" para sempre.
-      const c = !sgpeEstaCheia(mc)
-      sgpeCheiaGravar(c); sgpeAplicarTamanho(mc, btExp, c)
-      return
-    }
     if(f === 'copiar') {
       const t = `${(cSig.value||'').trim().toUpperCase()} ${(cNum.value||'').trim()}/${(cAno.value||'').trim()}`
       try { navigator.clipboard.writeText(t); toast('Processo copiado.', 'ok') }
@@ -13640,6 +14049,7 @@ async function pHistoricoPc(num) {
     `Histórico — ${String(num || '').trim() ? 'Parcial ' + num : 'TR'} ${tr}`;
   document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>';
   document.getElementById('moNL').classList.add('open');
+  jfAbrir('moNL');
   try {
     const q = { tr, setorial_id: U.setorialFiltro || 'FCEE' };
     // Sem número de parcial a rota devolve a TR inteira — e isso é melhor que não devolver
@@ -14685,6 +15095,7 @@ async function pVerParecer(tr, num) {
   document.getElementById('moNLT').textContent = `Parcial ${num} — ${tr}`
   document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
   document.getElementById('moNL').classList.add('open')
+  jfAbrir('moNL')
   try {
     const params = new URLSearchParams({ tr, parcial_num: num, setorial_id: U.setorialFiltro || 'FCEE' })
     const r = await fetch(`${API_URL}/parcela/historico?${params}`)
@@ -16580,6 +16991,7 @@ function ciBuscaAbrir() {
   d.onclick = ciBuscaFechar
   d.onkeydown = (e) => { if(e.key === 'Enter') { e.preventDefault(); ciBuscaLocalizar() } }
   document.body.appendChild(d)
+  jfAbrir('ciBuscaMo', d)
   document.addEventListener('keydown', ciBuscaEsc, true)
   ciBuscaMudou()
   const n = document.getElementById('ciBuscaNum'); if(n) n.focus()
@@ -16617,6 +17029,7 @@ function ciBuscaLimparCampos() {
 function ciBuscaEsc(e) { if(e.key === 'Escape') { e.stopPropagation(); ciBuscaFechar() } }
 
 function ciBuscaFechar() {
+  jfEncerrar('ciBuscaMo')
   const d = document.getElementById('ciBuscaMo')
   if(d) d.remove()
   document.removeEventListener('keydown', ciBuscaEsc, true)
@@ -16636,6 +17049,7 @@ function ciBuscaLocalizar() {
   // limpa o bloco de baixo, troca o `_ciModo` e dispara a carga.
   const põe = (id, val) => { const el = document.getElementById(id); if(el) el.value = val }
   põe('ciSgSigla', s); põe('ciSgNum', n); põe('ciSgAno', a)
+  jfEncerrar('ciBuscaMo')
   const d = document.getElementById('ciBuscaMo')
   if(d) d.remove()
   document.removeEventListener('keydown', ciBuscaEsc, true)
@@ -17543,6 +17957,7 @@ async function verProdDetalhe(analistaId, nome) {
   document.getElementById('moNLT').textContent = `Produtividade — ${nome}`
   document.getElementById('moNLB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
   document.getElementById('moNL').classList.add('open')
+  jfAbrir('moNL')
   try {
     const prodParams = new URLSearchParams({ analista_id: analistaId, limit: 99999 })
     if(U.setorialFiltro) prodParams.set('setorial_id', U.setorialFiltro)
@@ -17818,6 +18233,7 @@ function novVerImagem(id) {
     `<img src="${escHtml(n.imagem_src)}" alt="${escHtml(n.titulo||'')}" style="max-width:100%;display:block;border-radius:8px;">
      ${n.imagem_legenda ? `<div style="font-size:11.5px;font-style:italic;color:var(--ct);margin-top:8px;">${escHtml(n.imagem_legenda)}</div>` : ''}`
   document.getElementById('moNovImg').classList.add('open')
+  jfAbrir('moNovImg')
 }
 
 // ── O aviso do primeiro acesso ──────────────────────────────────────────────
@@ -18074,7 +18490,16 @@ async function perfilRedefinirSenha() {
 // ══════════════════════════════════════
 //  UTILITÁRIOS
 // ══════════════════════════════════════
-function fm(id) { document.getElementById(id).classList.remove('open') }
+// ⚠️ O `fm` É O FECHAR DE TODO MODAL DO SISTEMA, e por isso é aqui que as janelas flutuantes
+// permanentes (moTR, moNL, moNovImg) gravam a posição. Elas não são removidas do documento —
+// só perdem a classe `open` —, então sem este aviso elas continuariam na barra das
+// minimizadas depois de fechadas, e a posição nunca chegaria ao disco.
+function fm(id) {
+  // O `.el` na conferência não é preciosismo: sem ele, um id como `toString` acharia a
+  // propriedade HERDADA do Object e chamaria o encerramento de uma janela que não existe.
+  if(typeof JF_ABERTAS === 'object' && JF_ABERTAS[id] && JF_ABERTAS[id].el) jfEncerrar(id)
+  document.getElementById(id).classList.remove('open')
+}
 
 // ══════════════════════════════════════
 //  PAINEL TÉCNICO (superadmin only)
