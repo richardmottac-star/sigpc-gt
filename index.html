@@ -19385,6 +19385,20 @@ function trfDataBr(v) {
   try { return new Date(v).toLocaleDateString('pt-BR') } catch(_) { return '—' }
 }
 
+/**
+ * "Portaria FCEE nº 227/2025" a partir do que estiver gravado no cadastro.
+ *
+ * ⚠️ O CAMPO DO PAINEL ADMIN JÁ COSTUMA VIR COM O PREFIXO ("Ex: FCEE nº 227/2025"), e concatenar
+ * às cegas produziria "Portaria FCEE nº FCEE nº 227/2025" num documento assinado. Quando o
+ * prefixo já está lá, só o "Portaria" é acrescentado.
+ */
+function trfPortariaRotulo(p) {
+  const s = String(p || '').trim()
+  if(!s) return 'Portaria FCEE'
+  if(/^portaria/i.test(s)) return s
+  return /fcee/i.test(s) ? 'Portaria ' + s : 'Portaria FCEE nº ' + s
+}
+
 async function trfTermo(id) {
   let d = _trfDet && _trfDet.id === id ? _trfDet : null
   if(!d) {
@@ -19394,11 +19408,28 @@ async function trfTermo(id) {
       d = j.data
     } catch(e) { toast('Erro: ' + e.message, 'err'); return }
   }
-  // ⚠️ SEM VIGÊNCIA O TERMO NÃO SAI — sua ordem, 01/09. A data de vigência é a da portaria do
-  // analista de DESTINO, nunca a da dispensa nem a do clique: é ela que define de quando o
-  // termo vale. Um termo sem essa data não afirma nada.
-  if(!d.portaria_destino || !d.portaria_destino_em) {
-    toast('Este repasse não tem a portaria do analista de destino — o termo não pode ser emitido.', 'err')
+  // ⚠️ A PORTARIA E A VIGÊNCIA SAEM DO CADASTRO DO DESTINO — sua ordem, 01/09. Até aqui o termo
+  // lia `portaria_destino`, que vem da tabela `substituicao` e guarda a portaria da DISPENSA do
+  // analista de ORIGEM. O número costuma coincidir — a mesma portaria dispensa um e designa
+  // outro —, e é por isso que o erro não aparecia; no dia em que forem portarias diferentes, o
+  // termo afirma a errada. A fonte é o cadastro do destino: os campos PORTARIA e DATA DE
+  // INGRESSO NO GT, os mesmos que o Painel Admin edita.
+  const uParaCad = _trfUsuarios.find(x => x.id === (d.para && d.para.id))
+  if(!uParaCad) {
+    toast('Não encontrei o cadastro do analista de destino — o termo não pode ser emitido.', 'err')
+    return
+  }
+  // ⚠️ SEM VIGÊNCIA O TERMO NÃO SAI, E A RECUSA DIZ QUAL CAMPO FALTA. A vigência é a data de
+  // ingresso do destino no GT — nunca a da dispensa, nunca a do clique: é ela que define de
+  // quando o termo vale. Emitir com o campo em branco, ou com uma data deduzida daqui, seria
+  // afirmar uma vigência que ninguém registrou.
+  const faltaCad = [
+    uParaCad.portaria ? null : 'a portaria',
+    uParaCad.data_ingresso ? null : 'a data de ingresso no GT',
+  ].filter(Boolean)
+  if(faltaCad.length) {
+    toast(`O cadastro de ${uParaCad.nome} não tem ${faltaCad.join(' nem ')} — preencha no Painel `
+      + 'Admin para emitir o termo.', 'err')
     return
   }
 
@@ -19429,7 +19460,11 @@ function trfMontarTermo(d, cards) {
   const nomePara = (uPara && uPara.nome) || (d.para && d.para.nome) || '—'
   const grupo = (uPara && uPara.grupo) || (uDe && uDe.grupo) || '—'
   const coord = _trfUsuarios.find(x => x.perfil === 'coordenador' && String(x.grupo) === String(grupo))
-  const vigencia = trfDataBr(d.portaria_destino_em)
+  // ⚠️ AS DUAS LINHAS ABAIXO SÃO DO CADASTRO DO DESTINO, e a `trfTermo` já recusou o termo
+  // quando falta uma delas — aqui não há queda para `—`, porque um termo com a vigência em
+  // branco é justamente o papel que não pode existir.
+  const portariaPara = (uPara && uPara.portaria) || ''
+  const vigencia = trfDataBr(uPara && uPara.data_ingresso)
 
   // ⚠️ O CÓDIGO DA PC MOVIDA VEM DO REPASSE, não do estado de agora: é ele que diz quais PCs
   // ESTE termo repassou. Se a PC mudar de mão de novo amanhã, o termo continua contando o que
@@ -19536,27 +19571,36 @@ ${docCabecalho()}
 
   <div class="tbloco">
     <p><b>Analista de origem:</b> ${escHtml(nomeDe)}${uDe && uDe.grupo ? ' · Grupo ' + escHtml(String(uDe.grupo)) : ''}${
-      uDe && uDe.data_saida ? ' · dispensado em ' + trfDataBr(uDe.data_saida) : ''}${
+      uDe && uDe.data_saida ? ' · dispensa em ' + trfDataBr(uDe.data_saida) : ''}${
       uDe && uDe.portaria ? ' · Portaria ' + escHtml(uDe.portaria) : ''}</p>
+    ${/* ⚠️ SEM PARTICÍPIO AQUI: "designado/designada" concorda com a pessoa, e o termo é emitido
+          para o quadro inteiro. "Designação:" resolve sem depender de gênero. */''}
     <p><b>Analista de destino:</b> ${escHtml(nomePara)}${uPara && uPara.grupo ? ' · Grupo ' + escHtml(String(uPara.grupo)) : ''}
-       · designado pela Portaria ${escHtml(d.portaria_destino)}, publicada em ${escHtml(vigencia)}</p>
+       · Designação: ${escHtml(trfPortariaRotulo(portariaPara))} · ingresso no Grupo de Trabalho
+       em ${escHtml(vigencia)}</p>
     <p><b>Repasse registrado no sistema em:</b> ${escHtml(dataHoraBr(d.quando))}
        &nbsp;·&nbsp; <b>Executado por:</b> ${escHtml(U.nome)} — Técnico do Sistema</p>
     <p><b>Fundamento:</b> Portaria FCEE nº 285/2025 · Processo CGE nº 727/2025 · Decreto nº 1.008/2025</p>
   </div>
 
-  ${/* ⚠️ A VIGÊNCIA É A DA PORTARIA DO DESTINO — nunca a da dispensa, nunca a do clique. É a
-        data em que o novo analista passou a responder pelas prestações; o clique é só quando
-        o sistema registrou. */''}
+  ${/* ⚠️ A VIGÊNCIA É A DATA DE INGRESSO DO DESTINO NO GT — nunca a da dispensa, nunca a do
+        clique. É a data em que a pessoa passou a responder pelas prestações; o clique é só
+        quando o sistema registrou.
+
+        ⚠️ E O TEXTO NÃO DEPENDE DE GÊNERO. Ele dizia "o analista Fabiana Vieira" e
+        "produtividade a ele" — dois desacordos num documento assinado. A saída não é
+        "o(a) analista" nem "a pessoa analista" — é escrever a frase de um jeito em que a
+        concordância não apareça — o nome sozinho como sujeito, e "em seu nome" no lugar do
+        pronome. Quem mexer neste parágrafo mantém a regra. */''}
   <div class="tbloco">
-    <p>A partir de ${escHtml(vigencia)}, data de publicação da Portaria FCEE nº ${escHtml(d.portaria_destino)},
-       o analista ${escHtml(nomePara)} assume a análise das prestações de contas relacionadas neste
-       termo, respondendo por elas perante a coordenação do Grupo ${escHtml(String(grupo))} e pelos
-       prazos em curso.</p>
+    <p>A partir de ${escHtml(vigencia)}, data de ingresso no Grupo de Trabalho pela
+       ${escHtml(trfPortariaRotulo(portariaPara))}, ${escHtml(nomePara)} assume a análise das
+       prestações de contas relacionadas neste termo, respondendo por elas perante a coordenação
+       do Grupo ${escHtml(String(grupo))} e pelos prazos em curso.</p>
     <p style="margin-top:6px;">As prestações já baixadas permanecem registradas em nome de
-       ${escHtml(nomeDe)}, e a produtividade delas continua computada a ele — este repasse não
-       altera registro anterior. As prestações ora assumidas por ${escHtml(nomePara)} passarão a
-       gerar produtividade a ele na medida em que forem baixadas no SIGEF.</p>
+       ${escHtml(nomeDe)}, e a produtividade delas não é alterada por este repasse. As prestações
+       ora assumidas por ${escHtml(nomePara)} passarão a gerar produtividade em seu nome na medida
+       em que forem baixadas no SIGEF.</p>
   </div>
 
   <div class="cont">
