@@ -483,10 +483,16 @@ conf(/const SGPE_LOGO = LOGO_SGPE_B64/.test(html), 'SGPE_LOGO virou apelido — 
 conf((html.match(/'data:image\/png;base64,/g) || []).length === 2,
      'ha exatamente DOIS base64 de PNG no arquivo — um por logo',
      (html.match(/'data:image\/png;base64,/g) || []).length);
-// ⚠️ 18px E 22px DESDE 31/08/2026 (Richard): a 14px a marca do SIGEF ficava ilegivel — ela e
-// deitada (433x161), entao a altura que serve para uma marca quase quadrada nao serve para
-// ela. As duas continuam com `width:auto`: igualar a LARGURA esmagaria uma das duas.
-conf(/\.cmp-sigef\{height:18px;width:auto/.test(html), 'o do SIGEF sai a 18px de altura, largura automatica');
+// ⚠️ 24px E 22px DESDE 31/08/2026 (Richard), e o SIGEF e o MAIOR dos dois de proposito. A
+// altura de uma marca DEITADA (433x161) nao diz o tamanho que se le: a 18px o bloco tinha
+// 18px, mas as LETRAS dentro dele ficavam com 8 a 10px e, ao lado do bloco cheio do SGPe,
+// eram ilegiveis. Passou por 14 e por 18 antes de chegar aos 24 — cada vez que se comparam as
+// duas pela ALTURA DA CAIXA se erra, porque o olho mede a letra numa e o desenho inteiro na
+// outra. As duas continuam com `width:auto`: igualar a LARGURA esmagaria uma delas.
+conf(/\.cmp-sigef\{height:24px;width:auto/.test(html), 'o do SIGEF sai a 24px de altura, largura automatica');
+// ⚠️ E O SIGEF PASSOU A SER MAIS ALTO QUE O SGPe. Guardado aqui porque "as duas iguais" e a
+// correcao errada mais provavel: quem olhar so os numeros vai querer alinha-los.
+conf(!/\.cmp-sigef\{height:22px/.test(html), 'e NAO e igual ao do SGPe — sao marcas de proporcao diferente');
 conf(/\.cmp-sgpe\{height:22px;width:auto/.test(html), 'o do SGPe sai a 22px');
 
 // ⚠️ A LISTA DAS 183 NAO PODE ESTAR AQUI. Ela vem do GET /sgpe/siglas, que a le do
@@ -635,7 +641,7 @@ conf(/\.cmp-linha\{flex:0 0 100%/.test(html), 'a primeira linha ocupa a largura 
 // 18 e 22 — as alturas subiram e a explicacao ficou para tras. Um comentario que erra o
 // numero e pior que nenhum: quem for ajustar o tamanho procura o 14 no CSS, nao acha, e mexe
 // no lugar errado. Esta checagem existe para os dois nao voltarem a divergir.
-conf(/`\.cmp-sigef` a \*\*18px\*\*/.test(html) && /`\.cmp-sgpe` a \*\*22px\*\*/.test(html),
+conf(/`\.cmp-sigef` a \*\*24px\*\*/.test(html) && /`\.cmp-sgpe` a \*\*22px\*\*/.test(html),
      'e o comentario do arquivo diz os MESMOS numeros que o CSS');
 
 // ⚠️ AS OITO BARRAS DESENHAM O MESMO LOGO, E NAO HA COMO UMA DELAS DIVERGIR — porque nao ha
