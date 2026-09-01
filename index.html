@@ -3039,6 +3039,17 @@ const SB_ITENS = [
     icone:'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z' },
   { id:'coord', bloco:'coordenacao', rotulo:'Gestão Grupo', acao:'irGestaoGrupo()', pode:eCoord,
     icone:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z' },
+  // ⚠️ NO BLOCO DA COORDENAÇÃO, MAS SÓ O SUPERADMIN VÊ — e as duas coisas juntas são a
+  // decisão do Richard (31/08/2026). O item mora onde a pessoa procura por ele, que é a
+  // coordenação; quem pode movê-lo é outra pergunta, e a resposta é: ninguém além do técnico
+  // do sistema. Um coordenador não vê, e a própria `irTransferir` recusa se chegarem à ação
+  // por outro caminho.
+  //
+  // ⚠️ O `pode` RECEBE O PERFIL EFETIVO (ver a chamada `i.pode(ef)`), então no papel analista
+  // o superadmin também não vê. É o mesmo `pode` da Busca global e do Painel Técnico.
+  { id:'transf', bloco:'coordenacao', rotulo:'Transferir prestações de contas', acao:'irTransferir()',
+    pode:(u)=>u.perfil === 'superadmin',
+    icone:'M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z' },
   { id:'aprov', bloco:'coordenacao', rotulo:'Aprovações', acao:'irAprovacoes()', pode:eCoord,
     badge:'sbAprovBadge',
     icone:'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z' },
@@ -14237,6 +14248,10 @@ const AC_EV_LABEL = {
   assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
   resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC',
   processo_mae:'✎ Processo mãe',
+  // ⚠️ ESTE FALTAVA NAS DUAS CÓPIAS DO MAPA, e as 32 linhas da transferência do Samoel
+  // (28/08/2026) apareciam como o código cru `transferencia_dispensa` na tela do analista.
+  // Achado ao desenhar a tela de transferência, em 31/08.
+  transferencia_dispensa:'👥 PC transferida',
   // ⚠️ A FILA DE TRABALHO DO C.I. (24/08/2026). Rótulo próprio para não se confundir com o
   // `assumir_tr`, que é a analista assumindo a TR para ANALISAR — outra coisa, outra pessoa.
   ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
@@ -15257,6 +15272,9 @@ async function pVerParecer(tr, num) {
       pc_nova:'➕ PC cadastrada', solicitacao_correcao:'📨 Correção solicitada',
       correcao_negada:'✕ Correção negada', assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
       resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC', processo_mae:'✎ Processo mãe',
+      // ⚠️ Faltava aqui e no `AC_EV_LABEL` — ver o aviso de lá. Evento sem rótulo aparece
+      // como o código cru, e havia 32 linhas assim desde 28/08/2026.
+      transferencia_dispensa:'👥 PC transferida',
       // Os três da fila de trabalho do C.I. — ver AC_EV_LABEL, que é a outra cópia deste mapa.
       ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
       ci_passou:'🏛 C.I. passou a demanda'}
@@ -18648,6 +18666,261 @@ function fm(id) {
   document.getElementById(id).classList.remove('open')
 }
 
+
+// ══════════════════════════════════════
+//  TRANSFERIR PRESTAÇÕES DE CONTAS (só superadmin)
+// ══════════════════════════════════════
+//
+// Move as PCs ABERTAS de um analista para outro, e a TR junto. Nasceu da primeira
+// transferência real — as 32 PCs do Samoel para o Richard, em 28/08/2026, que foi um script
+// com dry-run porque não havia tela.
+//
+// ⚠️ NESTA RODADA É SÓ O DESENHO. A rota que grava não existe, e o botão fica cinza com o
+// motivo ao lado. Nada nesta tela escreve.
+//
+// ⚠️ O REGISTRO JÁ TEM ONDE MORAR, e não é tabela nova: `parcela_historico`. O script de
+// 28/08 gravou ali uma linha POR PC, com `valor_anterior` = "id · nome" de quem saiu,
+// `valor_novo` = o de quem recebeu, `analista_id` = o novo dono, e `estado_anterior` com a
+// foto da PC — é por ela que se desfaz. A coluna `evento` não tem CHECK no banco (conferido
+// em 31/08), então o valor novo entra sem ALTER nenhum.
+//
+// ⚠️ O QUE FALTA DECIDIR, quando a rota for escrita: o NOME do evento. As 32 linhas de hoje
+// são `transferencia_dispensa`, nome que nasceu do caso de dispensa. Esta tela transfere de
+// qualquer analista, dispensado ou não — reusar aquele nome faria a trilha mentir quando o
+// analista de origem está em atividade. É decisão do Richard, e não do código.
+//
+// ⚠️ E `transferencia_dispensa` NÃO TEM RÓTULO nos dois mapas de eventos — as 32 linhas do
+// Samoel aparecem HOJE como o código cru na tela do analista. Corrigido nesta rodada, nos
+// dois: `AC_EV_LABEL` e o `evLabel` do `pVerParecer`.
+
+let _trfUsuarios = []        // todos os cadastros, para os dois seletores
+let _trfTrs = []             // as TRs do "De" que têm PC aberta
+let _trfSel = new Set()      // as TRs marcadas
+let _trfCarregando = false
+
+// ⚠️ QUEM DIZ SE ESTÁ DISPENSADO É A `ehDispensado` QUE JÁ EXISTE, e não uma cópia daqui.
+// Ela lê `data_saida` — NUNCA `ativo`, que nos sete dispensados continua `true` por decisão
+// do Richard: o dispensado precisa terminar o que ficou em curso. São colunas diferentes e
+// podem discordar, e uma segunda definição divergiria no primeiro ajuste.
+const trfEhAnalista = (u) => u && u.perfil === 'analista'
+
+async function irTransferir() {
+  // ⚠️ `perfilEfetivo`, e não `U.perfil`: no papel analista o superadmin É analista em toda
+  // parte, e esta tela move o acervo de outra pessoa. A guarda de verdade será do servidor
+  // quando a rota existir — esta aqui só evita desenhar um caminho que ninguém percorre.
+  if(perfilEfetivo(U) !== 'superadmin') { toast('A transferência é exclusiva do superadmin.','err'); return }
+  ativarMenu('transf')
+  _trfTrs = []; _trfSel = new Set()
+  document.getElementById('BODY').innerHTML = `
+    <div class="cab"><h2>Transferir prestações de contas</h2>
+      <div class="sub">Move as PCs abertas de um analista para outro, e a TR junto.</div></div>
+
+    ${/* ⚠️ A REGRA FICA NA TELA, e não só no comentário do código: é ela que responde a
+          pergunta que o analista faz depois ("perdi minha produtividade?"). */''}
+    <div style="background:#FDF6E9;border-left:4px solid #BA7517;border-radius:0 8px 8px 0;
+                padding:11px 14px;margin-bottom:14px;font-size:12.5px;color:#4A3A0C;line-height:1.55;">
+      <b>As PCs já baixadas não são transferidas. A produtividade delas continua com quem analisou.</b>
+      <div style="margin-top:3px;color:#6B5A2C;">
+        A TR vai para o novo analista e as PCs abertas vão junto. As baixadas ficam no nome de
+        quem as analisou.</div>
+    </div>
+
+    <div class="filtros">
+      <div class="fg"><label>De</label>
+        <select id="trfDe" onchange="trfDeMudou()" style="min-width:250px;">
+          <option value="">Carregando...</option>
+        </select></div>
+      <div class="fg"><label>Para</label>
+        <select id="trfPara" onchange="trfBotao()" style="min-width:250px;">
+          <option value="">Carregando...</option>
+        </select></div>
+    </div>
+    ${/* A faixa cinza da dispensa — vazia até o "De" escolhido ser um dispensado. */''}
+    <div id="trfDispensa" style="margin:-4px 2px 14px;"></div>
+
+    <div id="trfLista"></div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <button class="btn-limpar" onclick="trfCancelar()">Cancelar</button>
+      <span id="trfBtWrap"></span>
+    </div>`
+  trfBotao()
+  await trfCarregarUsuarios()
+}
+
+async function trfCarregarUsuarios() {
+  try {
+    const j = await (await fetch(`${API_URL}/usuarios`)).json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar os analistas.')
+    _trfUsuarios = (j.data || []).filter(trfEhAnalista)
+      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+  } catch(e) {
+    _trfUsuarios = []
+    toast('Erro ao carregar os analistas: ' + e.message, 'err')
+  }
+  const de = document.getElementById('trfDe')
+  const para = document.getElementById('trfPara')
+  if(!de || !para) return
+
+  // ⚠️ O "DE" TRAZ OS DISPENSADOS, e é o caso principal da tela: o acervo que ficou parado é
+  // justamente o de quem saiu. Eles vêm com a etiqueta no próprio rótulo, porque um seletor
+  // fechado não mostra a faixa cinza de baixo.
+  de.innerHTML = '<option value="">Escolha o analista de origem</option>'
+    + _trfUsuarios.map(u => `<option value="${u.id}">${escHtml(u.nome)}${
+        ehDispensado(u) ? ' — dispensado' : ''}</option>`).join('')
+
+  // ⚠️ O "PARA" NÃO TRAZ DISPENSADO, e o corte é por `data_saida` — não por `ativo`, que nos
+  // sete continua `true`. Mandar PCs para quem saiu é o problema que esta tela existe para
+  // desfazer.
+  para.innerHTML = '<option value="">Escolha o analista de destino</option>'
+    + _trfUsuarios.filter(u => u.ativo && !ehDispensado(u))
+        .map(u => `<option value="${u.id}">${escHtml(u.nome)}</option>`).join('')
+  trfBotao()
+}
+
+/** Escolheu o "De": mostra a dispensa, se houver, e carrega as TRs dele. */
+function trfDeMudou() {
+  const id = parseInt(document.getElementById('trfDe')?.value || '0', 10)
+  const u = _trfUsuarios.find(x => x.id === id)
+  const cx = document.getElementById('trfDispensa')
+  if(cx) {
+    cx.innerHTML = (u && ehDispensado(u))
+      ? `<div style="font-size:11.5px;color:var(--ct);">
+           Grupo ${escHtml(String(u.grupo || '—'))} ·
+           saiu em ${escHtml(dataBr(u.data_saida))} ·
+           Portaria ${escHtml(String(u.portaria || '—'))}</div>`
+      : ''
+  }
+  _trfSel = new Set()
+  if(!id) { _trfTrs = []; trfRender(); return }
+  trfCarregarTrs(id)
+}
+
+async function trfCarregarTrs(id) {
+  const cont = document.getElementById('trfLista')
+  if(!cont) return
+  if(_trfCarregando) return
+  _trfCarregando = true
+  cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando as TRs...</div>'
+  try {
+    // ⚠️ A LISTA JÁ TEM ROTA: `resumo_tr` devolve uma linha por TR com `total_pcs` e
+    // `baixadas`. As ABERTAS são a diferença — a rota não precisou mudar para esta tela.
+    const p = new URLSearchParams({ analista_id: id, setorial_id: U.setorialFiltro || 'FCEE' })
+    const j = await (await fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p}`)).json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar as TRs.')
+    _trfTrs = (j.data || [])
+      .map(t => ({ tr: t.tr, entidade: t.entidade,
+                   abertas: Math.max(0, (Number(t.total_pcs) || 0) - (Number(t.baixadas) || 0)) }))
+      // ⚠️ TR SEM PC ABERTA NÃO ENTRA: não há o que transferir nela, e uma linha com "0 PCs"
+      // convidaria a marcá-la para nada.
+      .filter(t => t.abertas > 0)
+      .sort((a, b) => String(a.tr).localeCompare(String(b.tr)))
+  } catch(e) {
+    _trfTrs = []
+    cont.innerHTML = `<div style="padding:14px;font-size:12.5px;color:var(--r);">Erro: ${escHtml(e.message)}</div>`
+    _trfCarregando = false
+    trfBotao()
+    return
+  }
+  _trfCarregando = false
+  trfRender()
+}
+
+/** Quantas PCs a seleção move agora. Uma conta só — o cabeçalho e o botão leem daqui. */
+function trfPcsSelecionadas() {
+  return _trfTrs.filter(t => _trfSel.has(t.tr)).reduce((n, t) => n + t.abertas, 0)
+}
+
+function trfRender() {
+  const cont = document.getElementById('trfLista')
+  if(!cont) return
+  const de = document.getElementById('trfDe')?.value || ''
+  if(!de) { cont.innerHTML = ''; trfBotao(); return }
+  if(!_trfTrs.length) {
+    cont.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:24px;
+      text-align:center;font-size:12.5px;color:var(--ct);">Este analista não tem PC aberta — não há o que transferir.</div>`
+    trfBotao(); return
+  }
+  const totalPcs = _trfTrs.reduce((n, t) => n + t.abertas, 0)
+  const todas = _trfSel.size === _trfTrs.length
+  const sel = trfPcsSelecionadas()
+
+  cont.innerHTML = `
+    <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1.5px solid var(--cb);">
+        <input type="checkbox" id="trfTodas" ${todas ? 'checked' : ''} onchange="trfMarcarTodas(this.checked)"
+          title="Marcar ou desmarcar todas as TRs" style="width:15px;height:15px;cursor:pointer;">
+        <span style="font-size:12.5px;font-weight:700;color:var(--te);">
+          ${totalPcs} ${totalPcs === 1 ? 'PC aberta' : 'PCs abertas'} em
+          ${_trfTrs.length} ${_trfTrs.length === 1 ? 'TR' : 'TRs'}</span>
+        <span style="margin-left:auto;font-size:12px;color:${sel ? 'var(--v)' : 'var(--ct)'};font-weight:700;">
+          ${sel} ${sel === 1 ? 'selecionada' : 'selecionadas'}</span>
+      </div>
+      ${/* ⚠️ A LISTA ROLA A PARTIR DE ~5 TRs. Quem transfere um dispensado pega dezenas delas —
+            sem teto, os botões do rodapé sairiam da tela e a pessoa marcaria sem ver o que
+            está prestes a mover. */''}
+      <div style="max-height:230px;overflow-y:auto;">
+        ${_trfTrs.map(t => {
+          const on = _trfSel.has(t.tr)
+          return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
+            border-top:1px solid var(--cl);background:${on ? '#F4F8F2' : '#fff'};">
+            <input type="checkbox" ${on ? 'checked' : ''} onchange="trfMarcar('${escHtml(t.tr)}',this.checked)"
+              style="width:15px;height:15px;cursor:pointer;">
+            <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+              font-weight:700;color:var(--te);flex:0 0 118px;">${escHtml(t.tr)}</span>
+            <span style="flex:1 1 0;min-width:0;font-size:12px;color:var(--ct);overflow:hidden;
+              text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(t.entidade || '')}">${escHtml(t.entidade || '—')}</span>
+            <span style="flex:0 0 92px;text-align:right;font-size:12px;color:var(--ct);">
+              ${t.abertas} ${t.abertas === 1 ? 'PC aberta' : 'PCs abertas'}</span>
+          </label>`
+        }).join('')}
+      </div>
+    </div>`
+  trfBotao()
+}
+
+function trfMarcarTodas(on) {
+  _trfSel = on ? new Set(_trfTrs.map(t => t.tr)) : new Set()
+  trfRender()
+}
+
+function trfMarcar(tr, on) {
+  if(on) _trfSel.add(tr); else _trfSel.delete(tr)
+  trfRender()
+}
+
+function trfCancelar() {
+  const de = document.getElementById('trfDe'); if(de) de.value = ''
+  const para = document.getElementById('trfPara'); if(para) para.value = ''
+  const cx = document.getElementById('trfDispensa'); if(cx) cx.innerHTML = ''
+  _trfTrs = []; _trfSel = new Set()
+  trfRender()
+}
+
+/**
+ * O botão, e o motivo ao lado dele.
+ *
+ * ⚠️ ELE NASCE CINZA E CONTINUA CINZA NESTA RODADA — a rota que grava não existe. Mas a
+ * CONTA continua viva: o número acompanha a seleção, e o motivo muda conforme o que falta.
+ * Um botão que aceita clique e não responde é pior que um botão cinza (armadilha 15).
+ *
+ * ⚠️ E É CINZA SEM `onclick`, não só com `disabled`: um clique rápido ainda dispararia se o
+ * atributo fosse removido pelo devtools. É o mesmo padrão do Assumir com reserva pendente.
+ */
+function trfBotao() {
+  const wrap = document.getElementById('trfBtWrap')
+  if(!wrap) return
+  const para = document.getElementById('trfPara')?.value || ''
+  const n = trfPcsSelecionadas()
+  const motivo = !para ? 'Escolha para quem transferir.'
+    : !_trfSel.size ? 'Marque ao menos uma TR.'
+    : 'A gravação ainda não existe — a rota será escrita na próxima rodada.'
+  wrap.innerHTML = `
+    <button class="btn-acao" disabled title="${escHtml(motivo)}"
+      style="background:var(--cl);color:var(--ct);cursor:not-allowed;border:1px solid var(--cb);">
+      Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}</button>
+    <span style="font-size:11.5px;color:var(--ct);margin-left:9px;">${escHtml(motivo)}</span>`
+}
 // ══════════════════════════════════════
 //  PAINEL TÉCNICO (superadmin only)
 // ══════════════════════════════════════
