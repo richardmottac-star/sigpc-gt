@@ -8539,6 +8539,10 @@ const notifBarra = (n) => NOTIF_BARRA[n.tipo] || 'var(--r)'
 // pessoa apertaria um botão e chegaria no outro lugar.
 const NOTIF_REPASSE_BOTOES = {
   repasse:          ['planilha', 'termo'],
+  // ⚠️ A ORIGEM NÃO TEM "VER NA MINHA PLANILHA", e a ausência é o recado: as PCs saíram
+  // justamente de lá. Um botão que a levasse à planilha para não encontrar nada seria pior
+  // que botão nenhum.
+  repasse_origem:   ['termo'],
   repasse_coord:    ['termo'],
 }
 
@@ -18714,15 +18718,21 @@ const cieData = (v) => trfDataBr(v)
  * dizendo duas coisas sobre um repasse só.
  */
 function cieRender(r) {
+  // ⚠️ TRÊS PERSPECTIVAS, E A CONDIÇÃO VEM DO SERVIDOR. A tela não deduz de que lado a pessoa
+  // está: `r.condicao` é o mesmo texto que vai gravado na ciência, e é ele que escolhe o ramo.
+  // Deduzir aqui, comparando `U.id` com as pontas, seria a segunda definição de quem é quem —
+  // e a que divergisse mostraria à origem o texto de quem recebe.
   const ehDestino = r.condicao === 'analista de destino'
+  const ehOrigem = r.condicao === 'analista de origem'
   const nomeDe = (r.de && r.de.nome) || '—'
   const nomePara = (r.para && r.para.nome) || '—'
   const grupoRep = r.grupo_repasse || (r.para && r.para.grupo) || '—'
   const pcs = `${r.pcs} ${r.pcs === 1 ? 'prestação' : 'prestações'}`
   const trs = `${r.trs} ${r.trs === 1 ? 'TR' : 'TRs'}`
 
-  document.getElementById('cieTitulo').textContent = ehDestino
-    ? `Você recebeu ${r.pcs} ${r.pcs === 1 ? 'prestação de contas' : 'prestações de contas'}`
+  document.getElementById('cieTitulo').textContent =
+    ehDestino ? `Você recebeu ${r.pcs} ${r.pcs === 1 ? 'prestação de contas' : 'prestações de contas'}`
+    : ehOrigem ? `${r.pcs} ${r.pcs === 1 ? 'prestação passou' : 'prestações passaram'} para ${nomePara}`
     : `Repasse de prestações no Grupo ${grupoRep}`
   document.getElementById('cieSub').textContent =
     `Repasse de ${cieData(r.quando)} · aguardando sua ciência`
@@ -18732,21 +18742,40 @@ function cieRender(r) {
   // recusar (a ciência é devida de qualquer forma), então ele diz o que sabe e cala o resto,
   // em vez de escrever "a partir de —".
   const temVig = !!(r.vigencia && r.portaria)
+  const desde = temVig ? `<b>${escHtml(cieData(r.vigencia))}</b>` : ''
   const abertura = ehDestino
     ? (temVig
-        ? `A partir de <b>${escHtml(cieData(r.vigencia))}</b>, data de ingresso no Grupo de Trabalho
+        ? `A partir de ${desde}, data de ingresso no Grupo de Trabalho
            pela ${escHtml(trfPortariaRotulo(r.portaria))}, você assume a análise de
            <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>, anteriormente sob responsabilidade de
            <b>${escHtml(nomeDe)}</b>.`
         : `Você assume a análise de <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>,
            anteriormente sob responsabilidade de <b>${escHtml(nomeDe)}</b>.`)
-    : `Comunicamos que <b>${escHtml(nomePara)}</b> assume a análise de <b>${escHtml(pcs)}</b> em
-       <b>${escHtml(trs)}</b>, anteriormente sob responsabilidade de <b>${escHtml(nomeDe)}</b>.`
+    : ehOrigem
+      // ⚠️ A PERSPECTIVA DA ORIGEM É A DE QUEM ENTREGA — "sob sua responsabilidade, passaram
+      // para". Reaproveitar o texto do destino faria quem PERDEU o acervo ler que o recebeu; e
+      // o da coordenação a poria a falar de si mesma na terceira pessoa.
+      ? (temVig
+          ? `Comunicamos que <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>, sob sua
+             responsabilidade, passaram para <b>${escHtml(nomePara)}</b> a partir de ${desde}.`
+          : `Comunicamos que <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>, sob sua
+             responsabilidade, passaram para <b>${escHtml(nomePara)}</b>.`)
+      : `Comunicamos que <b>${escHtml(nomePara)}</b> assume a análise de <b>${escHtml(pcs)}</b> em
+         <b>${escHtml(trs)}</b>, anteriormente sob responsabilidade de <b>${escHtml(nomeDe)}</b>.`
 
-  const produtividade = `As prestações já baixadas permanecem registradas em nome de
-    <b>${escHtml(nomeDe)}</b>, e a produtividade delas não é alterada por este repasse. As
-    prestações ora assumidas por <b>${escHtml(nomePara)}</b> passarão a gerar produtividade em
-    seu nome na medida em que forem baixadas no SIGEF.`
+  // ⚠️ O FATO É O MESMO NOS TRÊS; MUDA A QUEM ELE SE DIRIGE. Para a origem, "em nome de
+  // {origem}" vira "em SEU nome" — é ela lendo sobre si —, e a segunda frase precisa NOMEAR o
+  // destino em vez de dizer "em seu nome", que ali passaria a apontar para a pessoa errada.
+  // A parte que AFIRMA A REGRA é a mesma do termo, palavra por palavra.
+  const produtividade = ehOrigem
+    ? `As prestações já baixadas permanecem registradas em <b>seu nome</b>, e a produtividade
+       delas não é alterada por este repasse. As prestações ora assumidas por
+       <b>${escHtml(nomePara)}</b> passarão a gerar produtividade em nome de
+       <b>${escHtml(nomePara)}</b> na medida em que forem baixadas no SIGEF.`
+    : `As prestações já baixadas permanecem registradas em nome de
+       <b>${escHtml(nomeDe)}</b>, e a produtividade delas não é alterada por este repasse. As
+       prestações ora assumidas por <b>${escHtml(nomePara)}</b> passarão a gerar produtividade em
+       seu nome na medida em que forem baixadas no SIGEF.`
 
   // ⚠️ A CAIXA DOS VENCIDOS SÓ FICA BEGE QUANDO HÁ. Bege com zero treina a pessoa a não olhar
   // a cor — e aí ela deixa de funcionar no dia em que houver prazo estourado.
@@ -18758,8 +18787,9 @@ function cieRender(r) {
 
   // ⚠️ A CAIXA DE MARCAR DA COORDENAÇÃO DIZ O GRUPO **DELA**, não o do repasse — ordem do
   // Richard. Quem assina declara na condição que ocupa; o grupo do repasse já está no título.
-  const declaracao = ehDestino
-    ? 'Declaro ciência do repasse acima e assumo a análise das prestações relacionadas, a partir desta data.'
+  const declaracao =
+    ehDestino ? 'Declaro ciência do repasse acima e assumo a análise das prestações relacionadas, a partir desta data.'
+    : ehOrigem ? 'Declaro ciência do repasse acima, na condição de analista de origem.'
     : `Declaro ciência do repasse acima, na condição de coordenação do Grupo ${r.meu_grupo || '—'}`
 
   document.getElementById('cieCorpo').innerHTML = `

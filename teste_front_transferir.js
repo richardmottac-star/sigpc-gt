@@ -424,6 +424,11 @@ S('O AVISO DE REPASSE NO SINO (01/09/2026)');
        'o aviso do analista de destino tem DOIS botoes');
   conf(/repasse_coord: +\['termo'\]/.test(html),
        'e o da coordenacao tem UM — o acervo nao e dela');
+  // ⚠️ A ORIGEM NAO TEM "VER NA MINHA PLANILHA", e a ausencia e o recado: as PCs sairam
+  // justamente de la. Um botao que a levasse a planilha para nao encontrar nada seria pior
+  // que botao nenhum.
+  conf(/repasse_origem: +\['termo'\]/.test(html),
+       'e o da origem tambem tem UM — as PCs sairam da planilha dela');
   conf(/Ver na minha planilha/.test(html) && /Abrir o termo de repasse/.test(html),
        'e os dois textos sao os que o Richard pediu');
 
@@ -497,8 +502,30 @@ S('A CIENCIA DO REPASSE — O MODAL DE ENTRADA (01/09/2026)');
   conf(/aguardando sua ciência/.test(rd), 'o subtitulo diz que aguarda a ciencia');
   // ⚠️ PRIMEIRA PESSOA para quem assume, TERCEIRA para quem toma conhecimento. Trocar um pelo
   // outro faria a coordenacao declarar que vai analisar as PCs.
-  conf(/você assume a análise de/.test(rd), 'o analista le na primeira pessoa');
-  conf(/Comunicamos que/.test(rd), 'e a coordenacao, na terceira');
+  conf(/você assume a análise de/.test(rd), 'o analista de destino le na primeira pessoa');
+  conf(/Comunicamos que <b>\$\{escHtml\(nomePara\)\}<\/b> assume a análise/.test(rd),
+       'e a coordenacao, na terceira');
+
+  // ⚠️ A ORIGEM E O TERCEIRO RAMO, e a perspectiva dela e a de QUEM ENTREGA. Reaproveitar o
+  // texto do destino faria quem PERDEU o acervo ler que o recebeu; o da coordenacao a poria a
+  // falar de si mesma na terceira pessoa.
+  conf(/const ehOrigem = r\.condicao === 'analista de origem'/.test(rd),
+       'ha o ramo da origem');
+  // ⚠️ A CONDICAO VEM DO SERVIDOR: e o mesmo texto que vai gravado na ciencia. Deduzir aqui,
+  // comparando U.id com as pontas, seria a segunda definicao de quem e quem.
+  conf(!/U\.id === \(r\.de/.test(rd) && !/r\.de\.id === U\.id/.test(rd),
+       'e ela nao e deduzida comparando U.id com as pontas');
+  conf(/sob sua\s+responsabilidade, passaram para <b>\$\{escHtml\(nomePara\)\}<\/b>/.test(rd),
+       'a origem le "sob sua responsabilidade, passaram para"');
+  conf(/prestações passaram' \} para \$\{nomePara\}/.test(rd) || /para \$\{nomePara\}`/.test(rd),
+       'e o titulo dela nomeia o destino');
+  // ⚠️ PARA A ORIGEM, "em nome de {origem}" VIRA "em SEU nome" — e ela lendo sobre si —, e a
+  // segunda frase NOMEIA o destino em vez de dizer "em seu nome", que ali apontaria para a
+  // pessoa errada. A parte que AFIRMA A REGRA continua a do termo, palavra por palavra.
+  conf(/permanecem registradas em <b>seu nome<\/b>/.test(rd),
+       'e as baixadas ficam explicitamente NO NOME DELA');
+  conf(/passarão a gerar produtividade em nome de\s+<b>\$\{escHtml\(nomePara\)\}<\/b>/.test(rd),
+       'e a segunda frase NOMEIA o destino, sem "em seu nome" ambiguo');
   // ⚠️ O PARAGRAFO DA PRODUTIVIDADE E O MESMO DO TERMO, palavra por palavra — inclusive por
   // nao depender de genero. Divergirem seria o sistema dizendo duas coisas sobre um repasse so.
   conf(/a produtividade delas não é alterada por este repasse/.test(rd),
@@ -523,6 +550,8 @@ S('A CIENCIA DO REPASSE — O MODAL DE ENTRADA (01/09/2026)');
   // na condicao que ocupa; o grupo do repasse ja esta no titulo.
   conf(/na condição de coordenação do Grupo \$\{r\.meu_grupo/.test(rd),
        'e a da coordenacao usa o grupo de QUEM ASSINA, nao o do repasse');
+  conf(/Declaro ciência do repasse acima, na condição de analista de origem\./.test(rd),
+       'e a da origem e a que o Richard escreveu');
 
   // ⚠️ O BOTAO NASCE DESABILITADO e so a caixa marcada o acende (armadilha 12); e o motivo fica
   // AO LADO, em texto — botao cinza nunca e mudo (armadilha 19).
