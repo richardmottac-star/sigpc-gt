@@ -372,5 +372,53 @@ conf(/Portaria \$\{d\.portaria\}/.test(semComent), 'a portaria');
 conf(/Voltou ao estoque em/.test(semComent), 'quando voltou ao estoque');
 conf(/As PCs já baixadas continuam com quem as analisou/.test(semComent), 'e que as baixadas ficam');
 
+
+S('O AVISO DE REPASSE NO SINO (01/09/2026)');
+{
+  // ⚠️ O DESTAQUE SAI DO MECANISMO QUE JA EXISTE. O servidor grava o aviso com urgente:true, e
+  // o ORDER BY do notificacao.listar ja o poe no TOPO — aqui so se escolhe a COR da barra.
+  conf(/const NOTIF_ICO = \{[^}]*repasse:/.test(html), "'repasse' tem icone proprio no sino");
+  conf(/const NOTIF_BARRA = \{ repasse: 'var\(--v\)' \}/.test(html),
+       'e a barra da borda esquerda dele e a VERDE, nao a vermelha do alarme');
+  conf(/border-left:3px solid '\+notifBarra\(n\)\+';/.test(html),
+       'a linha do sino usa a cor por tipo, e nao a vermelha fixa');
+
+  // ⚠️ QUEM DECIDE OS BOTOES E O ref_tipo, gravado pelo servidor — nunca o texto do titulo.
+  conf(/repasse: +\['planilha', 'termo'\]/.test(html),
+       'o aviso do analista de destino tem DOIS botoes');
+  conf(/repasse_coord: +\['termo'\]/.test(html),
+       'e o da coordenacao tem UM — o acervo nao e dela');
+  conf(/Ver na minha planilha/.test(html) && /Abrir o termo de repasse/.test(html),
+       'e os dois textos sao os que o Richard pediu');
+
+  // ⚠️ SEM O stopPropagation, clicar num botao dispararia TAMBEM o sinoClicar da linha, que
+  // navega para o termo — a pessoa apertaria um botao e chegaria no outro lugar.
+  const iB = html.indexOf('function notifBotoes(n)');
+  const bot = html.slice(iB, html.indexOf('async function notifAgir', iB));
+  conf(/event\.stopPropagation\(\)/.test(bot), 'os botoes param o clique da linha');
+  // ⚠️ SEM O ID NO LINK NAO HA BOTAO DE TERMO: um botao que abre um repasse que nao se sabe
+  // qual e seria o clique aceito que nao responde (armadilha 12).
+  conf(/quais\.includes\('termo'\) && id/.test(bot), 'sem o id no link, o botao do termo nao sai');
+  conf(/return ''/.test(bot), 'e num aviso que nao e de repasse nao ha barra de botoes');
+
+  // O link carrega o id do repasse, e a LINHA tambem leva ao termo — clique aceito que nao vai
+  // a lugar nenhum e a armadilha 15.
+  conf(/\^#repasse:\(\\d\+\)\$/.test(html), 'o link do aviso e #repasse:{id}');
+  const iS = html.indexOf('async function sinoClicar');
+  conf(/else if\(repId\) +trfTermo\(repId\)/.test(html.slice(iS, iS + 1400)),
+       'e o clique na linha abre o termo');
+
+  // ⚠️ trfTermo PASSOU A SER CHAMADA DE FORA DA TELA DE TRANSFERENCIA: vinda do sino, a
+  // irTransferir nunca rodou e _trfUsuarios esta VAZIA. Sem a carga, o termo recusaria com
+  // "nao encontrei o cadastro do analista de destino" — verdade sobre a lista, mentira sobre
+  // o banco.
+  const iT = html.indexOf('async function trfTermo(id)');
+  conf(/if\(!_trfUsuarios\.length\) await trfCarregarUsuarios\(\)/.test(html.slice(iT, iT + 1600)),
+       'a trfTermo carrega os usuarios quando vem de fora da tela');
+  // ⚠️ E O repasse_id ABRE O CAMINHO RESTRITO da busca global: sem ele, o botao do sino daria
+  // 403 no analista e no coordenador.
+  conf(/busca_global\?tr=\$\{encodeURIComponent\(tr\)\}&repasse_id=\$\{id\}/.test(html),
+       'e manda o repasse_id na busca global, que e o que abre a porta para as pontas');
+}
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);

@@ -454,15 +454,32 @@ console.log('\n═══ O SINO NO MODO: LE do alvo(), ESCREVE no U.id (24/08/20
        'o porque da assimetria esta escrito junto da regra');
 
   // ── o clique so marca o que e SEU, e a condicao e a POSSE, nao o modo ligado
-  const iC = html.indexOf('async function sinoClicar');
-  const clicar = html.slice(iC, html.indexOf('const el = document.getElementById(\'sinoPainel\')', iC));
+  //
+  // ⚠️ A GUARDA MUDOU DE FUNCAO EM 01/09/2026, e nao sumiu. Ela morava dentro da `sinoClicar`;
+  // com os botoes do aviso de repasse ela passou a ser chamada de DOIS lugares, e virou a
+  // `notifMarcarLida`. A primeira versao dos botoes REPETIA o bloco inteiro — e foi este teste,
+  // contando as escritas com `U.id`, que pegou. Dois blocos iguais divergem no primeiro
+  // ajuste, e o que divergiria aqui e justamente a guarda do modo "agir pela conta de".
+  const iC = html.indexOf('async function notifMarcarLida');
+  const clicar = html.slice(iC, html.indexOf('async function sinoClicar', iC));
   conf(/Number\(n\.destinatario_id\) === Number\(U\.id\)/.test(clicar),
-       'sinoClicar so marca quando a notificacao e do usuario logado');
-  conf(/if\(n && !n\.lida_em && meu\)/.test(clicar), 'e a remocao otimista entra na mesma condicao');
+       'so se marca quando a notificacao e do usuario logado');
+  conf(/if\(!\(n && !n\.lida_em && meu\)\) return/.test(clicar),
+       'e a remocao otimista entra na mesma condicao');
   // Sem isso o item sumiria da tela, o contador cairia, o PATCH casaria ZERO linhas (o WHERE
   // tem destinatario_id) e a carga de 60s traria tudo de volta — a tela piscando uma mentira.
-  conf(!/^\s*_notifs = _notifs\.filter\(x => x\.id !== id\)\s*$/m.test(clicar.split('if(n && !n.lida_em && meu)')[0] || ''),
-       'e nao ha remocao otimista fora dela');
+  conf(!/^\s*_notifs = _notifs\.filter\(x => x\.id !== id\)\s*$/m.test(clicar.split('const meu =')[0] || ''),
+       'e nao ha remocao otimista antes da condicao');
+  // ⚠️ E OS DOIS CAMINHOS ENTRAM PELA MESMA PORTA. Um deles que marcasse por conta propria
+  // pularia a guarda — que e exatamente o defeito que esta secao existe para pegar.
+  const iCl = html.indexOf('async function sinoClicar');
+  conf(/await notifMarcarLida\(id\)/.test(html.slice(iCl, iCl + 300)),
+       'a sinoClicar entra pela notifMarcarLida');
+  const iAg = html.indexOf('async function notifAgir');
+  conf(/await notifMarcarLida\(notifId\)/.test(html.slice(iAg, iAg + 300)),
+       'e os botoes do aviso de repasse, tambem');
+  conf((html.match(/destinatario_id: U\.id/g) || []).length === 2,
+       'e continuam sendo DUAS as escritas com U.id');
 
   // ── marcar-todas tem trava propria, alem de sumir da tela
   const iM = html.indexOf('async function sinoMarcarTodas');
