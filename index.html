@@ -18819,6 +18819,13 @@ let _trfCarregando = false
 // podem discordar, e uma segunda definição divergiria no primeiro ajuste.
 const trfEhAnalista = (u) => u && u.perfil === 'analista'
 
+// ⚠️ OS COORDENADORES FICAM NUMA LISTA PRÓPRIA, porque `_trfUsuarios` é filtrada por
+// `trfEhAnalista` — só `perfil === 'analista'` entra nela. O termo procurava o coordenador ali
+// dentro, e por isso a assinatura do meio saía sempre como travessão: quem ele procurava tinha
+// sido removido da lista antes. As duas saem da MESMA resposta de `GET /usuarios`, numa
+// chamada só: uma segunda consulta seria outra fonte para o mesmo documento.
+let _trfCoords = []
+
 async function irTransferir() {
   // ⚠️ `perfilEfetivo`, e não `U.perfil`: no papel analista o superadmin É analista em toda
   // parte, e esta tela move o acervo de outra pessoa. A guarda de verdade será do servidor
@@ -18900,8 +18907,10 @@ async function trfCarregarUsuarios() {
     if(j.error) throw new Error(j.error.message || 'Não foi possível carregar os analistas.')
     _trfUsuarios = (j.data || []).filter(trfEhAnalista)
       .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+    _trfCoords = (j.data || []).filter(u => u && u.perfil === 'coordenador')
   } catch(e) {
     _trfUsuarios = []
+    _trfCoords = []
     toast('Erro ao carregar os analistas: ' + e.message, 'err')
   }
   const de = document.getElementById('trfDe')
@@ -19399,6 +19408,25 @@ function trfPortariaRotulo(p) {
   return /fcee/i.test(s) ? 'Portaria ' + s : 'Portaria FCEE nº ' + s
 }
 
+/**
+ * O coordenador do grupo, para a assinatura do meio do termo — ou null.
+ *
+ * ⚠️ O NOME É O DE `usuarios.nome`, COMPLETO ("Gustavo Hallack Porto"). O `COORD_GRUPO` daqui
+ * do arquivo guarda o apelido do rótulo do seletor ("Grupo 3 — Gustavo"), que serve para
+ * escolher numa lista e não para assinar um documento.
+ *
+ * ⚠️ ENTRE DOIS COORDENADORES NO MESMO GRUPO, quem assina é quem está em exercício: o
+ * dispensado é descartado antes. Havendo empate, a ordem alfabética decide — é arbitrário, mas
+ * é estável, e o termo não muda de signatário a cada emissão.
+ */
+function trfCoordDoGrupo(grupo) {
+  if(grupo === null || grupo === undefined || grupo === '' || grupo === '—') return null
+  const nos = _trfCoords.filter(x => String(x.grupo) === String(grupo) && !ehDispensado(x))
+  if(!nos.length) return null
+  nos.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+  return nos[0]
+}
+
 async function trfTermo(id) {
   let d = _trfDet && _trfDet.id === id ? _trfDet : null
   if(!d) {
@@ -19459,7 +19487,10 @@ function trfMontarTermo(d, cards) {
   const nomeDe = (uDe && uDe.nome) || (d.de && d.de.nome) || '—'
   const nomePara = (uPara && uPara.nome) || (d.para && d.para.nome) || '—'
   const grupo = (uPara && uPara.grupo) || (uDe && uDe.grupo) || '—'
-  const coord = _trfUsuarios.find(x => x.perfil === 'coordenador' && String(x.grupo) === String(grupo))
+  // ⚠️ SEM COORDENADOR NO CADASTRO, A LINHA FICA EM BRANCO E O TERMO SAI ASSIM MESMO — sua
+  // ordem, 01/09. Ela é uma linha de assinatura: quem assina escreve o nome à mão. Recusar a
+  // emissão por causa dela seria travar o documento por um dado que o papel resolve sozinho.
+  const coord = trfCoordDoGrupo(grupo)
   // ⚠️ AS DUAS LINHAS ABAIXO SÃO DO CADASTRO DO DESTINO, e a `trfTermo` já recusou o termo
   // quando falta uma delas — aqui não há queda para `—`, porque um termo com a vigência em
   // branco é justamente o papel que não pode existir.
