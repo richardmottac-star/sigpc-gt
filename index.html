@@ -344,6 +344,19 @@ tr:last-child td{border-bottom:none;}
 .mo.jf .mch{position:sticky;top:0;z-index:5;cursor:move;user-select:none;}
 .mo.jf .mch h3{cursor:move;}
 
+/* ⚠️ A SEGUNDA CAMADA PRESA — para a janela que tem barra de trabalho abaixo do título.
+   Hoje é só o SGPe: a linha com sigla, número, ano e o botão Consultar. Ela era
+   flex-shrink:0 num .mc que não rolava, e por isso ficava parada de graça; quando a rolagem
+   passou a ser da janela inteira, ela virou conteúdo comum e saiu da tela junto com o resto.
+   Quem consulta o processo seguinte não pode ter de rolar de volta ao topo para achar o
+   campo — a caixa é de CONSULTA, e consultar de novo é o que mais se faz nela.
+
+   ⚠️ O top É MEDIDO, não escrito. A barra de título muda de altura com a largura da janela,
+   e um número fixo aqui grudaria esta camada 6px alto ou baixo demais em algum tamanho —
+   sobrepondo o título ou deixando uma fresta por onde o conteúdo passa. Quem mede é a
+   jfMedirTopo. */
+.mo.jf [data-jf-preso]{position:sticky;top:var(--jf-titulo,0px);z-index:4;background:#fff;}
+
 /* ⚠️ O #sgpeRolagem É A ÚNICA ROLAGEM INTERNA DO SISTEMA, e ela SAI na janela flutuante.
    O modal do SGPe prendia o cabeçalho e a busca e rolava só o miolo; a janela prende a
    barra de título e rola o resto — duas rolagens aninhadas dariam duas barras na mesma
@@ -4515,6 +4528,30 @@ function jfAplicar(mc, g) {
   mc.style.overflow  = 'auto'
 }
 
+/**
+ * A ALTURA DO QUE ESTÁ PRESO NO TOPO, escrita como variável de CSS na própria janela.
+ *
+ * ⚠️ SÃO DUAS MEDIDAS, E ELAS RESPONDEM PERGUNTAS DIFERENTES:
+ *   --jf-titulo  a barra de título sozinha — é onde a SEGUNDA camada presa se encosta
+ *   --jf-topo    tudo que está preso — é onde o CONTEÚDO que também gruda se encosta
+ * Numa janela sem segunda camada as duas são iguais, e é por isso que a conta é uma só.
+ *
+ * ⚠️ MEDIDO, NUNCA ESCRITO À MÃO. A barra de título quebra de linha conforme a largura, e a
+ * linha de busca do SGPe tem `flex-wrap` e um `#sgpeIdent` que só se enche depois da consulta —
+ * ela muda de altura DEPOIS de a janela abrir. Um número fixo acertaria num tamanho e erraria
+ * em todos os outros, e o erro não dá erro: sobra uma fresta por onde o conteúdo passa por
+ * baixo do título, ou a camada de baixo cobre a de cima.
+ */
+function jfMedirTopo(chave) {
+  const st = JF_ABERTAS[chave]; if(!st || !st.mc) return
+  const mch = st.el.querySelector('.mch')
+  const alturaTitulo = mch ? mch.offsetHeight : 0
+  let total = alturaTitulo
+  st.mc.querySelectorAll('[data-jf-preso]').forEach(p => { total += p.offsetHeight })
+  st.mc.style.setProperty('--jf-titulo', alturaTitulo + 'px')
+  st.mc.style.setProperty('--jf-topo', total + 'px')
+}
+
 /** O que está na tela agora, lido do ELEMENTO. */
 function jfGeoAtual(mc) {
   return { x: Math.round(parseFloat(mc.style.left) || 0), y: Math.round(parseFloat(mc.style.top) || 0),
@@ -4553,6 +4590,7 @@ function jfMaximizar(chave) {
                     w: Math.round(W * 0.98), h: Math.round(H * 0.96) })
   }
   jfPintarBotoes(chave)
+  jfMedirTopo(chave)
   jfFocar(chave)
 }
 
@@ -4585,6 +4623,10 @@ function jfRestaurar(chave) {
   // continuaram escritos nele. Recalcular a posição aqui faria a janela pular de lugar a cada
   // ida e volta à barra.
   st.mc.style.display = 'block'
+  // ⚠️ MEDIR DE NOVO AO RESTAURAR: enquanto a janela esteve minimizada o `.mc` ficou
+  // `display:none`, e tudo dentro dele mediu ZERO. Sem isto, a janela voltaria da barra com o
+  // topo preso em 0px — e o conteúdo passaria por baixo do título.
+  jfMedirTopo(chave)
   jfFocar(chave)
   jfBarraDesenhar()
 }
@@ -4712,6 +4754,12 @@ function jfAbrir(chave, el) {
     // Clicar em qualquer lugar da janela traz ela para a frente — e é isso que define quem o
     // Esc fecha quando há várias abertas.
     mc.addEventListener('pointerdown', () => jfFocar(chave), true)
+
+    if(typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(() => jfMedirTopo(chave))
+      const mchEl = el.querySelector('.mch'); if(mchEl) ro.observe(mchEl)
+      mc.querySelectorAll('[data-jf-preso]').forEach(p => ro.observe(p))
+    }
   }
 
   JF_ABERTAS[chave] = JF_ABERTAS[chave] || { el, mc, min: false, restaurar: null, titulo: JF_TITULO[chave] }
@@ -4724,10 +4772,19 @@ function jfAbrir(chave, el) {
   st.restaurar = { x: g.x, y: g.y, w: g.w, h: g.h }
   jfAplicar(mc, g)
   jfPintarBotoes(chave)
+  jfMedirTopo(chave)
   jfFocar(chave)
   jfBarraDesenhar()
   return st
 }
+
+// ⚠️ E A MEDIDA SE REFAZ SOZINHA. A altura do topo preso muda por caminhos que o gerenciador
+// não controla: a consulta enche o `#sgpeIdent`, que está DENTRO da linha de busca e pode
+// fazê-la quebrar; e a janela do navegador muda de tamanho. Um `ResizeObserver` vê os dois
+// sem que cada um deles precise se lembrar de avisar — e lembrar é justamente o que se
+// esquece. O `resize` da janela fica como rede: nem todo navegador antigo tem o observador.
+function jfMedirTodas() { Object.keys(JF_ABERTAS).forEach(jfMedirTopo) }
+window.addEventListener('resize', jfMedirTodas)
 
 // ── Esc ─────────────────────────────────────────────────────────────────────
 //
@@ -6008,12 +6065,17 @@ const VINC_CENTRO = 'text-align:center;'
 // A barra que marca o consultado, no lugar do selo que descia de linha (31/08/2026).
 const VINC_BARRA = '#EF9F27'
 
-// ⚠️ O CABEÇALHO E OS TÍTULOS FICAM DENTRO DA ÁREA QUE ROLA, presos com `sticky` — não acima
-// dela. É o único jeito de eles continuarem em cima das suas colunas quando a barra de
-// rolagem aparece: a barra come ~15px da LARGURA das linhas, e um cabeçalho posto FORA da
-// caixa não perderia esses 15px. A coluna elástica encolheria só nas linhas, e os títulos
-// passariam a apontar para a coluna vizinha.
-const VINC_ROLAGEM = 'max-height:330px;overflow-y:auto;'
+// ⚠️ A FAIXA NÃO TEM MAIS ROLAGEM PRÓPRIA (31/08/2026, segunda rodada). Os 330px com
+// `overflow-y:auto` nasceram quando o modal era uma caixa fixa de 90vh e a lista precisava
+// caber nela. A janela flutuante rola inteira, e aí a caixa de dentro virou uma segunda barra
+// de rolagem no meio da primeira: para chegar ao fim da lista era preciso rolar a janela até
+// a faixa e depois rolar a faixa — e a roda do mouse escolhe uma das duas sem avisar qual.
+//
+// ⚠️ O CABEÇALHO CONTINUA PRESO, e o alinhamento continua garantido — por outro caminho.
+// O argumento de antes era que um cabeçalho FORA da caixa de 330px não perderia os ~15px que
+// a barra de rolagem comia da largura das linhas, e os títulos passariam a apontar para a
+// coluna vizinha. Agora quem rola é o `.mc`, e o cabeçalho e as linhas estão os dois DENTRO
+// dele: a barra de rolagem tira a mesma largura dos dois, e eles continuam alinhados.
 
 /** O cabeçalho — todos os títulos centrados sobre a sua coluna, e uma linha embaixo. */
 function sgpeVincCabecalho() {
@@ -6236,25 +6298,32 @@ function sgpeVincHtml(d) {
   // ⚠️ O `gap` ENTRE AS LINHAS SAIU. Com um `border-top` em cada uma, o espaço abriria um vão
   // claro entre a divisória e a linha seguinte — a divisória deixaria de dividir duas linhas e
   // passaria a flutuar entre elas. Numa tabela, as linhas se encostam.
-  // ⚠️ SÓ A LISTA ROLA. A caixa de baixo tem altura máxima e rolagem própria; a TR, a
-  // entidade, a contagem e os títulos das colunas ficam presos no topo DELA, com `sticky`, e
-  // as linhas passam por baixo. Numa TR de 58 processos era o cabeçalho que sumia primeiro, e
-  // quem estava no fim da lista já não via de qual TR aquilo era.
+  // ⚠️ UMA ROLAGEM SÓ, A DA JANELA. A TR, a entidade, a contagem e os títulos das colunas
+  // ficam presos no topo enquanto as linhas passam por baixo — numa TR de 58 processos era o
+  // cabeçalho que sumia primeiro, e quem estava no fim da lista já não via de qual TR aquilo
+  // era. Mas quem rola é a janela inteira, e não uma caixa de 330px aqui dentro.
+  //
+  // ⚠️ O `top` É A ALTURA DO TOPO PRESO DA JANELA, não zero. Acima desta faixa há duas
+  // camadas grudadas — a barra de título e a linha de busca do SGPe —, e um `top:0` encostaria
+  // o cabeçalho da TR no alto do `.mc`, ATRÁS das duas (elas têm z-index maior). Ele ficaria
+  // preso onde ninguém o vê, que é o mesmo que não estar preso. A medida vem da
+  // `jfMedirTopo`; o `0px` de reserva é para o dia em que esta faixa for desenhada fora de
+  // uma janela flutuante.
   //
   // ⚠️ O FUNDO BRANCO NO BLOCO PRESO É OBRIGATÓRIO: sem ele o `sticky` fica transparente e as
   // linhas aparecem POR CIMA do texto do cabeçalho enquanto rolam.
   //
-  // ⚠️ E A JANELA CONTINUA ROLANDO POR FORA, como já rolava — o `#sgpeRolagem` do modal não
-  // foi tocado. São duas rolagens aninhadas de propósito: a de dentro é da lista da TR, a de
-  // fora é da consulta inteira.
+  // ⚠️ E O CAMINHO DO `sticky` TEM DE ESTAR LIVRE DE `overflow`. Entre este bloco e o `.mc`
+  // que rola há o `#sgpeVinculo` (sem estilo) e o `#sgpeRolagem`, que TEM `overflow-y:auto`
+  // inline — e é desligado na janela flutuante por `overflow:visible !important`. Se aquele
+  // `!important` sair, este `sticky` para de grudar e nada acusa: o cabeçalho simplesmente
+  // rola junto com a lista.
   return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cl);">
-      <div style="${VINC_ROLAGEM}">
-        <div style="position:sticky;top:0;z-index:2;background:#fff;">
-          ${cabecalho}
-          ${sgpeVincCabecalho()}
-        </div>
-        <div style="display:flex;flex-direction:column;">${mae}${linhas}</div>
+      <div style="position:sticky;top:var(--jf-topo,0px);z-index:2;background:#fff;">
+        ${cabecalho}
+        ${sgpeVincCabecalho()}
       </div>
+      <div style="display:flex;flex-direction:column;">${mae}${linhas}</div>
       ${rodape}
     </div>`
 }
@@ -6339,7 +6408,11 @@ function sgpeConsultaAbrir(bruto) {
         <button class="mcx" data-f="x" title="Fechar (Esc)">✕</button>
       </div>
 
-      <div style="padding:14px 18px 13px;border-bottom:1px solid var(--cl);flex-shrink:0;">
+      ${/* ⚠️ data-jf-preso: ESTA LINHA NÃO ROLA PARA FORA. O flex-shrink:0 ao lado dela é o
+            que sobrou de quando o .mc era flex e não rolava — hoje ele é inerte, porque a
+            janela flutuante desfaz o flex para que a rolagem seja uma só. Quem prende a
+            linha agora é a marca, e o CSS que ela dispara. */''}
+      <div data-jf-preso style="padding:14px 18px 13px;border-bottom:1px solid var(--cl);flex-shrink:0;">
         <div style="display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;">
           ${/* ⚠️ OS TRÊS RÓTULOS SUMIRAM COM AS TRÊS CAIXAS, e é o logo que os substitui.
                 Esta janela é do SGPe do começo ao fim: escrever "Sigla · Número · Ano" ao

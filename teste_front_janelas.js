@@ -238,6 +238,49 @@ conf(/\.mo\.jf #sgpeRolagem\{[^}]*overflow:visible !important/.test(semComent),
 conf(/mc\.style\.overflow\s*=\s*'auto'/.test(semComent), 'e quem rola passa a ser o .mc');
 conf(/mc\.style\.display\s*=\s*'block'/.test(semComent),
      'com o display:flex inline do SGPe desfeito, senao o sticky da barra nao pega');
+// ⚠️ E A FAIXA DE VINCULACAO TAMBEM PERDEU A DELA (31/08, segunda rodada): eram 330px com
+// rolagem propria dentro da janela que ja rola — duas barras, e a roda do mouse escolhendo
+// uma sem avisar qual. Agora e uma so, a do .mc.
+conf(!/max-height:330px/.test(semComent), 'a faixa de vinculacao nao tem mais rolagem propria');
+
+S('11b. O TOPO PRESO — DUAS CAMADAS, E A MEDIDA DELAS');
+// ⚠️ O DEFEITO: a linha de busca do SGPe (sigla, numero, ano, Consultar) era flex-shrink:0
+// num .mc que NAO rolava, e por isso ficava parada de graca. Quando a rolagem passou a ser da
+// janela inteira, ela virou conteudo comum e saiu da tela junto com o resto — e quem consulta
+// o processo seguinte tinha de rolar de volta ao topo para achar o campo.
+conf(/<div data-jf-preso style="padding:14px 18px 13px/.test(semComent),
+     'a linha de busca do SGPe esta marcada como presa');
+conf(/\.mo\.jf \[data-jf-preso\]\{[^}]*position:sticky/.test(semComent), 'e a marca a prende');
+conf(/\.mo\.jf \[data-jf-preso\]\{[^}]*background:#fff/.test(semComent),
+     'com fundo opaco, senao o conteudo passa por baixo dela');
+// ⚠️ ELA SE ENCOSTA NA BARRA DE TITULO, e nao no alto da janela: com top:0 as duas ficariam
+// no mesmo lugar, e a de z-index maior cobriria a outra.
+conf(/\.mo\.jf \[data-jf-preso\]\{[^}]*top:var\(--jf-titulo,0px\)/.test(semComent),
+     'e se encosta na barra de titulo, nao no alto do .mc');
+// ⚠️ A ALTURA E MEDIDA, NUNCA ESCRITA. A barra de titulo quebra de linha conforme a largura,
+// e a linha de busca tem flex-wrap e um #sgpeIdent que so se enche DEPOIS da consulta — ela
+// muda de altura com a janela ja aberta. Um numero fixo acertaria num tamanho e erraria em
+// todos os outros, e o erro nao da erro: sobra uma fresta, ou uma camada cobre a outra.
+conf(/function jfMedirTopo\(chave\)/.test(semComent), 'ha uma funcao que MEDE o topo preso');
+conf(/setProperty\('--jf-titulo'/.test(semComent) && /setProperty\('--jf-topo'/.test(semComent),
+     'e ela escreve as DUAS medidas: a barra de titulo e o topo inteiro');
+conf(/querySelectorAll\('\[data-jf-preso\]'\)\.forEach\(p => \{ total \+= p\.offsetHeight \}\)/.test(semComent),
+     'o topo inteiro soma as camadas presas a barra de titulo');
+// ⚠️ E SE REFAZ ONDE A ALTURA PODE TER MUDADO. Minimizada, o .mc fica display:none e tudo
+// dentro dele mede ZERO — sem medir de novo ao restaurar, a janela voltaria da barra com o
+// topo preso em 0px e o conteudo passaria por baixo do titulo.
+const chamadas = (semComent.match(/jfMedirTopo\(chave\)/g) || []).length;
+conf(chamadas >= 4, 'ela e chamada ao abrir, ao maximizar, ao restaurar e pelo observador', chamadas);
+conf(/function jfRestaurar\(chave\)[\s\S]{0,520}jfMedirTopo\(chave\)/.test(semComent),
+     'inclusive ao voltar da barra das minimizadas');
+// ⚠️ O ResizeObserver ve o que ninguem avisa: a consulta enchendo o #sgpeIdent, que esta
+// DENTRO da linha de busca e pode faze-la quebrar. Lembrar de avisar e o que se esquece.
+conf(/new ResizeObserver\(\(\) => jfMedirTopo\(chave\)\)/.test(semComent),
+     'um ResizeObserver refaz a medida sozinho');
+conf(/typeof ResizeObserver === 'function'/.test(semComent),
+     'com guarda, porque nem todo navegador o tem');
+conf(/window\.addEventListener\('resize', jfMedirTodas\)/.test(semComent),
+     'e o resize da janela fica como rede');
 
 S('12. O EXPANDIR PROPRIO DO SGPe SAIU');
 // ⚠️ ELE VIROU O MAXIMIZAR, que e o mesmo botao nas cinco janelas. Dois botoes de maximizar

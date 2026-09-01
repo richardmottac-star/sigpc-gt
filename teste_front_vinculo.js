@@ -223,27 +223,36 @@ const hInvAtual = ctx.sgpeVincHtml({ ...BLOCO,
 conf(/line-through/.test(hInvAtual) && /border-left-color:#EF9F27/.test(hInvAtual),
      'invalido E consultado mostra o riscado e a barra');
 
-S('6b. O CABECALHO PRESO E A LISTA QUE ROLA');
-// ⚠️ SO A LISTA ROLA (31/08/2026). A caixa de baixo tem altura maxima e rolagem propria; a
-// TR, a entidade, a contagem e os titulos das colunas ficam presos no topo DELA, e as linhas
-// passam por baixo. Numa TR de 58 processos era o cabecalho que sumia primeiro, e quem estava
-// no fim da lista ja nao via de qual TR aquilo era.
-conf(/max-height:330px;overflow-y:auto/.test(h), 'a lista tem altura maxima e rolagem propria');
-conf(/position:sticky;top:0/.test(h), 'e o bloco do cabecalho fica preso no topo dela');
-// ⚠️ E ELE FICA DENTRO DA CAIXA QUE ROLA, nao acima dela. Fora, ele nao perderia os ~15px que
-// a barra de rolagem come da LARGURA das linhas: a coluna elastica encolheria so nas linhas e
-// os titulos passariam a apontar para a coluna vizinha — exatamente quando ha lista demais
-// para ler, que e quando o titulo serve para alguma coisa.
-const iCaixa = h.indexOf('max-height:330px');
-conf(iCaixa > 0 && h.indexOf('text-transform:uppercase') > iCaixa,
-     'os titulos das colunas estao DENTRO da caixa que rola');
-conf(iCaixa > 0 && h.indexOf('2020TR000623') > iCaixa, 'e a TR e a entidade tambem');
-// ⚠️ FUNDO OPACO NO BLOCO PRESO: sem ele o sticky fica transparente e as linhas aparecem POR
-// CIMA do texto do cabecalho enquanto rolam.
-conf(/position:sticky;top:0;z-index:2;background:#fff/.test(h),
+S('6b. O CABECALHO PRESO, E UMA ROLAGEM SO');
+// ⚠️ A FAIXA NAO TEM MAIS ROLAGEM PROPRIA (31/08/2026, segunda rodada). Os 330px com
+// overflow-y:auto nasceram quando o modal era uma caixa fixa de 90vh; a janela flutuante rola
+// inteira, e a caixa de dentro virou uma segunda barra de rolagem no meio da primeira — para
+// chegar ao fim da lista era preciso rolar a janela ate a faixa e depois rolar a faixa, e a
+// roda do mouse escolhe uma das duas sem avisar qual.
+conf(!/max-height:330px/.test(h), 'a faixa NAO tem altura maxima');
+conf(!/overflow-y:auto/.test(h) && !/overflow:auto/.test(h), 'nem rolagem propria');
+// ⚠️ MAS O CABECALHO CONTINUA PRESO — e um sticky sem caixa propria e o ponto todo desta
+// rodada: ele gruda contra a janela, que e quem rola agora.
+conf(/position:sticky/.test(h), 'o bloco do cabecalho continua preso');
+conf(/position:sticky;top:var\(--jf-topo,0px\);z-index:2;background:#fff/.test(h),
      'com fundo opaco e acima das linhas');
-// ⚠️ A JANELA CONTINUA ROLANDO POR FORA — o #sgpeRolagem do modal nao foi tocado.
-conf(/id="sgpeRolagem" style="overflow-y:auto/.test(html), 'e a rolagem do modal segue de pe');
+// ⚠️ O top NAO E ZERO, E ESTA E A ARMADILHA DA RODADA. Acima desta faixa ha DUAS camadas
+// grudadas na janela — a barra de titulo e a linha de busca do SGPe —, e as duas tem z-index
+// maior. Com top:0 o cabecalho da TR grudaria no alto do .mc, ATRAS delas: preso onde
+// ninguem o ve, que e o mesmo que nao estar preso, e nada acusa.
+conf(!/position:sticky;top:0/.test(h), 'e o top NAO e zero — ele ficaria atras da barra de titulo');
+conf(/--jf-topo/.test(h), 'ele usa a altura MEDIDA do topo preso da janela');
+// A ordem no HTML nao mudou: cabecalho, titulos, e so entao as linhas.
+conf(h.indexOf('2020TR000623') < h.indexOf('text-transform:uppercase'),
+     'a TR vem antes dos titulos das colunas');
+conf(h.indexOf('text-transform:uppercase') < h.indexOf('SCC 00011160/2020'),
+     'e os titulos antes da primeira linha');
+// ⚠️ O CAMINHO DO STICKY TEM DE ESTAR LIVRE DE overflow ate o .mc que rola. O #sgpeRolagem
+// tem overflow-y:auto INLINE, e quem o desliga na janela flutuante e um !important no CSS.
+// Se aquele !important sair, este sticky para de grudar e nada acusa — o cabecalho
+// simplesmente rola junto com a lista.
+conf(/\.mo\.jf #sgpeRolagem\{[^}]*overflow:visible !important/.test(semComent),
+     'e o overflow do #sgpeRolagem e desligado na janela, senao o sticky nao gruda');
 
 S('7. O RODAPE');
 conf(/1 PC sem processo gravado/.test(h), 'diz quantas PCs nao tem processo', 'singular');
