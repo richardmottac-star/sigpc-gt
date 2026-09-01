@@ -4135,7 +4135,20 @@ async function buscar() {
       //
       // Conferido contra o banco antes de trocar: 788 TRs Livres pela regra antiga, 788 pela
       // nova. Nenhuma some da tela — o que muda é que as que aparecem agora dão para assumir.
-      const statusDerivado = (!t.analista_nome && (t.pcs_livres === undefined || +t.pcs_livres > 0)) ? 'livre'
+      // ⚠️ O DONO SAI DE `abertas_com_dono`, e não do `analista_nome` (01/09/2026). O nome
+      // que o `resumo_tr` devolve é `MAX()` sobre TODAS as linhas, inclusive as BAIXADAS — e a
+      // baixada mantém o nome de quem a analisou por regra, porque a produtividade é dela.
+      //
+      // Numa TR MISTA — o que toda TR vira depois de um repasse — o nome do analista antigo
+      // continuava ali pelas baixadas, e a TR nunca aparecia como Livre. A 2021TR000693 voltou
+      // ao estoque por um desfazer e ficou "Em Análise", sem botão Assumir: ninguém conseguia
+      // pegá-la.
+      //
+      // ⚠️ E NÃO DÁ PARA DERIVAR ISSO DAQUI. "Aberta com dono" não é
+      // `total - baixadas - livres`: há 1.384 PCs SEM dono que também não passam no
+      // `PC_LIVRE_SQL` (status 'analise' e afins), e contá-las como "com dono" tirava 154 TRs
+      // do Estoque. Medido antes de publicar. Quem sabe é o servidor, e ele passou a dizer.
+      const statusDerivado = (+(t.abertas_com_dono || 0) === 0 && (t.pcs_livres === undefined || +t.pcs_livres > 0)) ? 'livre'
         : baixadas >= totalPcs ? 'baixada'
         : statusList.includes('reanalise') ? 'reanalise'
         : statusList.includes('diligencia') ? 'diligencia'
