@@ -406,12 +406,15 @@ console.log('\n═══ 4g. BOTAO BUSCAR EM TODAS AS TELAS ═══');
   // ⚠️ O C.I. SAIU DAQUI EM 25/08/2026, e nao por descuido: a tela nova tem DOIS blocos de
   // busca independentes, cada um com o seu Buscar, e o de cima so acende com os tres campos
   // do processo preenchidos. O botao compartilhado tem um so, e sempre aceso.
+  // ⚠️ A BUSCA GLOBAL ENTROU EM 31/08/2026 — ela tinha um botao proprio, escrito a mao com
+  // uma lupa de emoji e 42px de altura, fora do padrao das outras. Passou ao compartilhado
+  // junto com as caixas de TR e de processo.
   const usos = (html.match(/\$\{BTN_BUSCAR\('/g) || []).length;
-  conf(usos === 5, `${usos} telas com o botao Buscar compartilhado (esperado 5)`);
+  conf(usos === 6, `${usos} telas com o botao Buscar compartilhado (esperado 6)`);
   conf(/onclick="ciBuscarSgpe\(\)"/.test(html) && /onclick="ciBuscarGeral\(\)"/.test(html),
        'e o C.I. tem os seus dois, um por bloco');
 
-  for (const acao of ['buscar()', 'buscarPlan()', 'adminFiltrar()', 'estBuscarAgora()', 'estLogBuscarAgora()']) {
+  for (const acao of ['buscar()', 'buscarPlan()', 'adminFiltrar()', 'estBuscarAgora()', 'estLogBuscarAgora()', 'bgBuscar()']) {
     conf(html.includes(`\${BTN_BUSCAR('${acao}')}`), `botao chamando ${acao}`);
   }
 

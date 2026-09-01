@@ -19,12 +19,79 @@ conf(/U\.perfil !== 'superadmin'/.test(ir), 'a funcao tambem recusa na origem');
 conf(/A GUARDA É DO SERVIDOR/.test(html), 'e o codigo diz onde a garantia mora');
 
 secao('2. UMA CHAMADA, E O SERVIDOR AGREGA');
-const busc = html.slice(html.indexOf('async function bgBuscar'), html.indexOf('async function bgBuscar') + 1200);
-conf(/\/busca_global\?termo=/.test(busc), 'chama GET /busca_global');
-conf(/usuario_id=\$\{U\.id\}/.test(busc), 'mandando o usuario_id');
+const busc = html.slice(html.indexOf('async function bgBuscar'), html.indexOf('async function bgBuscar') + 2400);
+conf(/\/busca_global\?\$\{p\}/.test(busc), 'chama GET /busca_global');
+conf(/new URLSearchParams\(\{ usuario_id: U\.id \}\)/.test(busc), 'mandando o usuario_id');
 conf(/sgpeAbsorver/.test(busc), 'e absorve o mapa de links do SGPe');
 conf(!/prestacoes_contas\?/.test(busc), 'a tela NAO busca as PCs por conta propria');
-conf(/termo\.length < 2/.test(busc), 'exige 2 caracteres antes de ir ao servidor');
+
+secao('2b. A BARRA ENTROU NO PADRAO DAS OUTRAS SETE (31/08/2026)');
+// ⚠️ ESTA TELA FICOU DE FORA DA PADRONIZACAO porque NAO E MODAL: e uma tela inteira (#BODY),
+// e a rodada anterior varreu os filtros das telas de lista. Aqui a busca era um campo livre
+// so, e a TR e o processo iam misturados no meio do texto.
+const bar = html.slice(html.indexOf('function irBuscaGlobal'), html.indexOf('function bgLimpar'));
+conf(/campoProcHtml\('bgPr'/.test(bar) && /campoTrHtml\('bgTr'/.test(bar),
+     'a TR e o processo tem caixa propria, pelos MESMOS helpers das outras barras');
+// ⚠️ O SGPe VEM PRIMEIRO por ser o mais consultado, e a ordem no HTML e a ordem na tela.
+conf(bar.indexOf("campoProcHtml('bgPr'") < bar.indexOf("campoTrHtml('bgTr'"),
+     'e o SGPe vem antes do SIGEF, como nas outras');
+// ⚠️ A .cmp-linha ocupa a linha inteira (flex:0 0 100%) — e ela que joga o campo livre e os
+// botoes para a SEGUNDA linha, sem nenhuma quebra escrita a mao.
+conf(/<div class="cmp-linha">/.test(bar), 'as duas caixas dividem a primeira linha');
+conf(/class="filtros"/.test(bar), 'e a barra usa a caixa de filtro padrao');
+conf(/id="bgTermo" placeholder="Entidade, NL ou PC"/.test(bar),
+     'o campo livre ficou com entidade, NL e PC');
+conf(/data-colagem/.test(bar), 'e aceita colagem normalizada, como as outras');
+// ⚠️ UM PAR DE BOTOES PARA A BARRA INTEIRA. O Limpar e novo nesta tela.
+conf(/BTN_BUSCAR\('bgBuscar\(\)'\)/.test(bar) && /bgLimpar\(\)/.test(bar),
+     'um par de botoes para a barra toda');
+// ⚠️ A FRASE SOBRE AS QUATRO GRAFIAS SAIU: ela existia porque o campo era LIVRE e a pessoa
+// tinha de adivinhar o formato. Com as caixas, o formato esta desenhado na tela.
+conf(!/Digite como preferir/.test(html), 'a frase de ajuda das quatro grafias saiu');
+// ⚠️ E O CAMPO LIVRE NAO PODE VOLTAR A PEDIR TR NEM PROCESSO no placeholder — seria a tela
+// convidando a digitar ali o que agora tem caixa propria.
+conf(!/placeholder="TR, PC, NL, processo SGPe ou entidade"/.test(html),
+     'e o campo livre nao pede mais TR nem processo');
+
+secao('2c. TR E PROCESSO VAO SEPARADOS PARA A ROTA');
+// ⚠️ COMO AS OUTRAS SETE BARRAS, e a rota combina os tres com AND. Antes eles iam no meio do
+// campo livre, e procurar a TR 704 E o processo SCC 11160 juntos era impossivel — a busca
+// livre e um OR sobre varios campos, e um OR nunca estreita.
+conf(/const tr = campoTrTermo\('bgTr'\)/.test(busc), 'a TR sai pelo campoTrTermo');
+conf(/const processo = campoProcTermo\('bgPr'\)/.test(busc), 'e o processo pelo campoProcTermo');
+conf(/p\.set\('tr', tr\)/.test(busc) && /p\.set\('processo', processo\)/.test(busc),
+     'e os dois vao SEPARADOS na URL');
+// ⚠️ SO O QUE ESTA PREENCHIDO ENTRA NA URL: um tr= vazio nao muda a resposta, mas apareceria
+// no log do servidor como se a caixa tivesse sido usada.
+conf(/if\(tr\) p\.set/.test(busc) && /if\(processo\) p\.set/.test(busc) && /if\(termo\) p\.set/.test(busc),
+     'e caixa vazia nao vira parametro');
+// ⚠️ BASTA UMA DAS TRES, e o minimo de 2 caracteres e SO do campo livre — ele varre entidade,
+// NL e PC, e uma letra sozinha traria milhares de TRs. A TR e o processo sao filtros de
+// COLUNA, e "2021" na caixa do ano e uma busca inteira, nao um comeco.
+conf(/if\(!termo && !tr && !processo\)/.test(busc), 'basta uma das tres caixas');
+conf(/if\(termo && termo\.length < 2\)/.test(busc),
+     'e o minimo de 2 caracteres vale so para o campo livre');
+
+secao('2d. O ECO DO QUE FOI PROCURADO');
+// ⚠️ O ECO SAI DO QUE A TELA MANDOU, e nao do d.termo que a rota devolve: numa busca por TR
+// ou por processo o termo vem VAZIO, e a frase viraria 'Nada encontrado para ""'.
+conf(/_bgAlvo = \[termo, tr, processo\]\.filter\(Boolean\)\.join/.test(busc),
+     'a tela guarda o que foi procurado');
+const pint = html.slice(html.indexOf('function bgPintar'), html.indexOf('const BG_SIT'));
+conf(!/escHtml\(d\.termo\)/.test(pint), 'e o resultado NAO ecoa o d.termo da rota');
+conf((pint.match(/escHtml\(_bgAlvo\)/g) || []).length === 2,
+     'nos dois lugares: o "nada encontrado" e a contagem',
+     (pint.match(/escHtml\(_bgAlvo\)/g) || []).length);
+
+secao('2e. O LIMPAR');
+const limp = html.slice(html.indexOf('function bgLimpar'), html.indexOf('async function bgBuscar'));
+conf(/'bgTermo','bgTrAno','bgTrNum','bgPrSigla','bgPrNum','bgPrAno'/.test(limp),
+     'apaga as SEIS caixas — as tres do processo, as duas da TR e a livre');
+conf(/campoMarcar\(campoGrupo\('bgPr'\)\)/.test(limp), 'e desmarca o aviso de sigla');
+// ⚠️ O LIMPAR NAO REBUSCA, e e a diferenca desta tela para as outras. No Estoque o Limpar
+// redesenha uma lista JA CARREGADA; aqui a busca e uma consulta ao servidor sobre 14.652 PCs,
+// e "limpar tudo e buscar" seria pedir o acervo inteiro — ou, com tudo vazio, um erro.
+conf(!/bgBuscar\(\)/.test(limp), 'e NAO dispara uma busca nova');
 
 secao('3. UM CARD POR TR');
 const card = html.slice(html.indexOf('function bgCard'), html.indexOf('function bgCard') + 3100);

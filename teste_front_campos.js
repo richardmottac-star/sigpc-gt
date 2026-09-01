@@ -599,13 +599,18 @@ conf(ctx.procInvalido('SCC 197/2021') === false && ctx.procInvalido('ADR20 1234/
      'sem marcar de invalido o que e valido');
 
 // ════════════════════════════════════════════════════════════════════════════
-console.log('\n═══ 14b. AS SETE BARRAS COMBINADAS ═══');
+console.log('\n═══ 14b. AS OITO BARRAS COMBINADAS ═══');
 //
-// ⚠️ SETE TELAS, E CADA UMA MANDA O FILTRO PARA ONDE ELE TEM DE IR. Quatro conversam com o
+// ⚠️ OITO TELAS, E CADA UMA MANDA O FILTRO PARA ONDE ELE TEM DE IR. Cinco conversam com o
 // servidor (as rotas passaram a aceitar `tr` e `processo` separados em 31/08); tres filtram a
 // lista que JA carregaram, e sempre filtraram. Misturar os dois modos e o que a armadilha 16
 // proibe: recortar no navegador uma lista que o servidor pagina faz o contador contar a
 // pagina, nao o acervo.
+//
+// ⚠️ A BUSCA GLOBAL ENTROU POR ULTIMO, em 31/08/2026, e ficou de fora da rodada das sete por
+// um motivo que vale registrar: ela NAO E MODAL nem tela de lista — e uma tela inteira
+// (`#BODY`) com uma busca so, e a varredura anterior procurou barras de FILTRO. O criterio
+// "onde ha caixa de TR e de processo" nao a encontrava porque ela ainda nao tinha nenhuma.
 const BARRAS = [
   ['Estoque de TRs',       'fTr',      'fPr',      'servidor'],
   ['Minha Planilha',       'plTr',     'plPr',     'servidor'],
@@ -614,6 +619,7 @@ const BARRAS = [
   ['Controle Interno',     'ciFTr',    'ciFPr',    'servidor'],
   ['Estornar Baixas',      'estTr',    'estPr',    'cliente'],
   ['Estornos Realizados',  'estLogTr', 'estLogPr', 'cliente'],
+  ['Busca global',         'bgTr',     'bgPr',     'servidor'],
 ];
 for (const [tela, idTr, idPr] of BARRAS) {
   conf(new RegExp("campoTrHtml\\('" + idTr + "'").test(semComent), `${tela}: tem a caixa de TR`);
@@ -624,6 +630,13 @@ for (const [tela, idTr, idPr] of BARRAS) {
 // ocupa a largura inteira empurra o resto para a linha de baixo. E fazer isso por CSS, e nao
 // por dois conteineres, e o que mantem UMA barra — os botoes continuam sendo um par so.
 conf(/\.cmp-linha\{flex:0 0 100%/.test(html), 'a primeira linha ocupa a largura inteira');
+
+// ⚠️ E O COMENTARIO DO index.html DIZIA 14px E 20px ate 31/08/2026, enquanto o CSS ja dizia
+// 18 e 22 — as alturas subiram e a explicacao ficou para tras. Um comentario que erra o
+// numero e pior que nenhum: quem for ajustar o tamanho procura o 14 no CSS, nao acha, e mexe
+// no lugar errado. Esta checagem existe para os dois nao voltarem a divergir.
+conf(/`\.cmp-sigef` a \*\*18px\*\*/.test(html) && /`\.cmp-sgpe` a \*\*22px\*\*/.test(html),
+     'e o comentario do arquivo diz os MESMOS numeros que o CSS');
 const LINHAS = [...semComent.matchAll(/cmp-linha[\s\S]{0,700}?<\/div>/g)].map(m => m[0]);
 conf(LINHAS.length === BARRAS.length, `ha uma linha propria por barra`, LINHAS.length);
 for (const bloco of LINHAS) {
@@ -641,12 +654,12 @@ for (const bloco of LINHAS)
 // CONFERIR. O `flex:0 0 100%` so QUEBRA a linha dentro de um contêiner que embrulha; num
 // `display:flex` sem `wrap` ele nao quebra nada — espreme todo o resto da barra contra a
 // borda e a tela fica pior do que antes, sem erro nenhum e sem teste reprovando.
-// Medido em 31/08: cinco barras nascem dentro de `.filtros` (que tem `flex-wrap:wrap`) e
+// Medido em 31/08: SEIS barras nascem dentro de `.filtros` (que tem `flex-wrap:wrap`) e
 // duas — Acompanhamento e Controle Interno — dentro de um flex proprio, tambem com `wrap`.
 {
   const cru = html.split(/\r?\n/);
   const iLinhas = cru.map((l, n) => (/class="cmp-linha"/.test(l) ? n : -1)).filter(n => n >= 0);
-  conf(iLinhas.length === BARRAS.length, 'as sete barras usam a classe', iLinhas.length);
+  conf(iLinhas.length === BARRAS.length, 'as oito barras usam a classe', iLinhas.length);
   for (const n of iLinhas) {
     let pai = null;
     for (let i = n - 1; i >= 0 && i >= n - 40; i--) {
@@ -657,15 +670,17 @@ for (const bloco of LINHAS)
     const embrulha = pai === 'filtros' || /flex-wrap:\s*wrap/.test(pai || '');
     conf(embrulha, `linha ${n + 1}: o contêiner da barra embrulha (flex-wrap)`, pai || 'nao achei o pai');
   }
-  conf(/\.filtros\{[^}]*flex-wrap:wrap/.test(html), 'e a `.filtros`, que hospeda cinco delas, embrulha');
+  conf(/\.filtros\{[^}]*flex-wrap:wrap/.test(html), 'e a `.filtros`, que hospeda seis delas, embrulha');
 }
 
-// ⚠️ AS QUATRO DE SERVIDOR MANDAM OS DOIS PARAMETROS. Sao quatro pares de `set`: Estoque,
-// Minha Planilha, Relatorios e C.I. — o Acompanhamento monta pelo `_acmpF`, logo abaixo.
-conf((semComent.match(/set\('tr', /g) || []).length === 4,
-     'quatro telas mandam `tr` a rota', (semComent.match(/set\('tr', /g) || []).length);
-conf((semComent.match(/set\('processo', /g) || []).length === 4,
-     'e as mesmas quatro mandam `processo`', (semComent.match(/set\('processo', /g) || []).length);
+// ⚠️ AS CINCO DE SERVIDOR MANDAM OS DOIS PARAMETROS. Sao cinco pares de `set`: Estoque,
+// Minha Planilha, Relatorios, C.I. e a Busca global — o Acompanhamento monta pelo `_acmpF`,
+// logo abaixo. A Busca global entrou em 31/08, junto com a rota, que ate entao so aceitava
+// `termo`: mandar as caixas separadas sem mudar o servidor daria 400 em toda busca por TR.
+conf((semComent.match(/set\('tr', /g) || []).length === 5,
+     'cinco telas mandam `tr` a rota', (semComent.match(/set\('tr', /g) || []).length);
+conf((semComent.match(/set\('processo', /g) || []).length === 5,
+     'e as mesmas cinco mandam `processo`', (semComent.match(/set\('processo', /g) || []).length);
 conf(/tr:campoTrTermo\('acmpTr'\), processo:campoProcTermo\('acmpPr'\)/.test(semComent),
      'e o Acompanhamento leva os dois no `_acmpF`');
 
