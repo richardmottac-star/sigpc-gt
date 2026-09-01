@@ -1605,6 +1605,20 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<div class="mo" id="moCiencia">
+  <div class="mc" style="width:620px;">
+    <div class="mch" style="background:var(--v);">
+      <div>
+        <h3 id="cieTitulo" style="color:#fff;">Ciência do repasse</h3>
+        <div id="cieSub" style="color:#D6EFE0;font-size:11px;margin-top:2px;"></div>
+      </div>
+    </div>
+    <div class="mcb">
+      <div id="cieCorpo"></div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="moNovImg">
   <div class="mc" style="width:min(900px,94vw);">
     <div class="mch v"><h3 id="novImgTitulo">Imagem</h3><button class="mcx" onclick="fm('moNovImg')">✕</button></div>
@@ -3230,6 +3244,10 @@ function renderSB() {
   // daqui, junto com o sino, e não de dentro de `irNovidades`. E o aviso do primeiro acesso
   // vem logo atrás: ele só abre se houver algo novo, e uma vez por sessão.
   novAvisoInicial()
+  // ⚠️ A CIÊNCIA VEM DEPOIS DO AVISO DE NOVIDADES, e as duas são `.mo`: a última a abrir fica
+  // por cima. A ordem é essa porque a ciência é a que exige ação — quem fecha ela cai no aviso
+  // de novidades atrás, e não o contrário.
+  cieInicial()
 }
 
 /**
@@ -18632,6 +18650,197 @@ async function novAvisoInicial() {
 
 function novAvisoVer() { fm('moNovAviso'); irNovidades() }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  A CIÊNCIA DO REPASSE — o modal de entrada (01/09/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ QUEM DIZ O QUE FALTA É O SERVIDOR. A tela não deduz "esta pessoa deve ciência": pede
+// `GET /transferencias/ciencia_pendente` e desenha o que voltar. Deduzir aqui seria a segunda
+// definição de quem deve — e a primeira, no servidor, é a que grava.
+//
+// ⚠️ O MODAL É `.mo`, TRAVANDO A TELA, e não a janela flutuante de 31/08. Aquelas existem para
+// a pessoa continuar trabalhando atrás; esta é a única coisa a fazer naquele instante.
+//
+// ⚠️ E NÃO HÁ ✕ NO CABEÇALHO, de propósito. As duas saídas são botões escritos — "Ver depois"
+// e "Registrar ciência" —, e "Ver depois" diz o que faz. Um ✕ ao lado deles seria uma terceira
+// porta sem rótulo, e quem sai por ela não sabe se registrou.
+let _cieFila = []          // os repasses pendentes, do mais antigo para o mais novo
+let _cieMostrado = false   // uma vez por sessão, como o aviso de Novidades
+
+/**
+ * Lê o que falta e abre o modal, se houver.
+ *
+ * ⚠️ NÃO ABRE NO MODO "AGIR PELA CONTA DE OUTRO" — ordem do Richard, e é a mesma família das
+ * cinco travas (estornar, devolver TR, pedir devolução, decidir no C.I., marcar o sino todo).
+ * Ali o modal seria pior que inútil: ele fala na PRIMEIRA PESSOA ("você assume a análise"), e
+ * quem está lendo não é quem assume. A guarda de verdade é do servidor, que recusa a gravação;
+ * esta aqui evita desenhar um caminho que ninguém pode percorrer.
+ */
+async function cieInicial() {
+  if(_cieMostrado) return
+  _cieMostrado = true
+  if(verComoAtivo()) return
+  if(!U || !U.id) return
+  try {
+    const j = await (await fetch(`${API_URL}/transferencias/ciencia_pendente?usuario_id=${U.id}`)).json()
+    if(j.error) return
+    _cieFila = j.data || []
+  } catch(e) { return }
+  cieAbrir()
+}
+
+/** Abre o primeiro da fila. Sem fila, fecha — é o que encerra a sequência. */
+function cieAbrir() {
+  const el = document.getElementById('moCiencia')
+  if(!el) return
+  if(!_cieFila.length) { el.classList.remove('open'); return }
+  cieRender(_cieFila[0])
+  el.classList.add('open')
+}
+
+/** dd/mm/aaaa a partir de 'aaaa-mm-dd' — a mesma da tela de transferência. */
+const cieData = (v) => trfDataBr(v)
+
+/**
+ * O corpo do modal. Dois textos, e a diferença não é de tom: é de quem fala.
+ *
+ * ⚠️ O DO ANALISTA É NA PRIMEIRA PESSOA porque ele é quem assume — "você assume a análise". O
+ * da coordenação é na terceira porque ela não assume nada: toma conhecimento de que outro
+ * assumiu. Trocar um pelo outro faria a coordenação declarar que vai analisar as PCs.
+ *
+ * ⚠️ E O PARÁGRAFO DA PRODUTIVIDADE É O MESMO DO TERMO, palavra por palavra — inclusive por
+ * não depender de gênero: o nome sozinho como sujeito e "em seu nome" no lugar do pronome. O
+ * modal e o termo falam do mesmo fato para as mesmas pessoas; divergirem seria o sistema
+ * dizendo duas coisas sobre um repasse só.
+ */
+function cieRender(r) {
+  const ehDestino = r.condicao === 'analista de destino'
+  const nomeDe = (r.de && r.de.nome) || '—'
+  const nomePara = (r.para && r.para.nome) || '—'
+  const grupoRep = r.grupo_repasse || (r.para && r.para.grupo) || '—'
+  const pcs = `${r.pcs} ${r.pcs === 1 ? 'prestação' : 'prestações'}`
+  const trs = `${r.trs} ${r.trs === 1 ? 'TR' : 'TRs'}`
+
+  document.getElementById('cieTitulo').textContent = ehDestino
+    ? `Você recebeu ${r.pcs} ${r.pcs === 1 ? 'prestação de contas' : 'prestações de contas'}`
+    : `Repasse de prestações no Grupo ${grupoRep}`
+  document.getElementById('cieSub').textContent =
+    `Repasse de ${cieData(r.quando)} · aguardando sua ciência`
+
+  // ⚠️ SEM VIGÊNCIA OU SEM PORTARIA, A FRASE NÃO AFIRMA A DATA. O cadastro do destino pode
+  // estar incompleto — é o mesmo caso em que o termo se recusa a sair. Aqui o modal não pode
+  // recusar (a ciência é devida de qualquer forma), então ele diz o que sabe e cala o resto,
+  // em vez de escrever "a partir de —".
+  const temVig = !!(r.vigencia && r.portaria)
+  const abertura = ehDestino
+    ? (temVig
+        ? `A partir de <b>${escHtml(cieData(r.vigencia))}</b>, data de ingresso no Grupo de Trabalho
+           pela ${escHtml(trfPortariaRotulo(r.portaria))}, você assume a análise de
+           <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>, anteriormente sob responsabilidade de
+           <b>${escHtml(nomeDe)}</b>.`
+        : `Você assume a análise de <b>${escHtml(pcs)}</b> em <b>${escHtml(trs)}</b>,
+           anteriormente sob responsabilidade de <b>${escHtml(nomeDe)}</b>.`)
+    : `Comunicamos que <b>${escHtml(nomePara)}</b> assume a análise de <b>${escHtml(pcs)}</b> em
+       <b>${escHtml(trs)}</b>, anteriormente sob responsabilidade de <b>${escHtml(nomeDe)}</b>.`
+
+  const produtividade = `As prestações já baixadas permanecem registradas em nome de
+    <b>${escHtml(nomeDe)}</b>, e a produtividade delas não é alterada por este repasse. As
+    prestações ora assumidas por <b>${escHtml(nomePara)}</b> passarão a gerar produtividade em
+    seu nome na medida em que forem baixadas no SIGEF.`
+
+  // ⚠️ A CAIXA DOS VENCIDOS SÓ FICA BEGE QUANDO HÁ. Bege com zero treina a pessoa a não olhar
+  // a cor — e aí ela deixa de funcionar no dia em que houver prazo estourado.
+  const cx = (n, rot, bege) => `<div style="flex:1;text-align:center;padding:9px 6px;border-radius:9px;
+      background:${bege ? '#FAEEDA' : 'var(--cbg)'};border:1px solid ${bege ? '#EFD9AE' : 'var(--cb)'};">
+      <div style="font-size:19px;font-weight:800;color:${bege ? '#7A4B10' : 'var(--te)'};">${n}</div>
+      <div style="font-size:10px;color:${bege ? '#7A4B10' : 'var(--ct)'};text-transform:uppercase;
+        letter-spacing:.4px;">${rot}</div></div>`
+
+  // ⚠️ A CAIXA DE MARCAR DA COORDENAÇÃO DIZ O GRUPO **DELA**, não o do repasse — ordem do
+  // Richard. Quem assina declara na condição que ocupa; o grupo do repasse já está no título.
+  const declaracao = ehDestino
+    ? 'Declaro ciência do repasse acima e assumo a análise das prestações relacionadas, a partir desta data.'
+    : `Declaro ciência do repasse acima, na condição de coordenação do Grupo ${r.meu_grupo || '—'}`
+
+  document.getElementById('cieCorpo').innerHTML = `
+    <div style="font-size:12.5px;line-height:1.55;color:var(--te);">${abertura}</div>
+    <div style="font-size:12.5px;line-height:1.55;color:var(--te);margin-top:9px;">${produtividade}</div>
+
+    <div style="display:flex;gap:8px;margin:14px 0;">
+      ${cx(r.trs, r.trs === 1 ? 'TR' : 'TRs', false)}
+      ${cx(r.pcs, 'prestações', false)}
+      ${cx(r.vencidas, r.vencidas === 1 ? 'prazo vencido' : 'prazos vencidos', r.vencidas > 0)}
+    </div>
+
+    <div style="text-align:center;margin-bottom:14px;">
+      <button class="btn-limpar" onclick="cieTermo(${r.id})">Abrir o termo de repasse</button>
+    </div>
+
+    ${/* ⚠️ O BOTÃO NASCE DESABILITADO e só a caixa marcada o acende — armadilha 12. E o motivo
+          fica ao lado, em texto, não só no `title`: botão cinza nunca é mudo (armadilha 19). */''}
+    <label style="display:flex;gap:9px;align-items:flex-start;padding:11px;border-radius:9px;
+      background:var(--vbg);border:1px solid #BFE3CE;cursor:pointer;">
+      <input type="checkbox" id="cieAceite" onchange="cieBotao()" style="margin-top:2px;flex:0 0 auto;">
+      <span style="font-size:12px;line-height:1.5;color:var(--te);">${escHtml(declaracao)}</span>
+    </label>
+
+    <div class="mcbt" style="align-items:center;">
+      <span id="cieMotivo" style="margin-right:auto;font-size:11px;color:var(--ct);">
+        Marque a declaração para registrar.</span>
+      <button class="mccn" onclick="cieDepois()">Ver depois</button>
+      <button class="mcok" id="cieBt" disabled onclick="cieRegistrar(${r.id})"
+        title="Marque a declaração acima">Registrar ciência</button>
+    </div>`
+  cieBotao()
+}
+
+/** O acender do botão: a caixa marcada é a única condição. */
+function cieBotao() {
+  const bt = document.getElementById('cieBt')
+  const cb = document.getElementById('cieAceite')
+  const mo = document.getElementById('cieMotivo')
+  if(!bt || !cb) return
+  bt.disabled = !cb.checked
+  bt.title = cb.checked ? '' : 'Marque a declaração acima'
+  if(mo) mo.textContent = cb.checked ? '' : 'Marque a declaração para registrar.'
+}
+
+/**
+ * "Ver depois": fecha sem registrar, e o modal volta no próximo acesso.
+ *
+ * ⚠️ NÃO GRAVA NADA, nem "adiado". O que faz ele voltar é a ausência da ciência no banco — a
+ * mesma pergunta que abriu o modal desta vez. Um "adiado" gravado seria um estado a mais para
+ * envelhecer e discordar do que importa.
+ */
+function cieDepois() { _cieFila = []; fm('moCiencia') }
+
+/** O termo, a partir do modal. Ele fecha, porque o termo abre noutra aba. */
+function cieTermo(id) { trfTermo(id) }
+
+async function cieRegistrar(id) {
+  const bt = document.getElementById('cieBt')
+  if(bt) { bt.disabled = true; bt.textContent = 'Registrando...' }
+  try {
+    const r = await fetch(`${API_URL}/transferencias/${id}/ciencia`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_id: U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message)
+    toast(j.data && j.data.repetida ? 'Sua ciência já estava registrada.' : 'Ciência registrada.', 'ok')
+  } catch(e) {
+    toast('Erro ao registrar a ciência: ' + e.message, 'err')
+    // ⚠️ O MODAL FICA ABERTO NO ERRO, com o motivo — o botão volta a poder ser clicado. Fechar
+    // aqui deixaria a pessoa achando que registrou (armadilha 12).
+    if(bt) { bt.disabled = false; bt.textContent = 'Registrar ciência' }
+    return
+  }
+  // ⚠️ E SE HOUVER MAIS DE UM PENDENTE, O PRÓXIMO ABRE NA SEQUÊNCIA. Fechar tudo depois do
+  // primeiro esconderia os outros até o próximo login, e quem tem dois repasses pendentes
+  // costuma ter os dois do mesmo dia.
+  _cieFila = _cieFila.slice(1)
+  cieAbrir()
+}
+
 // ── O formulário do superadmin ──────────────────────────────────────────────
 let _novEditId = null
 
@@ -19320,13 +19529,25 @@ function trfHistRender() {
   const th = (t, l) => `<th style="text-align:${l || 'left'};">${t}</th>`
   c.innerHTML = `<div class="tbl-wrap"><div style="overflow-x:auto;"><table>
     <thead><tr>${th('Quando')}${th('De → Para')}${th('TRs','right')}${th('PCs','right')}
-      ${th('Executado por')}${th('Termo')}</tr></thead>
+      ${th('Ciências','center')}${th('Executado por')}${th('Termo')}</tr></thead>
     <tbody>${lista.map(r => `
       <tr onclick="trfDetalhe(${r.id})" style="cursor:pointer;" title="Abrir o detalhe deste repasse">
         <td style="white-space:nowrap;">${escHtml(dataHoraBr(r.quando))}</td>
         <td><b>${escHtml((r.de && r.de.nome) || '—')}</b> → <b>${escHtml((r.para && r.para.nome) || '—')}</b></td>
         <td style="text-align:right;">${r.trs}</td>
         <td style="text-align:right;font-weight:700;">${r.pcs}</td>
+        ${/* ⚠️ "3 de 4" DIZ O QUE "3" SOZINHO NÃO DIZ. Quantas foram registradas só tem sentido
+              contra quantas se espera — e é a que FALTA que faz alguém agir. Os repasses velhos
+              não pedem ciência e mostram "—", não "0 de 0": zero sobre zero se lê como pendência,
+              e ali não há nenhuma. */''}
+        <td style="text-align:center;white-space:nowrap;">${
+          r.ciencias_esperadas
+            ? `<b style="color:${r.ciencias >= r.ciencias_esperadas ? 'var(--v)' : 'var(--am)'};">${
+                r.ciencias}</b><span style="color:var(--ct);"> de ${r.ciencias_esperadas}</span>${
+                r.ciencias >= r.ciencias_esperadas ? ''
+                  : `<div style="font-size:10px;color:var(--am);">faltam ${
+                      r.ciencias_esperadas - r.ciencias}</div>`}`
+            : '<span style="color:var(--ct);">—</span>'}</td>
         <td>${escHtml(r.executado_por_nome || '—')}</td>
         ${/* ⚠️ "sem termo" NÃO É UM LINK MORTO. Os repasses anteriores a esta rota vieram de um
               script que não gerou termo nenhum; oferecer um botão que fabricaria o documento
@@ -19752,6 +19973,8 @@ ${docCabecalho()}
 
   ${blocos}
 
+  ${trfCienciasBloco(d)}
+
   <table class="assin"><tr>
     <td style="width:33%;"><div class="linha">${escHtml(nomePara)}<br>Analista de destino, Grupo ${escHtml(String(grupo))}</div></td>
     <td style="width:33%;"><div class="linha">${escHtml((coord && coord.nome) || '—')}<br>Coordenador do Grupo ${escHtml(String(grupo))}</div></td>
@@ -19762,6 +19985,53 @@ ${docCabecalho()}
 </div>
 ${docScriptTermo(d.id)}
 </body></html>`
+}
+
+/**
+ * "Ciências registradas" — o bloco do fim do termo.  (01/09/2026)
+ *
+ * ⚠️ QUEM NÃO DEU APARECE, e essa é a metade que importa. Um bloco só com as ciências dadas
+ * leria como "todos tomaram ciência" — e o que a coordenação precisa saber ao assinar é
+ * justamente quem falta. As duas listas vêm da MESMA resposta do servidor
+ * (`ciencias` e `ciencias_pendentes`), e o pendente é derivado lá por subtração.
+ *
+ * ⚠️ E ELE SAI NO PDF E NO .doc SEM NADA A MAIS: os dois nascem do mesmo HTML — o PDF por
+ * `window.print()` e o .doc pelo mesmo `#doc` num Blob `application/msword`. Um bloco que
+ * dependesse de JavaScript apareceria na tela e sumiria nos dois documentos.
+ */
+function trfCienciasBloco(d) {
+  const dadas = (d && d.ciencias) || []
+  const faltam = (d && d.ciencias_pendentes) || []
+  if(!dadas.length && !faltam.length) return ''
+  const linhas = dadas.map(c => `
+    <tr>
+      <td>${escHtml(c.nome || '—')}</td>
+      <td>${escHtml(c.condicao || '—')}</td>
+      <td class="tc">${escHtml(dataHoraBr(c.quando))}</td>
+    </tr>`).join('')
+  // ⚠️ O PENDENTE É UMA LINHA DA MESMA TABELA, e não uma nota de rodapé: quem lê a coluna
+  // "Quando" de cima para baixo tem de encontrar a lacuna no lugar onde ela existe.
+  const pend = faltam.map(f => `
+    <tr>
+      <td>${escHtml(f.nome || '—')}</td>
+      <td>${escHtml(f.condicao || '—')}</td>
+      <td class="tc"><b>pendente</b></td>
+    </tr>`).join('')
+  return `
+  <div class="sec">Ciências registradas</div>
+  <table>
+    <thead><tr>
+      <th>Nome</th>
+      <th style="width:210px;">Condição</th>
+      <th class="tc" style="width:120px;">Data e hora</th>
+    </tr></thead>
+    <tbody>${linhas}${pend}</tbody>
+  </table>
+  <div class="legenda">
+    <b>${dadas.length}</b> de <b>${dadas.length + faltam.length}</b> ${
+      dadas.length + faltam.length === 1 ? 'ciência registrada' : 'ciências registradas'}${
+      faltam.length ? ' — as marcadas como <b>pendente</b> ainda não foram declaradas.' : '.'}
+  </div>`
 }
 
 /**

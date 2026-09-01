@@ -258,24 +258,46 @@ conf(/Termo de repasse de prestações de contas/.test(termo), 'o titulo e TERMO
 
 S('18c. A IDENTIFICACAO E O TEXTO');
 conf(/Analista de origem:/.test(termo) && /Analista de destino:/.test(termo), 'as duas pontas');
-conf(/dispensado em/.test(termo), 'com a dispensa da origem quando houver');
+// ⚠️ "dispensado em" VIROU "dispensa em" em 01/09/2026. O participio concorda com a pessoa, e
+// o termo e emitido para o quadro inteiro — mesma correcao que tirou "o analista Fabiana
+// Vieira" e "produtividade a ele" do corpo do documento.
+conf(/dispensa em/.test(termo), 'com a dispensa da origem quando houver');
+conf(!/dispensado em/.test(termo), 'e sem participio que dependa de genero');
 conf(/Repasse registrado no sistema em:/.test(termo) && /Técnico do Sistema/.test(termo),
      'quando foi registrado e quem executou');
 conf(/Portaria FCEE nº 285\/2025 · Processo CGE nº 727\/2025 · Decreto nº 1\.008\/2025/.test(termo),
      'e o fundamento completo');
-// ⚠️ A VIGENCIA E A DA PORTARIA DO DESTINO — nunca a da dispensa, nunca a do clique. E a data
-// em que o novo analista passou a responder; o clique e so quando o sistema registrou.
-conf(/const vigencia = trfDataBr\(d\.portaria_destino_em\)/.test(termo),
-     'a vigencia sai da portaria do DESTINO');
+// ⚠️ A VIGENCIA MUDOU DE FONTE em 01/09/2026, e a conferencia mudou junto. Ela lia
+// `d.portaria_destino_em`, que vem da tabela `substituicao` e guarda a portaria da DISPENSA da
+// ORIGEM — o numero costuma coincidir, e por isso o erro nao aparecia. Agora sai do CADASTRO do
+// destino: campos PORTARIA e DATA DE INGRESSO NO GT.
+conf(/const vigencia = trfDataBr\(uPara && uPara\.data_ingresso\)/.test(termo),
+     'a vigencia e a data de ingresso do DESTINO, lida do cadastro');
+conf(/const portariaPara = \(uPara && uPara\.portaria\)/.test(termo),
+     'e a portaria tambem vem do cadastro do destino');
+conf(!/d\.portaria_destino/.test(termo),
+     'e a portaria da substituicao NAO e mais usada no termo');
 conf(/A partir de \$\{escHtml\(vigencia\)\}/.test(termo), 'e abre o texto');
-conf(/produtividade delas continua computada a ele/.test(termo), 'o texto diz que a baixada fica');
+// ⚠️ O TEXTO PERDEU O GENERO em 01/09/2026. Ele dizia "o analista Fabiana Vieira" e
+// "produtividade a ele" — dois desacordos num documento assinado. A saida nao foi "o(a)
+// analista" nem "a pessoa analista": foi escrever a frase de um jeito em que a concordancia
+// nao aparece — o nome sozinho como sujeito, e "em seu nome" no lugar do pronome.
+conf(/a produtividade delas não é alterada por este repasse/.test(termo),
+     'o texto diz que a baixada fica');
 // ⚠️ O RECORTE ACEITA A QUEBRA DE LINHA. A frase vive num template literal indentado, e o
 // texto do documento quebra onde o codigo quebra — casar a frase inteira numa linha so
 // reprovaria por causa da indentacao, nao do que o termo diz.
-conf(/passarão a\s+gerar produtividade a ele na medida em que forem baixadas no SIGEF/.test(termo),
+conf(/passarão a gerar produtividade em seu nome na medida\s+em que forem baixadas no SIGEF/.test(termo),
      'e que a repassada passa a gerar para o destino');
-// ⚠️ SEM VIGENCIA O TERMO NAO SAI. Um termo que nao diz de quando vale nao afirma nada.
-conf(/!d\.portaria_destino \|\| !d\.portaria_destino_em/.test(bloco), 'sem portaria o termo e recusado');
+conf(!/produtividade a ele/.test(termo) && !/o analista \$\{escHtml\(nomePara\)\}/.test(termo),
+     'e nao sobrou concordancia de genero no corpo');
+// ⚠️ SEM VIGENCIA O TERMO NAO SAI. Um termo que nao diz de quando vale nao afirma nada — e
+// desde 01/09 a RECUSA DIZ QUAL CAMPO FALTA, porque quem le "nao pode ser emitido" sem saber o
+// que preencher fica parado no mesmo lugar.
+conf(/uParaCad\.portaria \? null : 'a portaria'/.test(bloco), 'sem portaria o termo e recusado');
+conf(/uParaCad\.data_ingresso \? null : 'a data de ingresso no GT'/.test(bloco),
+     'e sem a data de ingresso, tambem');
+conf(/faltaCad\.join\(' nem '\)/.test(bloco), 'e a recusa nomeia o campo que falta');
 
 S('18d. OS CONTADORES E O BLOCO POR TR');
 for (const c of ['TRs', 'PCs no total', 'repassadas', 'baixadas que permanecem', 'prazos vencidos']) {
@@ -308,8 +330,22 @@ conf(/Coluna Repasse:/.test(termo), 'ela explica a coluna');
 conf(/As linhas em amarelo são as repassadas/.test(termo), 'e o amarelo');
 conf(/Analista de destino, Grupo/.test(termo) && /Coordenador do Grupo/.test(termo)
      && /Técnico do Sistema, SIGPC-GT/.test(termo), 'as tres assinaturas, nomeadas');
-conf(/perfil === 'coordenador' && String\(x\.grupo\) === String\(grupo\)/.test(termo),
+// ⚠️ O COORDENADOR SAIA SEMPRE COMO TRAVESSAO ate 01/09/2026, e a conferencia nao pegava: o
+// termo procurava `perfil === 'coordenador'` dentro de `_trfUsuarios`, que e filtrada por
+// `trfEhAnalista` — so `perfil === 'analista'` entra nela, e o `find` procurava alguem que ja
+// tinha sido removido da lista. Agora ha `_trfCoords`, montada na MESMA resposta de
+// `GET /usuarios`, e uma funcao unica que le pelo grupo do destino.
+conf(/const coord = trfCoordDoGrupo\(grupo\)/.test(termo),
      'e o coordenador sai do grupo do destino');
+conf(/function trfCoordDoGrupo\(grupo\)/.test(html), 'por uma funcao unica');
+conf(/_trfCoords\.filter\(x => String\(x\.grupo\) === String\(grupo\) && !ehDispensado\(x\)\)/.test(html),
+     'que le a lista propria dos coordenadores, e descarta o dispensado');
+conf(/_trfCoords = \(j\.data \|\| \[\]\)\.filter\(u => u && u\.perfil === 'coordenador'\)/.test(html),
+     'montada na MESMA resposta de GET /usuarios, sem segunda chamada');
+// ⚠️ E O NOME E O COMPLETO, de `usuarios.nome`. O `COORD_GRUPO` do arquivo guarda o apelido do
+// rotulo do seletor ("Grupo 3 — Gustavo"), que serve para escolher numa lista e nao para
+// assinar um documento.
+conf(!/COORD_GRUPO/.test(termo), 'e o termo NAO usa o apelido do rotulo do grupo');
 conf(/Emitido por/.test(termo) && /SIGPC-GT/.test(termo), 'o rodape traz quem emitiu');
 
 S('18f. OS DADOS DE CADA TR VEM DA BUSCA GLOBAL');
@@ -419,6 +455,142 @@ S('O AVISO DE REPASSE NO SINO (01/09/2026)');
   // 403 no analista e no coordenador.
   conf(/busca_global\?tr=\$\{encodeURIComponent\(tr\)\}&repasse_id=\$\{id\}/.test(html),
        'e manda o repasse_id na busca global, que e o que abre a porta para as pontas');
+}
+
+S('A CIENCIA DO REPASSE — O MODAL DE ENTRADA (01/09/2026)');
+{
+  // ⚠️ MODAL COMUM, TRAVANDO A TELA — e nao a janela flutuante de 31/08. Aquelas sao de
+  // CONSULTA E TRABALHO e existem para a pessoa continuar mexendo na tela atras; ciencia e o
+  // contrario: e a unica coisa a fazer naquele instante.
+  conf(/<div class="mo" id="moCiencia">/.test(html), 'o modal e .mo, o que trava a tela');
+  const iMk = html.indexOf('<div class="mo" id="moCiencia">');
+  const mk = html.slice(iMk, html.indexOf('</div>\n\n<div class="mo" id="moNovImg">', iMk) + 40);
+  conf(!/class="jf"|jfAbrir|id="moCiencia" class="jf"/.test(mk), 'e nao e janela flutuante');
+  // ⚠️ SEM ✕ NO CABECALHO, de proposito: as duas saidas sao botoes escritos, e "Ver depois"
+  // diz o que faz. Um ✕ ao lado seria uma terceira porta sem rotulo.
+  conf(!/class="mcx"/.test(mk), 'e nao ha ✕ no cabecalho — as saidas sao botoes escritos');
+
+  // ⚠️ QUEM DIZ O QUE FALTA E O SERVIDOR. A tela nao deduz "esta pessoa deve ciencia".
+  const iIni = html.indexOf('async function cieInicial');
+  const ini = html.slice(iIni, html.indexOf('function cieAbrir', iIni));
+  conf(/transferencias\/ciencia_pendente\?usuario_id=/.test(ini),
+       'a fila vem do servidor, e a tela nao deduz quem deve');
+  // ⚠️ NAO ABRE NO MODO "AGIR PELA CONTA DE OUTRO": o modal fala na PRIMEIRA PESSOA, e quem
+  // esta lendo nao e quem assume. A guarda de verdade e do servidor, que recusa a gravacao.
+  conf(/if\(verComoAtivo\(\)\) return/.test(ini), 'e nao abre no modo "agir pela conta de"');
+  conf(ini.indexOf('verComoAtivo()') < ini.indexOf('ciencia_pendente'),
+       'e a guarda vem ANTES de pedir a lista');
+  conf(/_cieMostrado/.test(ini), 'abre uma vez por sessao, como o aviso de Novidades');
+  // ⚠️ O RECORTE NAO PODE DEPENDER DO TERMINADOR DE LINHA: o index.html esta em CRLF, e casar
+  // por '...()\n' devolvia -1 aqui, com a janela saindo vazia e a conferencia falhando por
+  // defeito do teste. E a armadilha 25 do sigpc-api noutra roupa.
+  const iLogin = html.indexOf('  novAvisoInicial()');
+  conf(iLogin > 0 && /cieInicial\(\)/.test(html.slice(iLogin, iLogin + 600)),
+       'e e chamado ao entrar no sistema');
+
+  // ── os dois textos, e a diferenca e de QUEM FALA
+  const iR = html.indexOf('function cieRender(r)');
+  const rd = html.slice(iR, html.indexOf('function cieBotao', iR));
+  conf(/Você recebeu \$\{r\.pcs\}/.test(rd), 'o titulo do analista de destino');
+  conf(/Repasse de prestações no Grupo \$\{grupoRep\}/.test(rd),
+       'e o da coordenacao traz o grupo DO REPASSE');
+  conf(/aguardando sua ciência/.test(rd), 'o subtitulo diz que aguarda a ciencia');
+  // ⚠️ PRIMEIRA PESSOA para quem assume, TERCEIRA para quem toma conhecimento. Trocar um pelo
+  // outro faria a coordenacao declarar que vai analisar as PCs.
+  conf(/você assume a análise de/.test(rd), 'o analista le na primeira pessoa');
+  conf(/Comunicamos que/.test(rd), 'e a coordenacao, na terceira');
+  // ⚠️ O PARAGRAFO DA PRODUTIVIDADE E O MESMO DO TERMO, palavra por palavra — inclusive por
+  // nao depender de genero. Divergirem seria o sistema dizendo duas coisas sobre um repasse so.
+  conf(/a produtividade delas não é alterada por este repasse/.test(rd),
+       'o paragrafo da produtividade e o do termo');
+  conf(/passarão a gerar produtividade em\s+seu nome/.test(rd), 'e a parte final tambem');
+
+  // ── as tres caixas, e a bege so quando ha
+  conf(/cx\(r\.trs,/.test(rd) && /cx\(r\.pcs,/.test(rd) && /cx\(r\.vencidas,/.test(rd),
+       'as tres caixas: TRs, prestacoes e prazos vencidos');
+  // ⚠️ BEGE COM ZERO treinaria a pessoa a nao olhar a cor — e ai ela deixa de funcionar no dia
+  // em que houver prazo estourado.
+  conf(/r\.vencidas > 0\)/.test(rd), 'e a bege so acende quando ha prazo vencido');
+  conf(/#FAEEDA/.test(rd), 'o bege e o mesmo da pilula do Estoque');
+
+  conf(/Abrir o termo de repasse/.test(rd), 'ha o botao do termo');
+  conf(/cieTermo\(\$\{r\.id\}\)/.test(rd), 'e ele leva ao termo daquele repasse');
+
+  // ── a caixa de marcar
+  conf(/Declaro ciência do repasse acima e assumo a análise das prestações relacionadas, a partir desta data\./.test(rd),
+       'a declaracao do analista e a que o Richard escreveu');
+  // ⚠️ O GRUPO DA DECLARACAO DA COORDENACAO E O **DELE**, nao o do repasse. Quem assina declara
+  // na condicao que ocupa; o grupo do repasse ja esta no titulo.
+  conf(/na condição de coordenação do Grupo \$\{r\.meu_grupo/.test(rd),
+       'e a da coordenacao usa o grupo de QUEM ASSINA, nao o do repasse');
+
+  // ⚠️ O BOTAO NASCE DESABILITADO e so a caixa marcada o acende (armadilha 12); e o motivo fica
+  // AO LADO, em texto — botao cinza nunca e mudo (armadilha 19).
+  conf(/id="cieBt" disabled/.test(rd), 'o botao de registrar nasce desabilitado');
+  const iBt = html.indexOf('function cieBotao');
+  const btn = html.slice(iBt, html.indexOf('function cieDepois', iBt));
+  conf(/bt\.disabled = !cb\.checked/.test(btn), 'e a caixa marcada e a unica condicao');
+  conf(/Marque a declaração para registrar/.test(rd) && /id="cieMotivo"/.test(rd),
+       'o motivo do cinza fica AO LADO, em texto, nao so no title');
+
+  // ⚠️ "VER DEPOIS" NAO GRAVA NADA, nem "adiado". O que o faz voltar e a ausencia da ciencia no
+  // banco — um "adiado" gravado seria um estado a mais para envelhecer.
+  const iD = html.indexOf('function cieDepois()');
+  const dep = html.slice(iD, iD + 200);
+  conf(/fm\('moCiencia'\)/.test(dep) && !/fetch\(/.test(dep), '"Ver depois" fecha sem gravar nada');
+
+  // ── o registro
+  const iReg = html.indexOf('async function cieRegistrar');
+  const reg = html.slice(iReg, iReg + 1600);
+  conf(/transferencias\/\$\{id\}\/ciencia/.test(reg), 'o registro chama POST /transferencias/:id/ciencia');
+  conf(/usuario_id: U\.id/.test(reg), 'e manda o proprio id');
+  // ⚠️ O MODAL FICA ABERTO NO ERRO, com o botao de volta: fechar deixaria a pessoa achando que
+  // registrou (armadilha 12).
+  conf(/bt\.disabled = false; bt\.textContent = 'Registrar ciência'/.test(reg),
+       'no erro o modal fica aberto e o botao volta');
+  // ⚠️ HAVENDO MAIS DE UM PENDENTE, O PROXIMO ABRE NA SEQUENCIA.
+  conf(/_cieFila = _cieFila\.slice\(1\)/.test(reg) && /cieAbrir\(\)/.test(reg),
+       'e o proximo pendente abre na sequencia');
+}
+
+S('AS CIENCIAS NO TERMO E NO HISTORICO');
+{
+  // ⚠️ QUEM NAO DEU APARECE, e essa e a metade que importa: um bloco so com as dadas leria
+  // como "todos tomaram ciencia", e o que a coordenacao precisa saber ao assinar e quem falta.
+  const iB = html.indexOf('function trfCienciasBloco(d)');
+  const bl = html.slice(iB, html.indexOf('function docScriptTermo', iB));
+  conf(iB > 0, 'ha o bloco "Ciencias registradas" no termo');
+  conf(/Ciências registradas/.test(bl), 'com esse titulo');
+  conf(/<th>Nome<\/th>/.test(bl) && /Condição/.test(bl) && /Data e hora/.test(bl),
+       'nome, condicao e data\/hora de cada um');
+  conf(/<b>pendente<\/b>/.test(bl), 'e quem nao deu aparece como pendente');
+  // ⚠️ O PENDENTE E UMA LINHA DA MESMA TABELA, e nao uma nota de rodape: quem le a coluna
+  // "Quando" de cima para baixo encontra a lacuna no lugar onde ela existe.
+  conf(bl.indexOf('const pend') > 0 && /\$\{linhas\}\$\{pend\}/.test(bl),
+       'na mesma tabela das ciencias dadas');
+  conf(/d\.ciencias_pendentes/.test(bl) && /d\.ciencias/.test(bl),
+       'e as duas listas vem da MESMA resposta do servidor');
+  conf(/if\(!dadas\.length && !faltam\.length\) return ''/.test(bl),
+       'sem ciencia nenhuma e sem pendente, o bloco nao aparece');
+
+  // ⚠️ SAI NO PDF E NO .doc SEM NADA A MAIS: os dois nascem do mesmo #doc. Um bloco que
+  // dependesse de JavaScript apareceria na tela e sumiria nos dois documentos.
+  const iT = html.indexOf('function trfMontarTermo');
+  const termo = html.slice(iT, html.indexOf('function trfCienciasBloco', iT));
+  conf(/\$\{trfCienciasBloco\(d\)\}/.test(termo), 'o bloco entra no HTML do termo');
+  conf(termo.indexOf('trfCienciasBloco(d)') < termo.indexOf('<table class="assin">'),
+       'e vem ANTES das assinaturas — quem assina no pe assina tendo lido tudo');
+
+  // ── o Historico
+  const iH = html.indexOf('function trfHistRender');
+  const hist = html.slice(iH, html.indexOf('function dataHoraBr', iH));
+  conf(/th\('Ciências','center'\)/.test(hist), 'a lista do Historico ganhou a coluna Ciencias');
+  conf(/r\.ciencias_esperadas/.test(hist) && /faltam \$\{/.test(hist),
+       'e ela diz quantas foram e quantas faltam');
+  // ⚠️ "3 de 4" DIZ O QUE "3" SOZINHO NAO DIZ, e o repasse velho mostra "—", nao "0 de 0":
+  // zero sobre zero se le como pendencia, e ali nao ha nenhuma.
+  conf(/: '<span style="color:var\(--ct\);">—<\/span>'/.test(hist),
+       'e o repasse que nao pede ciencia mostra — , nao 0 de 0');
 }
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);
