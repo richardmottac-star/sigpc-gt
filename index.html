@@ -424,6 +424,17 @@ tr:last-child td{border-bottom:none;}
    ⚠️ O SGPe VEM PRIMEIRO por ser o mais consultado (Richard, 31/08/2026) — a ordem esta na
    marcacao, nao aqui: esta classe so reserva a linha. */
 .cmp-linha{flex:0 0 100%;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:2px;}
+/* ══ A TR QUE VOLTOU AO ESTOQUE POR UM DESFAZER (01/09/2026) ══
+   As cores são as do sistema para "atenção sem erro": #EF9F27 no realce e #412402 no texto,
+   as mesmas da faixa de avisos. O fundo #FAEEDA é o mesmo do consultado na faixa de
+   vinculação — a gramática já existe, e inventar uma segunda diria que é outra coisa. */
+.est-disp{display:inline-block;margin-left:6px;background:#EF9F27;color:#412402;border-radius:20px;
+  padding:1px 8px;font-size:9.5px;font-weight:800;white-space:nowrap;cursor:help;}
+/* ⚠️ A BARRA VAI NA PRIMEIRA CÉLULA, e não na `<tr>`: em tabela o `border-left` da linha não
+   é desenhado pelos navegadores com `border-collapse`. É a mesma armadilha da faixa de
+   vinculação, onde a borda também mora na linha e não no contêiner. */
+.est-linha-disp > td{background:#FAEEDA !important;}
+.est-linha-disp > td:first-child{border-left:4px solid #EF9F27;}
 .cmp-sigef{height:24px;width:auto;flex:0 0 auto;display:block;}
 .cmp-sgpe{height:22px;width:auto;flex:0 0 auto;display:block;}
 .nl-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--cb);font-size:12px;}
@@ -4095,6 +4106,10 @@ async function buscar() {
     const [r, _res] = await Promise.all([
       fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p.toString()}`),
       estCarregarReservas(),
+      // ⚠️ NO MESMO Promise.all das reservas: as duas pintam a MESMA linha, e carregar uma
+      // depois da outra faria a lista aparecer, depois ganhar a pílula — um pisca que se lê
+      // como se a tela tivesse mudado de ideia.
+      estDevolvidasCarregar(),
     ])
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
@@ -4199,6 +4214,48 @@ async function estCancelarReserva(tr, id) {
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
+// ══ A PÍLULA "ANALISTA DISPENSADO" ══════════════════════════════════════════
+//
+// TR que voltou ao estoque porque um repasse foi DESFEITO. Ela é livre como qualquer outra —
+// a pílula não muda o que se pode fazer, ela conta de onde a TR veio, que é a pergunta de
+// quem a vê aparecer do nada no estoque.
+//
+// ⚠️ A MARCA É DERIVADA, NÃO GRAVADA — decisão do Richard, 01/09/2026. Não há coluna
+// `veio_de_dispensado` em `prestacoes_contas`, e não pode haver: ela mudaria sozinha a cada
+// desfazer e ficaria mentindo até alguém rodar um script. É o mesmo motivo pelo qual não
+// existe `sigef_tag`. A verdade é o histórico, e a rota `/transferencias/devolvidas` é a
+// leitura dele.
+//
+// ⚠️ E O MAPA É PEDIDO UMA VEZ, não por linha. A rota devolve o conjunto inteiro (são poucas
+// TRs, e por construção continuam poucas); casar por TR aqui custa nada. Um `fetch` por linha
+// seria N+1 numa lista paginada — o defeito que o `linksDeLinhas` existe para não repetir.
+const EST_DEVOLVIDAS = new Map()
+
+async function estDevolvidasCarregar() {
+  try {
+    const j = await (await fetch(`${API_URL}/transferencias/devolvidas`)).json()
+    if(j.error) return
+    EST_DEVOLVIDAS.clear()
+    ;(j.data || []).forEach(d => EST_DEVOLVIDAS.set(d.tr, d))
+  } catch(_) {
+    // ⚠️ SILÊNCIO DE PROPÓSITO: a pílula é um enfeite informativo. Derrubar um erro vermelho
+    // no Estoque por causa dela faria a pessoa desconfiar da lista, que está certa.
+  }
+}
+
+/** A pílula e o balão, para uma TR livre. Vazio quando a TR não veio de um desfazer. */
+function estPilulaDispensado(tr) {
+  const d = EST_DEVOLVIDAS.get(tr)
+  if(!d) return ''
+  const titulo = [
+    `Veio de ${d.de_nome || 'analista dispensado'}`,
+    d.portaria ? `Portaria ${d.portaria}` : null,
+    d.devolvida_em ? `Voltou ao estoque em ${dataHoraBr(d.devolvida_em)}` : null,
+    'As PCs já baixadas continuam com quem as analisou.',
+  ].filter(Boolean).join(' · ')
+  return `<span class="est-disp" title="${escHtml(titulo)}">Analista dispensado</span>`
+}
+
 function renderEst(rows) {
   const tbody = document.getElementById('estBody')
   if(!tbody) return
@@ -4270,7 +4327,11 @@ function renderEst(rows) {
 
     const infoSt = EST_STATUS_INFO[t.statusDerivado] || {label:t.statusDerivado||'—',cls:''}
 
-    html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}">
+    // ⚠️ A FAIXA E A BARRA VÃO NA LINHA, e não na célula: é a linha inteira que se quer
+    // enxergar de longe no meio de 1.560 TRs. A barra de 4px na borda esquerda é a mesma
+    // gramática da faixa de vinculação — cor no canto, fundo bege no corpo.
+    const disp = EST_DEVOLVIDAS.has(t.tr)
+    html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}${disp ? ' est-linha-disp' : ''}">
       <td class="est-tr"><strong style="font-size:11px;">${t.tr||'—'}</strong>${tagReserva}</td>
       <!-- Sem lapis aqui, de proposito: a linha do Estoque e agregada por TR e nao tem uma PC de
            referencia para o servidor corrigir. Quem corrige o processo mae usa o detalhe da TR. -->
@@ -4288,7 +4349,10 @@ function renderEst(rows) {
             da linha, porque esta coluna é estreita e tem `table-layout:fixed` (armadilha 24).
             ⚠️ A conferência NÃO SUMIU DO SISTEMA: continua na Minha Planilha e no cartão da
             parcela, que é onde há PC na mão para declarar. */''}
-      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span></td>
+      ${/* ⚠️ AO LADO DO "Livre", E NÃO NO LUGAR DELE. A TR devolvida É livre — trocar o
+            rótulo faria a pessoa achar que ela está num estado diferente e não pode ser
+            assumida. A pílula acrescenta a procedência; o estado continua sendo o estado. */''}
+      <td><span class="bdg ${infoSt.cls}">${infoSt.label}</span>${estPilulaDispensado(t.tr)}</td>
       <td>${acoes}</td>
     </tr>`
   })
@@ -18715,6 +18779,14 @@ async function irTransferir() {
     <div class="cab"><h2>Transferir prestações de contas</h2>
       <div class="sub">Move as PCs abertas de um analista para outro, e a TR junto.</div></div>
 
+    ${/* ⚠️ AS DUAS ABAS DIVIDEM A MESMA TELA porque respondem à mesma pergunta em tempos
+          diferentes: "para quem mando" e "o que já mandei". Separá-las em dois itens de menu
+          faria procurar num lugar o que se acabou de fazer no outro. */''}
+    <div style="display:flex;gap:2px;border-bottom:1.5px solid var(--cb);margin-bottom:14px;">
+      ${trfAbaBtn('nova', 'Nova transferência')}${trfAbaBtn('hist', 'Histórico')}
+    </div>
+
+    ${_trfAba === 'hist' ? trfHistHtml() : `
     ${/* ⚠️ A REGRA FICA NA TELA, e não só no comentário do código: é ela que responde a
           pergunta que o analista faz depois ("perdi minha produtividade?"). */''}
     <div style="background:#FDF6E9;border-left:4px solid #BA7517;border-radius:0 8px 8px 0;
@@ -18740,12 +18812,15 @@ async function irTransferir() {
 
     <div id="trfLista"></div>
 
-    <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;">
       <button class="btn-limpar" onclick="trfCancelar()">Cancelar</button>
       <span id="trfBtWrap"></span>
-    </div>`
-  trfBotao()
+    </div>`}`
+  if(_trfAba === 'nova') trfBotao()
+  // ⚠️ OS USUÁRIOS SÃO CARREGADOS NAS DUAS ABAS: o Histórico precisa deles para filtrar por
+  // GRUPO, que é uma coluna de `usuarios` e não vem no repasse.
   await trfCarregarUsuarios()
+  if(_trfAba === 'hist') trfHistRender()
 }
 
 async function trfCarregarUsuarios() {
@@ -18948,6 +19023,290 @@ function trfBotao() {
  * linha do histórico guarda a foto da PC —, mas desfazer hoje é script, não botão. Por isso a
  * pergunta antes, com os números que a pessoa está prestes a mover.
  */
+
+// ── A ABA HISTÓRICO: os repasses já feitos ──────────────────────────────────
+//
+// ⚠️ ELA LÊ TRÊS ROTAS, TODAS DE LEITURA, e só o Desfazer escreve. O repasse se identifica
+// pelo carimbo da transação — não há coluna nem tabela nova; ver `lib/transferencia.js`.
+
+let _trfAba = 'nova'         // 'nova' | 'hist'
+let _trfHist = []            // os repasses, do mais recente para o mais antigo
+let _trfDet = null           // o repasse aberto no detalhe
+let _trfHistCarregou = false
+
+function trfAba(qual) {
+  _trfAba = qual
+  irTransferir()
+  if(qual === 'hist' && !_trfHistCarregou) trfHistCarregar()
+  else if(qual === 'hist') trfHistRender()
+}
+
+const trfAbaBtn = (id, rot) => `<button onclick="trfAba('${id}')" style="background:none;border:none;
+  border-bottom:3px solid ${_trfAba === id ? 'var(--v)' : 'transparent'};padding:8px 14px;cursor:pointer;
+  font-family:'Barlow',sans-serif;font-size:13.5px;font-weight:${_trfAba === id ? '800' : '600'};
+  color:${_trfAba === id ? 'var(--te)' : 'var(--ct)'};">${rot}</button>`
+
+async function trfHistCarregar() {
+  const c = document.getElementById('trfHistLista')
+  if(c) c.innerHTML = '<div class="loading"><div class="spin"></div>Carregando os repasses...</div>'
+  try {
+    const j = await (await fetch(`${API_URL}/transferencias?usuario_id=${U.id}`)).json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível carregar.')
+    _trfHist = j.data || []
+    _trfHistCarregou = true
+  } catch(e) {
+    _trfHist = []
+    if(c) c.innerHTML = `<div style="padding:14px;font-size:12.5px;color:var(--r);">Erro: ${escHtml(e.message)}</div>`
+    return
+  }
+  trfHistRender()
+}
+
+/** O recorte da aba, aplicado à lista já carregada.
+ *
+ * ⚠️ FILTRA NO NAVEGADOR, e isto NÃO é a armadilha 16. Ela proíbe recortar no cliente uma
+ * lista que o servidor PAGINA — aqui a rota devolve os repasses inteiros, sem página, e são
+ * dois hoje. Se um dia forem milhares, o filtro sobe para a rota junto com a paginação. */
+function trfHistFiltrada() {
+  const q = termoBusca(document.getElementById('trfHQ')?.value || '')
+  const g = document.getElementById('trfHGrupo')?.value || ''
+  const de = document.getElementById('trfHDe')?.value || ''
+  const ate = document.getElementById('trfHAte')?.value || ''
+  const grupoDe = (id) => {
+    const u = _trfUsuarios.find(x => x.id === id); return u ? String(u.grupo || '') : ''
+  }
+  return _trfHist.filter(r => {
+    if(q) {
+      const alvo = termoBusca([r.de && r.de.nome, r.para && r.para.nome, r.executado_por_nome,
+        (r.trs_lista || []).join(' ')].filter(Boolean).join(' '))
+      if(!alvo.includes(q)) return false
+    }
+    // ⚠️ O GRUPO É O DE QUALQUER UMA DAS DUAS PONTAS. Um repasse entre grupos aparece nos
+    // dois — esconder de um lado faria o coordenador procurar um repasse que existe.
+    if(g && grupoDe(r.de && r.de.id) !== g && grupoDe(r.para && r.para.id) !== g) return false
+    const d = String(r.quando || '').slice(0, 10)
+    if(de && d < de) return false
+    if(ate && d > ate) return false
+    return true
+  })
+}
+
+function trfHistRender() {
+  const c = document.getElementById('trfHistLista')
+  if(!c) return
+  const lista = trfHistFiltrada()
+  const totPcs = lista.reduce((n, r) => n + (r.pcs || 0), 0)
+  const tot = document.getElementById('trfHTotais')
+  if(tot) {
+    tot.innerHTML = `<b style="color:var(--te);">${lista.length}</b> ${
+      lista.length === 1 ? 'repasse' : 'repasses'} · <b style="color:var(--te);">${totPcs}</b> ${
+      totPcs === 1 ? 'PC movida' : 'PCs movidas'}`
+  }
+  if(!lista.length) {
+    c.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:24px;
+      text-align:center;font-size:12.5px;color:var(--ct);">Nenhum repasse no recorte.</div>`
+    return
+  }
+  const th = (t, l) => `<th style="text-align:${l || 'left'};">${t}</th>`
+  c.innerHTML = `<div class="tbl-wrap"><div style="overflow-x:auto;"><table>
+    <thead><tr>${th('Quando')}${th('De → Para')}${th('TRs','right')}${th('PCs','right')}
+      ${th('Executado por')}${th('Termo')}</tr></thead>
+    <tbody>${lista.map(r => `
+      <tr onclick="trfDetalhe(${r.id})" style="cursor:pointer;" title="Abrir o detalhe deste repasse">
+        <td style="white-space:nowrap;">${escHtml(dataHoraBr(r.quando))}</td>
+        <td><b>${escHtml((r.de && r.de.nome) || '—')}</b> → <b>${escHtml((r.para && r.para.nome) || '—')}</b></td>
+        <td style="text-align:right;">${r.trs}</td>
+        <td style="text-align:right;font-weight:700;">${r.pcs}</td>
+        <td>${escHtml(r.executado_por_nome || '—')}</td>
+        ${/* ⚠️ "sem termo" NÃO É UM LINK MORTO. Os repasses anteriores a esta rota vieram de um
+              script que não gerou termo nenhum; oferecer um botão que fabricaria o documento
+              agora seria produzir papel com data retroativa. */''}
+        <td onclick="event.stopPropagation()">${r.tem_termo
+          ? `<button class="btn-acao btn-ver" style="padding:3px 10px;font-size:11.5px;"
+               onclick="trfTermo(${r.id})">Termo</button>`
+          : '<span style="font-size:11.5px;color:var(--ct);">sem termo</span>'}</td>
+      </tr>`).join('')}</tbody></table></div></div>`
+}
+
+/** dd/mm/aaaa hh:mm — o carimbo do repasse, em hora de Brasília. */
+function dataHoraBr(v) {
+  if(!v) return '—'
+  try { return new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) }
+  catch(_) { return String(v).slice(0, 16).replace('T', ' ') }
+}
+
+// ── O DETALHE ───────────────────────────────────────────────────────────────
+async function trfDetalhe(id) {
+  const cx = document.getElementById('trfDetBox')
+  if(!cx) return
+  cx.innerHTML = '<div class="loading"><div class="spin"></div>Carregando o detalhe...</div>'
+  cx.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  try {
+    const j = await (await fetch(`${API_URL}/transferencias/${id}?usuario_id=${U.id}`)).json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível abrir o detalhe.')
+    _trfDet = j.data
+  } catch(e) {
+    cx.innerHTML = `<div style="padding:14px;font-size:12.5px;color:var(--r);">Erro: ${escHtml(e.message)}</div>`
+    return
+  }
+  trfDetRender()
+}
+
+function trfDetRender() {
+  const cx = document.getElementById('trfDetBox')
+  const d = _trfDet
+  if(!cx || !d) return
+  cx.innerHTML = `
+    <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);margin-top:14px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1.5px solid var(--cb);flex-wrap:wrap;">
+        <div style="font-size:13.5px;font-weight:800;color:var(--te);">
+          ${escHtml(dataHoraBr(d.quando))} · ${escHtml((d.de && d.de.nome) || '—')} → ${escHtml((d.para && d.para.nome) || '—')}</div>
+        <span style="font-size:12px;color:var(--ct);">${d.pcs} ${d.pcs === 1 ? 'PC' : 'PCs'} em ${d.trs} ${d.trs === 1 ? 'TR' : 'TRs'}</span>
+        <span style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-limpar" onclick="trfDetFechar()">Fechar</button>
+          <button class="btn-acao" style="background:#8A6100;color:#fff;"
+            onclick="trfDesfazer(${d.id})">↩ Desfazer este repasse</button>
+        </span>
+      </div>
+      <div style="max-height:320px;overflow-y:auto;">
+        <table><thead><tr><th>TR</th><th>Entidade</th><th>Código da PC</th><th>Parcial</th><th>Onde está</th></tr></thead>
+        <tbody>${(d.linhas || []).map(l => `<tr>
+          <td style="font-family:ui-monospace,monospace;white-space:nowrap;">${escHtml(l.tr)}</td>
+          <td>${escHtml(l.entidade || '—')}</td>
+          <td style="font-family:ui-monospace,monospace;">${escHtml(l.codigo_pc || '—')}</td>
+          <td>${escHtml(String(l.parcial_num || '—'))}</td>
+          ${/* ⚠️ "ONDE ESTÁ" É O ESTADO DE AGORA, e não o do repasse: é ele que explica por que
+                o desfazer pode ser recusado. A PC baixada depois, ou já devolvida ao estoque,
+                aparece aqui antes de a pessoa clicar. */''}
+          <td>${l.baixada ? '<span style="color:var(--v);font-weight:700;">baixada</span>'
+            : l.analista_atual == null ? '<span style="color:var(--ct);">no estoque</span>'
+            : 'com o analista'}</td></tr>`).join('')}</tbody></table>
+      </div>
+    </div>`
+}
+
+function trfDetFechar() { _trfDet = null; const c = document.getElementById('trfDetBox'); if(c) c.innerHTML = '' }
+
+// ── O DESFAZER ──────────────────────────────────────────────────────────────
+//
+// ⚠️ A CONFIRMAÇÃO É MODAL, E NÃO JANELA FLUTUANTE — sua ordem, e ela está certa: desfazer um
+// repasse move o acervo de volta ao estoque e não tem botão de refazer. Travar a tela é o que
+// a confirmação existe para fazer, e as janelas flutuantes são as de CONSULTA.
+async function trfDesfazer(id) {
+  const d = _trfDet
+  const okConf = await moConfirm(
+    `Desfazer o repasse de ${d ? dataHoraBr(d.quando) : ''}?`,
+    { titulo: 'Desfazer o repasse', perigo: true,
+      detalhe: 'As TRs voltam ao ESTOQUE e ficam livres para qualquer analista do grupo — elas '
+        + 'NÃO voltam para o analista de origem.\n\n'
+        + 'As PCs já baixadas não são tocadas: a produtividade continua com quem analisou.' })
+  if(!okConf) return
+  const cx = document.getElementById('trfDetBox')
+  try {
+    const r = await fetch(`${API_URL}/transferencias/${id}/desfazer`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_id: U.id }),
+    })
+    const j = await r.json()
+    if(j.error) {
+      // ⚠️ A RECUSA POR MOVIMENTAÇÃO POSTERIOR VEM COM A LISTA, e é ela que a pessoa precisa
+      // ver: "3 PCs impediram" sem dizer quais obriga a procurar no escuro.
+      const imp = j.error.pcs_impedidas
+      if(Array.isArray(imp) && imp.length) {
+        trfImpedidas(j.error.message, imp)
+        return
+      }
+      throw new Error(j.error.message || 'Não foi possível desfazer.')
+    }
+    const dd = j.data || {}
+    toast(`${dd.devolvidas} ${dd.devolvidas === 1 ? 'PC voltou' : 'PCs voltaram'} ao estoque.`, 'ok')
+    _trfDet = null; _trfHistCarregou = false
+    if(cx) cx.innerHTML = ''
+    trfHistCarregar()
+  } catch(e) { toast('Erro: ' + e.message, 'err') }
+}
+
+/** A lista de PCs que impediram o desfazer, na própria tela — não num toast que some. */
+function trfImpedidas(msg, imp) {
+  const cx = document.getElementById('trfDetBox')
+  if(!cx) return
+  cx.insertAdjacentHTML('afterbegin', `
+    <div id="trfImped" style="background:#FDECEA;border-left:4px solid var(--r);border-radius:0 8px 8px 0;
+      padding:12px 15px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;color:#7A1C12;">${escHtml(msg)}</div>
+      <div style="max-height:180px;overflow-y:auto;margin-top:8px;">
+        ${imp.map(x => `<div style="font-size:11.5px;color:#7A1C12;padding:2px 0;">
+          <span style="font-family:ui-monospace,monospace;">${escHtml(x.codigo_pc || x.tr)}</span>
+          — ${escHtml(x.motivo || 'movimentação posterior')}</div>`).join('')}
+      </div>
+      <button class="btn-limpar" style="margin-top:9px;"
+        onclick="document.getElementById('trfImped')?.remove()">Entendi</button>
+    </div>`)
+}
+
+// ── O TERMO ─────────────────────────────────────────────────────────────────
+//
+// ⚠️ GERADO NA HORA, a partir do detalhe — não há termo guardado no banco. É a mesma técnica
+// dos relatórios da CGE: um Blob `application/msword` que o Word abre. E só existe para os
+// repasses do evento novo; os do script de 28/08 mostram "sem termo".
+async function trfTermo(id) {
+  let d = _trfDet && _trfDet.id === id ? _trfDet : null
+  if(!d) {
+    try {
+      const j = await (await fetch(`${API_URL}/transferencias/${id}?usuario_id=${U.id}`)).json()
+      if(j.error) throw new Error(j.error.message)
+      d = j.data
+    } catch(e) { toast('Erro: ' + e.message, 'err'); return }
+  }
+  const linhas = (d.linhas || []).map(l => `<tr>
+    <td>${escHtml(l.tr)}</td><td>${escHtml(l.entidade || '')}</td>
+    <td>${escHtml(l.codigo_pc || '')}</td><td>${escHtml(String(l.parcial_num || ''))}</td></tr>`).join('')
+  const doc = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Termo de Transferência — ${escHtml(dataHoraBr(d.quando))}</title></head><body>
+    <div style="font-family:Arial,sans-serif;font-size:11px;">
+    <h2 style="text-align:center;">TERMO DE TRANSFERÊNCIA DE PRESTAÇÕES DE CONTAS</h2>
+    <p>Fundação Catarinense de Educação Especial — Grupo de Trabalho de Prestações de Contas</p>
+    <p><b>Data:</b> ${escHtml(dataHoraBr(d.quando))}<br>
+       <b>De:</b> ${escHtml((d.de && d.de.nome) || '—')}<br>
+       <b>Para:</b> ${escHtml((d.para && d.para.nome) || '—')}<br>
+       <b>Total:</b> ${d.pcs} prestações de contas em ${d.trs} termo(s) de referência</p>
+    <p style="border-left:3px solid #999;padding-left:8px;">As prestações de contas já baixadas
+       não foram transferidas. A produtividade delas permanece com quem as analisou.</p>
+    <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10px;">
+      <thead><tr><th>TR</th><th>Entidade</th><th>Código da PC</th><th>Parcial</th></tr></thead>
+      <tbody>${linhas}</tbody></table>
+    </div></body></html>`
+  const blob = new Blob(['﻿', doc], { type: 'application/msword' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `termo_transferencia_${id}.doc`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+
+/** O corpo da aba Histórico. Só o markup — quem enche é a `trfHistRender`. */
+function trfHistHtml() {
+  return `
+    <div class="filtros">
+      <div class="fg"><label>Analista ou TR</label>
+        <input data-colagem type="text" id="trfHQ" placeholder="Nome ou TR" style="width:210px;"
+          oninput="trfHistRender()"></div>
+      <div class="fg"><label>Grupo</label>
+        <select id="trfHGrupo" onchange="trfHistRender()">
+          <option value="">Todos</option><option value="1">Grupo 1</option>
+          <option value="2">Grupo 2</option><option value="3">Grupo 3</option></select></div>
+      <div class="fg"><label>De</label>
+        <input type="date" id="trfHDe" onchange="trfHistRender()"></div>
+      <div class="fg"><label>Até</label>
+        <input type="date" id="trfHAte" onchange="trfHistRender()"></div>
+      ${/* Os totais do RECORTE, não do acervo — é o que a pessoa está olhando. */''}
+      <div style="margin-left:auto;align-self:flex-end;font-size:12.5px;color:var(--ct);"
+        id="trfHTotais">—</div>
+    </div>
+    <div id="trfHistLista"></div>
+    <div id="trfDetBox"></div>`
+}
+
 async function trfConfirmar() {
   const deId = parseInt(document.getElementById('trfDe')?.value || '0', 10)
   const paraId = parseInt(document.getElementById('trfPara')?.value || '0', 10)

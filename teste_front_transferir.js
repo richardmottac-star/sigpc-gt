@@ -169,22 +169,29 @@ conf(/As PCs já baixadas não são transferidas/.test(bloco.slice(bloco.indexOf
 conf(/_trfSel = new Set\(\)\s*\n\s*trfDeMudou\(\)/.test(bloco), 'e a lista se refaz depois de gravar');
 conf(/bt\.textContent = 'Transferindo\.\.\.'/.test(bloco), 'o botao avisa enquanto grava');
 
-S('10. A TELA ESCREVE POR UM CAMINHO SO');
-// ⚠️ ATE 31/08 ESTA SECAO EXIGIA QUE NADA ESCREVESSE — a rota nao existia. Agora ela existe,
-// e o que se guarda mudou de "nao escreve" para "escreve por UM caminho, e so por ele".
+S('10. A TELA ESCREVE POR DOIS CAMINHOS, E SO POR ELES');
+// ⚠️ ESTA SECAO JA MUDOU DE SENTIDO DUAS VEZES, e o registro importa: em 31/08 ela exigia que
+// a tela NAO escrevesse (a rota nao existia); em 01/09 passou a exigir UMA escrita; e agora
+// sao DUAS — transferir e desfazer. O que ela guarda e sempre o mesmo: que nao aparece uma
+// terceira sem ninguem notar.
 const escritas = bloco.match(/method: '(POST|PATCH|PUT|DELETE)'/g) || [];
-conf(escritas.length === 1, 'ha UMA escrita nesta tela', escritas.join(', '));
-conf(escritas[0] === "method: 'POST'", 'e ela e um POST');
-const urls = bloco.match(/fetch\(`\$\{API_URL\}[^`]*`/g) || [];
-conf(urls.length === 3, 'tres chamadas ao servidor: usuarios, resumo_tr e a transferencia',
-     urls.length);
-// ⚠️ AS DUAS LEITURAS NAO PODEM VIRAR ESCRITA por descuido: um `method` no fetch dos usuarios
-// ou do resumo_tr passaria despercebido, porque as duas rotas respondem a GET e a POST no
-// Express so se declaradas — mas o erro apareceria como 404, tarde demais.
-const leitura = bloco.slice(0, bloco.indexOf('async function trfConfirmar'));
-conf(!/method:/.test(leitura), 'e nada antes da confirmacao manda method — as duas sao GET');
-conf(/\/transferencia`/.test(bloco), 'a escrita vai para /transferencia');
-conf(!/\/prestacoes_contas\/[^`]*`,\s*\{/.test(bloco), 'e nao ha PATCH direto em prestacoes_contas');
+conf(escritas.length === 2, 'ha DUAS escritas nesta tela', escritas.join(', '));
+conf(escritas.every((e) => e === "method: 'POST'"), 'e as duas sao POST');
+const alvos = bloco.match(/fetch\(`\$\{API_URL\}\/[a-z_/]+/g) || [];
+conf(alvos.some((a) => a.endsWith('/transferencia')), 'uma vai para /transferencia');
+conf(alvos.some((a) => a.includes('/transferencias/')), 'e a outra para /transferencias/:id/desfazer');
+// ⚠️ E NENHUMA ESCREVE DIRETO EM prestacoes_contas: mover PC por PATCH da tela contornaria a
+// transacao, a foto e as conferencias da rota — seria transferir sem tudo-ou-nada.
+conf(!/\/prestacoes_contas[^`]*`,\s*\{[\s\S]{0,80}method/.test(bloco),
+     'e nenhuma escreve direto em prestacoes_contas');
+// ⚠️ AS QUATRO LEITURAS SAO GET, e a checagem e por CHAMADA e nao por bloco: a aba Historico
+// entrou entre a lista e a confirmacao, entao "o que vem antes" deixou de ser so leitura.
+// Medir por posicao no arquivo e fragil — a ordem muda a cada tela nova.
+for (const alvo of ['/usuarios`', '/resumo_tr', '/transferencias?usuario_id', '/transferencias/${id}?usuario_id']) {
+  const i = bloco.indexOf(alvo);
+  const trecho = i < 0 ? '' : bloco.slice(i, i + 120);
+  conf(i > 0 && !/method:/.test(trecho), `a leitura ${alvo} vai por GET`);
+}
 
 S('11. O ROTULO QUE FALTAVA NOS DOIS MAPAS');
 // ⚠️ `transferencia_dispensa` NAO TINHA ROTULO, e as 32 linhas da transferencia do Samoel
@@ -197,6 +204,83 @@ conf(/const AC_EV_LABEL = \{[\s\S]{0,900}?transferencia_dispensa:/.test(semComen
      'no AC_EV_LABEL');
 conf(/const evLabel = \{[\s\S]{0,900}?transferencia_dispensa:/.test(semComent),
      'e no evLabel do ver parecer');
+
+
+S('16. AS DUAS ABAS');
+// ⚠️ ELAS DIVIDEM A MESMA TELA porque respondem a mesma pergunta em tempos diferentes: "para
+// quem mando" e "o que ja mandei". Dois itens de menu fariam procurar num lugar o que se
+// acabou de fazer no outro.
+conf(/trfAbaBtn\('nova', 'Nova transferência'\)/.test(bloco), 'ha a aba Nova transferencia');
+conf(/trfAbaBtn\('hist', 'Histórico'\)/.test(bloco), 'e a aba Historico');
+conf(/_trfAba === 'hist' \? trfHistHtml\(\)/.test(bloco), 'e a tela troca de corpo conforme a aba');
+
+S('17. O HISTORICO');
+conf(/\/transferencias\?usuario_id/.test(bloco), 'a lista sai de GET /transferencias');
+conf(/id="trfHQ"/.test(bloco) && /id="trfHGrupo"/.test(bloco), 'ha filtro por analista/TR e por grupo');
+conf(/id="trfHDe"/.test(bloco) && /id="trfHAte"/.test(bloco), 'e por periodo');
+conf(/id="trfHTotais"/.test(bloco), 'e os totais ficam a direita');
+// ⚠️ OS TOTAIS SAO DO RECORTE, e nao do acervo: e o que a pessoa esta olhando.
+conf(/const lista = trfHistFiltrada\(\)[\s\S]{0,300}?repasses/.test(bloco),
+     'e contam o recorte, nao a lista inteira');
+// ⚠️ O GRUPO E O DE QUALQUER UMA DAS DUAS PONTAS: um repasse entre grupos aparece nos dois.
+conf(/grupoDe\(r\.de && r\.de\.id\) !== g && grupoDe\(r\.para && r\.para\.id\) !== g/.test(bloco),
+     'o filtro de grupo olha as DUAS pontas');
+for (const col of ['Quando', 'De → Para', 'TRs', 'PCs', 'Executado por', 'Termo']) {
+  conf(bloco.includes(`th('${col}'`) || bloco.includes(`th('${col}',`), `a coluna ${col} existe`);
+}
+conf(/onclick="trfDetalhe\(\$\{r\.id\}\)"/.test(bloco), 'clicar na linha abre o detalhe');
+
+S('18. O TERMO');
+// ⚠️ "sem termo" NAO E UM LINK MORTO. Os repasses anteriores a esta rota vieram de um script
+// que nao gerou termo nenhum; oferecer um botao que fabricaria o documento agora seria
+// produzir papel com data retroativa.
+conf(/r\.tem_termo/.test(bloco), 'o termo depende do tem_termo que a rota devolve');
+conf(/sem termo/.test(bloco), 'e o repasse antigo mostra "sem termo"');
+conf(/application\/msword/.test(bloco), 'o termo e gerado na hora, como os relatorios da CGE');
+conf(/TERMO DE TRANSFERÊNCIA DE PRESTAÇÕES DE CONTAS/.test(bloco), 'com o titulo do documento');
+conf(/não foram transferidas/.test(bloco), 'e repetindo no papel a regra do que fica');
+
+S('19. O DESFAZER');
+// ⚠️ A CONFIRMACAO E MODAL, E NAO JANELA FLUTUANTE — ordem do Richard: desfazer move o acervo
+// de volta ao estoque e nao tem botao de refazer. Travar a tela e o que a confirmacao existe
+// para fazer; as janelas flutuantes sao as de CONSULTA.
+conf(/await moConfirm\([\s\S]{0,400}?perigo: true/.test(bloco), 'pede confirmacao em modal, com o tom de perigo');
+conf(/voltam ao ESTOQUE e ficam livres para qualquer analista do grupo/.test(bloco),
+     'dizendo que as TRs voltam ao estoque e ficam livres');
+conf(/desfazer`, \{/.test(bloco) || /\/desfazer`/.test(bloco), 'e chama a rota do desfazer');
+// ⚠️ A RECUSA POR MOVIMENTACAO POSTERIOR VEM COM A LISTA, e e ela que a pessoa precisa ver:
+// "3 PCs impediram" sem dizer quais obriga a procurar no escuro.
+conf(/pcs_impedidas/.test(bloco), 'a recusa traz a lista de PCs que impediram');
+conf(/function trfImpedidas/.test(bloco), 'e ela e mostrada na tela');
+// ⚠️ NA TELA, E NAO NUM TOAST: o toast some, e a lista e o que se precisa ler com calma.
+conf(/insertAdjacentHTML\('afterbegin'/.test(bloco), 'na propria tela, nao num toast que some');
+
+S('20. A PILULA DO ESTOQUE');
+// ⚠️ A MARCA E DERIVADA, NAO GRAVADA — decisao do Richard. Nao ha coluna veio_de_dispensado, e
+// nao pode haver: ela mudaria sozinha a cada desfazer e ficaria mentindo ate alguem rodar um
+// script. E o mesmo motivo pelo qual nao existe sigef_tag.
+conf(/EST_DEVOLVIDAS/.test(semComent), 'ha o mapa das TRs devolvidas');
+conf(/\/transferencias\/devolvidas/.test(semComent), 'lido da rota que deriva do historico');
+conf(/estDevolvidasCarregar\(\),/.test(semComent), 'e carregado junto com as reservas');
+// ⚠️ NO MESMO Promise.all: as duas pintam a MESMA linha, e carregar uma depois da outra faria
+// a lista aparecer e depois ganhar a pilula — um pisca que se le como se a tela tivesse
+// mudado de ideia.
+conf(/Promise\.all\(\[[\s\S]{0,400}?estDevolvidasCarregar\(\)/.test(semComent),
+     'no MESMO Promise.all das reservas');
+conf(/\.est-disp\{[^}]*background:#EF9F27[^}]*color:#412402/.test(semComent),
+     'a pilula tem fundo #EF9F27 e texto #412402');
+conf(/\.est-linha-disp > td\{background:#FAEEDA/.test(semComent), 'a faixa da linha e #FAEEDA');
+conf(/\.est-linha-disp > td:first-child\{border-left:4px solid #EF9F27/.test(semComent),
+     'e a barra de 4px na borda esquerda');
+// ⚠️ AO LADO DO "Livre", E NAO NO LUGAR DELE: a TR devolvida E livre, e trocar o rotulo faria
+// a pessoa achar que ela nao pode ser assumida.
+conf(/\$\{infoSt\.label\}<\/span>\$\{estPilulaDispensado\(t\.tr\)\}/.test(semComent),
+     'a pilula fica AO LADO do Livre, nao no lugar dele');
+// O balao: de quem veio, a portaria, quando voltou, e o que fica.
+conf(/Veio de \$\{d\.de_nome/.test(semComent), 'o balao diz de quem veio');
+conf(/Portaria \$\{d\.portaria\}/.test(semComent), 'a portaria');
+conf(/Voltou ao estoque em/.test(semComent), 'quando voltou ao estoque');
+conf(/As PCs já baixadas continuam com quem as analisou/.test(semComent), 'e que as baixadas ficam');
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);
