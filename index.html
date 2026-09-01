@@ -18911,14 +18911,17 @@ function trfCancelar() {
 }
 
 /**
- * O botão, e o motivo ao lado dele.
+ * O botão, e o motivo ao lado dele quando ele está cinza.
  *
- * ⚠️ ELE NASCE CINZA E CONTINUA CINZA NESTA RODADA — a rota que grava não existe. Mas a
- * CONTA continua viva: o número acompanha a seleção, e o motivo muda conforme o que falta.
- * Um botão que aceita clique e não responde é pior que um botão cinza (armadilha 15).
+ * ⚠️ A ROTA SUBIU EM 01/09/2026, e o motivo "a gravação ainda não existe" saiu junto. O que
+ * fica são os dois motivos REAIS de o botão estar cinza: falta o "Para", ou falta marcar TR.
+ * Um botão que aceita clique e não responde é pior que um botão cinza (armadilha 15) — e um
+ * botão cinza sem motivo ao lado é quase tão ruim, porque a pessoa fica procurando o que
+ * falta.
  *
- * ⚠️ E É CINZA SEM `onclick`, não só com `disabled`: um clique rápido ainda dispararia se o
- * atributo fosse removido pelo devtools. É o mesmo padrão do Assumir com reserva pendente.
+ * ⚠️ E CONTINUA CINZA SEM `onclick` QUANDO NÃO PODE. Só `disabled` ainda dispararia se o
+ * atributo fosse removido pelo devtools; a versão habilitada é outro elemento, com o
+ * `onclick`. É o mesmo padrão do Assumir com reserva pendente.
  */
 function trfBotao() {
   const wrap = document.getElementById('trfBtWrap')
@@ -18926,13 +18929,61 @@ function trfBotao() {
   const para = document.getElementById('trfPara')?.value || ''
   const n = trfPcsSelecionadas()
   const motivo = !para ? 'Escolha para quem transferir.'
-    : !_trfSel.size ? 'Marque ao menos uma TR.'
-    : 'A gravação ainda não existe — a rota será escrita na próxima rodada.'
-  wrap.innerHTML = `
-    <button class="btn-acao" disabled title="${escHtml(motivo)}"
-      style="background:var(--cl);color:var(--ct);cursor:not-allowed;border:1px solid var(--cb);">
-      Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}</button>
-    <span style="font-size:11.5px;color:var(--ct);margin-left:9px;">${escHtml(motivo)}</span>`
+    : !_trfSel.size ? 'Marque ao menos uma TR.' : ''
+  const rotulo = `Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}`
+  if(motivo) {
+    wrap.innerHTML = `
+      <button class="btn-acao" disabled title="${escHtml(motivo)}"
+        style="background:var(--cl);color:var(--ct);cursor:not-allowed;border:1px solid var(--cb);">${rotulo}</button>
+      <span style="font-size:11.5px;color:var(--ct);margin-left:9px;">${escHtml(motivo)}</span>`
+    return
+  }
+  wrap.innerHTML = `<button class="btn-acao btn-ass" id="trfBt" onclick="trfConfirmar()">${rotulo}</button>`
+}
+
+/**
+ * A confirmação, e então a gravação.
+ *
+ * ⚠️ A TRANSFERÊNCIA NÃO TEM DESFAZER NA TELA. Ela é reversível — o `estado_anterior` de cada
+ * linha do histórico guarda a foto da PC —, mas desfazer hoje é script, não botão. Por isso a
+ * pergunta antes, com os números que a pessoa está prestes a mover.
+ */
+async function trfConfirmar() {
+  const deId = parseInt(document.getElementById('trfDe')?.value || '0', 10)
+  const paraId = parseInt(document.getElementById('trfPara')?.value || '0', 10)
+  const trs = _trfTrs.filter(t => _trfSel.has(t.tr)).map(t => t.tr)
+  const n = trfPcsSelecionadas()
+  if(!deId || !paraId || !trs.length) return
+  const uDe = _trfUsuarios.find(x => x.id === deId)
+  const uPara = _trfUsuarios.find(x => x.id === paraId)
+  const okConf = await moConfirm(
+    `Transferir ${n} ${n === 1 ? 'PC aberta' : 'PCs abertas'} em ${trs.length} ${
+      trs.length === 1 ? 'TR' : 'TRs'} de ${uDe ? uDe.nome : deId} para ${uPara ? uPara.nome : paraId}?`,
+    { titulo: 'Confirmar a transferência',
+      detalhe: 'As PCs já baixadas não são transferidas — a produtividade delas continua com quem analisou.' })
+  if(!okConf) return
+
+  const bt = document.getElementById('trfBt')
+  if(bt) { bt.disabled = true; bt.style.opacity = '.5'; bt.style.cursor = 'wait'; bt.textContent = 'Transferindo...' }
+  try {
+    const r = await fetch(`${API_URL}/transferencia`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ de_id: deId, para_id: paraId, trs,
+        usuario_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' }),
+    })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível transferir.')
+    const d = j.data || {}
+    toast(`${d.transferidas} ${d.transferidas === 1 ? 'PC transferida' : 'PCs transferidas'}`
+      + `${d.ficaram_baixadas ? ` · ${d.ficaram_baixadas} baixadas ficaram` : ''}.`, 'ok')
+    // ⚠️ RECARREGA A LISTA DO "DE": depois da transferência aquelas TRs não são mais dele, e
+    // deixar a lista de pé convidaria a clicar de novo sobre um estado que já mudou.
+    _trfSel = new Set()
+    trfDeMudou()
+  } catch(e) {
+    toast('Erro: ' + e.message, 'err')
+    trfBotao()
+  }
 }
 // ══════════════════════════════════════
 //  PAINEL TÉCNICO (superadmin only)

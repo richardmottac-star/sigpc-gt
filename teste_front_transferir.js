@@ -133,26 +133,58 @@ conf(/function trfPcsSelecionadas\(\)/.test(bloco), 'ha UMA funcao que conta as 
 conf((bloco.match(/trfPcsSelecionadas\(\)/g) || []).length >= 3,
      'e o cabecalho e o botao leem dela', (bloco.match(/trfPcsSelecionadas\(\)/g) || []).length);
 
-S('9. O BOTAO CINZA, E O MOTIVO AO LADO');
-// ⚠️ NESTA RODADA ELE NAO GRAVA — a rota nao existe. Mas a CONTA continua viva: o numero
-// acompanha a selecao, e o motivo muda conforme o que falta.
+S('9. O BOTAO, E O MOTIVO AO LADO QUANDO ELE ESTA CINZA');
+// ⚠️ A ROTA SUBIU EM 01/09/2026 e o motivo "a gravacao ainda nao existe" saiu junto. O que
+// fica sao os DOIS motivos reais de o botao estar cinza.
 conf(/Transferir \$\{n\} \$\{n === 1 \? 'PC' : 'PCs'\}/.test(bloco), 'o numero acompanha a selecao');
 conf(/Escolha para quem transferir\./.test(bloco), 'sem "Para", o motivo diz isso');
 conf(/Marque ao menos uma TR\./.test(bloco), 'sem TR marcada, diz isso');
-conf(/A gravação ainda não existe/.test(bloco), 'e com os dois prontos, diz que a rota nao existe');
-// ⚠️ CINZA E SEM `onclick`, nao so com `disabled`: um clique rapido ainda dispararia se o
-// atributo fosse tirado pelo devtools. E o mesmo padrao do Assumir com reserva pendente.
-conf(/<button class="btn-acao" disabled title=/.test(bloco), 'o botao nasce desabilitado');
-conf(!/Transferir[\s\S]{0,200}?onclick=/.test(bloco), 'e sem onclick nenhum — nada nesta tela grava');
+conf(!/A gravação ainda não existe/.test(bloco), 'e o motivo da rota inexistente SAIU');
+// ⚠️ CINZA SEM `onclick`, e a versao habilitada e OUTRO elemento. So `disabled` ainda
+// dispararia se o atributo fosse tirado pelo devtools — e o Assumir com reserva pendente
+// segue o mesmo padrao.
+conf(/<button class="btn-acao" disabled title=/.test(bloco), 'o cinza nasce desabilitado');
 conf(/cursor:not-allowed/.test(bloco), 'com o cursor de bloqueado');
 conf(/margin-left:9px/.test(bloco), 'e o motivo escrito AO LADO, nao so no title');
+conf(/if\(motivo\) \{[\s\S]{0,400}?return\s*\n\s*\}/.test(bloco),
+     'e o caminho cinza sai antes — o botao com onclick e outro elemento');
 conf(/onclick="trfCancelar\(\)"/.test(bloco), 'e ha o Cancelar');
 
-S('10. NADA NESTA TELA ESCREVE');
-// ⚠️ A RODADA E SO O DESENHO. Um POST/PATCH aqui seria a rota nascendo por acidente.
-conf(!/method:\s*'(POST|PATCH|PUT|DELETE)'/.test(bloco), 'nenhum POST, PATCH, PUT ou DELETE');
-conf((bloco.match(/fetch\(/g) || []).length === 2,
-     'so duas leituras: os usuarios e o resumo_tr', (bloco.match(/fetch\(/g) || []).length);
+S('9b. O BOTAO LIGADO NA ROTA');
+conf(/onclick="trfConfirmar\(\)"/.test(bloco), 'com "Para" e TR marcada, o botao chama a gravacao');
+conf(/fetch\(`\$\{API_URL\}\/transferencia`/.test(bloco), 'e ela vai para POST /transferencia');
+conf(/method: 'POST'/.test(bloco), 'por POST');
+conf(/de_id: deId, para_id: paraId, trs/.test(bloco), 'mandando de_id, para_id e as TRs marcadas');
+conf(/usuario_id: U\.id/.test(bloco), 'e o usuario_id — e por ele que o servidor le o perfil no BANCO');
+// ⚠️ SO AS TRs MARCADAS VAO, e nao a lista inteira: a selecao e o que a pessoa conferiu.
+conf(/_trfTrs\.filter\(t => _trfSel\.has\(t\.tr\)\)\.map\(t => t\.tr\)/.test(bloco),
+     'so as TRs marcadas entram no corpo');
+// ⚠️ A PERGUNTA ANTES: a transferencia e reversivel (o estado_anterior guarda a foto), mas
+// desfazer hoje e script, nao botao. Por isso a confirmacao traz os numeros.
+conf(/await moConfirm\(/.test(bloco), 'ha confirmacao antes de gravar');
+conf(/As PCs já baixadas não são transferidas/.test(bloco.slice(bloco.indexOf('moConfirm'))),
+     'e ela repete a regra do que fica');
+// ⚠️ RECARREGA DEPOIS: aquelas TRs nao sao mais do "De", e deixar a lista de pe convidaria a
+// clicar de novo sobre um estado que ja mudou.
+conf(/_trfSel = new Set\(\)\s*\n\s*trfDeMudou\(\)/.test(bloco), 'e a lista se refaz depois de gravar');
+conf(/bt\.textContent = 'Transferindo\.\.\.'/.test(bloco), 'o botao avisa enquanto grava');
+
+S('10. A TELA ESCREVE POR UM CAMINHO SO');
+// ⚠️ ATE 31/08 ESTA SECAO EXIGIA QUE NADA ESCREVESSE — a rota nao existia. Agora ela existe,
+// e o que se guarda mudou de "nao escreve" para "escreve por UM caminho, e so por ele".
+const escritas = bloco.match(/method: '(POST|PATCH|PUT|DELETE)'/g) || [];
+conf(escritas.length === 1, 'ha UMA escrita nesta tela', escritas.join(', '));
+conf(escritas[0] === "method: 'POST'", 'e ela e um POST');
+const urls = bloco.match(/fetch\(`\$\{API_URL\}[^`]*`/g) || [];
+conf(urls.length === 3, 'tres chamadas ao servidor: usuarios, resumo_tr e a transferencia',
+     urls.length);
+// ⚠️ AS DUAS LEITURAS NAO PODEM VIRAR ESCRITA por descuido: um `method` no fetch dos usuarios
+// ou do resumo_tr passaria despercebido, porque as duas rotas respondem a GET e a POST no
+// Express so se declaradas — mas o erro apareceria como 404, tarde demais.
+const leitura = bloco.slice(0, bloco.indexOf('async function trfConfirmar'));
+conf(!/method:/.test(leitura), 'e nada antes da confirmacao manda method — as duas sao GET');
+conf(/\/transferencia`/.test(bloco), 'a escrita vai para /transferencia');
+conf(!/\/prestacoes_contas\/[^`]*`,\s*\{/.test(bloco), 'e nao ha PATCH direto em prestacoes_contas');
 
 S('11. O ROTULO QUE FALTAVA NOS DOIS MAPAS');
 // ⚠️ `transferencia_dispensa` NAO TINHA ROTULO, e as 32 linhas da transferencia do Samoel
