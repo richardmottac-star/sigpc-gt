@@ -637,6 +637,54 @@ conf(/\.cmp-linha\{flex:0 0 100%/.test(html), 'a primeira linha ocupa a largura 
 // no lugar errado. Esta checagem existe para os dois nao voltarem a divergir.
 conf(/`\.cmp-sigef` a \*\*18px\*\*/.test(html) && /`\.cmp-sgpe` a \*\*22px\*\*/.test(html),
      'e o comentario do arquivo diz os MESMOS numeros que o CSS');
+
+// ⚠️ AS OITO BARRAS DESENHAM O MESMO LOGO, E NAO HA COMO UMA DELAS DIVERGIR — porque nao ha
+// oito <img>: ha UM, dentro do campoTrHtml, e os oito o chamam. Estas checagens nasceram de
+// uma suspeita de 31/08/2026 de que a Busca global estivesse com o logo menor. Medido: nao
+// estava — o arquivo tem UMA definicao de cada classe e UM <img> de cada, e o publicado
+// tambem. O que elas guardam e que continue assim.
+//
+// ⚠️ UMA SEGUNDA DEFINICAO DE .cmp-sigef SERIA O DEFEITO PERFEITO: mudaria o tamanho em
+// algumas telas e nao em outras, conforme a ordem no arquivo, e nada acusaria.
+const defsSigef = (html.match(/\.cmp-sigef\{/g) || []).length;
+const defsSgpe = (html.match(/\.cmp-sgpe\{/g) || []).length;
+conf(defsSigef === 1, 'ha UMA definicao de .cmp-sigef no arquivo inteiro', defsSigef);
+conf(defsSgpe === 1, 'e UMA de .cmp-sgpe', defsSgpe);
+// ⚠️ E UM <img> DE CADA, o das funcoes compartilhadas. Um segundo <img> escrito a mao numa
+// tela seria a mesma marca com outro tamanho, e a barra daquela tela sairia do padrao.
+const imgsSigef = (html.match(/class="cmp-sigef"/g) || []).length;
+const imgsSgpe = (html.match(/class="cmp-sgpe"/g) || []).length;
+conf(imgsSigef === 1, 'e UM <img> com a classe do SIGEF, o do campoTrHtml', imgsSigef);
+conf(imgsSgpe === 1, 'e UM com a do SGPe, o do campoProcHtml', imgsSgpe);
+{
+  const tr = html.slice(html.indexOf('function campoTrHtml'), html.indexOf('function campoProcHtml'));
+  const pr = html.slice(html.indexOf('function campoProcHtml'), html.indexOf('function campoEl'));
+  conf(/class="cmp-sigef">/.test(tr), 'o do SIGEF sai de dentro do campoTrHtml');
+  conf(/class="cmp-sgpe">/.test(pr), 'e o do SGPe, de dentro do campoProcHtml');
+  // ⚠️ SEM style INLINE NOS DOIS: inline vence classe, e um tamanho escrito na tag deixaria a
+  // regra do CSS de enfeite — quem fosse ajustar mexeria no lugar que nao manda.
+  conf(!/<img[^>]*class="cmp-sigef"[^>]*style=/.test(html) && !/<img[^>]*style=[^>]*class="cmp-sigef"/.test(html),
+       'e nenhum dos dois leva style inline');
+  conf(!/<img[^>]*class="cmp-sgpe"[^>]*style=/.test(html) && !/<img[^>]*style=[^>]*class="cmp-sgpe"/.test(html),
+       'nem o do SGPe');
+}
+// ⚠️ E NENHUMA REGRA DE PAGINA MIRA <img> POR ALTURA alem das duas. Os blocos <style> dentro
+// de template literal (os documentos .doc que a tela gera) nao contam: eles vao para outro
+// documento e nao alcancam a barra. Por isso a varredura para no primeiro </style> depois do
+// terceiro bloco real.
+{
+  const linhas = html.split(/\r?\n/);
+  const fins = linhas.map((l, i) => (/<\/style>/.test(l) ? i : -1)).filter(i => i >= 0);
+  const reais = [8, 493, 893].map(ini => {
+    const fim = fins.find(x => x > ini);
+    return linhas.slice(ini, fim + 1).join('\n');
+  }).join('\n');
+  const regrasImg = reais.split('\n').filter(l => /(^|[\s,>])img[\s,{.:]/.test(l) && /\{/.test(l));
+  conf(regrasImg.length <= 1, 'so a do rodape mira <img> de forma ampla',
+       regrasImg.map(l => l.trim().slice(0, 40)).join(' | '));
+  conf(!/\.filtros[^{]*img|\.cmpg[^{]*img|\.cmp-linha[^{]*img/.test(reais),
+       'e nenhuma regra mira img DENTRO das barras — seria o jeito de uma tela divergir');
+}
 const LINHAS = [...semComent.matchAll(/cmp-linha[\s\S]{0,700}?<\/div>/g)].map(m => m[0]);
 conf(LINHAS.length === BARRAS.length, `ha uma linha propria por barra`, LINHAS.length);
 for (const bloco of LINHAS) {
