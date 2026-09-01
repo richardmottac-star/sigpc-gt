@@ -18870,8 +18870,21 @@ function trfRender() {
               font-weight:700;color:var(--te);flex:0 0 118px;">${escHtml(t.tr)}</span>
             <span style="flex:1 1 0;min-width:0;font-size:12px;color:var(--ct);overflow:hidden;
               text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(t.entidade || '')}">${escHtml(t.entidade || '—')}</span>
-            <span style="flex:0 0 92px;text-align:right;font-size:12px;color:var(--ct);">
-              ${t.abertas} ${t.abertas === 1 ? 'PC aberta' : 'PCs abertas'}</span>
+            ${/* ⚠️ SÓ "N abertas", SEM O "PCs" (31/08/2026). Em 92px o "2 PCs abertas"
+                  quebrava em duas linhas e crescia a linha inteira — e as vizinhas, que não
+                  quebravam, deixavam de se alinhar com ela.
+                  A palavra saiu em vez de a coluna crescer porque ela já está dita no
+                  CABEÇALHO da lista ("N PCs abertas em N TRs"), uma vez, em cima de todas.
+                  Repetir a unidade em cada linha é a palavra ocupando o lugar do número —
+                  a mesma decisão da coluna PARCIAIS da faixa de vinculação.
+
+                  ⚠️ E O `nowrap` É O QUE FECHA O CASO, não a largura. Encurtar o texto só
+                  torna a quebra improvável; com `flex:0 0` a célula não estica, então basta
+                  um número maior ou uma fonte diferente para ela voltar a quebrar. Com o
+                  `nowrap` ela não quebra nunca — e os 84px cabem "83 abertas" com folga, que
+                  é a maior TR do acervo. */''}
+            <span style="flex:0 0 84px;text-align:right;white-space:nowrap;font-size:12px;color:var(--ct);">
+              ${t.abertas} ${t.abertas === 1 ? 'aberta' : 'abertas'}</span>
           </label>`
         }).join('')}
       </div>

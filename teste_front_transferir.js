@@ -113,7 +113,15 @@ conf(/PCs abertas'\}\s*em/.test(bloco) || /PC aberta' : 'PCs abertas'/.test(bloc
 conf(/'selecionada' : 'selecionadas'/.test(bloco), 'e a direita, quantas estao selecionadas');
 conf(/onchange="trfMarcar\('/.test(bloco), 'cada TR tem a sua caixa');
 conf(/t\.entidade/.test(bloco), 'a linha traz a entidade');
-conf(/PC aberta' : 'PCs abertas'/.test(bloco), 'e quantas PCs abertas ela tem');
+// ⚠️ NA LINHA E SO "N abertas": em 92px o "2 PCs abertas" quebrava em duas e desalinhava as
+// vizinhas. A unidade fica dita UMA vez, no cabecalho da lista, em cima de todas — repeti-la
+// em cada linha e a palavra ocupando o lugar do numero.
+conf(/\$\{t\.abertas\} \$\{t\.abertas === 1 \? 'aberta' : 'abertas'\}/.test(bloco),
+     'e quantas abertas ela tem, sem repetir "PCs"');
+// ⚠️ E O nowrap E O QUE FECHA O CASO, nao a largura: com flex:0 0 a celula nao estica, entao
+// so encurtar o texto torna a quebra improvavel — nao impossivel.
+conf(/flex:0 0 84px;text-align:right;white-space:nowrap/.test(bloco),
+     'e a celula nao pode quebrar de jeito nenhum');
 // ⚠️ A LISTA ROLA A PARTIR DE ~5 TRs: quem transfere um dispensado pega dezenas delas, e sem
 // teto os botoes do rodape sairiam da tela — a pessoa marcaria sem ver o que vai mover.
 conf(/max-height:230px;overflow-y:auto/.test(bloco), 'e a lista rola depois de umas 5 TRs');
