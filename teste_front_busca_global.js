@@ -94,7 +94,12 @@ conf(/campoMarcar\(campoGrupo\('bgPr'\)\)/.test(limp), 'e desmarca o aviso de si
 conf(!/bgBuscar\(\)/.test(limp), 'e NAO dispara uma busca nova');
 
 secao('3. UM CARD POR TR');
-const card = html.slice(html.indexOf('function bgCard'), html.indexOf('function bgCard') + 3100);
+// ⚠️ O RECORTE VAI ATE A PROXIMA FUNCAO, e nao ate um numero de caracteres. A janela fixa de
+// 3100 deixava o `faltam` a 3.267 caracteres do inicio — fora por 167 —, e a checagem
+// reprovava por causa do tamanho do recorte, nao do que a funcao faz. Medir por marco e
+// medir a coisa; medir por contagem e medir o acaso.
+const iCard = html.indexOf('function bgCard');
+const card = html.slice(iCard, html.indexOf('\nfunction ', iCard + 10));
 conf(/total_parciais/.test(card) && /total_pcs/.test(card) && /baixadas/.test(card) && /faltam/.test(card),
      'os QUATRO contadores: parciais, PCs, baixadas, faltam');
 conf(/bgBadge\(c\.situacao\)/.test(card), 'a badge da situacao no cabecalho');
@@ -142,20 +147,38 @@ conf(/if\(!noCi\.length\) return ''/.test(bci), 'e o bloco some quando nao ha C.
 
 secao('7. O ENCAMINHAMENTO — PDF e .doc, sem biblioteca');
 const doc = html.slice(html.indexOf('function bgMontarDoc'), html.indexOf('function bgMontarDoc') + 8000);
-conf(/window\.print\(\)/.test(doc), 'o PDF sai por window.print(), como o relatorio CGE');
+// ⚠️ O TIMBRE SAIU DAQUI EM 01/09/2026, e nao sumiu: virou DOC_CSS, DOC_CABECALHO e DOC_ACOES,
+// compartilhados com o TERMO DE REPASSE. Duas copias do brasao divergiriam no primeiro ajuste,
+// e um documento oficial com o cabecalho de uma versao anterior so se descobre depois de
+// assinado. As checagens abaixo passaram a medir a DEFINICAO, e a do documento e que ele a USA.
+const timbre = html.slice(html.indexOf('const DOC_CSS ='), html.indexOf('function bgMontarDoc'));
+conf(/window\.print\(\)/.test(timbre), 'o PDF sai por window.print(), como o relatorio CGE');
 conf(/application\/msword/.test(doc), "e o .doc por Blob 'application/msword'");
 conf(!/jspdf|pdfmake|html2pdf|require\('docx'\)/i.test(html), 'NENHUMA biblioteca de documento foi trazida');
-conf(/LOGO_SC/.test(doc), 'usa a marca do Governo de SC');
-conf(/ESTADO DE SANTA CATARINA/.test(doc) && /FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL/.test(doc),
+conf(/LOGO_SC/.test(timbre), 'usa a marca do Governo de SC');
+conf(/ESTADO DE SANTA CATARINA/.test(timbre) && /FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL/.test(timbre),
      'com o cabecalho institucional');
+conf(/GABINETE DA PRESIDÊNCIA/.test(timbre) && /SETOR DE PRESTAÇÃO DE CONTAS — GRUPO DE TRABALHO/.test(timbre),
+     'e as quatro linhas do timbre');
 conf(/Busca global do sistema/.test(doc), 'o titulo e "Busca global do sistema"');
-conf(/@page \{ size:A4 portrait/.test(doc), 'em A4');
+conf(/@page \{ size:A4 portrait/.test(timbre), 'em A4');
 conf(/Emitido por/.test(doc) && /U\.nome/.test(doc), 'o rodape traz quem emitiu');
 conf(/toLocaleDateString\('pt-BR'\)/.test(doc) && /toLocaleTimeString/.test(doc), 'com data e hora');
-conf(/@media print\{\.acoes\{display:none;\}/.test(doc), 'e os botoes somem no papel');
+conf(/@media print\{\.acoes\{display:none;\}/.test(timbre), 'e os botoes somem no papel');
 // o codigo completo tambem no documento
-conf(/\.cod\{font-family:"Courier New",monospace;white-space:nowrap;\}/.test(doc),
+conf(/\.cod\{font-family:"Courier New",monospace;white-space:nowrap;\}/.test(timbre),
      'no documento o codigo tambem nao quebra linha');
+// ⚠️ E O DOCUMENTO TEM DE USAR A DEFINICAO, nao ter uma copia dela: e o unico jeito de as
+// duas nao divergirem.
+conf(/<style>\$\{DOC_CSS\}/.test(doc), 'o documento le o CSS compartilhado');
+conf(/\$\{docCabecalho\(\)\}/.test(doc), 'e o cabecalho compartilhado');
+conf(/\$\{DOC_ACOES\}/.test(doc), 'e os botoes compartilhados');
+// ⚠️ A CHECAGEM E SOBRE ESTE DOCUMENTO, e nao sobre o arquivo inteiro: o relatorio da CGE e o
+// de Monitoramento tem cada um o seu timbre, escrito antes desta extracao e com CSS proprio.
+// Unifica-los e outra frente — contar o arquivo todo reprovaria por causa deles, que nao sao
+// o assunto aqui.
+conf(!/ESTADO DE SANTA CATARINA/.test(doc), 'o documento NAO tem uma copia do brasao');
+conf(!/@page \{ size:A4 portrait/.test(doc), 'nem uma copia do CSS');
 conf(/Código da PC/.test(doc), 'com o mesmo rotulo da tela');
 conf(/blocoCi/.test(doc), 'o bloco do C.I. entra no documento');
 conf(/linkSgpe/.test(doc), 'e o link do SGPe');

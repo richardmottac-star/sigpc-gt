@@ -237,8 +237,98 @@ S('18. O TERMO');
 conf(/r\.tem_termo/.test(bloco), 'o termo depende do tem_termo que a rota devolve');
 conf(/sem termo/.test(bloco), 'e o repasse antigo mostra "sem termo"');
 conf(/application\/msword/.test(bloco), 'o termo e gerado na hora, como os relatorios da CGE');
-conf(/TERMO DE TRANSFERÊNCIA DE PRESTAÇÕES DE CONTAS/.test(bloco), 'com o titulo do documento');
-conf(/não foram transferidas/.test(bloco), 'e repetindo no papel a regra do que fica');
+
+S('18b. O TERMO NO PADRAO DA BUSCA GLOBAL (01/09/2026)');
+const termo = semComent.slice(semComent.indexOf('function trfMontarTermo'),
+                              semComent.indexOf('function docScriptTermo'));
+conf(!!termo, 'ha a funcao que monta o termo');
+// ⚠️ MESMA FOLHA TIMBRADA, e nao uma parecida: DOC_CSS, DOC_CABECALHO e DOC_ACOES sao os do
+// documento da Busca global. Uma segunda copia divergiria no primeiro ajuste, e um termo com
+// o cabecalho de uma versao anterior so se descobre depois de assinado.
+conf(/<style>\$\{DOC_CSS\}/.test(termo), 'usa o CSS compartilhado');
+conf(/\$\{docCabecalho\(\)\}/.test(termo), 'e o cabecalho compartilhado — brasao e os quatro titulos');
+// ⚠️ E O CABECALHO E FUNCAO, nao constante: como constante ele interpolaria o base64 do brasao
+// na CARGA do arquivo, dependendo da ordem de declaracao. Duas suites quebraram assim em
+// 01/09 — elas rodam pedacos do index.html num vm onde o LOGO_SC nao existe.
+conf(/function docCabecalho\(\)/.test(semComent), 'o cabecalho e funcao, avaliada so ao montar');
+conf(!/const DOC_CABECALHO/.test(semComent), 'e nao uma constante avaliada na carga');
+conf(/\$\{DOC_ACOES\}/.test(termo), 'e os dois botoes do topo');
+conf(!/ESTADO DE SANTA CATARINA/.test(termo), 'e NAO tem uma copia do brasao');
+conf(/Termo de repasse de prestações de contas/.test(termo), 'o titulo e TERMO DE REPASSE');
+
+S('18c. A IDENTIFICACAO E O TEXTO');
+conf(/Analista de origem:/.test(termo) && /Analista de destino:/.test(termo), 'as duas pontas');
+conf(/dispensado em/.test(termo), 'com a dispensa da origem quando houver');
+conf(/Repasse registrado no sistema em:/.test(termo) && /Técnico do Sistema/.test(termo),
+     'quando foi registrado e quem executou');
+conf(/Portaria FCEE nº 285\/2025 · Processo CGE nº 727\/2025 · Decreto nº 1\.008\/2025/.test(termo),
+     'e o fundamento completo');
+// ⚠️ A VIGENCIA E A DA PORTARIA DO DESTINO — nunca a da dispensa, nunca a do clique. E a data
+// em que o novo analista passou a responder; o clique e so quando o sistema registrou.
+conf(/const vigencia = trfDataBr\(d\.portaria_destino_em\)/.test(termo),
+     'a vigencia sai da portaria do DESTINO');
+conf(/A partir de \$\{escHtml\(vigencia\)\}/.test(termo), 'e abre o texto');
+conf(/produtividade delas continua computada a ele/.test(termo), 'o texto diz que a baixada fica');
+// ⚠️ O RECORTE ACEITA A QUEBRA DE LINHA. A frase vive num template literal indentado, e o
+// texto do documento quebra onde o codigo quebra — casar a frase inteira numa linha so
+// reprovaria por causa da indentacao, nao do que o termo diz.
+conf(/passarão a\s+gerar produtividade a ele na medida em que forem baixadas no SIGEF/.test(termo),
+     'e que a repassada passa a gerar para o destino');
+// ⚠️ SEM VIGENCIA O TERMO NAO SAI. Um termo que nao diz de quando vale nao afirma nada.
+conf(/!d\.portaria_destino \|\| !d\.portaria_destino_em/.test(bloco), 'sem portaria o termo e recusado');
+
+S('18d. OS CONTADORES E O BLOCO POR TR');
+for (const c of ['TRs', 'PCs no total', 'repassadas', 'baixadas que permanecem', 'prazos vencidos']) {
+  conf(termo.includes(c), `o contador "${c}"`);
+}
+conf(/const blocos = cards\.map/.test(termo), 'ha um bloco por TR');
+conf(/CNPJ/.test(termo) && /Processo SGPe \(mãe\)/.test(termo), 'com CNPJ e processo mae');
+for (const col of ['Parcial', 'Código da PC', 'NL', 'Situação', 'Parecer', 'Repasse']) {
+  conf(termo.includes('>' + col + '<'), `a coluna ${col}`);
+}
+// ⚠️ A COLUNA REPASSE TRAZ O NOME, e nao "sim/nao": quem le o termo quer saber COM QUEM cada
+// prestacao fica, e e essa a pergunta que o documento existe para responder.
+conf(/const fica = foiRepassada \? nomePara : \(pc\.baixada \? nomeDe : '—'\)/.test(termo),
+     'a coluna Repasse traz o NOME de quem fica com cada PC');
+conf(/class="trepasse"/.test(termo), 'a linha repassada leva fundo amarelo');
+conf(/\.trepasse td\{background:#FFF8E1/.test(semComent), 'e a cor esta no CSS do documento');
+conf(/BG_CI\[p\.ci\.situacao\]/.test(termo), 'a secao do C.I. e a mesma da Busca global');
+// ⚠️ A FAIXA VERMELHA JUNTA OS TRES MOTIVOS NUMA LINHA SO: tres faixas empilhadas na mesma TR
+// fariam o documento parecer um erro.
+conf(/prazo vencido há/.test(termo) && /prestação no Controle Interno/.test(termo)
+     && /processo arquivado com prestação em aberto/.test(termo),
+     'a faixa de atencao cobre os tres casos');
+conf(/class="aviso"/.test(termo), 'numa faixa vermelha');
+
+S('18e. A LEGENDA E AS ASSINATURAS');
+// ⚠️ A LEGENDA VEM ANTES DA PRIMEIRA TABELA: a coluna Repasse traz dois nomes, e sem dizer o
+// que cada um significa ela se le como "de quem era" — o contrario do que e.
+conf(termo.indexOf('class="legenda"') < termo.indexOf('${blocos}'), 'a legenda vem antes das tabelas');
+conf(/Coluna Repasse:/.test(termo), 'ela explica a coluna');
+conf(/As linhas em amarelo são as repassadas/.test(termo), 'e o amarelo');
+conf(/Analista de destino, Grupo/.test(termo) && /Coordenador do Grupo/.test(termo)
+     && /Técnico do Sistema, SIGPC-GT/.test(termo), 'as tres assinaturas, nomeadas');
+conf(/perfil === 'coordenador' && String\(x\.grupo\) === String\(grupo\)/.test(termo),
+     'e o coordenador sai do grupo do destino');
+conf(/Emitido por/.test(termo) && /SIGPC-GT/.test(termo), 'o rodape traz quem emitiu');
+
+S('18f. OS DADOS DE CADA TR VEM DA BUSCA GLOBAL');
+// ⚠️ ELA E A UNICA ROTA QUE DEVOLVE O CARD INTEIRO, e e o card que o termo reproduz. Montar
+// uma segunda consulta com os mesmos campos seria duas fontes para o mesmo documento.
+conf(/busca_global\?tr=\$\{encodeURIComponent\(tr\)\}/.test(bloco), 'uma chamada por TR');
+conf(/Promise\.all\(trs\.map/.test(bloco), 'as chamadas vao juntas, nao uma de cada vez');
+
+S('18g. A PORTARIA DO DESTINO NA TELA');
+// ⚠️ A `substituicao` RESPONDE PRIMEIRO. Pedir sempre faria digitar o que o banco ja sabe;
+// nunca pedir faria o repasse ser recusado sem a pessoa poder resolver.
+conf(/function trfPortariaDe\(paraId\)/.test(bloco), 'a tela sabe quando o banco ja tem a portaria');
+conf(/\/substituicao/.test(bloco), 'lendo da substituicao');
+conf(/id="trfPortariaBox"/.test(bloco), 'ha a caixa dos dois campos');
+conf(/box\.style\.display = \(paraId && !tem\) \? '' : 'none'/.test(bloco),
+     'e ela so aparece quando FALTA');
+conf(/id="trfPortaria"/.test(bloco) && /id="trfPortariaEm"/.test(bloco), 'o numero e a data');
+conf(/faltaPortaria \? 'Informe o número e a data de publicação da portaria\.'/.test(bloco),
+     'e sem eles o botao fica cinza com o motivo');
 
 S('19. O DESFAZER');
 // ⚠️ A CONFIRMACAO E MODAL, E NAO JANELA FLUTUANTE — ordem do Richard: desfazer move o acervo

@@ -7268,6 +7268,95 @@ function bgDocumento(tr) {
   w.document.close()
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  O PAPEL TIMBRADO DOS DOCUMENTOS — uma definição só
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ EXTRAÍDO DO DOCUMENTO DA BUSCA GLOBAL em 01/09/2026, quando o TERMO DE REPASSE passou a
+// precisar do mesmo timbre. Duas cópias do brasão e do CSS divergiriam no primeiro ajuste — e
+// um termo oficial com o cabeçalho de uma versão anterior é o tipo de erro que só aparece
+// quando o documento já foi assinado.
+//
+// ⚠️ NÃO É O CSS DA TELA. Este vai para OUTRO documento — uma janela nova, e depois um `.doc`
+// que o Word abre. Por isso é texto, e não classe do `index.html`.
+const DOC_CSS = `
+@page { size:A4 portrait; margin:1.2cm 1.4cm 1.2cm 1.4cm; }
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:#E8E8E8;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;line-height:1.55;}
+.paper{max-width:900px;margin:0 auto;background:#fff;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.15);}
+.hdr-tbl{width:100%;border-collapse:collapse;margin-bottom:4px;}
+.hdr-logo{width:150px;vertical-align:middle;text-align:center;padding-right:12px;}
+.logo-img{height:60px;width:auto;}
+.hdr-txt{vertical-align:middle;text-align:center;}
+.hdr-sc{font-size:10px;font-weight:700;letter-spacing:1px;}
+.hdr-fcee{font-size:12px;font-weight:900;color:#006B3C;letter-spacing:.5px;white-space:nowrap;}
+.hdr-sub{font-size:10px;font-weight:600;}
+.hdr-linha{border-top:2px solid #006B3C;margin:4px 0 10px;}
+h2{font-size:12px;font-weight:900;text-align:center;text-transform:uppercase;margin:8px 0 10px;}
+.ficha{border:1px solid #000;padding:8px 12px;margin:0 0 10px;}
+.ficha p{margin:1px 0;}
+.sec{font-size:11px;font-weight:900;margin:10px 0 4px;}
+table{width:100%;border-collapse:collapse;font-size:9px;margin:2px 0 8px;}
+thead{display:table-header-group;}
+th{background:#E8E8E8;padding:4px 5px;text-align:left;border:1px solid #000;font-weight:700;}
+td{padding:3px 5px;border:1px solid #000;vertical-align:top;}
+.tc{text-align:center;}
+/* ⚠️ Dimensionada pela PC FINAL: "2018TR000093-PFINAL" tem 19 caracteres, contra 12 da
+   parcial. O nowrap garante que ela nunca quebre em duas linhas no papel. */
+.cod{font-family:"Courier New",monospace;white-space:nowrap;}
+.casou td{background:#FFF8E1;}
+.atraso{color:#B00020;}
+.cont{display:flex;gap:10px;margin:0 0 10px;}
+.cont div{flex:1;border:1px solid #000;padding:5px;text-align:center;}
+.cont b{display:block;font-size:15px;}
+.rodape{border-top:1px solid #000;margin-top:12px;padding-top:6px;font-size:8.5px;color:#333;}
+.obs{margin-top:10px;font-size:9px;color:#333;line-height:1.45;}
+.obs p{margin:3px 0;}
+.acoes{max-width:900px;margin:12px auto 0;text-align:right;}
+.acoes button{font-family:Arial;font-size:12px;font-weight:700;padding:9px 18px;margin-left:7px;
+  border:none;border-radius:6px;cursor:pointer;background:#006B3C;color:#fff;}
+.acoes .w{background:#1A4E8A;}
+/* As ações não existem no papel — só na tela. */
+@media print{.acoes{display:none;} html,body{background:#fff;} .paper{box-shadow:none;padding:0;}}
+/* ══ Só o TERMO DE REPASSE usa daqui para baixo (01/09/2026) ══ */
+.tbloco{border:1px solid #000;padding:8px 10px;margin:0 0 8px;}
+.tbloco p{margin:2px 0;}
+.trepasse td{background:#FFF8E1;}
+.aviso{border:1px solid #B00020;background:#FDECEA;color:#7A1C12;padding:6px 9px;margin:0 0 8px;font-weight:700;}
+.legenda{border:1px solid #000;padding:6px 9px;margin:0 0 8px;font-size:9px;}
+.assin{width:100%;border-collapse:collapse;margin-top:26px;border:none;}
+.assin td{border:none;text-align:center;vertical-align:top;padding:0 6px;font-size:9px;}
+.assin .linha{border-top:1px solid #000;padding-top:3px;}`
+
+/**
+ * O timbre: brasão à esquerda, os quatro títulos à direita, e a linha verde embaixo.
+ *
+ * ⚠️ É FUNÇÃO, E NÃO CONSTANTE, por causa do `LOGO_SC`. Uma constante interpolaria o base64 do
+ * brasão no momento em que o arquivo CARREGA — e aí ela depende da ordem de declaração, que
+ * ninguém garante ao mover código. Como função, o brasão só é lido quando um documento é
+ * montado. Foi assim que duas suítes de teste quebraram em 01/09: elas rodam pedaços do
+ * arquivo num `vm` onde o `LOGO_SC` não existe, e a constante estourava na carga.
+ */
+function docCabecalho() {
+  return `  <table class="hdr-tbl"><tr>
+    <td class="hdr-logo"><img src="${LOGO_SC}" class="logo-img" alt="Governo de Santa Catarina"></td>
+    <td class="hdr-txt">
+      <div class="hdr-sc">ESTADO DE SANTA CATARINA</div>
+      <div class="hdr-fcee">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL</div>
+      <div class="hdr-sub">GABINETE DA PRESIDÊNCIA</div>
+      <div class="hdr-sub">SETOR DE PRESTAÇÃO DE CONTAS — GRUPO DE TRABALHO</div>
+    </td>
+  </tr></table>
+  <div class="hdr-linha"></div>`
+}
+
+/** Os dois botões do topo. Eles somem na impressão — ver o `@media print` do DOC_CSS. */
+const DOC_ACOES = `<div class="acoes">
+  <button onclick="window.print()">📄 Imprimir / salvar em PDF</button>
+  <button class="w" onclick="baixarDoc()">📝 Baixar .doc (Word)</button>
+</div>`
+
 function bgMontarDoc(c) {
   const agora = new Date()
   const carimbo = agora.toLocaleDateString('pt-BR') + ' às ' +
@@ -7334,62 +7423,11 @@ function bgMontarDoc(c) {
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Busca global do sistema — ${escHtml(c.tr)}</title>
-<style>
-@page { size:A4 portrait; margin:1.2cm 1.4cm 1.2cm 1.4cm; }
-*{margin:0;padding:0;box-sizing:border-box;}
-html,body{background:#E8E8E8;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;line-height:1.55;}
-.paper{max-width:900px;margin:0 auto;background:#fff;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.15);}
-.hdr-tbl{width:100%;border-collapse:collapse;margin-bottom:4px;}
-.hdr-logo{width:150px;vertical-align:middle;text-align:center;padding-right:12px;}
-.logo-img{height:60px;width:auto;}
-.hdr-txt{vertical-align:middle;text-align:center;}
-.hdr-sc{font-size:10px;font-weight:700;letter-spacing:1px;}
-.hdr-fcee{font-size:12px;font-weight:900;color:#006B3C;letter-spacing:.5px;white-space:nowrap;}
-.hdr-sub{font-size:10px;font-weight:600;}
-.hdr-linha{border-top:2px solid #006B3C;margin:4px 0 10px;}
-h2{font-size:12px;font-weight:900;text-align:center;text-transform:uppercase;margin:8px 0 10px;}
-.ficha{border:1px solid #000;padding:8px 12px;margin:0 0 10px;}
-.ficha p{margin:1px 0;}
-.sec{font-size:11px;font-weight:900;margin:10px 0 4px;}
-table{width:100%;border-collapse:collapse;font-size:9px;margin:2px 0 8px;}
-thead{display:table-header-group;}
-th{background:#E8E8E8;padding:4px 5px;text-align:left;border:1px solid #000;font-weight:700;}
-td{padding:3px 5px;border:1px solid #000;vertical-align:top;}
-.tc{text-align:center;}
-/* ⚠️ Dimensionada pela PC FINAL: "2018TR000093-PFINAL" tem 19 caracteres, contra 12 da
-   parcial. O nowrap garante que ela nunca quebre em duas linhas no papel. */
-.cod{font-family:"Courier New",monospace;white-space:nowrap;}
-.casou td{background:#FFF8E1;}
-.atraso{color:#B00020;}
-.cont{display:flex;gap:10px;margin:0 0 10px;}
-.cont div{flex:1;border:1px solid #000;padding:5px;text-align:center;}
-.cont b{display:block;font-size:15px;}
-.rodape{border-top:1px solid #000;margin-top:12px;padding-top:6px;font-size:8.5px;color:#333;}
-.obs{margin-top:10px;font-size:9px;color:#333;line-height:1.45;}
-.obs p{margin:3px 0;}
-.acoes{max-width:900px;margin:12px auto 0;text-align:right;}
-.acoes button{font-family:Arial;font-size:12px;font-weight:700;padding:9px 18px;margin-left:7px;
-  border:none;border-radius:6px;cursor:pointer;background:#006B3C;color:#fff;}
-.acoes .w{background:#1A4E8A;}
-/* As ações não existem no papel — só na tela. */
-@media print{.acoes{display:none;} html,body{background:#fff;} .paper{box-shadow:none;padding:0;}}
+<style>${DOC_CSS}
 </style></head><body>
-<div class="acoes">
-  <button onclick="window.print()">📄 Imprimir / salvar em PDF</button>
-  <button class="w" onclick="baixarDoc()">📝 Baixar .doc (Word)</button>
-</div>
+${DOC_ACOES}
 <div class="paper" id="doc">
-  <table class="hdr-tbl"><tr>
-    <td class="hdr-logo"><img src="${LOGO_SC}" class="logo-img" alt="Governo de Santa Catarina"></td>
-    <td class="hdr-txt">
-      <div class="hdr-sc">ESTADO DE SANTA CATARINA</div>
-      <div class="hdr-fcee">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL</div>
-      <div class="hdr-sub">GABINETE DA PRESIDÊNCIA</div>
-      <div class="hdr-sub">SETOR DE PRESTAÇÃO DE CONTAS — GRUPO DE TRABALHO</div>
-    </td>
-  </tr></table>
-  <div class="hdr-linha"></div>
+${docCabecalho()}
 
   <h2>Busca global do sistema</h2>
 
@@ -18816,9 +18854,28 @@ async function irTransferir() {
           <option value="">Carregando...</option>
         </select></div>
       <div class="fg"><label>Para</label>
-        <select id="trfPara" onchange="trfBotao()" style="min-width:250px;">
+        <select id="trfPara" onchange="trfParaMudou()" style="min-width:250px;">
           <option value="">Carregando...</option>
         </select></div>
+    </div>
+    ${/* ⚠️ SÓ APARECEM QUANDO O BANCO NÃO SABE. A portaria de designação do destino define a
+          VIGÊNCIA do termo, e a tabela `substituicao` já a guarda para quem é substituto de
+          alguém — nos dois repasses que existem hoje ela responde sozinha. Pedir um dado que
+          o banco tem seria fazer digitar o que já está escrito, e digitar cria divergência.
+          Quando ela NÃO responde, os dois campos são obrigatórios: sem vigência o termo não
+          é emitido, e sem termo a transferência não deve acontecer. */''}
+    <div id="trfPortariaBox" style="display:none;">
+      <div class="filtros" style="border-left:4px solid #BA7517;">
+        <div style="flex:0 0 100%;font-size:12px;color:#4A3A0C;">
+          <b>Não há portaria de designação registrada para este analista.</b>
+          Informe o número e a data de publicação — é essa data que define a partir de quando
+          o termo vale.</div>
+        <div class="fg"><label>Portaria nº *</label>
+          <input type="text" id="trfPortaria" placeholder="203/2026" style="width:150px;"
+            oninput="trfBotao()"></div>
+        <div class="fg"><label>Publicada em *</label>
+          <input type="date" id="trfPortariaEm" style="width:165px;" onchange="trfBotao()"></div>
+      </div>
     </div>
     ${/* A faixa cinza da dispensa — vazia até o "De" escolhido ser um dispensado. */''}
     <div id="trfDispensa" style="margin:-4px 2px 14px;"></div>
@@ -18831,8 +18888,9 @@ async function irTransferir() {
     </div>`}`
   if(_trfAba === 'nova') trfBotao()
   // ⚠️ OS USUÁRIOS SÃO CARREGADOS NAS DUAS ABAS: o Histórico precisa deles para filtrar por
-  // GRUPO, que é uma coluna de `usuarios` e não vem no repasse.
-  await trfCarregarUsuarios()
+  // GRUPO, que é uma coluna de `usuarios` e não vem no repasse. As substituições vêm junto —
+  // é delas que sai a portaria do destino, e o termo do Histórico também precisa.
+  await Promise.all([trfCarregarUsuarios(), trfSubsCarregar()])
   if(_trfAba === 'hist') trfHistRender()
 }
 
@@ -18863,6 +18921,40 @@ async function trfCarregarUsuarios() {
   para.innerHTML = '<option value="">Escolha o analista de destino</option>'
     + _trfUsuarios.filter(u => u.ativo && !ehDispensado(u))
         .map(u => `<option value="${u.id}">${escHtml(u.nome)}</option>`).join('')
+  trfBotao()
+}
+
+// ── A PORTARIA DO DESTINO ───────────────────────────────────────────────────
+//
+// ⚠️ A `substituicao` RESPONDE PRIMEIRO. Ela já guarda "quem substituiu quem, por qual
+// portaria, publicada quando" — e a rota do repasse consulta a MESMA tabela antes de aceitar.
+// Se a tela pedisse sempre, a pessoa digitaria o que o banco já sabe; se nunca pedisse, o
+// repasse seria recusado sem ela poder resolver.
+let _trfSubs = []
+
+async function trfSubsCarregar() {
+  try {
+    const j = await (await fetch(`${API_URL}/substituicao`)).json()
+    _trfSubs = j.error ? [] : (j.data || [])
+  } catch(_) { _trfSubs = [] }
+}
+
+/** A portaria que o banco já tem para este destino, ou null. */
+function trfPortariaDe(paraId) {
+  const s = _trfSubs.filter(x => Number(x.substituto_id) === Number(paraId))
+  if(!s.length) return null
+  // A mais recente, quando há mais de uma — foi ela que designou a pessoa por último.
+  s.sort((a, b) => String(b.data_publicacao || '').localeCompare(String(a.data_publicacao || '')))
+  return { portaria: s[0].portaria, em: String(s[0].data_publicacao || '').slice(0, 10) }
+}
+
+function trfParaMudou() {
+  const paraId = parseInt(document.getElementById('trfPara')?.value || '0', 10)
+  const box = document.getElementById('trfPortariaBox')
+  const tem = paraId ? trfPortariaDe(paraId) : null
+  // ⚠️ A CAIXA SÓ APARECE QUANDO FALTA. Mostrá-la sempre, preenchida, convidaria a corrigir à
+  // mão um dado oficial que já está no banco.
+  if(box) box.style.display = (paraId && !tem) ? '' : 'none'
   trfBotao()
 }
 
@@ -19016,8 +19108,17 @@ function trfBotao() {
   if(!wrap) return
   const para = document.getElementById('trfPara')?.value || ''
   const n = trfPcsSelecionadas()
+  // ⚠️ A PORTARIA ENTRA NA CONTA DO BOTÃO. Sem vigência o termo não é emitido, e sem termo a
+  // transferência não deve acontecer — deixar gravar e recusar o documento depois seria criar
+  // um repasse que não se pode documentar.
+  const paraId = parseInt(para || '0', 10)
+  const jaTem = paraId ? trfPortariaDe(paraId) : null
+  const pNum = (document.getElementById('trfPortaria')?.value || '').trim()
+  const pEm = (document.getElementById('trfPortariaEm')?.value || '').trim()
+  const faltaPortaria = !!paraId && !jaTem && !(pNum && pEm)
   const motivo = !para ? 'Escolha para quem transferir.'
-    : !_trfSel.size ? 'Marque ao menos uma TR.' : ''
+    : !_trfSel.size ? 'Marque ao menos uma TR.'
+    : faltaPortaria ? 'Informe o número e a data de publicação da portaria.' : ''
   const rotulo = `Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}`
   if(motivo) {
     wrap.innerHTML = `
@@ -19257,11 +19358,33 @@ function trfImpedidas(msg, imp) {
     </div>`)
 }
 
-// ── O TERMO ─────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+//  O TERMO DE REPASSE (01/09/2026)
+// ══════════════════════════════════════════════════════════════════════════════
 //
-// ⚠️ GERADO NA HORA, a partir do detalhe — não há termo guardado no banco. É a mesma técnica
-// dos relatórios da CGE: um Blob `application/msword` que o Word abre. E só existe para os
-// repasses do evento novo; os do script de 28/08 mostram "sem termo".
+// ⚠️ NO PADRÃO DO DOCUMENTO DA BUSCA GLOBAL, e não parecido com ele: mesmo `DOC_CSS`, mesmo
+// `docCabecalho()`, mesmos dois botões. Uma segunda folha timbrada divergiria no primeiro
+// ajuste, e um termo assinado com o cabeçalho de uma versão anterior só se descobre depois.
+//
+// ⚠️ GERADO NA HORA, não guardado. E só para o evento `transferencia`: os 32 registros de
+// 28/08 vieram de um script que não gerou termo nenhum, e fabricar um agora seria produzir
+// papel com data retroativa. A tela mostra "sem termo" neles.
+//
+// ⚠️ E OS DADOS DE CADA TR VÊM DA BUSCA GLOBAL — uma chamada por TR. Ela é a única rota que
+// devolve o card inteiro (CNPJ, situação, prazo, processo mãe, NLs, pareceres, C.I.), e é
+// justamente o card que o termo tem de reproduzir. Montar uma segunda consulta com os mesmos
+// campos seria duas fontes para o mesmo documento — e um relatório que conta por um caminho e
+// lista por outro pode divergir de si mesmo.
+
+/** dd/mm/aaaa a partir de 'aaaa-mm-dd' ou de um Date — sem fatiar texto de Date (armadilha 25). */
+function trfDataBr(v) {
+  if(!v) return '—'
+  const s = String(v)
+  const iso = /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null
+  if(iso) return iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4)
+  try { return new Date(v).toLocaleDateString('pt-BR') } catch(_) { return '—' }
+}
+
 async function trfTermo(id) {
   let d = _trfDet && _trfDet.id === id ? _trfDet : null
   if(!d) {
@@ -19271,30 +19394,226 @@ async function trfTermo(id) {
       d = j.data
     } catch(e) { toast('Erro: ' + e.message, 'err'); return }
   }
-  const linhas = (d.linhas || []).map(l => `<tr>
-    <td>${escHtml(l.tr)}</td><td>${escHtml(l.entidade || '')}</td>
-    <td>${escHtml(l.codigo_pc || '')}</td><td>${escHtml(String(l.parcial_num || ''))}</td></tr>`).join('')
-  const doc = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-    <title>Termo de Transferência — ${escHtml(dataHoraBr(d.quando))}</title></head><body>
-    <div style="font-family:Arial,sans-serif;font-size:11px;">
-    <h2 style="text-align:center;">TERMO DE TRANSFERÊNCIA DE PRESTAÇÕES DE CONTAS</h2>
-    <p>Fundação Catarinense de Educação Especial — Grupo de Trabalho de Prestações de Contas</p>
-    <p><b>Data:</b> ${escHtml(dataHoraBr(d.quando))}<br>
-       <b>De:</b> ${escHtml((d.de && d.de.nome) || '—')}<br>
-       <b>Para:</b> ${escHtml((d.para && d.para.nome) || '—')}<br>
-       <b>Total:</b> ${d.pcs} prestações de contas em ${d.trs} termo(s) de referência</p>
-    <p style="border-left:3px solid #999;padding-left:8px;">As prestações de contas já baixadas
-       não foram transferidas. A produtividade delas permanece com quem as analisou.</p>
-    <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10px;">
-      <thead><tr><th>TR</th><th>Entidade</th><th>Código da PC</th><th>Parcial</th></tr></thead>
-      <tbody>${linhas}</tbody></table>
-    </div></body></html>`
-  const blob = new Blob(['﻿', doc], { type: 'application/msword' })
-  const a = document.createElement('a')
+  // ⚠️ SEM VIGÊNCIA O TERMO NÃO SAI — sua ordem, 01/09. A data de vigência é a da portaria do
+  // analista de DESTINO, nunca a da dispensa nem a do clique: é ela que define de quando o
+  // termo vale. Um termo sem essa data não afirma nada.
+  if(!d.portaria_destino || !d.portaria_destino_em) {
+    toast('Este repasse não tem a portaria do analista de destino — o termo não pode ser emitido.', 'err')
+    return
+  }
+
+  const trs = [...new Set((d.linhas || []).map(l => l.tr))]
+  toast(`Montando o termo — ${trs.length} ${trs.length === 1 ? 'TR' : 'TRs'}...`, 'ok')
+  let cards = []
+  try {
+    const res = await Promise.all(trs.map(tr =>
+      fetch(`${API_URL}/busca_global?tr=${encodeURIComponent(tr)}&usuario_id=${U.id}`).then(r => r.json())))
+    cards = res.map((j, i) => (j.data && (j.data.cards || []).find(c => c.tr === trs[i])) || null)
+                .filter(Boolean)
+  } catch(e) { toast('Erro ao carregar as TRs: ' + e.message, 'err'); return }
+  if(!cards.length) { toast('Não consegui carregar os dados das TRs.', 'err'); return }
+
+  const w = window.open('', '_blank')
+  if(!w) { toast('Permita pop-ups para gerar o termo.', 'err'); return }
+  w.document.write(trfMontarTermo(d, cards))
+  w.document.close()
+}
+
+function trfMontarTermo(d, cards) {
+  const agora = new Date()
+  const carimbo = agora.toLocaleDateString('pt-BR') + ' às ' +
+                  agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const uDe = _trfUsuarios.find(x => x.id === (d.de && d.de.id))
+  const uPara = _trfUsuarios.find(x => x.id === (d.para && d.para.id))
+  const nomeDe = (uDe && uDe.nome) || (d.de && d.de.nome) || '—'
+  const nomePara = (uPara && uPara.nome) || (d.para && d.para.nome) || '—'
+  const grupo = (uPara && uPara.grupo) || (uDe && uDe.grupo) || '—'
+  const coord = _trfUsuarios.find(x => x.perfil === 'coordenador' && String(x.grupo) === String(grupo))
+  const vigencia = trfDataBr(d.portaria_destino_em)
+
+  // ⚠️ O CÓDIGO DA PC MOVIDA VEM DO REPASSE, não do estado de agora: é ele que diz quais PCs
+  // ESTE termo repassou. Se a PC mudar de mão de novo amanhã, o termo continua contando o que
+  // ele fez — que é o que um documento assinado tem de fazer.
+  const movidas = new Set((d.linhas || []).map(l => l.codigo_pc).filter(Boolean))
+
+  let totPcs = 0, totBaixadas = 0, totRepassadas = 0, totVencidos = 0
+  const blocos = cards.map(c => {
+    const linkSgpe = _sgpeCache.get(c.processo_mae) || ''
+    const todas = c.parciais.flatMap(pa => pa.pcs)
+    const rep = todas.filter(p => movidas.has(p.codigo_pc)).length
+    const bx = todas.filter(p => p.baixada).length
+    totPcs += todas.length; totBaixadas += bx; totRepassadas += rep
+    const vencido = !!(c.prazo && c.prazo.vencido)
+    if(vencido) totVencidos++
+    const temCi = c.parciais.some(p => p.ci)
+    const arquivado = /arquiv/i.test(String(c.situacao_portal || '')) && bx < todas.length
+
+    // ⚠️ A FAIXA VERMELHA JUNTA OS TRÊS MOTIVOS NUMA LINHA SÓ. Três faixas empilhadas na
+    // mesma TR fariam o documento parecer um erro; o que importa é a TR pedir atenção.
+    const motivos = [
+      vencido ? `prazo vencido há ${c.prazo.dias_atraso} dia${c.prazo.dias_atraso === 1 ? '' : 's'}` : null,
+      temCi ? 'prestação no Controle Interno' : null,
+      arquivado ? 'processo arquivado com prestação em aberto' : null,
+    ].filter(Boolean)
+
+    const linhas = c.parciais.map(pa => pa.pcs.map((pc, idx) => {
+      const foiRepassada = movidas.has(pc.codigo_pc)
+      // ⚠️ A COLUNA REPASSE TRAZ O NOME, e não "sim/não": quem lê o termo quer saber COM QUEM
+      // cada prestação fica, e é essa a pergunta que o documento existe para responder.
+      const fica = foiRepassada ? nomePara : (pc.baixada ? nomeDe : '—')
+      return `
+    <tr${foiRepassada ? ' class="trepasse"' : ''}>
+      <td class="tc">${idx === 0 ? (pa.final ? 'PC final' : escHtml(pa.num) + ' de ' + c.total_parciais) : ''}</td>
+      <td class="cod">${escHtml(pc.codigo_pc)}</td>
+      <td class="cod">${pc.codigo_nl ? escHtml(pc.codigo_nl) : '—'}</td>
+      <td>${idx === 0 ? escHtml(normalizarProcesso(pa.processo_pc) || '—') : ''}</td>
+      <td class="tc">${pc.baixada ? 'baixada' : escHtml(pc.status || '—')}</td>
+      <td>${escHtml(pc.parecer_tipo || '—')}</td>
+      <td>${escHtml(fica)}</td>
+    </tr>`
+    }).join('')).join('')
+
+    const noCi = c.parciais.filter(p => p.ci)
+    const blocoCi = !noCi.length ? '' : `
+    <div class="sec">Controle Interno</div>
+    <table>
+      <thead><tr><th style="width:90px;">Parcial</th><th style="width:110px;">Encaminhada em</th>
+        <th>Ponto do ciclo</th><th style="width:110px;">Encerrada em</th></tr></thead>
+      <tbody>${noCi.map(p => `<tr>
+        <td class="tc">${p.final ? 'PC final' : escHtml(p.num)}</td>
+        <td class="tc">${p.ci.dt ? bgData(p.ci.dt) : '—'}</td>
+        <td>${escHtml(BG_CI[p.ci.situacao] || p.ci.situacao)}${p.ci.rodada > 1 ? ' (rodada ' + p.ci.rodada + ')' : ''}</td>
+        <td class="tc">${p.ci.encerrado_em ? bgData(p.ci.encerrado_em) : '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`
+
+    return `
+  <div class="sec">${escHtml(c.tr)}</div>
+  ${!motivos.length ? '' : `<div class="aviso">Atenção — ${escHtml(motivos.join(' · '))}</div>`}
+  <div class="ficha">
+    <p><b>Termo de Referência:</b> ${escHtml(c.tr)}</p>
+    <p><b>Entidade:</b> ${escHtml(c.entidade || '—')}${c.cnpj_cpf ? ' &nbsp;·&nbsp; <b>CNPJ:</b> ' + escHtml(c.cnpj_cpf) : ''}</p>
+    <p><b>Situação:</b> ${escHtml(c.situacao.rotulo)}</p>
+    <p><b>Prazo:</b> ${c.prazo
+      ? (c.prazo.vencido
+          ? `${bgData(c.prazo.data)} — <b class="atraso">${c.prazo.dias_atraso} dia${c.prazo.dias_atraso === 1 ? '' : 's'} de atraso</b>`
+          : bgData(c.prazo.data))
+      : 'não definido'}</p>
+    <p><b>Processo SGPe (mãe):</b> ${escHtml(normalizarProcesso(c.processo_mae) || '—')}${
+      linkSgpe ? '<br><span style="font-size:8px;word-break:break-all;">' + escHtml(linkSgpe) + '</span>' : ''}</p>
+  </div>
+  <div class="cont">
+    <div><b>${c.total_parciais}</b>parciais</div>
+    <div><b>${c.total_pcs}</b>PCs</div>
+    <div><b>${bx}</b>baixadas</div>
+    <div><b>${rep}</b>repassadas</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th class="tc" style="width:58px;">Parcial</th>
+      <th style="width:124px;">Código da PC</th>
+      <th style="width:86px;">NL</th>
+      <th style="width:110px;">Processo SGPe</th>
+      <th class="tc" style="width:58px;">Situação</th>
+      <th style="width:96px;">Parecer</th>
+      <th>Repasse</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>
+  ${blocoCi}`
+  }).join('')
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Termo de repasse de prestações de contas</title>
+<style>${DOC_CSS}
+</style></head><body>
+${DOC_ACOES}
+<div class="paper" id="doc">
+${docCabecalho()}
+
+  <h2>Termo de repasse de prestações de contas</h2>
+
+  <div class="tbloco">
+    <p><b>Analista de origem:</b> ${escHtml(nomeDe)}${uDe && uDe.grupo ? ' · Grupo ' + escHtml(String(uDe.grupo)) : ''}${
+      uDe && uDe.data_saida ? ' · dispensado em ' + trfDataBr(uDe.data_saida) : ''}${
+      uDe && uDe.portaria ? ' · Portaria ' + escHtml(uDe.portaria) : ''}</p>
+    <p><b>Analista de destino:</b> ${escHtml(nomePara)}${uPara && uPara.grupo ? ' · Grupo ' + escHtml(String(uPara.grupo)) : ''}
+       · designado pela Portaria ${escHtml(d.portaria_destino)}, publicada em ${escHtml(vigencia)}</p>
+    <p><b>Repasse registrado no sistema em:</b> ${escHtml(dataHoraBr(d.quando))}
+       &nbsp;·&nbsp; <b>Executado por:</b> ${escHtml(U.nome)} — Técnico do Sistema</p>
+    <p><b>Fundamento:</b> Portaria FCEE nº 285/2025 · Processo CGE nº 727/2025 · Decreto nº 1.008/2025</p>
+  </div>
+
+  ${/* ⚠️ A VIGÊNCIA É A DA PORTARIA DO DESTINO — nunca a da dispensa, nunca a do clique. É a
+        data em que o novo analista passou a responder pelas prestações; o clique é só quando
+        o sistema registrou. */''}
+  <div class="tbloco">
+    <p>A partir de ${escHtml(vigencia)}, data de publicação da Portaria FCEE nº ${escHtml(d.portaria_destino)},
+       o analista ${escHtml(nomePara)} assume a análise das prestações de contas relacionadas neste
+       termo, respondendo por elas perante a coordenação do Grupo ${escHtml(String(grupo))} e pelos
+       prazos em curso.</p>
+    <p style="margin-top:6px;">As prestações já baixadas permanecem registradas em nome de
+       ${escHtml(nomeDe)}, e a produtividade delas continua computada a ele — este repasse não
+       altera registro anterior. As prestações ora assumidas por ${escHtml(nomePara)} passarão a
+       gerar produtividade a ele na medida em que forem baixadas no SIGEF.</p>
+  </div>
+
+  <div class="cont">
+    <div><b>${cards.length}</b>TRs</div>
+    <div><b>${totPcs}</b>PCs no total</div>
+    <div><b>${totRepassadas}</b>repassadas</div>
+    <div><b>${totBaixadas}</b>baixadas que permanecem</div>
+    <div><b>${totVencidos}</b>prazos vencidos</div>
+  </div>
+
+  ${/* ⚠️ A LEGENDA VEM ANTES DA PRIMEIRA TABELA. A coluna Repasse traz dois nomes, e sem dizer
+        o que cada um significa ela se lê como "de quem era" — o contrário do que é. */''}
+  <div class="legenda">
+    <b>Coluna Repasse:</b> <b>${escHtml(nomePara)}</b> — prestação repassada por este termo, que
+    passa a responder por ela. &nbsp;·&nbsp; <b>${escHtml(nomeDe)}</b> — prestação já baixada, que
+    permanece registrada em seu nome, com a produtividade. As linhas em amarelo são as repassadas.
+  </div>
+
+  ${blocos}
+
+  <table class="assin"><tr>
+    <td style="width:33%;"><div class="linha">${escHtml(nomePara)}<br>Analista de destino, Grupo ${escHtml(String(grupo))}</div></td>
+    <td style="width:33%;"><div class="linha">${escHtml((coord && coord.nome) || '—')}<br>Coordenador do Grupo ${escHtml(String(grupo))}</div></td>
+    <td style="width:33%;"><div class="linha">${escHtml(U.nome)}<br>Técnico do Sistema, SIGPC-GT</div></td>
+  </tr></table>
+
+  <div class="rodape">Emitido por <b>${escHtml(U.nome)}</b> em ${carimbo} · SIGPC-GT</div>
+</div>
+${docScriptTermo(d.id)}
+</body></html>`
+}
+
+/**
+ * O script do botão .doc, que vive DENTRO do documento gerado.
+ *
+ * ⚠️ A TAG QUE FECHA O SCRIPT VAI ESCAPADA. A sequência crua, aqui dentro, fecharia o bloco
+ * de script da PÁGINA que escreve o documento — e o resto do `index.html` viraria texto solto
+ * na tela. Caí nisso em 01/09/2026 escrevendo o aviso sobre isso: é a armadilha 10 na sua
+ * forma mais irônica, e por isso o aviso agora não escreve a sequência nem para citá-la.
+ */
+function docScriptTermo(id) {
+  return `<script>
+function baixarDoc(){
+  var doc = document.getElementById('doc').outerHTML
+  var css = document.querySelector('style').innerHTML
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8"><title>Termo de repasse de prestações de contas</title>' +
+    '<style>' + css + '</style></head><body>' + doc + '</body></html>'
+  var blob = new Blob(['\\ufeff', html], { type: 'application/msword' })
+  var a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `termo_transferencia_${id}.doc`
-  document.body.appendChild(a); a.click(); a.remove()
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+  a.download = 'termo-de-repasse-${id}.doc'
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  setTimeout(function(){ URL.revokeObjectURL(a.href) }, 4000)
+}
+<\/script>`
 }
 
 /** O corpo da aba Histórico. Só o markup — quem enche é a `trfHistRender`. */
@@ -19340,7 +19659,12 @@ async function trfConfirmar() {
   try {
     const r = await fetch(`${API_URL}/transferencia`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
+      // ⚠️ A PORTARIA SÓ VAI QUANDO A TELA A PEDIU. Quando a `substituicao` responde, quem
+      // resolve é o servidor, lendo a MESMA tabela — mandar daqui um valor digitado por cima
+      // do oficial criaria duas versões do mesmo dado.
       body: JSON.stringify({ de_id: deId, para_id: paraId, trs,
+        portaria: (document.getElementById('trfPortaria')?.value || '').trim() || undefined,
+        portaria_em: (document.getElementById('trfPortariaEm')?.value || '').trim() || undefined,
         usuario_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' }),
     })
     const j = await r.json()
