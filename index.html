@@ -19563,15 +19563,31 @@ function trfHistRender() {
     <tbody>${lista.map(r => `
       <tr onclick="trfDetalhe(${r.id})" style="cursor:pointer;" title="Abrir o detalhe deste repasse">
         <td style="white-space:nowrap;">${escHtml(dataHoraBr(r.quando))}</td>
-        <td><b>${escHtml((r.de && r.de.nome) || '—')}</b> → <b>${escHtml((r.para && r.para.nome) || '—')}</b></td>
+        ${/* ⚠️ O DESFEITO SE ANUNCIA NA LINHA, e não só pela coluna Ciências mostrando "—". Sem
+              a etiqueta, um repasse revogado se lê como um repasse em vigor, e a diferença é
+              justamente a que importa: as PCs dele estão no ESTOQUE, não com o destino. */''}
+        <td><b>${escHtml((r.de && r.de.nome) || '—')}</b> → <b>${escHtml((r.para && r.para.nome) || '—')}</b>${
+          r.desfeito ? `<span style="display:inline-block;margin-left:7px;font-size:9.5px;
+            font-weight:700;padding:1px 7px;border-radius:9px;background:#FDECEC;color:#8E2A2A;
+            border:1px solid #F2C4C4;">DESFEITO</span>` : ''}</td>
         <td style="text-align:right;">${r.trs}</td>
         <td style="text-align:right;font-weight:700;">${r.pcs}</td>
         ${/* ⚠️ "3 de 4" DIZ O QUE "3" SOZINHO NÃO DIZ. Quantas foram registradas só tem sentido
               contra quantas se espera — e é a que FALTA que faz alguém agir. Os repasses velhos
               não pedem ciência e mostram "—", não "0 de 0": zero sobre zero se lê como pendência,
-              e ali não há nenhuma. */''}
+              e ali não há nenhuma.
+
+              ⚠️ O DESFEITO TAMBÉM NÃO COBRA, e o servidor já manda `ciencias_esperadas: 0` nele.
+              Mas aqui ele não vira "—" e sim as ciências que chegaram a ser dadas ANTES do
+              desfazer: elas aconteceram, e o termo as lista. Um travessão apagaria o registro
+              de que alguém declarou. */''}
         <td style="text-align:center;white-space:nowrap;">${
-          r.ciencias_esperadas
+          r.desfeito
+            ? (r.ciencias
+                ? `<b style="color:var(--ct);">${r.ciencias}</b>
+                   <div style="font-size:10px;color:var(--ct);">antes do desfazer</div>`
+                : '<span style="color:var(--ct);">—</span>')
+          : r.ciencias_esperadas
             ? `<b style="color:${r.ciencias >= r.ciencias_esperadas ? 'var(--v)' : 'var(--am)'};">${
                 r.ciencias}</b><span style="color:var(--ct);"> de ${r.ciencias_esperadas}</span>${
                 r.ciencias >= r.ciencias_esperadas ? ''

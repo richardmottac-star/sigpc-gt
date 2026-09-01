@@ -621,5 +621,23 @@ S('AS CIENCIAS NO TERMO E NO HISTORICO');
   conf(/: '<span style="color:var\(--ct\);">—<\/span>'/.test(hist),
        'e o repasse que nao pede ciencia mostra — , nao 0 de 0');
 }
+
+S('O REPASSE DESFEITO NO HISTORICO (01/09/2026)');
+{
+  const iH = html.indexOf('function trfHistRender');
+  const hist = html.slice(iH, html.indexOf('function dataHoraBr', iH));
+  // ⚠️ O DESFEITO SE ANUNCIA NA LINHA, e nao so pela coluna Ciencias mostrando "—". Sem a
+  // etiqueta, um repasse revogado se le como um repasse em vigor — e a diferenca e justamente a
+  // que importa: as PCs dele estao no ESTOQUE, nao com o destino.
+  conf(/r\.desfeito \?/.test(hist), 'a linha do Historico marca o repasse desfeito');
+  conf(/>DESFEITO<\/span>/.test(hist), 'com a etiqueta escrita');
+  // ⚠️ E O QUE ELE MOSTRA NA COLUNA CIENCIAS NAO E "—" QUANDO ALGUEM DECLAROU ANTES: as
+  // ciencias dadas antes do desfazer aconteceram, e o termo as lista. Um travessao apagaria o
+  // registro de que alguem declarou.
+  conf(/antes do desfazer/.test(hist),
+       'e as ciencias dadas antes do desfazer continuam a vista');
+  conf(hist.indexOf('r.desfeito') < hist.indexOf('r.ciencias_esperadas'),
+       'o ramo do desfeito e conferido antes da cobranca normal');
+}
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);
