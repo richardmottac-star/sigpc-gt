@@ -5590,8 +5590,22 @@ const VINC_COL = {
   pcs:      'flex:0 0 52px;',
   parciais: 'flex:0 0 110px;',
 }
-const VINC_LINHA = 'display:flex;align-items:center;gap:8px;padding:6px 8px;'
+// ⚠️ A BORDA ESQUERDA MORA NA `VINC_LINHA`, E POR ISSO O CABEÇALHO TAMBÉM A TEM. Ela é
+// transparente por padrão e só a linha do consultado a pinta — se ela nascesse apenas na
+// linha destacada, todas as outras (e os títulos das colunas) ficariam 4px à esquerda dela,
+// e a tabela desalinharia justamente na linha que se quer olhar.
+const VINC_LINHA = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-left:4px solid transparent;'
 const VINC_CENTRO = 'text-align:center;'
+
+// A barra que marca o consultado, no lugar do selo que descia de linha (31/08/2026).
+const VINC_BARRA = '#EF9F27'
+
+// ⚠️ O CABEÇALHO E OS TÍTULOS FICAM DENTRO DA ÁREA QUE ROLA, presos com `sticky` — não acima
+// dela. É o único jeito de eles continuarem em cima das suas colunas quando a barra de
+// rolagem aparece: a barra come ~15px da LARGURA das linhas, e um cabeçalho posto FORA da
+// caixa não perderia esses 15px. A coluna elástica encolheria só nas linhas, e os títulos
+// passariam a apontar para a coluna vizinha.
+const VINC_ROLAGEM = 'max-height:330px;overflow-y:auto;'
 
 /** O cabeçalho — todos os títulos centrados sobre a sua coluna, e uma linha embaixo. */
 function sgpeVincCabecalho() {
@@ -5658,9 +5672,11 @@ function sgpeVincNumero(processo, ehLink) {
     style="${mono}background:none;border:0;padding:0;cursor:pointer;">${txt}</button>`
 }
 
-/** A etiqueta "consultado" — a mesma nos dois lugares que a usam. */
-const sgpeVincSeloAtual = () => `<span style="background:${VINC_RISCADO};color:${VINC_AMBAR};
-  border-radius:20px;padding:1px 8px;font-size:9.5px;font-weight:800;white-space:nowrap;">consultado</span>`
+// ⚠️ O SELO "consultado" SAIU EM 31/08/2026, e a barra laranja da esquerda ocupou o lugar
+// dele. Ele não estava errado — estava sem espaço: em 158px o número normalizado já leva
+// ~128px, e o `flex-wrap` da célula, que existia para ele não vazar por cima do assunto,
+// fazia o selo descer para uma segunda linha DENTRO da coluna PROCESSO e crescer a linha
+// inteira. A barra marca o mesmo estado sem disputar largura com ninguém.
 
 /**
  * O MIOLO DA LINHA: o assunto e a situação. Um lugar só, usado pela lista e pela mãe.
@@ -5727,21 +5743,21 @@ function sgpeVincLinha(p, destacar) {
   // quando elas eram blocos soltos; numa tabela, cada caixa desenha uma coluna falsa por cima
   // das de verdade e o olho perde o alinhamento. Fica o `border-top`, que é o que separa.
   //
-  // ⚠️ NA LISTA O SELO "consultado" FICA LOGO DEPOIS DO NÚMERO, dentro da coluna PROCESSO —
-  // decisão do Richard, e ele tem razão: em PARCIAIS o selo tomaria o lugar dos NÚMEROS DAS
-  // PARCIAIS, que é a informação daquela coluna. Na mãe é o contrário: lá PARCIAIS está
-  // vazia, e o selo tem onde ficar sem empurrar nada.
+  // ⚠️ O CONSULTADO É A BARRA LARANJA DA ESQUERDA, e não mais um selo dentro da coluna
+  // PROCESSO (31/08/2026). Ela vem JUNTO com o fundo bege, que continua: são os dois que
+  // dizem "você está aqui". A barra mora na margem da linha, onde não há nada para empurrar.
   //
-  // ⚠️ E ELE CABE AQUI POR CAUSA DO `flex-wrap` DA CÉLULA: em 158px o número normalizado já
-  // leva ~128px, então o selo desce para a segunda linha DENTRO da coluna, em vez de vazar
-  // por cima do assunto. Sem o wrap, esta escolha cortaria o selo em silêncio.
-  return `<div style="${VINC_LINHA}background:${fundo};border-top:1px solid var(--cl);">
+  // ⚠️ E A ESPESSURA É A MESMA NAS OUTRAS LINHAS, em transparente — vem da `VINC_LINHA`.
+  // Pintar a borda só na destacada moveria o conteúdo dela 4px para a direita, e a coluna
+  // que se quer ler seria a única fora do lugar.
+  return `<div style="${VINC_LINHA}background:${fundo};border-top:1px solid var(--cl);${
+      atual ? `border-left-color:${VINC_BARRA};` : ''}">
       ${/* ⚠️ A CÉLULA QUEBRA, e isto é a armadilha 24 de novo. Com `flex:0 0 158px` ela perde a
             licença de esticar, e conteúdo que não cabe NÃO é cortado: escapa por cima da
-            coluna vizinha. E o que entra aqui é de tamanho variável — o número, mais o selo
-            do consultado, mais o rótulo "processo inválido" quando for o caso. */''}
+            coluna vizinha. E o que entra aqui é de tamanho variável — o número, mais o
+            rótulo "processo inválido" quando for o caso. */''}
       <span style="${VINC_COL.processo}display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;">
-        ${num}${atual ? sgpeVincSeloAtual() : ''}
+        ${num}
       </span>
       ${sgpeVincMiolo(p.assunto, p.situacao_portal)}
       <span style="${VINC_COL.pcs}${VINC_CENTRO}font-size:11.5px;color:var(--ct);">${p.qtd}</span>
@@ -5774,11 +5790,17 @@ function sgpeVincHtml(d) {
   // ⚠️ A MÃE É UMA LINHA DA MESMA TABELA, e lê das mesmas `VINC_COL`. Ela guarda o fundo azul
   // e a etiqueta, mas as colunas são as de baixo — com largura própria, o número dela não
   // ficaria em cima do número das outras, e a tabela deixaria de ser tabela.
-  // ⚠️ PCS e PARCIAIS ficam VAZIAS: a mãe não tem PC nem parcial. É na PARCIAIS que entra o
-  // selo "consultado" quando é ela a consultada — foi a sua regra, e ali há espaço.
+  // ⚠️ PCS e PARCIAIS ficam VAZIAS: a mãe não tem PC nem parcial. Era na PARCIAIS que entrava
+  // o selo "consultado" quando era ela a consultada; hoje quem diz isso é a barra da esquerda,
+  // e as duas células ficam vazias sempre.
+  // ⚠️ A BORDA DA MÃE PASSOU A 4px, a mesma das outras linhas, e ela é LARANJA quando a mãe
+  // é a consultada. Duas espessuras deixariam a linha da mãe 1px fora do alinhamento das
+  // outras; e uma marca só para "consultado" na lista e outra na mãe seriam duas linguagens
+  // para o mesmo estado, na mesma tabela. Quem continua dizendo que ela é a mãe é a etiqueta
+  // azul, que não saiu.
   const mae = !d.processo_mae ? '' : `
     <div style="${VINC_LINHA}background:${ehMae ? VINC_AMBAR : VINC_AZUL};
-      border-top:1px solid var(--cl);border-left:3px solid ${VINC_AZUL_BORDA};">
+      border-top:1px solid var(--cl);border-left-color:${ehMae ? VINC_BARRA : VINC_AZUL_BORDA};">
       ${/* ⚠️ A CÉLULA QUEBRA, e isto é a armadilha 24 de novo. Com `flex:0 0 158px` ela perde a
             licença de esticar, e conteúdo que não cabe NÃO é cortado: escapa por cima da
             coluna vizinha. E o que entra aqui é de tamanho variável — o número normalizado
@@ -5793,7 +5815,7 @@ function sgpeVincHtml(d) {
       ${/* Os campos são os DELA (`mae_*`), que vêm do join próprio da rota. */''}
       ${sgpeVincMiolo(d.mae_assunto, d.mae_situacao_portal)}
       <span style="${VINC_COL.pcs}"></span>
-      <span style="${VINC_COL.parciais}${VINC_CENTRO}">${ehMae ? sgpeVincSeloAtual() : ''}</span>
+      <span style="${VINC_COL.parciais}${VINC_CENTRO}"></span>
     </div>`
 
   const linhas = (d.processos || []).map(p => sgpeVincLinha(p, !ehMae)).join('')
@@ -5806,10 +5828,25 @@ function sgpeVincHtml(d) {
   // ⚠️ O `gap` ENTRE AS LINHAS SAIU. Com um `border-top` em cada uma, o espaço abriria um vão
   // claro entre a divisória e a linha seguinte — a divisória deixaria de dividir duas linhas e
   // passaria a flutuar entre elas. Numa tabela, as linhas se encostam.
+  // ⚠️ SÓ A LISTA ROLA. A caixa de baixo tem altura máxima e rolagem própria; a TR, a
+  // entidade, a contagem e os títulos das colunas ficam presos no topo DELA, com `sticky`, e
+  // as linhas passam por baixo. Numa TR de 58 processos era o cabeçalho que sumia primeiro, e
+  // quem estava no fim da lista já não via de qual TR aquilo era.
+  //
+  // ⚠️ O FUNDO BRANCO NO BLOCO PRESO É OBRIGATÓRIO: sem ele o `sticky` fica transparente e as
+  // linhas aparecem POR CIMA do texto do cabeçalho enquanto rolam.
+  //
+  // ⚠️ E A JANELA CONTINUA ROLANDO POR FORA, como já rolava — o `#sgpeRolagem` do modal não
+  // foi tocado. São duas rolagens aninhadas de propósito: a de dentro é da lista da TR, a de
+  // fora é da consulta inteira.
   return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cl);">
-      ${cabecalho}
-      ${sgpeVincCabecalho()}
-      <div style="display:flex;flex-direction:column;">${mae}${linhas}</div>
+      <div style="${VINC_ROLAGEM}">
+        <div style="position:sticky;top:0;z-index:2;background:#fff;">
+          ${cabecalho}
+          ${sgpeVincCabecalho()}
+        </div>
+        <div style="display:flex;flex-direction:column;">${mae}${linhas}</div>
+      </div>
       ${rodape}
     </div>`
 }

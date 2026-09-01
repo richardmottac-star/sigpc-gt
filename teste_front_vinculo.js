@@ -125,44 +125,59 @@ conf(!/>mãe</.test(ctx.sgpeVincHtml({ ...BLOCO, processo_mae: null })), 'sem pr
 conf(partes(h).lista.every(x => !x.includes('#EAF1F9')), 'e o azul nao vaza para a lista');
 
 S('4. O CONSULTADO');
-conf(h.includes('#FAEEDA') && />consultado</.test(h), 'o atual leva fundo ambar e a etiqueta');
+// ⚠️ SAO AS DUAS COISAS JUNTAS (31/08/2026): o fundo bege, que ja existia, MAIS a barra
+// laranja de 4px na borda esquerda. O selo "consultado" saiu — ele descia para uma segunda
+// linha DENTRO da coluna PROCESSO e crescia a linha inteira.
+conf(h.includes('#FAEEDA') && h.includes('#EF9F27'), 'o atual leva fundo ambar e a barra laranja');
+conf(!/consultado/.test(h), 'e a palavra "consultado" nao sobrou em lugar nenhum da faixa');
 // ⚠️ O NUMERO VALIDO SAI NORMALIZADO — `SCC11160/2020` vira `SCC 00011160/2020` pelo
 // `normalizarProcesso`, que e o mesmo de todas as listas do sistema. So o INVALIDO sai cru
 // (secao 6), porque ali normalizar seria a tela consertando texto que ela nao entendeu.
 const alvoAtual = ctx.normalizarProcesso('SCC11160/2020');
 conf(h.includes(alvoAtual), 'o processo valido sai normalizado', alvoAtual);
-// ⚠️ O SELO FOI PARA A COLUNA PARCIAIS: em 158px o numero normalizado ja ocupa ~128px, e o
-// selo ao lado seria cortado em silencio ou obrigaria o numero a truncar.
 const linhaAtual = partes(h).lista.find(x => x.includes(alvoAtual)) || '';
 conf(/#FAEEDA/.test(linhaAtual), 'a linha do consultado tem o fundo bege');
-// ⚠️ NA LISTA O SELO FICA NA COLUNA PROCESSO, logo depois do numero — em PARCIAIS ele
-// tomaria o lugar dos numeros das parciais, que e a informacao daquela coluna (Richard).
-// A checagem recorta a CELULA, e nao a linha: 'esta na linha' passaria com o selo em
-// qualquer uma das cinco colunas, que e o que se quer distinguir aqui.
+// ⚠️ A BARRA E DA LINHA, E NAO DE UMA CELULA. O selo tinha de escolher uma coluna — e as duas
+// escolhas possiveis custavam largura a alguem: na PROCESSO ele descia de linha, na PARCIAIS
+// tomava o lugar dos numeros. A borda esquerda fica na margem da linha, fora das cinco
+// colunas, e por isso nao empurra nada.
 const celProc = (linha) => linha.slice(linha.indexOf('flex:0 0 158px'), linha.indexOf('flex:1 1 0'));
 const celPar  = (linha) => linha.slice(linha.indexOf('flex:0 0 110px'));
-conf(/>consultado</.test(celProc(linhaAtual)), 'e o selo fica na coluna PROCESSO, com o numero');
-conf(!/>consultado</.test(celPar(linhaAtual)), 'e NAO na PARCIAIS, que ali tem os numeros');
+conf(/border-left-color:#EF9F27/.test(linhaAtual), 'e a barra laranja na borda esquerda dela');
+conf(!/#EF9F27/.test(celProc(linhaAtual)) && !/#EF9F27/.test(celPar(linhaAtual)),
+     'e ela nao entra em celula nenhuma');
 conf(/1 a 12/.test(celPar(linhaAtual)), 'os numeros das parciais seguem inteiros na coluna deles',
      celPar(linhaAtual).replace(/<[^>]*>/g,'').trim());
-conf((h.match(/>consultado</g) || []).length === 1, 'so UM "consultado" na faixa inteira',
-     (h.match(/>consultado</g) || []).length);
+// ⚠️ AS OUTRAS LINHAS TEM A MESMA ESPESSURA, em transparente — e o cabecalho tambem. Pintar a
+// borda so na destacada moveria o conteudo dela 4px para a direita: a linha que se quer ler
+// seria a unica fora do alinhamento da tabela.
+conf(partes(h).lista.every(x => /border-left:4px solid transparent/.test(x)),
+     'todas as linhas nascem com 4px de borda transparente');
+conf(/border-left:4px solid transparent/.test(partes(h).cabecalho),
+     'e os titulos das colunas tambem, senao ficariam 4px fora das colunas');
+conf((h.match(/border-left-color:#EF9F27/g) || []).length === 1, 'so UMA barra laranja na faixa inteira',
+     (h.match(/border-left-color:#EF9F27/g) || []).length);
 
 S('5. CONSULTANDO PELA MAE');
 // ⚠️ O AMBAR VAI PARA A FAIXA AZUL, e NENHUMA linha da lista se destaca (decisao do Richard).
 const hm = ctx.sgpeVincHtml(comPapel('mae'));
 const blocoMae = partes(hm).mae;
 conf(/#FAEEDA/.test(blocoMae) && />mãe</.test(blocoMae), 'a faixa da mae fica ambar');
-conf(/>consultado</.test(blocoMae), 'e ganha a etiqueta "consultado" junto com a de "mãe"');
-// ⚠️ NA MAE E O CONTRARIO DA LISTA: o selo vai na coluna PARCIAIS, porque ali ela esta
-// VAZIA — a mae nao tem parcial nem PC. E o que faz as duas escolhas conviverem.
-// A checagem recorta a CELULA, como na lista — "esta na linha" passaria com o selo em
-// qualquer uma das cinco colunas, que e exatamente o que se quer distinguir.
+conf(/border-left-color:#EF9F27/.test(blocoMae), 'e ganha a MESMA barra laranja da lista');
+// ⚠️ A MAE PERDE A BORDA AZUL ENQUANTO E ELA A CONSULTADA, e quem continua dizendo que ela e
+// a mae e a ETIQUETA azul, que nao saiu. Uma marca na lista e outra na mae seriam duas
+// linguagens para o mesmo estado, na mesma tabela — e a mae ficaria 1px fora do alinhamento,
+// porque a borda dela era de 3px e a das outras e de 4px.
+const estiloMae = blocoMae.slice(0, blocoMae.indexOf('>'));
+conf(!/#1A4E8A/.test(estiloMae), 'e a borda azul cede o lugar enquanto ela e a consultada');
+conf(/>mãe</.test(blocoMae), 'mas a etiqueta "mãe" fica, e e ela que a identifica');
 const celProcMae = blocoMae.slice(blocoMae.indexOf('flex:0 0 158px'), blocoMae.indexOf('flex:1 1 0'));
 const celPcsMae  = blocoMae.slice(blocoMae.indexOf('flex:0 0 52px'), blocoMae.indexOf('flex:0 0 110px'));
 const celParMae  = blocoMae.slice(blocoMae.indexOf('flex:0 0 110px'));
-conf(/>consultado</.test(celParMae), 'na mae o selo fica na coluna PARCIAIS');
-conf(!/>consultado</.test(celProcMae), 'e NAO na PROCESSO, ao contrario da lista');
+conf(!/#EF9F27/.test(celProcMae) && !/#EF9F27/.test(celParMae),
+     'e a barra nao entra em celula nenhuma, como na lista');
+// ⚠️ A BORDA DA MAE E DE 4px COMO A DAS OUTRAS, e nao mais de 3px.
+conf(/border-left:4px solid transparent/.test(blocoMae), 'a mae parte da mesma espessura das outras');
 // ⚠️ E as duas colunas da direita ficam VAZIAS de conteudo proprio: a mae nao tem PC nem
 // parcial. E por estarem vazias que o selo cabe ali sem empurrar informacao nenhuma.
 //
@@ -177,14 +192,13 @@ const textoCelula = (linha, marca) => {
 };
 conf(textoCelula(blocoMae, 'flex:0 0 52px') === '', 'e a coluna PCS da mae fica vazia',
      JSON.stringify(textoCelula(blocoMae, 'flex:0 0 52px')));
-conf(!/[0-9]/.test(String(textoCelula(blocoMae, 'flex:0 0 110px')).replace('consultado', '')),
-     'e a PARCIAIS nao traz numero de parcial',
+conf(textoCelula(blocoMae, 'flex:0 0 110px') === '', 'e a PARCIAIS fica vazia tambem',
      JSON.stringify(textoCelula(blocoMae, 'flex:0 0 110px')));
-conf((hm.match(/>consultado</g) || []).length === 1, 'e ha UM so na faixa toda',
-     (hm.match(/>consultado</g) || []).length);
+conf((hm.match(/border-left-color:#EF9F27/g) || []).length === 1, 'e ha UMA barra so na faixa toda',
+     (hm.match(/border-left-color:#EF9F27/g) || []).length);
 // O `atual: true` do SCC11160 continua vindo da rota, e mesmo assim a linha nao se destaca.
 const listaMae = partes(hm).lista.join('');
-conf(!/>consultado</.test(listaMae), 'nenhuma linha da lista fica destacada, mesmo com atual=true');
+conf(!/border-left-color:#EF9F27/.test(listaMae), 'nenhuma linha da lista fica destacada, mesmo com atual=true');
 
 S('6. O PROCESSO INVALIDO');
 // `AR355478172` nao forma processo — e o `procInvalido` da tela que decide, o mesmo das listas.
@@ -202,12 +216,34 @@ conf((h.match(/flex:0 0 158px[^"]*flex-wrap:wrap/g) || []).length === 4,
      'nas quatro celulas de processo — mae e as tres linhas',
      (h.match(/flex:0 0 158px[^"]*flex-wrap:wrap/g) || []).length);
 conf(linhaInv.includes('AR355478172'), 'e o valor CRU, sem a tela tentar consertar');
-// ⚠️ INVALIDO QUE TAMBEM E O CONSULTADO MOSTRA AS DUAS COISAS — o fundo e o mesmo, e e a
-// ETIQUETA que separa (decisao do Richard).
+// ⚠️ INVALIDO QUE TAMBEM E O CONSULTADO MOSTRA AS DUAS COISAS — o fundo bege e o mesmo nos
+// dois casos, e quem os separa agora e a BARRA (antes era o selo).
 const hInvAtual = ctx.sgpeVincHtml({ ...BLOCO,
   processos: [{ processo: 'AR355478172', qtd: 2, parciais: ['7'], atual: true }] });
-conf(/line-through/.test(hInvAtual) && />consultado</.test(hInvAtual),
-     'invalido E consultado mostra o riscado e a etiqueta');
+conf(/line-through/.test(hInvAtual) && /border-left-color:#EF9F27/.test(hInvAtual),
+     'invalido E consultado mostra o riscado e a barra');
+
+S('6b. O CABECALHO PRESO E A LISTA QUE ROLA');
+// ⚠️ SO A LISTA ROLA (31/08/2026). A caixa de baixo tem altura maxima e rolagem propria; a
+// TR, a entidade, a contagem e os titulos das colunas ficam presos no topo DELA, e as linhas
+// passam por baixo. Numa TR de 58 processos era o cabecalho que sumia primeiro, e quem estava
+// no fim da lista ja nao via de qual TR aquilo era.
+conf(/max-height:330px;overflow-y:auto/.test(h), 'a lista tem altura maxima e rolagem propria');
+conf(/position:sticky;top:0/.test(h), 'e o bloco do cabecalho fica preso no topo dela');
+// ⚠️ E ELE FICA DENTRO DA CAIXA QUE ROLA, nao acima dela. Fora, ele nao perderia os ~15px que
+// a barra de rolagem come da LARGURA das linhas: a coluna elastica encolheria so nas linhas e
+// os titulos passariam a apontar para a coluna vizinha — exatamente quando ha lista demais
+// para ler, que e quando o titulo serve para alguma coisa.
+const iCaixa = h.indexOf('max-height:330px');
+conf(iCaixa > 0 && h.indexOf('text-transform:uppercase') > iCaixa,
+     'os titulos das colunas estao DENTRO da caixa que rola');
+conf(iCaixa > 0 && h.indexOf('2020TR000623') > iCaixa, 'e a TR e a entidade tambem');
+// ⚠️ FUNDO OPACO NO BLOCO PRESO: sem ele o sticky fica transparente e as linhas aparecem POR
+// CIMA do texto do cabecalho enquanto rolam.
+conf(/position:sticky;top:0;z-index:2;background:#fff/.test(h),
+     'com fundo opaco e acima das linhas');
+// ⚠️ A JANELA CONTINUA ROLANDO POR FORA — o #sgpeRolagem do modal nao foi tocado.
+conf(/id="sgpeRolagem" style="overflow-y:auto/.test(html), 'e a rolagem do modal segue de pe');
 
 S('7. O RODAPE');
 conf(/1 PC sem processo gravado/.test(h), 'diz quantas PCs nao tem processo', 'singular');
