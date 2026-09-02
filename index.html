@@ -3629,32 +3629,149 @@ function renderDashPrecisa() {
     </div>`
 }
 
+// ══════════════════════════════════════
+//  "SUAS PCs NO CONTROLE INTERNO" — anel único e bloco de fonte  (02/09/2026)
+// ══════════════════════════════════════
+// ⚠️ ERAM TRÊS LINHAS E VIRARAM CINCO, porque duas das três mentiam.
+//
+// A antiga "C.I. de acordo" era `ci_situacao = 'encerrado'` e nada mais — e MEDIDO em 02/09:
+// das 1.584 encerradas do acervo, apenas 7 têm decisão do C.I. registrada. As outras 1.577
+// vieram do UPDATE em massa de 16/08 (`executar_16_08.js` FRENTE 3, alimentado pelo
+// `PCS_NO_CONTROLE_INTERNO.csv`), que escolheu 'encerrado' para não afundar a fila real dos
+// três técnicos. A escolha estava certa; o rótulo do painel é que afirmava acordo que ninguém
+// deu. Agora elas têm linha própria — "Declarada por você".
+//
+// A antiga "Voltou com ressalvas" juntava a devolução por ressalva com a REABERTURA pelo
+// SGPe, que é outra coisa: a reaberta voltou porque o processo tramitou, não porque o C.I.
+// discordou. Medido: 157 das 161 reabertas caíam ali dentro.
+//
+// ⚠️ A UNIDADE É A PARCELA, e não a PC — igual à fila do C.I. desde 26/08. Medido antes de
+// escrever: das 1.988 parcelas no ciclo, ZERO têm PCs em `ci_situacao` diferentes, então a
+// parcela é homogênea e a contagem não precisa de regra de desempate.
+//
+// ⚠️ O SERVIDOR MANDA AS CINCO PRONTAS (`ci_l1..ci_l5` e `ci_total`). A tela NÃO SOMA NADA —
+// foi a tela ter conta própria que criou as divergências que o levantamento de 02/09 achou.
+const DASH_CI_LINHAS = [
+  { k: 'ci_l1_na_fila',   rotulo: 'Aguardando análise no C.I.', cor: '#BA7517', num: '#854F0B' },
+  { k: 'ci_l2_declarada', rotulo: 'Declarada por você',         cor: '#7F77DD', num: '#3C3489' },
+  { k: 'ci_l3_de_acordo', rotulo: 'C.I. de acordo',             cor: '#639922', num: '#3B6D11' },
+  { k: 'ci_l4_reaberta',  rotulo: 'Reaberta pelo C.I.',         cor: '#378ADD', num: '#185FA5' },
+  { k: 'ci_l5_ressalva',  rotulo: 'Voltou com ressalvas',       cor: '#E24B4A', num: '#A32D2D' },
+]
+
+// A circunferência do anel: 2π × 46 = 289. Constante, para o dasharray não recalcular.
+const DASH_CI_VOLTA = 289
+
+// O texto do bloco "Fonte" — uma linha por situação, na MESMA ordem e cor das fatias.
+// ⚠️ Mora aqui, colado em `DASH_CI_LINHAS`, e não solto no HTML: as duas listas têm de andar
+// juntas, e é a distância entre elas que deixa a segunda ficar velha (a lição do `ciBolha`).
+const DASH_CI_FONTE = [
+  'encaminhadas e ainda na fila, sem retorno.',
+  'encerradas antes de o sistema receber a devolutiva do C.I.; a confiabilidade vem da sua declaração.',
+  'decisão de acordo registrada no sistema por técnico do Controle Interno.',
+  'voltaram pelo SGPe depois do encerramento; a baixa e o encaminhamento seguem valendo.',
+  'devolvidas com ressalva, aguardando providência sua.',
+]
+
+/**
+ * Abre e fecha o bloco "Fonte".
+ *
+ * ⚠️ O ESTADO MORA NO PRÓPRIO ELEMENTO (`data-aberto` no botão), nunca em `sessionStorage` —
+ * ordem do Richard. É estado de uma visita a uma tela, não preferência da pessoa.
+ */
+function dashCiFonte(btn) {
+  const abrir = btn.dataset.aberto !== '1'
+  btn.dataset.aberto = abrir ? '1' : '0'
+  const bloco = document.getElementById('dashCiFonteBloco')
+  if(bloco) bloco.hidden = !abrir
+  btn.style.background  = abrir ? 'var(--vbg)' : 'transparent'
+  btn.style.borderColor = abrir ? 'var(--v)'   : 'var(--borda-suave)'
+  btn.style.color       = abrir ? 'var(--v)'   : 'var(--texto-secundario)'
+}
+
 function renderDashCi() {
   const el = document.getElementById('dashCi')
   if(!el) return
   const d = DASH_PAINEL
-  const barras = [
-    { rotulo: 'Aguardando análise',  n: d?.ci_na_fila ?? 0,      cor: '#BA7517' },
-    { rotulo: 'C.I. de acordo',      n: d?.ci_encerrado ?? 0,    cor: '#3B6D11' },
-    { rotulo: 'Voltou com ressalvas', n: d?.ci_com_analista ?? 0, cor: '#A32D2D' },
-  ]
-  // ⚠️ A proporção é sobre o MAIOR, não sobre a soma: com 19 encerradas e 1 na fila, dividir
-  // pela soma daria uma barra de 5% que não se vê. O que a barra compara é entre si.
-  const maior = Math.max(1, ...barras.map(b => b.n))
+  // ⚠️ O ESTADO DO "Fonte" SOBREVIVE À REPINTURA. `renderDashCi` roda a cada 60 s pelo relógio
+  // do Dashboard; sem esta linha o bloco que a pessoa acabou de abrir fecharia sozinho no meio
+  // da leitura. Continua sendo estado do elemento — lido do elemento ANTIGO e devolvido ao
+  // novo, e não de armazenamento nenhum.
+  const fonteAberta = document.getElementById('dashCiFonteBtn')?.dataset.aberto === '1'
+
+  const linhas = DASH_CI_LINHAS.map(l => ({ ...l, n: d ? (d[l.k] ?? 0) : null }))
+  const total = d ? (d.ci_total ?? 0) : null
+
+  // As fatias, em sequência. `off` acumula o que já foi desenhado — é o que encaixa uma fatia
+  // depois da outra na mesma volta.
+  // ⚠️ COM `total` ZERO NÃO HÁ FATIA NENHUMA, e o trilho aparece sozinho. Dividir por zero
+  // daria `NaN` no `dasharray`, e o SVG some inteiro sem erro nenhum no console.
+  let acumulado = 0
+  const fatias = linhas.map(l => {
+    const comp = (total && l.n) ? (l.n / total) * DASH_CI_VOLTA : 0
+    const f = { cor: l.cor, comp, off: acumulado }
+    acumulado += comp
+    return f
+  }).filter(f => f.comp > 0)
+
   el.innerHTML = `
     <div style="background:#FCFDFC;border-radius:12px;box-shadow:var(--sombra);padding:14px 15px;height:100%;">
-      <div style="font-size:13px;font-weight:700;color:var(--te);margin-bottom:11px;">
-        Suas PCs no Controle Interno</div>
-      ${barras.map(b => `
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;">
-          <span style="flex:0 0 140px;font-size:12px;color:var(--ct);">${b.rotulo}</span>
-          <span style="flex:1;height:9px;background:var(--surface-1, #E4EAE6);border-radius:6px;overflow:hidden;">
-            <span style="display:block;height:100%;width:${d ? Math.round(b.n / maior * 100) : 0}%;
-              background:${b.cor};border-radius:6px;transition:width .8s cubic-bezier(.22,1,.36,1);"></span>
-          </span>
-          <span style="flex:0 0 auto;font-size:15px;font-weight:600;color:${b.cor};min-width:28px;text-align:right;">
-            ${d ? b.n : '—'}</span>
-        </div>`).join('')}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:13px;">
+        <div style="flex:1 1 0;min-width:0;font-size:13px;font-weight:700;color:var(--te);">
+          Suas PCs no Controle Interno</div>
+        <button id="dashCiFonteBtn" type="button" data-aberto="${fonteAberta ? '1' : '0'}"
+          onclick="dashCiFonte(this)" title="De onde vem cada número"
+          style="flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-family:inherit;
+                 font-size:12px;cursor:pointer;border:0.5px solid ${fonteAberta ? 'var(--v)' : 'var(--borda-suave)'};
+                 border-radius:var(--raio);padding:3px 9px;
+                 background:${fonteAberta ? 'var(--vbg)' : 'transparent'};
+                 color:${fonteAberta ? 'var(--v)' : 'var(--texto-secundario)'};">
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;flex:0 0 auto;"
+            aria-hidden="true"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          Fonte</button>
+      </div>
+
+      <div style="display:flex;gap:22px;align-items:center;">
+        ${/* ⚠️ O rotate(-90 60 60) VAI EM CADA CÍRCULO, e não num g em volta: o texto do centro
+              está no mesmo SVG e giraria junto, deitado de lado. */''}
+        <svg viewBox="0 0 120 120" style="flex:0 0 auto;width:120px;height:120px;" aria-hidden="true">
+          <circle cx="60" cy="60" r="46" fill="none" stroke="var(--surface-1, #E4EAE6)" stroke-width="13"/>
+          ${fatias.map(f => `<circle cx="60" cy="60" r="46" fill="none" stroke="${f.cor}" stroke-width="13"
+            stroke-dasharray="${f.comp.toFixed(2)} ${(DASH_CI_VOLTA - f.comp).toFixed(2)}"
+            stroke-dashoffset="${(-f.off).toFixed(2)}" transform="rotate(-90 60 60)"/>`).join('')}
+          <text x="60" y="60" text-anchor="middle" font-family="Barlow,sans-serif"
+            font-size="26" font-weight="500" fill="var(--texto)">${total == null ? '—' : total}</text>
+          <text x="60" y="75" text-anchor="middle" font-family="Barlow,sans-serif"
+            font-size="11" fill="var(--texto-muted)">no C.I.</text>
+        </svg>
+
+        <div style="flex:1 1 0;min-width:0;">
+          ${linhas.map(l => `
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px;">
+              ${/* Zero vira bolinha VAZIA com borda, e não some: "não há nada aqui" é uma
+                    resposta, e esconder a linha faria o painel dançar a cada 60 s. */''}
+              <span style="flex:0 0 auto;width:10px;height:10px;border-radius:50%;
+                ${l.n ? `background:${l.cor};` : 'background:transparent;border:1px solid var(--borda-campo);'}"></span>
+              <span style="flex:1 1 0;min-width:0;font-size:13px;color:var(--texto-secundario);">${l.rotulo}</span>
+              <span style="flex:0 0 auto;font-size:14px;font-weight:500;
+                color:${l.n ? l.num : 'var(--texto-muted)'};">${l.n == null ? '—' : l.n}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div id="dashCiFonteBloco" ${fonteAberta ? '' : 'hidden'}
+        style="background:var(--fundo-alt);border-radius:var(--raio);padding:12px 14px;margin-top:12px;">
+        <div style="font-size:12px;font-weight:500;color:var(--texto);margin-bottom:7px;">
+          De onde vem cada número</div>
+        ${DASH_CI_LINHAS.map((l, i) => `
+          <div style="font-size:12px;color:var(--texto-secundario);line-height:1.5;margin-bottom:4px;">
+            <span style="color:${l.num};font-weight:500;">${l.rotulo}</span> — ${DASH_CI_FONTE[i]}</div>`).join('')}
+        <div style="border-top:0.5px solid var(--borda-suave);margin-top:9px;padding-top:8px;
+                    font-size:12px;color:var(--texto-muted);line-height:1.5;">
+          Unidade: parcela · Tabela: prestacoes_contas · Filtro: suas PCs com
+          <code style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">enviado_ci = true</code></div>
+      </div>
+
       <div style="font-size:11.5px;color:var(--ct);margin-top:10px;line-height:1.45;">
         ${!d ? 'Aguardando o servidor para calcular a espera.'
              : (d.ci_mais_antigo_dias == null
