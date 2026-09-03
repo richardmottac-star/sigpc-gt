@@ -4,8 +4,73 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 17/08/2026 (madrugada) — ver `SESSAO.md`. **DOZE escritas em produção em
-16/08; NENHUMA em 17/08.**
+**Última sessão:** 03/09/2026 — ver `SESSAO.md`. **DUAS escritas em produção em 02–03/09**
+(a primeira invalidação real e a limpeza do lixo de teste); nenhuma outra.
+
+> ## ▶ 02–03/09/2026 — A PC INVALIDADA, O ANEL DO C.I. E O BOTÃO "FONTE"
+>
+> **✅ NASCEU A PC INVALIDADA — resíduo de carga que SAI DAS CONTAGENS SEM SAIR DA TABELA.**
+> Quatro colunas em `prestacoes_contas`: `invalidada`, `invalidada_em`, `invalidada_por`,
+> `motivo_invalidacao`. A regra mora em **`sigpc-api/lib/invalidada.js`** e é **uma cópia só**,
+> aplicada em **28 pontos** entre o `server.js` e as libs. **Ver a armadilha 29.**
+> As rotas são `POST /pc/:codigo_pc/invalidar` e `POST /pc/:codigo_pc/desinvalidar` —
+> **superadmin e coordenador**, motivo obrigatório de **no mínimo 15 caracteres** (e não os 10
+> do `correcao.MOTIVO_MIN`: é a mesma régua do estorno, porque as duas tiram trabalho da conta
+> de alguém). O perfil é lido do BANCO pelo `usuario_id`, nunca do corpo.
+>
+> ⚠️ **INVALIDAR NÃO ZERA `baixada`, e isto não é descuido.** Zerar seria estorno com outro
+> nome: inventaria um evento que não houve, apagaria `parecer_tipo` e faria a PC voltar a
+> aparecer como trabalho pendente. **O par `baixada = true AND invalidada = true` é LEGÍTIMO** —
+> e é por isso que toda contagem de baixadas precisa do filtro. Não é `baixada` que muda.
+>
+> ⚠️ **O `lib/pc-nova.js` PRECISA DO FILTRO INVERTIDO, e a ausência é deliberada.** A
+> conferência de duplicidade usa `TODAS_INCLUSIVE_INVALIDADAS`: se ela não enxergar a PC
+> invalidada, **o cadastro recria exatamente a PC que acabou de sair de circulação** — e a nova
+> nasce sem a marca, então nada impediria de recriá-la de novo. **A duplicidade tem de ver o
+> que a contagem não vê.**
+>
+> ⚠️ **A produtividade cumulativa usa `(invalidada = false OR invalidada_em > corte)`** —
+> `ativaAte`, e não `ativa`. Com o filtro simples, um relatório de julho gerado depois da
+> invalidação perderia PCs que valiam naquela data: **o passado mudaria**. É a mesma forma que
+> o estorno já usava (`estornada = false OR data_estorno > $1`), copiada de propósito.
+>
+> **✅ O PAINEL "SUAS PCs NO CONTROLE INTERNO" VIROU ANEL ÚNICO, COM CINCO LINHAS** — eram três
+> barras, e **duas das três mentiam**. As cinco: **na fila** · **declarada por você** ·
+> **C.I. de acordo** · **reaberta pelo C.I.** · **voltou com ressalvas**. A "C.I. de acordo"
+> antiga era `ci_situacao = 'encerrado'` e nada mais: das 1.584 encerradas, **só 7 têm decisão
+> do C.I. gravada** — as outras 1.577 vieram do UPDATE em massa de 16/08, e o rótulo afirmava
+> um acordo que ninguém deu. A "voltou com ressalvas" antiga engolia a **reabertura pelo SGPe**,
+> que é outra coisa (157 de 161).
+> ⚠️ **A unidade é a PARCELA**, como a fila do C.I. desde 26/08 — medido antes de escrever: das
+> 1.988 parcelas no ciclo, **zero** têm PCs em `ci_situacao` diferentes.
+> ⚠️ **O servidor manda as cinco prontas** (`ci_l1..ci_l5`, `ci_total`). **A tela não soma nada** —
+> foi a tela ter conta própria que criou as divergências que o levantamento de 02/09 achou.
+>
+> **✅ PADRÃO NOVO — TODO PAINEL E TODO GRÁFICO GANHA BOTÃO "FONTE".** Ele abre um bloco que diz,
+> por número: **de onde vem · a unidade · a tabela · o filtro · e o que NÃO conta**. Estreou no
+> anel do C.I. (`dashCiFonte`, `DASH_CI_FONTE`) e **vale daqui para a frente**: número em painel
+> sem "Fonte" é número que ninguém consegue conferir — e foi conferindo que se descobriu que
+> duas das três barras antigas mentiam.
+> ⚠️ **O texto da fonte mora COLADO na lista que desenha as fatias** (`DASH_CI_FONTE` logo abaixo
+> de `DASH_CI_LINHAS`), na mesma ordem e nas mesmas cores. Solto no HTML, ele fica velho — é a
+> lição do `ciBolha`.
+> ⚠️ **O estado do "Fonte" mora no PRÓPRIO ELEMENTO** (`data-aberto` no botão), nunca em
+> `sessionStorage` — ordem do Richard: é estado de uma visita a uma tela, não preferência da
+> pessoa. Mas ele **sobrevive à repintura**: `renderDashCi` roda a cada 60 s, e sem ler o valor
+> do elemento antigo o bloco que a pessoa acabou de abrir fecharia sozinho no meio da leitura.
+>
+> **✅ AS 15 CHECAGENS DESATUALIZADAS DA SUÍTE DA TELA FORAM CORRIGIDAS** (03/09, commit
+> `90dc92c`). **Nenhuma apontava defeito** — as frentes mudaram de propósito e era o teste que
+> media a tela anterior. Seis arquivos: `ci` (6), `painel` (5), `links`, `menu`, `vercomo`,
+> `busca`. **A causa mais comum foi fatia fixa que encolheu por baixo do que media — ver a
+> armadilha 30.**
+>
+> **Testes em 03/09:** **26 suítes · 2.476 checagens · 0 falhas** neste repositório ·
+> `sigpc-api` **27 · 2.199 · 1** (a falha é a `teste_sgpe_portal.js`, anterior a esta sessão —
+> medido no commit `3a30e42` do `sigpc-api`).
+>
+> ⚠️ **NADA DISTO FOI ABERTO NO NAVEGADOR** — nem o anel, nem o "Fonte", nem a tela de
+> Transferência de 31/08–01/09. A lista do que olhar está no `SESSAO.md` deste repo.
 
 > ## ▶ 17/08/2026 — SÓ TELA. Nada gravado no banco.
 >
@@ -145,7 +210,13 @@ Campos: `codigo_pc`, `codigo_nl`, `tipo`, `tr`, `processo_pc`, `processo_mae`,
 `data_baixa`, `origem_baixa`, `registrado_por`, `setorial_id`, `dt_limite_pc`,
 `dt_recebimento_pc`, `prazo_analise_dias`, `dias_atraso`, `prazo_diligencia`,
 `num_diligencia`, `enviado_ci`, `dt_envio_ci`, `parecer_ci`, `situacao_atual`,
-`ci_situacao`, `ci_rodada`, `dt_inicio_analise`, `dt_assumida`
+`ci_situacao`, `ci_rodada`, `dt_inicio_analise`, `dt_assumida`,
+`invalidada`, `invalidada_em`, `invalidada_por`, `motivo_invalidacao`
+
+⚠️ **`invalidada` TIRA A PC DAS CONTAGENS SEM TIRÁ-LA DA TABELA** (02/09/2026). É a PC que
+nunca deveria ter existido — resíduo de carga, sem correspondência no SIGEF. A coluna é
+`NOT NULL DEFAULT false`, e **nenhuma consulta pergunta por ela à mão**: quem responde é
+`sigpc-api/lib/invalidada.js`. **Ver a armadilha 29.**
 
 ⚠️ **`dt_inicio_analise` e `dt_assumida` respondem perguntas DIFERENTES.** A primeira é o
 relógio da **análise** e não reinicia; a segunda é **quando este analista pegou a TR**, e
@@ -554,6 +625,115 @@ continuam exigindo autorização expressa. O que muda é o ritmo do trabalho, n�
     elas pedem `sigef_status IS NULL` **com** `baixada = true`, e toda PC importada nasceu com
     o campo preenchido.
 
+29. **⚠️ A PC INVALIDADA SAI DA CONTAGEM SEM SAIR DA TABELA — e a regra é UMA CÓPIA SÓ**
+    (02/09/2026).
+
+    A `2021PC002840` (TR `2021TR002375`) nasceu com `processo_pc = '-1'`, recebeu por engano o
+    SCC da FINAL em 14/08 e a renumeração de 16/08 a fundiu na parcela 1. A analista conferiu
+    no SIGEF: **não existe prestação de 763,58 naquela TR**. Ela travava a TR fora das
+    concluídas, porque `baixadas >= total_pcs` contava uma PC que não existe.
+
+    ⚠️ **O ESTORNO NÃO SERVE, e isso foi medido antes de desenhar.** Ele é por **parcela**, tem
+    `AND baixada = true` no `UPDATE`, e a PC alvo está `baixada = false` — estornar a parcela 1
+    desfaria a baixa da PC **certa** e deixaria o resíduo intacto. E `estornada = true` **nem
+    sai da contagem**: o `resumo_tr` faz `COUNT(*)` sem filtro, e as 56 estornadas do acervo
+    continuam somando em `total_pcs`.
+
+    ⚠️ **INVALIDAR NÃO ZERA `baixada`** — decisão do Richard. Zerar seria estorno com outro
+    nome: inventaria um evento que não houve, apagaria `parecer_tipo` e faria a PC voltar a
+    aparecer como trabalho pendente. **O par `baixada = true AND invalidada = true` é
+    LEGÍTIMO**, e é justamente por isso que **toda contagem de baixadas precisa do filtro** —
+    não é `baixada` que muda de valor.
+
+    ⚠️ **`lib/invalidada.js` É A ÚNICA CÓPIA, e o alias é PARÂMETRO.** São **28 pontos** entre
+    `server.js` e as libs; escrever `AND NOT invalidada` à mão em cada um seria 28 cópias da
+    mesma regra, e **a segunda cópia é sempre a que fica velha** — foi assim com o
+    `MAPA_PLAN_EST` da tela e com as duas definições de "livre" que abriram o vão das 87 PCs.
+    Os 28 pontos não concordam no alias (`p.`, `q.`, `x.`, nenhum), então ele entra como
+    argumento em vez de obrigar a reescrever consulta que não tem nada a ver com isto.
+
+    ⚠️ **O `lib/pc-nova.js` PRECISA DO FILTRO INVERTIDO, e a ausência é DELIBERADA.** A
+    conferência de duplicidade usa `TODAS_INCLUSIVE_INVALIDADAS`: **sem enxergar a invalidada,
+    o cadastro recria exatamente a PC que acabou de sair de circulação** — e a nova nasce sem a
+    marca, então nada impediria de recriá-la de novo. **A duplicidade tem de ver o que a
+    contagem não vê**, e a constante tem nome próprio para ser grepável: quem varrer o arquivo
+    atrás de consulta sem filtro acha esta e lê por que ela fica como está.
+
+    ⚠️ **A PRODUTIVIDADE CUMULATIVA USA `ativaAte`, NÃO `ativa`** —
+    `(invalidada = false OR invalidada_em > $corte)`. É o que impede de **reescrever relatório
+    já emitido**: com o filtro simples, um relatório de julho gerado depois da invalidação
+    perderia PCs que valiam naquela data. As 16 baixadas candidatas têm `data_baixa` em agosto,
+    dentro do período do CGE em aberto — **o passado mudaria**. É a mesma forma que o estorno já
+    usa (`estornada = false OR data_estorno > $1`), copiada de propósito: as duas respondem
+    "o que valia naquela data". O `>` é estrito: invalidada no instante exato do corte já não
+    valia naquele relatório.
+
+    ⚠️ **Quem invalida é superadmin ou coordenador**, com motivo de **15 caracteres** — a régua
+    do estorno, e não os 10 do `correcao.MOTIVO_MIN`. O perfil é lido do BANCO pelo
+    `usuario_id`, nunca do corpo. Rotas: `POST /pc/:codigo_pc/invalidar` e `/desinvalidar`.
+
+30. **⚠️ TESTE COM FATIA FIXA MENTE QUANDO O CÓDIGO CRESCE — e mente dizendo "FALHA"**
+    (03/09/2026).
+
+    `html.slice(i, i + N)` recorta um pedaço do `index.html` para medir. Quando o código dentro
+    da janela cresce, **o que se quer medir sai pela borda** — e o teste reprova algo que está
+    escrito na tela. Foram **11 das 15 falhas** desta sessão, em três janelas:
+
+    · a do grupo "Fluxo da análise" tinha **2.600** caracteres e passou a cortar o item do C.I.
+      ao meio quando a engenharia entrou no grupo — três checagens caíram de uma vez, e uma
+      delas afirmava que o destaque tinha sumido;
+    · a da `renderPlan` tinha **9.000** e a função hoje tem **19.883**: enxergava só o ramo de
+      cima e reprovava a faixa e o menu do ramo verde, escritos logo abaixo;
+    · a do `pBotaoAcoes` tinha **900** e parava dentro do comentário que explica de onde saem
+      `pa.num` e `pa.pcs` — o peso e a cor do botão continuavam lá.
+
+    ⚠️ **A REGRA QUE FICA: a janela termina num MARCO DO PRÓPRIO CÓDIGO, nunca num número.**
+    O marco cresce junto com o arquivo; o número não. As três viraram
+    `html.indexOf("linhas.push(acGrupo('Correções'))", i)`,
+    `html.indexOf('function planRenderPag() {', i)` e `html.indexOf('function renderPlan(rows) {')`.
+
+    ⚠️ **E o modo de falhar é traiçoeiro porque parece defeito de tela.** Nenhuma das 11 apontava
+    problema no `index.html`. Antes de "consertar" a tela por causa de um teste, **confira no
+    código se o que se afirma existe** — foi o que evitou mexer em cinco coisas que estavam
+    certas.
+
+31. **⚠️ `process.exitCode`, NUNCA `process.exit()`, EM SCRIPT QUE TERMINA EM `ROLLBACK`**
+    (03/09/2026).
+
+    O `limpar_lixo_teste_20260902.js` recusava **certo** — conferia as duas linhas contra a
+    descrição, achava zero e fazia `ROLLBACK` — e logo depois morria com
+    `Error: Connection terminated unexpectedly`, **escondendo justamente a mensagem que
+    importa**. A recusa é quando a saída mais precisa ser legível, e era a única que não era.
+
+    ⚠️ **`process.exit()` MATA NA HORA, COM CONSULTA EM VOO.** Ele vinha logo depois de
+    `await pool.end()`, em **quatro cópias**: o `end()` nem chegava a terminar e a conexão ficava
+    pendurada até cair sozinha. Num script que termina em `ROLLBACK`, matar na hora é o oposto do
+    que se quer. `process.exitCode` + `return` **pedem** para sair quando não houver mais nada
+    pendente.
+
+    ⚠️ **E `pool.on('error')` NÃO É OPCIONAL.** Cliente **ocioso** que perde a conexão emite
+    `'error'` no **pool**, não na consulta — e evento `'error'` sem ouvinte derruba o processo no
+    Node. Foi a outra metade do mesmo defeito.
+
+    ⚠️ **Um `finally` só, e os TRÊS caminhos passam por ele** — recusa, erro e sucesso. Teardown
+    escrito à mão em cada saída é o que faz uma delas divergir. Provado nos três: recusa 2.134 ms
+    `exitCode 1`, erro 2.109 ms `exitCode 1`, sucesso 2.129 ms `exitCode 0`, sem stack em nenhum.
+
+32. **⚠️ FOTO TIRADA NO MEIO DA RODADA MEDE O PRÓPRIO LIXO DO TESTE** (03/09/2026).
+
+    Reportei **3 linhas** na trilha da TR `2021TR002375` quando eram **1**. As outras duas (ids
+    2544 e 2545) eram **do próprio teste que estava rodando naquele instante** — a consulta de
+    conferência foi feita com a rodada ainda em curso, e o que ela viu foi o rastro do teste, não
+    o estado do sistema. Depois da limpeza, a trilha voltou ao que sempre foi: **1 linha**, id
+    701, `processo_pc`, de 14/08.
+
+    ⚠️ **A REGRA QUE FICA: número de conferência se mede com a rodada PARADA e o lixo já
+    removido** — antes de começar, ou depois de limpar. Nunca no meio.
+
+    ⚠️ **E é irmã da regra de 16/08** — "toda gravação em massa confere DE NOVO depois de gravar,
+    dentro da mesma transação". Conferir na hora errada é a mesma falha da conferência que só
+    olha antes: prova o que se esperava, não o que aconteceu.
+
 ---
 
 ## As três regras do time de agentes (Richard, 13/08/2026)
@@ -636,6 +816,36 @@ lápis saiu da tela. Ver `sigpc-api/SPLIT_PROCESSO_2026-08-16.md`.
 - Nunca commitar CSVs de carga nem scripts com credencial.
 - Comunicação com o Richard em português do Brasil.
 
+### ⚠️ TODO PAINEL E TODO GRÁFICO GANHA BOTÃO "FONTE" (desde 02/09/2026)
+
+**Número que a pessoa não consegue conferir é número em que ela não pode confiar.** Todo painel
+e todo gráfico do sistema passa a ter um botão **"Fonte"** que abre, ali mesmo, um bloco
+dizendo por número:
+
+| | |
+|---|---|
+| **de onde vem** | a rota e o campo que trazem o valor |
+| **a unidade** | PC? parcela? TR? — a maioria das divergências nasce aqui |
+| **a tabela** | de onde o servidor leu |
+| **o filtro** | a condição que recorta |
+| **o que NÃO conta** | e é esta linha que a pessoa procura quando o número a surpreende |
+
+Estreou no anel "Suas PCs no Controle Interno" (`dashCiFonte`, `DASH_CI_FONTE`). **Não é
+enfeite:** foi tentar escrever a fonte de cada barra que revelou que **duas das três barras
+antigas mentiam** — a "C.I. de acordo" afirmava um acordo que 1.577 PCs nunca receberam.
+
+⚠️ **O texto da fonte mora COLADO na lista que desenha as fatias**, na mesma ordem e nas mesmas
+cores. As duas listas têm de andar juntas, e **é a distância entre elas que deixa a segunda ficar
+velha** — a lição do `ciBolha`.
+
+⚠️ **O estado do "Fonte" mora no PRÓPRIO ELEMENTO** (`data-aberto` no botão), nunca em
+`sessionStorage` — ordem do Richard: é estado de uma visita a uma tela, não preferência da
+pessoa. **Mas ele sobrevive à repintura:** o painel se redesenha sozinho a cada 60 s, e sem ler
+o valor do elemento antigo o bloco que a pessoa acabou de abrir fecharia no meio da leitura.
+
+⚠️ **E a tela continua não somando nada** (armadilha 16). O servidor manda as linhas prontas; a
+"Fonte" explica a conta do servidor, ela não refaz a conta aqui.
+
 ### O aviso sonoro — `C:\Users\Richard\.claude\avisar.ps1`
 
 Roda ao fim de **toda** resposta, inclusive diagnóstico e pergunta.
@@ -669,13 +879,34 @@ exibição — o script inteiro deixa de rodar. Já aconteceu.
 > Conferida contra o banco em **13/08/2026**. O que está `[x]` foi verificado, não presumido.
 > A lista completa e o motivo de cada baixa estão no `CLAUDE.md` do `sigpc-api`.
 >
-> **▶ A PRÓXIMA SESSÃO COMEÇA NO `SESSAO.md`**, que abre com as cinco frentes deixadas em
-> 14/08 — a primeira delas é a **auditoria das planilhas × base do sistema, só leitura
-> primeiro**. ⚠️ Não "consertar" o banco para bater com a planilha: há caso medido em que a
-> planilha é que estava errada (Grupo 2, coluna "Número de PCs" inflada ~2x).
+> **▶ A PRÓXIMA SESSÃO COMEÇA NO `SESSAO.md`**, que abre com o estado de 03/09 — a frente
+> aberta é **a invalidação de PC na TELA**: as rotas estão no ar e o `index.html` ainda não
+> tem caminho para ela. ⚠️ A auditoria planilhas × base continua valendo e continua sendo só
+> leitura primeiro: não "consertar" o banco para bater com a planilha — há caso medido em que
+> a planilha é que estava errada (Grupo 2, coluna "Número de PCs" inflada ~2x).
 >
 > **Estado em 13/08:** 53 usuários · **51 conseguem entrar** · fila de aprovação **vazia** ·
 > **2 sem CPF**, e por isso barrados: **49 Scheila** e **52 Eduardo** (este também inativo).
+
+### ⚠️ 31/08–03/09/2026 — no ar, NÃO abertas no navegador
+
+- [ ] **O anel "Suas PCs no Controle Interno" no Dashboard.** Cinco linhas, uma volta só, e o
+      **total no miolo**. Conferir que os rótulos dizem o que a linha mede — a "Declarada por
+      você" é a que existe justamente porque a antiga afirmava acordo que não houve.
+- [ ] **O botão "Fonte" do anel.** Abre e fecha; o bloco tem **uma linha por fatia, na mesma
+      ordem e na mesma cor**. ⚠️ **Deixar aberto e esperar um minuto**: o painel se repinta a
+      cada 60 s, e o bloco tem de continuar aberto. Se fechar sozinho, foi a leitura do
+      `data-aberto` do elemento antigo que se perdeu.
+- [ ] **A tela Transferir prestações de contas** (31/08–01/09) — as duas abas, o Histórico, o
+      desfazer, a pílula do Estoque e o termo de repasse. Nada disto foi clicado.
+- [ ] **O modal de ciência do repasse** e o aviso no sino, nas duas perspectivas (origem e
+      destino). ⚠️ O repasse **desfeito** aparece no Histórico e **não cobra ciência** — é o
+      ramo que se confere antes da cobrança normal.
+- [ ] **"Meus pedidos" dizendo onde o pedido nasce** (03/09).
+- [ ] **A invalidação de PC na tela** — hoje ela **não existe no `index.html`** (medido: zero
+      ocorrências de `invalidada`). As rotas estão no ar e a `2021PC002840` já foi invalidada
+      pelo servidor. **Desenhar o caminho na tela é frente aberta**, e é decisão do Richard
+      onde ele mora: quem invalida é superadmin ou coordenador.
 
 ### ⚠️ 16–17/08/2026 — no ar, NÃO abertas no navegador
 

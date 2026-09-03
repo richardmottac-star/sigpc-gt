@@ -1,9 +1,175 @@
-# SIGPC-GT — ESTADO EM 17/08/2026 (madrugada)
+# SIGPC-GT — ESTADO EM 03/09/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
+> ⚠️ **O QUE ESTÁ ABAIXO DA LINHA "HISTÓRICO" É DE 17/08/2026 e ficou para trás.** Ele descreve
+> o Estoque de TRs e a faixa de avisos daquela semana, e continua útil como registro do que se
+> mediu — **não como estado**. O estado é este bloco.
+
 ---
 
+## ▶ O ESTADO DE AGORA — leia isto primeiro
+
+**Duas escritas em produção em 02–03/09**, as duas no `sigpc-api`: a **primeira invalidação
+real** (`2021PC002840`) e a **limpeza do lixo de teste** (ids 2544 e 2545 de `parcela_historico`).
+Nada mais foi gravado. **O sistema está ABERTO** e os dois interruptores continuam desligados.
+
+**Testes em 03/09:** **26 suítes · 2.476 checagens · 0 falhas** neste repositório ·
+`sigpc-api` **27 · 2.199 · 1** — a falha é a `teste_sgpe_portal.js`, **anterior a esta sessão**
+(medida no commit `3a30e42` do `sigpc-api`, não re-executada aqui).
+
+---
+
+## 1. A PC INVALIDADA — nasceu em 02/09, e é a frente que atravessa
+
+**O resíduo de carga agora SAI DAS CONTAGENS SEM SAIR DA TABELA.** Quatro colunas novas em
+`prestacoes_contas`: `invalidada`, `invalidada_em`, `invalidada_por`, `motivo_invalidacao`.
+
+| | |
+|---|---|
+| a regra | **`sigpc-api/lib/invalidada.js`** — uma cópia só, aplicada em **28 pontos** |
+| as rotas | `POST /pc/:codigo_pc/invalidar` · `POST /pc/:codigo_pc/desinvalidar` |
+| quem pode | **superadmin e coordenador** (perfil lido do BANCO pelo `usuario_id`) |
+| o motivo | obrigatório, **mínimo 15 caracteres** — a régua do estorno, não os 10 da correção |
+| o caso zero | `2021PC002840`, TR `2021TR002375` — nasceu com `processo_pc = '-1'` e não existe no SIGEF |
+
+### Os quatro pontos que não podem ser esquecidos
+
+1. **Invalidar NÃO zera `baixada`.** O par `baixada = true AND invalidada = true` é **legítimo**.
+   Zerar seria estorno com outro nome — inventaria um evento que não houve e devolveria a PC à
+   fila como trabalho pendente. **É por isso que toda contagem de baixadas precisa do filtro.**
+2. **O `lib/pc-nova.js` precisa do filtro INVERTIDO** (`TODAS_INCLUSIVE_INVALIDADAS`). Sem
+   enxergar a invalidada, **o cadastro recria exatamente a PC que acabou de sair de circulação**
+   — e a nova nasce sem a marca. **A duplicidade tem de ver o que a contagem não vê.**
+3. **A produtividade cumulativa usa `ativaAte`**, não `ativa`:
+   `(invalidada = false OR invalidada_em > $corte)`. Com o filtro simples, um relatório de julho
+   gerado hoje perderia PCs que valiam naquela data — **o passado mudaria**.
+4. **O estorno não servia**, e isso foi medido antes de desenhar: ele é por parcela, exige
+   `baixada = true`, e `estornada = true` nem sai da contagem do `resumo_tr`.
+
+### 🔴 O que atravessa para a próxima sessão
+
+**A invalidação NÃO EXISTE NA TELA.** Medido: **zero** ocorrências de `invalidada` no
+`index.html`. As rotas estão no ar e a primeira PC já foi invalidada pelo servidor — falta o
+caminho na tela, e **onde ele mora é decisão do Richard** (quem invalida é superadmin ou
+coordenador; o motivo de 15 caracteres é obrigatório e vai gravado).
+
+---
+
+## 2. O ANEL DO C.I. — cinco linhas, e duas das três antigas mentiam
+
+O painel **"Suas PCs no Controle Interno"** deixou de ser três barras e virou **um anel só, com
+cinco linhas e o total no miolo**:
+
+| linha | o que mede |
+|---|---|
+| **Aguardando análise no C.I.** | encaminhadas e ainda na fila, sem retorno |
+| **Declarada por você** | encerradas antes de o sistema receber a devolutiva; a confiabilidade vem da declaração |
+| **C.I. de acordo** | decisão de acordo **gravada** por técnico do Controle Interno |
+| **Reaberta pelo C.I.** | voltaram pelo SGPe depois do encerramento; a baixa e o encaminhamento seguem valendo |
+| **Voltou com ressalvas** | devolvidas com ressalva, aguardando providência sua |
+
+**Por que mudou, com número:**
+- a antiga "C.I. de acordo" era `ci_situacao = 'encerrado'` e nada mais. Das **1.584** encerradas,
+  **só 7** têm decisão do C.I. registrada — as outras **1.577** vieram do UPDATE em massa de
+  16/08 (`executar_16_08.js` FRENTE 3). A escolha de 16/08 estava certa; **o rótulo é que
+  afirmava um acordo que ninguém deu**. Por isso a linha "Declarada por você" existe.
+- a antiga "Voltou com ressalvas" engolia a **reabertura pelo SGPe**, que é outra coisa: a
+  reaberta voltou porque o processo tramitou, não porque o C.I. discordou. **157 de 161** caíam ali.
+
+⚠️ **A unidade é a PARCELA**, como a fila do C.I. desde 26/08. Medido antes de escrever: das
+**1.988** parcelas no ciclo, **zero** têm PCs em `ci_situacao` diferentes — a parcela é homogênea
+e a contagem não precisa de regra de desempate.
+
+⚠️ **O servidor manda as cinco prontas** (`ci_l1..ci_l5`, `ci_total`). **A tela não soma nada** —
+foi a tela ter conta própria que criou as divergências que o levantamento de 02/09 achou.
+
+---
+
+## 3. O BOTÃO "FONTE" — padrão novo, vale para todo painel e todo gráfico
+
+Estreou no anel do C.I. (`dashCiFonte`, `DASH_CI_FONTE`) e **vale daqui para a frente**. Ele abre
+um bloco que diz, por número: **de onde vem · a unidade · a tabela · o filtro · e o que NÃO conta**.
+
+**Não é enfeite:** foi tentar escrever a fonte de cada barra que revelou que duas das três
+mentiam. **Número que ninguém consegue conferir é número em que ninguém pode confiar.**
+
+⚠️ O texto mora **colado** em `DASH_CI_LINHAS`, na mesma ordem e nas mesmas cores — solto no
+HTML ele fica velho (a lição do `ciBolha`).
+⚠️ O estado mora no **próprio elemento** (`data-aberto` no botão), nunca em `sessionStorage` —
+ordem do Richard. **Mas sobrevive à repintura:** `renderDashCi` roda a cada 60 s, e sem ler o
+valor do elemento antigo o bloco fecharia sozinho no meio da leitura.
+
+---
+
+## 4. A SUÍTE DA TELA — 15 checagens desatualizadas, ZERO defeitos
+
+Commit `90dc92c`. **Nenhuma das 15 apontava problema no `index.html`**: as frentes mudaram de
+propósito entre 26 e 31/08 e era o teste que continuava medindo a tela anterior.
+
+| arquivo | falhas | o que estava velho |
+|---|---|---|
+| `teste_front_ci` | 6 | duas **fatias fixas** que encolheram; o ícone virou chave de `AC_ICONES` e a cor, de `AC_CORES` |
+| `teste_front_painel` | 5 | a fatia do `pBotaoAcoes`; `padding:9px 14px` e ícone de **30px** desde 30/08 |
+| `teste_front_links` | 1 | **13** telas absorvem `j.links`, não 12 — a Acompanhamento entrou |
+| `teste_front_menu` | 1 | **17** itens somem no papel analista — `transf` e `acomp` nasceram só-superadmin |
+| `teste_front_vercomo` | 1 | as travas do modo são **SEIS** — a sexta é o `ciReabrirAbrir` |
+| `teste_front_busca` | 1 | a fila do C.I. paginou: `pagina` e `tamanho` no mesmo `URLSearchParams` |
+
+⚠️ **A causa de 11 das 15 foi a mesma: `html.slice(i, i + N)`.** A janela do grupo "Fluxo da
+análise" tinha 2.600 e cortava o item do C.I. ao meio; a da `renderPlan` tinha 9.000 e a função
+hoje tem **19.883**; a do `pBotaoAcoes` tinha 900 e parava dentro de um comentário. **As três
+passaram a terminar num marco do próprio código.** Ver a **armadilha 30**.
+
+⚠️ **`transf` e `acomp` também entraram na `GUARDA_REAL`** do `teste_front_menu` — sem isso elas
+ficavam de fora da conferência item a item, que é a razão de aquela seção existir.
+
+---
+
+## 5. O QUE APRENDEMOS E FICOU ESCRITO — armadilhas 29 a 32
+
+| # | a regra |
+|---|---|
+| **29** | a PC invalidada sai da contagem sem sair da tabela, e a regra é **uma cópia só** |
+| **30** | **teste com fatia fixa mente quando o código cresce** — terminar num marco, nunca num número |
+| **31** | **`process.exitCode`, nunca `process.exit()`**, em script que termina em `ROLLBACK` |
+| **32** | **foto tirada no meio da rodada mede o próprio lixo do teste** |
+
+**A 32 aconteceu comigo nesta sessão:** reportei **3 linhas** na trilha da TR `2021TR002375`
+quando eram **1**. As outras duas (ids 2544 e 2545) eram do teste que estava rodando **naquele
+instante**. Depois da limpeza, a trilha voltou ao que sempre foi: 1 linha, id 701, `processo_pc`,
+de 14/08. **Número de conferência se mede com a rodada parada e o lixo já removido** — antes de
+começar, ou depois de limpar. Nunca no meio.
+
+---
+
+## 6. ▶ O QUE OLHAR AO ABRIR O NAVEGADOR
+
+Nada do que segue foi clicado por uma pessoa.
+
+- [ ] **O anel do C.I.** — cinco linhas, uma volta só, total no miolo, rótulos dizendo o que a
+      linha mede.
+- [ ] **O botão "Fonte"** — abre e fecha; uma linha por fatia, mesma ordem e mesma cor.
+      ⚠️ **Deixar aberto e esperar um minuto:** o painel se repinta a cada 60 s e o bloco tem de
+      continuar aberto.
+- [ ] **A tela Transferir prestações de contas** (31/08–01/09) — as duas abas, o Histórico, o
+      desfazer, a pílula do Estoque e o termo de repasse.
+- [ ] **O modal de ciência do repasse** e o aviso no sino, nas duas perspectivas. O repasse
+      **desfeito** aparece no Histórico e **não cobra ciência**.
+- [ ] **"Meus pedidos" dizendo onde o pedido nasce** (03/09).
+- [ ] **O que ficou de 16–17/08 e nunca foi aberto:** a tela Estoque de TRs inteira, a etiqueta
+      de reserva sem invadir o SGPe MÃE (`2022TR001511` e `2023TR000582`), a faixa de avisos no
+      Dashboard e as logos da governança em 48 px. **A lista ponto a ponto está no HISTÓRICO,
+      abaixo.**
+
+⚠️ **E continua em aberto o `isMeuTR`**, que erra em 5 analistas (ids 19, 22, 23, 40 e 51): o
+botão "Ver" não aparece nas TRs deles no Estoque. **Não corrigido de propósito** — o conserto
+certo é no `sigpc-api`, e é decisão do Richard. Detalhe no HISTÓRICO.
+
+---
+---
+
+# HISTÓRICO — o arquivo como estava em 17/08/2026
 ## ▶ 17/08/2026, 00h–01h30 — O FECHAMENTO
 
 **Três commits nesta madrugada, todos de TELA. Nada foi gravado no banco.** As seções abaixo
@@ -35,7 +201,7 @@ publicação é que atravessou a meia-noite.
 
 ---
 
-## ✅ O ESTADO DE AGORA — leia isto primeiro
+## ✅ O ESTADO EM 16–17/08/2026 — histórico
 
 > ⚠️ **ESTE ARQUIVO ESTAVA DESATUALIZADO.** A seção "A NUMERAÇÃO DAS PARCIAIS: ONDE PARAMOS",
 > mais abaixo, abre dizendo que nada foi gravado e que falta o Richard responder se o SIGEF
