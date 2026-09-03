@@ -454,14 +454,85 @@ conf(/const DASH_NEUTRO = /.test(html), 'ha um estado neutro');
 conf(/const zero = n === 0/.test(html) && /\(n === null \|\| zero\) \? DASH_NEUTRO : c/.test(html),
      'e o zero vira cinza em vez de sumir');
 
-S('13d. BLOCO B — SUAS PCs NO C.I.');
+S('13d. BLOCO B — SUAS PCs NO C.I.  (anel de 5 linhas, 02/09/2026)');
+// ⚠️ ESTA SECAO FOI REESCRITA. Ela afirmava as TRES barras horizontais antigas e ficou
+// mentindo quando o painel virou anel com CINCO linhas: as quatro checagens falhavam
+// apontando para um desenho que nao existe mais. O teste foi ajustado ao painel, e nao o
+// contrario — duas das tres barras antigas somavam coisas diferentes sob o mesmo rotulo, e e
+// por isso que elas viraram cinco.
 conf(/Suas PCs no Controle Interno/.test(html), 'o bloco existe');
-for (const [rot, cor] of [['Aguardando análise', '#BA7517'], ['C.I. de acordo', '#3B6D11'],
-                          ['Voltou com ressalvas', '#A32D2D']])
-  conf(new RegExp(`rotulo: '${rot}'[^\\n]*cor: '${cor}'`).test(html), `barra "${rot}" em ${cor}`);
-// ⚠️ A proporcao e sobre o MAIOR, nao sobre a soma: 1 de 20 daria uma barra de 5% invisivel.
-conf(/const maior = Math\.max\(1, \.\.\.barras\.map/.test(html),
-     'a barra compara com o MAIOR, nao com a soma');
+conf(/const DASH_CI_LINHAS = \[/.test(html), 'as linhas saem de uma lista unica');
+
+// As CINCO, com as duas cores de cada: a da fatia do anel e a do numero da legenda.
+for (const [k, rot, cor, num] of [
+  ['ci_l1_na_fila',   'Aguardando análise no C.I.', '#BA7517', '#854F0B'],
+  ['ci_l2_declarada', 'Declarada por você',         '#7F77DD', '#3C3489'],
+  ['ci_l3_de_acordo', 'C.I. de acordo',             '#639922', '#3B6D11'],
+  ['ci_l4_reaberta',  'Reaberta pelo C.I.',         '#378ADD', '#185FA5'],
+  ['ci_l5_ressalva',  'Voltou com ressalvas',       '#E24B4A', '#A32D2D'],
+])
+  conf(new RegExp(`k: '${k}',[^\\n]*rotulo: '${rot}',[^\\n]*cor: '${cor}', num: '${num}'`).test(html),
+       `linha "${rot}" (${k}) em ${cor} / ${num}`);
+
+// ⚠️ AS DUAS QUE NASCERAM DA CORRECAO. "Declarada por voce" separa as encerradas pela carga
+// de 16/08 das que tem decisao do C.I. registrada; "Reaberta pelo C.I." separa a devolucao
+// por ressalva da reabertura pelo SGPe. Sem estas duas o painel volta a afirmar acordo que
+// ninguem deu.
+conf(/rotulo: 'Declarada por você'/.test(html) && /rotulo: 'Reaberta pelo C\.I\.'/.test(html),
+     'as duas linhas que a correcao criou seguem la');
+
+// ⚠️ A TELA NAO SOMA: os cinco numeros e o total vem prontos do servidor.
+conf(/d\[l\.k\] \?\? 0/.test(html), 'cada linha le o campo que o servidor mandou');
+conf(/d\.ci_total \?\? 0/.test(html), 'e o centro do anel le ci_total, tambem do servidor');
+
+// ⚠️ A PROPORCAO E SOBRE O TOTAL, e nao sobre o maior — foi o que mudou com o anel. Numa
+// rosca as fatias tem de fechar a volta; comparar com o maior daria um anel que nunca fecha.
+conf(/\(total && l\.n\) \? \(l\.n \/ total\) \* DASH_CI_VOLTA : 0/.test(html),
+     'a fatia e proporcional ao TOTAL, nao ao maior');
+conf(!/const maior = Math\.max\(1, \.\.\.barras\.map/.test(html),
+     'e a conta antiga, por MAIOR, saiu junto com as barras');
+// ⚠️ Com total zero nao ha fatia: dividir por zero daria NaN no dasharray e o SVG sumiria
+// inteiro, sem erro nenhum no console.
+conf(/\.filter\(f => f\.comp > 0\)/.test(html), 'fatia de comprimento zero nao e desenhada');
+
+// A geometria: viewBox 120, r=46, stroke 13, e a volta de 289 (2π × 46).
+conf(/const DASH_CI_VOLTA = 289/.test(html), 'a circunferencia e 289');
+conf(/viewBox="0 0 120 120"/.test(html), 'viewBox 0 0 120 120');
+conf(/cx="60" cy="60" r="46" fill="none"/.test(html), 'circulo cx=60 cy=60 r=46');
+conf(/stroke-width="13"/.test(html), 'stroke-width 13');
+// ⚠️ O rotate vai em CADA circulo, e nao num <g>: o texto do centro esta no mesmo SVG e
+// giraria junto, deitado de lado.
+conf(/transform="rotate\(-90 60 60\)"/.test(html), 'e o rotate(-90 60 60) por circulo');
+conf(/font-size="26"/.test(html) && /no C\.I\./.test(html),
+     'o centro traz o total em 26px e o rotulo "no C.I."');
+
+// ⚠️ ZERO NAO SOME — vira bolinha VAZIA com borda. Esconder a linha faria o painel dancar a
+// cada 60s, que e o intervalo do relogio do Dashboard. E a mesma regra dos cards de cima.
+conf(/background:transparent;border:1px solid var\(--borda-campo\);/.test(html),
+     'linha zerada vira bolinha vazia com borda, e nao some');
+
+S('13d-2. O BOTAO "Fonte" E O BLOCO QUE ELE ABRE');
+conf(/function dashCiFonte\(btn\)/.test(html), 'o botao alterna o bloco');
+conf(/const DASH_CI_FONTE = \[/.test(html), 'e o texto de cada situacao mora ao lado das linhas');
+// ⚠️ O ESTADO MORA NO ELEMENTO, nunca em sessionStorage — ordem do Richard. E estado de uma
+// visita a uma tela, nao preferencia da pessoa.
+conf(/btn\.dataset\.aberto/.test(html), 'o estado fica no proprio elemento (data-aberto)');
+// ⚠️ O RECORTE E A FUNCAO, e nao o arquivo. A primeira versao desta checagem afirmava que
+// `sessionStorage` nao aparecia em lugar nenhum do `index.html` — e aparece, legitimamente,
+// no expandir do SGPe. Asserção larga demais falha por causa de codigo que nao tem nada a ver
+// com a regra que ela guarda.
+conf(!/sessionStorage/.test(
+       html.slice(html.indexOf('function dashCiFonte'),
+                  html.indexOf('function renderDashCi'))),
+     'e dashCiFonte NAO toca em sessionStorage');
+// ⚠️ E ELE SOBREVIVE A REPINTURA: `renderDashCi` roda a cada 60s, e sem isto o bloco que a
+// pessoa acabou de abrir fecharia sozinho no meio da leitura.
+conf(/const fonteAberta = document\.getElementById\('dashCiFonteBtn'\)\?\.dataset\.aberto === '1'/.test(html),
+     'e e lido do elemento antigo antes de repintar');
+conf(/Unidade: parcela · Tabela: prestacoes_contas/.test(html),
+     'o rodape do bloco declara a unidade e a tabela');
+
+S('13d-3. O RODAPE DA ESPERA, que ficou como estava');
 conf(/A mais antiga está lá há/.test(html), 'a linha da mais antiga');
 conf(/Espera média do setorial/.test(html), 'e a espera media do setorial');
 conf(/Nenhuma PC sua está no Controle Interno agora/.test(html), 'com variante para o vazio');
