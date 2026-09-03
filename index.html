@@ -9170,24 +9170,41 @@ let _meusPedidos = []
  * `irEst` e `irPlanilha` recusam para ele. Link que leva a um toast de recusa é a armadilha
  * 15 com outra roupa.
  *
- * ⚠️ E SOME NO "VER COMO" TAMBÉM. Ali o menu esconde o Estoque de propósito (`soAcao`), por
- * ser tela que só serve para AGIR e não mostra dado da pessoa. Oferecer o link aqui devolveria
- * pela porta dos fundos exatamente o caminho que aquele modo tira — e o "Solicitar devolução"
- * da Minha Planilha já se esconde sozinho com `!verComoAtivo()`.
+ * ⚠️ ELE APARECE NO "VER COMO" TAMBÉM — decisão do Richard, 03/09/2026, e a condição de
+ * `verComoAtivo()` que estava aqui SAIU. O modo existe para o Richard enxergar exatamente o
+ * que o analista enxerga; esconder dele o texto que explica o caminho derrota o propósito da
+ * tela. Esconder texto explicativo nunca foi guarda de nada — a guarda é a da ação.
+ *
+ * ⚠️ O QUE MUDA NO MODO É O LINK, NÃO A LINHA. O menu esconde o Estoque de propósito
+ * (`soAcao`), por ser tela que só serve para AGIR e não mostra dado da pessoa; dar o link
+ * aqui devolveria pela porta dos fundos o caminho que aquele modo tira. Então **a linha
+ * continua inteira e o rótulo vira texto puro** — a pessoa lê onde o pedido nasce sem que a
+ * tela ofereça um atalho que o modo removeu. É o oposto de sumir com a frase: some o clique,
+ * fica a explicação.
+ *
+ * ⚠️ A "Minha Planilha" CONTINUA COM LINK no modo, porque ela continua no menu — não tem
+ * `soAcao`, e mostra dado da pessoa. O "Solicitar devolução" lá dentro é que se esconde
+ * sozinho com `!verComoAtivo()`, e isso é guarda de AÇÃO, na origem: a armadilha 13.
  */
 function meusOrientacao() {
-  if(U.perfil === 'controle_interno' || verComoAtivo()) return ''
-  const link = (rot, fn) => `<a href="javascript:void(0)" onclick="${fn}"
-    style="color:var(--v);text-decoration:underline;cursor:pointer;">${rot}</a>`
+  if(U.perfil === 'controle_interno') return ''
+  // ⚠️ O TERCEIRO ARGUMENTO É "DÁ PARA IR DAQUI?". Quando não dá, o rótulo sai como texto e a
+  // frase fica de pé — nunca some a linha. Link que leva a um toast de recusa, ou que
+  // reabre um caminho que o modo tirou, é a armadilha 15 com outra roupa.
+  const link = (rot, fn, vai) => vai
+    ? `<a href="javascript:void(0)" onclick="${fn}"
+        style="color:var(--v);text-decoration:underline;cursor:pointer;">${rot}</a>`
+    : `<span style="font-weight:500;color:var(--texto);">${rot}</span>`
+  const vc = verComoAtivo()
   return `
     <div style="background:var(--fundo-alt);border-radius:var(--raio);padding:12px 14px;margin-bottom:18px;">
       <div style="font-size:12px;font-weight:500;color:var(--texto);">
         Esta tela só lista. Para criar um pedido:</div>
       <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
-        <span style="font-weight:500;">Pedir vaga extra</span> — vá ao ${link('Estoque de TRs','irEst()')},
+        <span style="font-weight:500;">Pedir vaga extra</span> — vá ao ${link('Estoque de TRs','irEst()', !vc)},
         clique em Assumir na TR desejada. Se estiver acima do limite, aparece o botão de pedir vaga.</div>
       <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
-        <span style="font-weight:500;">Devolver uma TR</span> — vá à ${link('Minha Planilha','irPlanilha()')},
+        <span style="font-weight:500;">Devolver uma TR</span> — vá à ${link('Minha Planilha','irPlanilha()', true)},
         abra o cartão da TR e clique em Solicitar devolução.</div>
     </div>`
 }
