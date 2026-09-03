@@ -9152,6 +9152,46 @@ function pedDispensado(s) {
 // ══════════════════════════════════════
 let _meusPedidos = []
 
+/**
+ * O bloco de orientação: esta tela SÓ LISTA, e o pedido nasce em outro lugar.
+ *
+ * ⚠️ ELE EXISTE PORQUE O CAMINHO NÃO É ÓBVIO. Nem o pedido de vaga nem o de devolução têm
+ * tela própria: o de vaga nasce DENTRO do modal Assumir, do Estoque, e só quando o analista
+ * está acima do limite; o de devolução, no cartão da TR da Minha Planilha. Quem abre "Meus
+ * pedidos" procurando um botão de criar não acha nenhum, e a tela não dizia por quê.
+ *
+ * ⚠️ OS DOIS LINKS CHAMAM AS MESMAS FUNÇÕES DO MENU (`irEst`, `irPlanilha`), e não uma
+ * navegação própria. Uma segunda forma de chegar às mesmas telas seria a segunda cópia que
+ * um dia diverge — e essas duas já carregam as guardas de perfil delas.
+ *
+ * ⚠️ O BLOCO SOME PARA O CONTROLE INTERNO. Hoje o técnico do C.I. nem chega aqui — a guarda
+ * de `irMeusPedidos` o barra antes —, então esta condição é redundante DE PROPÓSITO: ela
+ * garante que, se um dia a guarda de cima sair, o bloco não passe a oferecer duas telas que
+ * `irEst` e `irPlanilha` recusam para ele. Link que leva a um toast de recusa é a armadilha
+ * 15 com outra roupa.
+ *
+ * ⚠️ E SOME NO "VER COMO" TAMBÉM. Ali o menu esconde o Estoque de propósito (`soAcao`), por
+ * ser tela que só serve para AGIR e não mostra dado da pessoa. Oferecer o link aqui devolveria
+ * pela porta dos fundos exatamente o caminho que aquele modo tira — e o "Solicitar devolução"
+ * da Minha Planilha já se esconde sozinho com `!verComoAtivo()`.
+ */
+function meusOrientacao() {
+  if(U.perfil === 'controle_interno' || verComoAtivo()) return ''
+  const link = (rot, fn) => `<a href="javascript:void(0)" onclick="${fn}"
+    style="color:var(--v);text-decoration:underline;cursor:pointer;">${rot}</a>`
+  return `
+    <div style="background:var(--fundo-alt);border-radius:var(--raio);padding:12px 14px;margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:500;color:var(--texto);">
+        Esta tela só lista. Para criar um pedido:</div>
+      <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
+        <span style="font-weight:500;">Pedir vaga extra</span> — vá ao ${link('Estoque de TRs','irEst()')},
+        clique em Assumir na TR desejada. Se estiver acima do limite, aparece o botão de pedir vaga.</div>
+      <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
+        <span style="font-weight:500;">Devolver uma TR</span> — vá à ${link('Minha Planilha','irPlanilha()')},
+        abra o cartão da TR e clique em Solicitar devolução.</div>
+    </div>`
+}
+
 async function irMeusPedidos() {
   // O tecnico do C.I. nao trabalha o acervo. Tirar do menu sem por a guarda deixaria
   // a tela alcancavel por quem soubesse o caminho — a licao do Relatorios, em 12/08.
@@ -9162,6 +9202,7 @@ async function irMeusPedidos() {
     <div style="font-size:11px;color:var(--ct);margin-bottom:14px;">
       Pedidos para assumir TR acima do limite. Sem resposta em 3 dias, o pedido expira e a TR volta ao estoque.
     </div>
+    ${meusOrientacao()}
     <div id="meusCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
   await meusCarregar()
 }
