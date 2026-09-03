@@ -230,5 +230,118 @@ console.log('\n═══ 6. A FILA DE DEVOLUCAO DE TR ═══');
   conf(/INATIVO/.test(bI), 'inativo tambem');
 }
 
+
+console.log('\n═══ 9. O INDICADO DO MOTIVO 1 E LISTA FECHADA (03/09/2026) ═══');
+{
+  // ⚠️ ISTO NASCEU DE UM DEFEITO MEDIDO, e a secao existe para ele nao voltar. O campo era um
+  // `datalist`, que SUGERE e aceita texto livre: a Marlene digitou "Juliana" em vez de
+  // escolher "Juliana de Souza", o `confDev` casava por igualdade exata contra
+  // `usuarios.nome`, o `indicado_id` foi gravado NULO, o Enviar acendeu igual — e o pedido 7
+  // so foi recusado 14 dias depois, por um erro que ela nao tinha como ver.
+  //
+  // ⚠️ E E A SEGUNDA VEZ que o `datalist` custa isto neste arquivo: a categoria do
+  // Repositorio virou `select` em 18/08 pelo mesmo motivo. Por isso a marcacao e conferida
+  // aqui, e nao so o comportamento.
+  conf(/<select id="devIndicado"/.test(html), 'o campo e um <select>, nao um <input>');
+  conf(!/list="devAnalistas"/.test(html) && !/<datalist id="devAnalistas"/.test(html),
+       'o datalist saiu — nao ha mais como digitar um nome');
+  conf(/<option value="">Selecione o analista<\/option>/.test(html),
+       'a primeira opcao e em branco, com o texto pedido');
+
+  // ── O comportamento, rodando as funcoes DE VERDADE num DOM de mentira ────────
+  //
+  // ⚠️ O RECORTE VAI DE `devIndicadoPintar` ATE `confDev`, e nao um numero de caracteres:
+  // fatia fixa mente quando o codigo cresce (armadilha 30).
+  const iP = html.indexOf('function devIndicadoPintar()');
+  const fP = html.indexOf('async function confDev()');
+  conf(iP > 0 && fP > iP, 'as funcoes do campo estao no arquivo');
+
+  const els = {};
+  ['devIndicado', 'devIndicadoAviso', 'devJust', 'devJustConta', 'btnConfDev'].forEach((id) => {
+    els[id] = { id, value: '', innerHTML: '', textContent: '', disabled: false, title: '', style: {} };
+  });
+  const c2 = {
+    console,
+    escHtml: (s) => String(s == null ? '' : s),
+    PED_ANALISTAS: [],
+    PED_PREVIA: { pode: true, motivo_bloqueio: null,
+                  motivos: [{ id: 'analise_anterior', exigeIndicado: true }, { id: 'outro' }] },
+    _motivo: '',
+    document: { getElementById: (id) => els[id] || null, querySelector: () => null },
+  };
+  vm.createContext(c2);
+  vm.runInContext(html.slice(iP, fP) + `
+function devMotivoEscolhido(){ return _motivo }
+function _setAnalistas(l){ PED_ANALISTAS = l }
+function _setMotivo(m){ _motivo = m }
+`, c2);
+
+  // 'Ândrea' esta aqui de proposito: sem o locale 'pt-BR' no localeCompare ela cai no fim.
+  c2._setAnalistas([
+    { id: 45, nome: 'Juliana de Souza' },
+    { id: 46, nome: 'Marlene Teodoro Ramos da Silva' },
+    { id: 19, nome: 'Ândrea Zamboni' },
+    { id: 22, nome: 'Ana Claudia' },
+  ]);
+  c2.devIndicadoPintar();
+
+  const opts = [...els.devIndicado.innerHTML.matchAll(/<option value="(\d+)">([^<]+)</g)];
+  conf(JSON.stringify(opts.map((m) => m[2]))
+       === JSON.stringify(['Ana Claudia', 'Ândrea Zamboni', 'Juliana de Souza', 'Marlene Teodoro Ramos da Silva']),
+       'ordenada por nome, e o acento no lugar certo (pt-BR)', JSON.stringify(opts.map((m) => m[2])));
+  // ⚠️ O `value` E O ID, e nao o nome: e a armadilha 1 resolvida na origem, em vez de
+  // conferida depois por igualdade de texto.
+  conf(opts.some((m) => m[1] === '45' && m[2] === 'Juliana de Souza'),
+       'o value de cada opcao e o ID, e o texto e o nome');
+  conf(els.devIndicado.value === '', 'nasce sem escolha');
+
+  els.devJust.value = 'justificativa suficiente';
+  c2._setMotivo('analise_anterior');
+
+  els.devIndicado.value = '';
+  c2.devPintarBotao();
+  conf(els.btnConfDev.disabled === true, 'sem escolha o Enviar fica APAGADO');
+  conf(/Selecione na lista/.test(els.btnConfDev.title), 'e o motivo esta no title — cinza nunca e mudo');
+
+  els.devIndicado.value = '45';
+  c2.devPintarBotao();
+  conf(els.btnConfDev.disabled === false, 'com analista escolhido, acende');
+  conf(c2.devIndicadoEscolhido().id === 45 && c2.devIndicadoEscolhido().nome === 'Juliana de Souza',
+       'e resolve para o id 45 COM o nome completo — os dois saem da mesma opcao');
+
+  // ⚠️ O CASO DO PEDIDO 7, virado teste: um nome solto no campo nao acende mais nada.
+  els.devIndicado.value = 'Juliana';
+  c2.devPintarBotao();
+  conf(els.btnConfDev.disabled === true, 'um valor que nao e id de ninguem NAO acende (o pedido 7)');
+  conf(c2.devIndicadoEscolhido() === null, 'e nao resolve para analista nenhum');
+
+  // Os outros cinco motivos nao pedem indicado, e nao podem ficar travados por causa disto.
+  c2._setMotivo('outro');
+  els.devIndicado.value = '';
+  c2.devPintarBotao();
+  conf(els.btnConfDev.disabled === false, 'motivo sem indicado acende sem escolha nenhuma');
+
+  // ⚠️ O PRECO DA LISTA FECHADA: sem ela carregada, o motivo 1 fica sem caminho. Nao pode
+  // ficar sem caminho E sem explicacao.
+  c2._setAnalistas([]);
+  c2.devIndicadoPintar();
+  conf(/Não foi possível carregar a lista/.test(els.devIndicadoAviso.textContent),
+       'lista vazia: o aviso sob o campo TROCA e diz que ela nao carregou', els.devIndicadoAviso.textContent);
+  c2._setMotivo('analise_anterior');
+  c2.devPintarBotao();
+  conf(els.btnConfDev.disabled === true && /lista de analistas não carregou/.test(els.btnConfDev.title),
+       'e o Enviar fica apagado dizendo isso', els.btnConfDev.title);
+
+  // ── O que o modal MANDA para a rota ──────────────────────────────────────────
+  const iC = html.indexOf('async function confDev()');
+  const bC = html.slice(iC, html.indexOf('\n}', iC));
+  conf(/const achado = devIndicadoEscolhido\(\)/.test(bC),
+       'o confDev le a opcao escolhida, e nao o texto do campo');
+  conf(/indicado_nome: achado \? achado\.nome : null/.test(bC),
+       'e o nome vai da MESMA opcao do id — nunca do que a pessoa digitou');
+  conf(!/PED_ANALISTAS\.find\(u => u\.nome === nome\)/.test(html),
+       'o casamento por igualdade de nome saiu do arquivo');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);

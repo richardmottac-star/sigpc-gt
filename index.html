@@ -1218,13 +1218,18 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
       </div>
 
       <!-- Só aparece no motivo 1, e ali é OBRIGATÓRIO: sem ele a TR volta ao estoque para
-           qualquer um pegar, quando deveria ir para quem já estava com ela. -->
+           qualquer um pegar, quando deveria ir para quem já estava com ela.
+           ⚠️ LISTA FECHADA DESDE 03/09/2026 — era um `datalist`, que aceita texto livre, e
+           foi o defeito medido: a Marlene digitou "Juliana" em vez de escolher "Juliana de
+           Souza", o `indicado_id` foi gravado NULO, o Enviar acendeu igual, e o pedido 7 só
+           foi recusado 14 dias depois — sem que ela pudesse saber o que tinha errado.
+           O `value` de cada opção é o `id`, nunca o nome: casar por nome é a armadilha 1. -->
       <div class="mc-campo" id="devIndicadoBox" style="display:none;">
         <label>Quem já analisava esta TR *</label>
-        <input list="devAnalistas" id="devIndicado" placeholder="Nome do analista"
-          oninput="devPintarBotao()" style="width:100%;">
-        <datalist id="devAnalistas"></datalist>
-        <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">
+        <select id="devIndicado" onchange="devPintarBotao()" style="width:100%;">
+          <option value="">Selecione o analista</option>
+        </select>
+        <div style="font-size:10.5px;color:var(--ct);margin-top:3px;" id="devIndicadoAviso">
           Sem este nome a TR voltaria ao estoque para qualquer um pegar.</div>
       </div>
 
@@ -9959,7 +9964,9 @@ async function abrirPedidoDev(tr) {
   if(verComoAtivo()) { toast('Pedir devolução é decisão dele, não trabalho — não dá para pedir no lugar dele.','err'); return }
   PED_TR = tr; PED_PREVIA = null
   document.getElementById('devJust').value = ''
-  document.getElementById('devIndicado').value = ''
+  // ⚠️ REPINTA O SELECT INTEIRO, e não `.value = ''` sobre a lista de antes: reabrir o modal
+  // noutra TR não pode deixar de pé a escolha da anterior.
+  devIndicadoPintar()
   document.getElementById('devIndicadoBox').style.display = 'none'
   document.getElementById('devMotivos').innerHTML = ''
   document.getElementById('devAviso').innerHTML = ''
@@ -9996,24 +10003,70 @@ async function abrirPedidoDev(tr) {
 
     devPintarBotao()
 
-    // A lista de nomes do motivo 1 sai de quem já está em `usuarios` — mas o campo é LIVRE,
-    // porque há analista com meta e sem cadastro (a Caroline). Buscada depois de pintar o
-    // modal, e sem travar nada se falhar: o campo continua servindo digitado à mão.
+    // A lista do motivo 1 sai de quem está em `usuarios`, e desde 03/09/2026 ela é FECHADA.
+    //
+    // ⚠️ ANTES O CAMPO ERA LIVRE, e o motivo escrito aqui era "há analista com meta e sem
+    // cadastro (a Caroline)". A decisão do Richard inverteu isso, e o preço está registrado:
+    // quem não tem cadastro NÃO PODE MAIS SER INDICADO por este modal. Foi escolha
+    // deliberada — o campo livre custou o pedido 7, recusado por um nome incompleto.
+    //
+    // ⚠️ E SE A BUSCA FALHAR, O ENVIAR NÃO ACENDE no motivo 1 — não há mais o caminho
+    // digitado à mão para socorrer. Por isso o aviso sob o campo TROCA DE TEXTO e diz que a
+    // lista não carregou: botão cinza nunca é mudo (armadilha 15).
     if(!PED_ANALISTAS.length) {
       try {
         const ru = await fetch(`${API_URL}/usuarios?ativo=true`)
         const ju = await ru.json()
         PED_ANALISTAS = (ju.data || []).filter(u => u.perfil === 'analista' && u.nome)
-      } catch(_) { /* o campo livre continua valendo */ }
+      } catch(_) { /* o aviso sob o campo explica, e o botão fica apagado */ }
     }
-    document.getElementById('devAnalistas').innerHTML =
-      PED_ANALISTAS.map(u => `<option value="${escHtml(u.nome)}">`).join('')
+    devIndicadoPintar()
+    // ⚠️ E REPINTA O BOTÃO DEPOIS DA LISTA CHEGAR. Quem marcasse o motivo 1 na janela entre o
+    // `devPintarBotao` de cima e esta linha leria no title "a lista não carregou" — verdade
+    // naquele instante, mentira um instante depois, e ninguém mais chamaria a função.
+    devPintarBotao()
   } catch(e) {
     document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br>
       <span style="color:var(--r);font-size:11px;">Erro: ${escHtml(e.message)}</span>`
     // ⚠️ Desabilitado TAMBÉM no erro — era este o caminho que deixava o botão aceso.
     devBotao(false, e.message)
   }
+}
+
+/**
+ * As opções do "quem já analisava esta TR" — LISTA FECHADA, ordenada por nome.
+ *
+ * ⚠️ O `value` DE CADA OPÇÃO É O `id`, e não o nome. Era o nome que o `datalist` mandava, e a
+ * API casava por igualdade exata contra `usuarios.nome`: "Juliana" não é "Juliana de Souza",
+ * então o `indicado_id` ia nulo e ninguém percebia. Com o `id` no `value` não há casamento a
+ * fazer — é a armadilha 1 resolvida na origem, e não conferida depois.
+ *
+ * ⚠️ A PRIMEIRA OPÇÃO É EM BRANCO, de propósito. Um `select` que já nasce com o primeiro nome
+ * escolhido faria a pessoa enviar o pedido apontando para quem ela nunca escolheu — e o
+ * pedido pareceria completo.
+ *
+ * ⚠️ `localeCompare` COM 'pt-BR': sem o locale, nome com acento cai no fim da lista.
+ */
+function devIndicadoPintar() {
+  const sel = document.getElementById('devIndicado')
+  if(!sel) return
+  const ordenados = [...PED_ANALISTAS].sort((a, b) =>
+    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+  sel.innerHTML = `<option value="">Selecione o analista</option>`
+    + ordenados.map(u => `<option value="${u.id}">${escHtml(u.nome)}</option>`).join('')
+  sel.value = ''
+  // ⚠️ O AVISO TROCA DE TEXTO quando a lista não carregou. Sem isto o campo ficaria com um
+  // select de uma opção só e o Enviar apagado sem dizer por quê.
+  const av = document.getElementById('devIndicadoAviso')
+  if(av) av.textContent = ordenados.length
+    ? 'Sem este nome a TR voltaria ao estoque para qualquer um pegar.'
+    : 'Não foi possível carregar a lista de analistas. Feche e abra o modal de novo.'
+}
+
+/** O analista escolhido, ou `null`. Resolve o `id` do select contra a lista carregada. */
+function devIndicadoEscolhido() {
+  const id = parseInt(document.getElementById('devIndicado')?.value || '0', 10)
+  return PED_ANALISTAS.find(u => u.id === id) || null
 }
 
 /** Liga/desliga o Enviar, com o motivo no title. */
@@ -10045,7 +10098,9 @@ function devPintarBotao() {
   const just = document.getElementById('devJust').value.trim()
   const motivo = devMotivoEscolhido()
   const m = (PED_PREVIA?.motivos || []).find(x => x.id === motivo)
-  const indicado = document.getElementById('devIndicado').value.trim()
+  // ⚠️ O TESTE É "TEM ANALISTA COM id?", e não "o campo tem texto". Era o texto não vazio que
+  // acendia o Enviar com um nome que o cadastro não reconhece.
+  const indicado = devIndicadoEscolhido()
 
   const conta = document.getElementById('devJustConta')
   if(conta) conta.textContent = just.length < 10 ? `(faltam ${10 - just.length})` : ''
@@ -10054,7 +10109,9 @@ function devPintarBotao() {
   if(!PED_PREVIA.pode)       return devBotao(false, PED_PREVIA.motivo_bloqueio || 'Não é possível pedir agora.')
   if(!motivo)                return devBotao(false, 'Selecione o motivo.')
   if(m && m.exigeIndicado && !indicado)
-    return devBotao(false, 'Informe quem já analisava esta TR.')
+    return devBotao(false, PED_ANALISTAS.length
+      ? 'Selecione na lista quem já analisava esta TR.'
+      : 'A lista de analistas não carregou — feche e abra o modal de novo.')
   if(just.length < 10)       return devBotao(false, 'Escreva a justificativa — quem decide vai ler.')
   devBotao(true)
 }
@@ -10064,17 +10121,20 @@ async function confDev() {
   const b = document.getElementById('btnConfDev')
   b.disabled = true; b.textContent = 'Enviando...'
   try {
-    const nome = document.getElementById('devIndicado').value.trim()
-    const achado = PED_ANALISTAS.find(u => u.nome === nome)
+    // ⚠️ OS DOIS CAMPOS SAEM DA MESMA OPÇÃO ESCOLHIDA. Antes o nome vinha do que a pessoa
+    // digitou e o `id` de uma busca por igualdade de nome — as duas coisas podiam discordar,
+    // e discordaram: o pedido 7 foi gravado com nome "Juliana" e `id` nulo.
+    const achado = devIndicadoEscolhido()
     const r = await fetch(`${API_URL}/solicitacao_devolucao`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         tr: PED_TR, analista_id: U.id,
         motivo: devMotivoEscolhido(),
         justificativa: document.getElementById('devJust').value.trim(),
-        // Manda o ID quando o nome bate com o cadastro — filtrar por nome é a armadilha 1.
+        // O `id` é o que vale; o nome vai junto para o sino e o histórico poderem escrever
+        // quem foi indicado sem uma segunda consulta.
         indicado_id: achado ? achado.id : null,
-        indicado_nome: nome || null,
+        indicado_nome: achado ? achado.nome : null,
       })
     })
     const j = await r.json()
