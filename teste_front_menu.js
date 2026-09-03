@@ -104,6 +104,10 @@ console.log('\n═══ 2. A REGRA DO MENU E A MESMA DA TELA ═══');
     faixa:['coordenador','superadmin'],
     recado:['coordenador','superadmin'],
     admin:['coordenador','superadmin'],
+    // Transferir prestacoes de contas (`irTransferir`) e Acompanhamento (`irAcompanhamento`)
+    // recusam quem nao e superadmin na propria funcao da tela — lidas la, nao deduzidas.
+    transf:['superadmin'],
+    acomp:['superadmin'],
     prior:['superadmin'],
     config:['superadmin'],
   };
@@ -135,8 +139,12 @@ console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
   // ⚠️ E a 15a entrou em 18/08/2026: 'estornar' (Estornar Baixa) passou a ser so-superadmin,
   // porque o estorno em lote nao deixa linha em parcela_historico. Quem precisa desfazer uma
   // baixa usa "Corrigir situacao", que tem motivo obrigatorio e trilha.
+  // ⚠️ E SAO 17 DESDE 26–31/08/2026, com duas telas novas que ja nascem so-superadmin:
+  // 'transf' (Transferir prestacoes de contas) e 'acomp' (Acompanhamento). Nenhuma das duas
+  // precisou de excecao escrita a mao — caem pela mesma regra do papel efetivo, que e
+  // exatamente o que esta secao existe para provar.
   const SOMEM = ['board','rel','vercomo','coord','aprov','afast','estlog','ci','faixa','recado',
-                 'admin','bglobal','prior','config','estornar'];
+                 'admin','bglobal','prior','config','estornar','transf','acomp'];
   const comoTec = idsDe(superad);
   const comoAn  = idsDe(superAn);
 

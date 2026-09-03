@@ -267,8 +267,14 @@ console.log('\n═══ 4e. CONTROLE INTERNO — a busca passou para o SERVIDOR
   // O recorte agora e feito no banco, e a tela manda o que o usuario escolheu.
   conf(!/function ciGrupos\(\)/.test(html), 'ciGrupos saiu — a tela nao agrupa nem filtra localmente');
   conf(/API_URL\}\/ci\/fila\?\$\{p\}/.test(html), 'a lista vem filtrada do servidor');
-  conf(/new URLSearchParams\(\{ usuario_id: U\.id, chip: _ciChip \}\)/.test(html),
+  // ⚠️ A PAGINACAO ENTROU NO MESMO `URLSearchParams` — a fila do C.I. deixou de trazer o
+  // ciclo inteiro e passou a pedir uma pagina por vez. E o mesmo recorte no servidor: chip,
+  // quem pede, e agora tambem QUANTO se quer. A busca (`q`, `tr`, `processo`, `analista_id`,
+  // `espera`) e acrescentada abaixo, no mesmo `p`.
+  conf(/new URLSearchParams\(\{ usuario_id: U\.id, chip: _ciChip,/.test(html),
        'com o recorte do chip e quem esta pedindo');
+  conf(/pagina: _ciPagina, tamanho: _ciTamanho \}\)/.test(html),
+       'e com a pagina pedida — a tela nao baixa mais o ciclo inteiro');
 
   // ⚠️ OS DOIS BLOCOS DE BUSCA SAO EXCLUDENTES, e a decisao e do Richard: usar um limpa o
   // outro. Combina-los devolveria vazio silencioso toda vez que o processo digitado nao fosse

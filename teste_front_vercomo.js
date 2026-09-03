@@ -282,6 +282,9 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
     ['abrirPedidoDev',  'solicitar devolução — o pedido é dele, não seu'],
     // ⚠️ ERA `ciDecidir` ate 25/08/2026, quando a tela do C.I. voltou a ser POR PC.
     ['ciConfirmar',     'decidir no C.I. — é do técnico, não do analista'],
+    // ⚠️ REABRIR NAO E DESFAZER A BAIXA, e nao e do analista: quem reabre uma parcela
+    // encerrada e o tecnico do C.I. (26/08/2026).
+    ['ciReabrirAbrir', 'reabrir no C.I. — e do tecnico do Controle Interno'],
   ];
 
   LIBERADAS.forEach(([fn, rot]) => {
@@ -294,13 +297,15 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
     const bloco = html.slice(i, i + 500);
     conf(i > 0 && /if\(verComoAtivo\(\)\)/.test(bloco), `${fn} continua RECUSANDO (${rot})`);
   });
-  // ⚠️ SAO CINCO, E A QUINTA E NOMEADA. Contar sem nomear era a versao anterior desta linha,
-  // e ela nao distinguia a trava certa da trava por engano — que e a coisa que ela existe
-  // para pegar. As quatro primeiras sao acoes de TRABALHO que continuam sendo do dono; a
-  // quinta, de 24/08, e o `sinoMarcarTodas`, que NAO e acao de trabalho: e a garantia de que
-  // ler o sino de outro no modo nunca marca a notificacao dele como lida.
+  // ⚠️ SAO SEIS, E TODAS SAO NOMEADAS. Contar sem nomear era a versao anterior desta
+  // linha, e ela nao distinguia a trava certa da trava por engano — que e a coisa que ela
+  // existe para pegar. As quatro primeiras sao acoes de TRABALHO que continuam sendo do
+  // dono; a quinta, de 24/08, e o `sinoMarcarTodas`, que NAO e acao de trabalho: e a
+  // garantia de que ler o sino de outro no modo nunca marca a notificacao dele como lida.
+  // A sexta, de 26/08, e o `ciReabrirAbrir` — reabrir uma parcela encerrada e do tecnico do
+  // C.I., e nao passa a ser do analista so porque alguem esta agindo pela conta dele.
   const travas = (html.match(/if\(verComoAtivo\(\)\) \{ toast\(/g) || []).length;
-  conf(travas === 5, 'as travas sao CINCO, nem mais nem menos', String(travas));
+  conf(travas === 6, 'as travas sao SEIS, nem mais nem menos', String(travas));
   const iMT = html.indexOf('async function sinoMarcarTodas');
   conf(/if\(verComoAtivo\(\)\) \{ toast\(/.test(html.slice(iMT, iMT + 700)),
        'e a quinta e o sinoMarcarTodas — leitura do sino nunca marca o aviso de outro');

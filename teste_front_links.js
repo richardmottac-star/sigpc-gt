@@ -154,8 +154,10 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
   //   (tela que nao desenha processo nao tem link a absorver) · 12 de novo em 13/08, com a
   //   BUSCA GLOBAL, que desenha o SGPe de cada parcial e do processo mae.
   // Se este numero mudar, a pergunta e sempre a mesma: a tela que entrou/saiu desenha SGPe?
-  conf(direto + viaHelper + viaParalelo === 12,
-       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 12 telas absorvendo j.links`);
+  //   · 13 desde 26/08/2026, com a tela ACOMPANHAMENTO (`acmpCarregar`): ela desenha o
+  //     processo de cada linha da trilha pelo `procHtml`, e por isso absorve.
+  conf(direto + viaHelper + viaParalelo === 13,
+       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 13 telas absorvendo j.links`);
 
   // O helper PRECISA absorver — se alguem tirar o sgpeAbsorver de dentro dele, quatro telas
   // perdem o link de uma vez, em silencio.

@@ -157,13 +157,21 @@ console.log('\n═══ 3. O C.I. MUDOU DE LUGAR — DA LINHA PARA O MENU (18/0
   conf(/pBotaoCI` FOI REMOVIDA/.test(html),
        'e ficou o comentario dizendo para onde o botao foi');
 
+  // ⚠️ A JANELA VAI ATE O GRUPO 2, e nao um numero fixo de caracteres. A fatia de 2600 que
+  // estava aqui cortava o item do C.I. ao meio quando o grupo cresceu (a engenharia entrou
+  // em 31/08), e o teste reprovava o destaque que estava escrito na tela.
   const iMenu = html.indexOf("linhas.push(acGrupo('Fluxo da análise'))");
-  const bMenu = html.slice(iMenu, iMenu + 2600);
+  const bMenu = html.slice(iMenu, html.indexOf("linhas.push(acGrupo('Correções'))", iMenu));
   conf(iMenu > 0, 'o menu tem o grupo "Fluxo da analise"');
-  conf(/acItem\('Encaminhar ao C\.I\.', '🏛'/.test(bMenu), 'e o C.I. e um item dele');
+  // ⚠️ O SEGUNDO ARGUMENTO E A CHAVE DE `AC_ICONES`, e nao um emoji. Os itens do menu
+  // ganharam icone de traco em 30/08 — "nada de emoji: eles mudam de forma e de tamanho a
+  // cada sistema", diz o proprio comentario da tela.
+  conf(/acItem\('Encaminhar ao C\.I\.', 'enviar'/.test(bMenu), 'e o C.I. e um item dele');
   conf(/pEnviarCiPc\(\$\{nm\}\)/.test(bMenu), 'que chama o pEnviarCI da parcela');
   const bCI = bMenu.slice(bMenu.indexOf("'Encaminhar ao C.I.'"));
-  conf(/'azul'/.test(bCI), 'com o icone AZUL do Controle Interno');
+  // O azul do Controle Interno mora em `AC_CORES.situacao` (#1B4F8E sobre #E8F0FB) — a cor
+  // e escolhida pela NATUREZA da acao, e nao mais por um nome de cor solto.
+  conf(/'situacao'/.test(bCI), 'com o icone AZUL do Controle Interno');
   // O ultimo argumento do acItem e o `destaque`, que poe o rotulo em negrito. Ele fecha em
   // `true))` — o primeiro parentese e do acItem, o segundo do linhas.push.
   conf(/\btrue\)\)/.test(bCI.slice(0, 420)),
@@ -181,7 +189,10 @@ console.log('\n═══ 3. O C.I. MUDOU DE LUGAR — DA LINHA PARA O MENU (18/0
 console.log('\n═══ 4. A LINHA DA PARCIAL FICOU COM UM BOTAO SO ═══');
 {
   const iRP = html.indexOf('function renderPlan(rows) {');
-  const bRP = html.slice(iRP, iRP + 9000);
+  // ⚠️ A JANELA E A FUNCAO INTEIRA, e nao 9.000 caracteres. A `renderPlan` passou de
+  // 19 mil com a engenharia, a pilula e o menu de acoes: a fatia curta enxergava so o ramo
+  // de cima e reprovava o ramo verde, que estava escrito logo abaixo dela.
+  const bRP = html.slice(iRP, html.indexOf('function planRenderPag() {', iRP));
 
   conf((bRP.match(/\$\{pFaixaPasso\(pa\)\}/g) || []).length === 2,
        'a faixa aparece nos DOIS ramos — baixada e em aberto');

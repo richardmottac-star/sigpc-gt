@@ -209,20 +209,27 @@ console.log('\n═══ 7. NO CODIGO DA TELA ═══');
   // A pergunta que a secao fazia — "a area expandida tem botoes com peso visual, e nao
   // links apagados?" — continua valendo; o que mudou e ONDE olhar. Agora se mede o botao
   // unico e os itens do menu, que sao o que a pessoa ve.
+  // ⚠️ A JANELA VAI ATE A `renderPlan`, e nao 900 caracteres. O comentario que explica de
+  // onde saem `pa.num` e `pa.pcs` cresceu em 31/08 e empurrou o estilo do botao para fora da
+  // fatia curta — o peso e a cor continuavam escritos, e o teste dizia que nao.
   const acoes = html.slice(html.indexOf('function pBotaoAcoes(pa, tr) {'),
-                           html.indexOf('function pBotaoAcoes(pa, tr) {') + 900);
+                           html.indexOf('function renderPlan(rows) {'));
   conf(/font-weight:800/.test(acoes), 'o botao "Acoes" da linha tem peso 800');
   conf(/background:var\(--v\);color:#fff/.test(acoes),
        'e e verde solido com texto branco — o mesmo peso do antigo "Registrar parecer"');
   conf(/Ações ▾/.test(acoes) && !/⋯/.test(acoes),
        'o rotulo e "Acoes ▾", sem os tres pontinhos');
 
-  // Os itens do menu: fonte e respiro maiores, como o Richard pediu ao levar tudo para la.
+  // Os itens do menu: fonte grande e icone com peso proprio, como o Richard pediu ao levar
+  // tudo para la. O que se mede aqui e que o item continua sendo BOTAO, e nao link apagado.
   const item = html.slice(html.indexOf('function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {'),
                           html.indexOf('function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {') + 1600);
   conf(/font-size:13\.5px/.test(item), 'os itens do menu estao em 13.5px');
-  conf(/padding:11px 14px/.test(item), 'com padding 11px 14px');
-  conf(/width:28px;height:28px/.test(item), 'e o icone num quadradinho de 28px');
+  conf(/padding:9px 14px/.test(item), 'com padding 9px 14px');
+  // ⚠️ 30px, e nao 28: o quadradinho cresceu junto com o icone de traco que entrou em
+  // 30/08 no lugar do emoji. O respiro caiu para 9px na mesma passagem — o icone maior ja
+  // da altura a linha, e manter os 11px deixava o item alto demais.
+  conf(/width:30px;height:30px/.test(item), 'e o icone num quadradinho de 30px');
 
   // 2. TR baixada recua
   // a regra saiu do render e virou `planTrConcluida` em 10/08, para o botao e o inicio da
