@@ -153,7 +153,12 @@ const mud = corpo('ciSgpeMudou');
 conf(/bt\.disabled = falta\.length > 0/.test(mud), 'e so acende com os tres');
 conf(/bt\.title = falta\.length \?/.test(mud), 'e o cinza DIZ o que falta (armadilha 15)');
 for (const c of ['a sigla', 'o número', 'o ano']) conf(mud.includes(`'${c}'`), `sabe apontar "${c}"`);
-conf(/Pontuação e zeros à esquerda não importam/.test(B), 'e a tela explica a normalizacao');
+// ⚠️ A FRASE DA NORMALIZACAO SAIU, e nao e perda: ela existia para o campo de TEXTO LIVRE,
+// onde a pessoa digitava 'SCC 00019123/2022' e precisava saber que pontuacao e zeros nao
+// importavam. Com o componente de TRES CAMPOS (31/08) a sigla, o numero e o ano entram
+// separados, e nao ha o que normalizar para o usuario entender.
+conf(/campoProcHtml\('ciSg', \{ modo: 'busca'/.test(B),
+     'o bloco usa o componente de tres campos, que dispensa a explicacao da normalizacao');
 
 S('7. A LISTA — O PROCESSO SGPe E O ELEMENTO PRINCIPAL');
 // ⚠️ O TECNICO DO C.I. NAO PROCURA PELO CODIGO DA PC: ele procura pelo PROCESSO, porque e com
@@ -168,7 +173,14 @@ conf(!/<div>PC<\/div>/.test(B), 'e "PC" deixou de ser coluna — virou subtitulo
 // Os tres degraus da esquerda.
 conf(/font-size:20px;font-weight:500;color:var\(--te\)/.test(B1), '1o degrau: o processo em 20px, weight 500, cor primaria');
 conf(/font-size:12px;color:var\(--ct\);margin-top:2px/.test(B1), '2o degrau: PC · TR · parcela em 12px, cor secundaria');
-conf(/\$\{escHtml\(l\.codigo_pc\)\} · \$\{escHtml\(l\.tr\)\} · parcela/.test(B), 'com os tres, nessa ordem');
+// ⚠️ O `codigo_pc` SAIU DO SEGUNDO DEGRAU e foi para o `title` — a unidade da fila virou a
+// PARCELA em 26/08, e uma linha passou a valer por VARIAS PCs. Um codigo so no texto
+// identificaria uma das nove e esconderia as outras oito; o degrau passou a dizer
+// TR · parcela · quantas PCs, com a lista completa no title.
+conf(/\$\{escHtml\(l\.tr\)\} · parcela \$\{escHtml\(l\.parcial_num \|\| '—'\)\} · <b>\$\{nPcs\}/.test(B),
+     'o segundo degrau e TR · parcela · N PCs');
+conf(/title="\$\{escHtml\(codigos\.join\(', '\)\)\}"/.test(B),
+     'e os codigos das PCs da parcela vao no title');
 conf(/font-size:12px;color:#9AA8A0;overflow:hidden/.test(B1), '3o degrau: a entidade em 12px, cor mais fraca');
 // ⚠️ AS COLUNAS DA DIREITA CAEM PARA 13px de proposito: competir em tamanho com o processo
 // desfaria o degrau que a primeira linha acabou de construir.
@@ -180,13 +192,31 @@ conf(/\? `<span style="color:#9AA8A0;">—<\/span>`/.test(B), 'e mostra um traco
 conf(/String\(l\.processo_pc\)\.trim\(\) === '-'/.test(B), 'inclusive quando o dado gravado e o literal "-"');
 // ⚠️ SEM ZEBRA (26/08/2026): cada PC e um bloco separado por uma divisoria de 1px na cor de
 // borda padrao. A zebra pintava a linha inteira e competia com a hierarquia dos tres degraus.
-conf(!/i % 2 === 0/.test(B), 'a zebra saiu');
+// ⚠️ A ZEBRA VOLTOU, e com regra: o DESTAQUE da busca F2 (27/08) sobrepoe a zebra. Sem essa
+// ordem a linha encontrada mudaria de cor conforme caisse em posicao par ou impar — o realce
+// dependeria de onde ela parou na lista, que e o oposto de realce.
+conf(/const fundo = achada \? '#FAEEDA' : \(i % 2 === 0 \? '#fff' : 'rgba\(99,153,34,\.09\)'\)/.test(B),
+     'o destaque da busca SOBREPOE a zebra, e nao o contrario');
+// E a borda nasce transparente em toda linha: acrescentar 4px so na encontrada empurraria o
+// conteudo dela e a coluna perderia o alinhamento.
+conf(/const borda = achada \? '#BA7517' : 'transparent'/.test(B),
+     'e a borda nasce transparente em todas, para o alinhamento nao quebrar');
 conf(!/#F2F8EC/.test(B), 'e o verde alternado tambem');
 conf(/\$\{i === 0 \? '' : 'border-top:1px solid var\(--cb\);'\}/.test(B),
      'divisoria de 1px entre os blocos — sem borda no topo do primeiro');
 conf(/<span style="color:#9AA8A0;font-size:13px;">—<\/span>/.test(B), '"—" quando ninguem esta com ela');
-conf(/Mostrando as <b>\$\{_ciDados\.length\.toLocaleString\('pt-BR'\)\}<\/b> mais antigas de/.test(B1),
-     'e o corte continua sendo dito');
+// ⚠️ O CORTE DEIXOU DE EXISTIR — virou PAGINA em 27/08 (ver `lib/ci-fila.js`). A faixa amarela
+// que dizia "mostrando as 300 mais antigas de 875" saiu junto: ela era honesta sobre um
+// limite que nao precisava existir, e mandava "use a busca", que so ajuda quem ja sabe o que
+// procurar. Quem afirma o tamanho agora e a paginacao.
+// ⚠️ CONTRA `semComentario`, e nao contra `B`: a frase sobrevive num COMENTARIO do
+// `index.html` — justamente o que explica por que ela saiu da tela. Testar o bloco cru faria
+// a checagem falhar por causa da documentacao da propria remocao.
+conf(!/mais antigas de/.test(semComentario), 'a faixa do corte saiu da tela');
+conf(/function ciIrPagina\(n\)/.test(B) && /function ciTrocarTamanho\(v\)/.test(B),
+     'e no lugar dela ha paginacao de verdade');
+conf(/_ciPagina\.toLocaleString\('pt-BR'\)\} \/ \$\{_ciPaginas/.test(B1),
+     'que diz a pagina atual e o total de paginas');
 
 S('8. ABRIR NAO E ASSUMIR');
 // ⚠️ ATE 25/08 EXPANDIR A LINHA GRAVAVA A PC no nome de quem clicou — `POST /ci/pc/abrir`. A
@@ -204,10 +234,18 @@ conf(/ciListaRender\(\)/.test(exp), 'e repinta');
 // O botao "Abrir"/"Fechar" no lugar da seta.
 conf(!/\$\{aberta \? '▲' : '▼'\}/.test(B), 'a seta saiu');
 conf(/>\$\{aberta \? 'Fechar' : 'Abrir'\}<\/button>/.test(B1), 'e virou um botao Abrir / Fechar');
-conf(/onclick="ciExpandir\('\$\{escHtml\(l\.codigo_pc\)\}'\)" class="btn-sec"/.test(B),
-     'pequeno, no estilo secundario');
-conf(/padding:4px 12px;font-size:12px/.test(B1), 'em 12px');
-conf(/<div style="text-align:right;">\s*<button onclick="ciExpandir/.test(B1), 'alinhado a direita da linha');
+// ⚠️ O BOTAO GANHOU CLASSE PROPRIA (`ci-bt-abrir`) no lugar de `btn-sec` + padding inline, e
+// divide a celula com o "Reabrir" (26/08). Por isso a checagem antiga, que exigia o
+// `ciExpandir` COLADO no `text-align:right`, deixou de casar: agora pode haver um botao
+// antes dele.
+conf(/onclick="ciExpandir\('\$\{escHtml\(l\.codigo_pc\)\}'\)" class="ci-bt-abrir"/.test(B),
+     'pequeno, na classe propria da tela');
+conf(/text-align:right;white-space:nowrap;/.test(B), 'a celula dos botoes e alinhada a direita');
+// ⚠️ O "Reabrir" so nasce para quem pode, e o predicado e o MESMO da rota
+// (`ciFila.podeReabrir`): encerrada, fora do "ver como", e tecnico do C.I. — superadmin
+// incluido na recusa. A tela desenha o que o servidor autoriza.
+conf(/const podeReabrir = l\.ci_situacao === 'encerrado' && !verComoAtivo\(\) && U\.perfil === 'controle_interno'/.test(B),
+     'e o Reabrir ao lado, so para quem a rota autoriza');
 // ⚠️ A LINHA INTEIRA DEIXOU DE SER CLICAVEL. Com abrir sendo so abrir isso seria inofensivo,
 // mas o processo SGPe da primeira linha e um LINK: clicar nele abriria o cartao junto.
 conf(!/<div onclick="ciExpandir/.test(B), 'e a linha inteira nao e mais um botao');
@@ -260,7 +298,10 @@ conf(/title="\$\{escHtml\(motivo\)\}"/.test(B), 'com o motivo no title');
 for (const m of ['Esta PC já foi encerrada no Controle Interno.',
                  'Esta PC está com a analista, aguardando a correção.',
                  'Escolha uma das duas opções acima.',
-                 'O parecer do Controle Interno é dado por um técnico do C.I.'])
+                 // ⚠️ REESCRITO: o texto antigo enunciava a REGRA ("o parecer e dado por um
+                 // tecnico"); o novo fala com QUEM esta lendo ("voce nao e tecnico"). Botao
+                 // cinza tem de dizer por que ESTA pessoa nao pode, e nao recitar o estatuto.
+                 'Você não é técnico do Controle Interno — esta parcela não pode ser decidida por você.'])
   conf(B.includes(m), `o motivo "${m.slice(0, 34)}..."`);
 // ⚠️ O BOTAO TOMA A COR DA OPCAO ESCOLHIDA — e o que liga a escolha ao ato.
 conf(/background:\$\{pode \? escolhida\.cor : '#B6C2BB'\}/.test(B), 'e o botao toma a cor da opcao escolhida');
@@ -295,10 +336,18 @@ for (const fn of ['ciAbrirDevolver', 'ciDevChecar', 'ciDevConfirmar',
 conf(!/_ciAcaoPc/.test(B), 'e o estado que elas usavam tambem');
 // ⚠️ A TELA NAO CHAMA NENHUMA ROTA /ci/pc/*. A fila e LEITURA; a unica escrita e o parecer.
 conf(!/\/ci\/pc\//.test(semComentario), 'nenhuma chamada a /ci/pc/ sobrou');
-// ⚠️ E AS UNICAS DUAS ESCRITAS DA TELA sao o parecer e nada mais. `sinoCarregar` e afins vivem
-// fora deste bloco; aqui dentro, so pode haver um POST.
+// ⚠️ SAO DOIS POSTs, e nao um: o PARECER (`ciConfirmar` -> POST /ci/decidir) e a REABERTURA
+// (`ciReabrirConfirmar` -> POST /ci/reabrir), que nasceu em 26/08 para o caso do processo que
+// volta pelo SGPe DEPOIS de o C.I. ja ter encerrado a PC. Esta checagem dizia UM porque e
+// anterior a ela.
+//
+// ⚠️ O QUE ELA GUARDA CONTINUA VALENDO, e e o de cima: nenhuma chamada a `/ci/pc/*`. As duas
+// escritas que restam sao ATOS sobre a parcela — decidir e reabrir —, e nenhuma delas e ato
+// de POSSE. Se aparecer um terceiro POST, ele precisa ser justificado aqui.
 const posts = (semComentario.match(/method:'POST'/g) || []).length;
-conf(posts === 1, 'a tela do C.I. faz UM POST so — o do parecer', posts + ' POSTs');
+conf(posts === 2, 'a tela do C.I. faz DOIS POSTs — o parecer e a reabertura', posts + ' POSTs');
+conf(/ciConfirmar/.test(semComentario) && /ciReabrirConfirmar/.test(semComentario),
+     'e sao esses dois, nomeados');
 conf(/API_URL\}\/ci\/decidir/.test(B), 'e ele vai para /ci/decidir');
 
 S('14. O QUE A TELA NUNCA FAZ');
