@@ -2395,7 +2395,7 @@ function verComoPodeVer(u) {
 async function irVerComo() {
   // ⚠️ SÓ SUPERADMIN (decisão do Richard, 12/08). Ver o sistema pelos olhos de outra pessoa
   // é ferramenta de suporte do dono do sistema, não de coordenação.
-  if(U.perfil !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
   ativarMenu('vercomo')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:13px;margin-bottom:13px;">
@@ -4513,7 +4513,7 @@ function renderEst(rows) {
       acoes = `<button class="btn-acao btn-ass" onclick="assumirTR('${t.tr}')">Assumir</button>`
     } else if(isMeuTR(t)) {
       acoes = `<button class="btn-acao btn-ver" onclick="abrirTR('${t.tr}')">Ver</button>`
-      if(U.perfil==='superadmin') {
+      if(perfilEfetivo(U)==='superadmin') {
         acoes += `<button class="btn-acao" style="background:#8A6100;color:#fff;margin-left:3px;" onclick="abrirDevM('${t.tr}')" title="Devolver TR inteira ao estoque (master)">↩ Master</button>`
       }
     } else {
@@ -7205,7 +7205,7 @@ let _bgAlvo = ''
 // varreu os filtros das telas de lista. Aqui a busca era um campo livre só, e a TR e o
 // processo iam misturados no meio do texto.
 function irBuscaGlobal() {
-  if(U.perfil !== 'superadmin') { toast('A busca global é exclusiva do superadmin.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('A busca global é exclusiva do superadmin.','err'); return }
   ativarMenu('bglobal')
   document.getElementById('BODY').innerHTML = `
     <div class="cab"><h2>Busca global</h2>
@@ -7813,7 +7813,7 @@ let _cfgExcecoes = []
 let _cfgUsuarios = []
 
 async function irConfiguracoes() {
-  if(U.perfil !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito ao superadmin.','err'); return }
   ativarMenu('config')
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Configurações</div>
@@ -8336,7 +8336,7 @@ const FAIXA_ESCOPOS = [
 let _faixaLista = []
 
 async function irFaixa() {
-  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  if(!['coordenador','superadmin'].includes(perfilEfetivo(U))) { toast('Acesso restrito.','err'); return }
   ativarMenu('faixa')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap;">
@@ -9077,8 +9077,8 @@ function notifRenderTudo() {
 // clicasse em Cancelar querendo desistir mandava o recado para o grupo. Não havia como sair
 // sem enviar. Agora é um formulário só, e Cancelar cancela.
 async function sinoRecado() {
-  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
-  const soGrupo = U.perfil === 'coordenador'
+  if(!['coordenador','superadmin'].includes(perfilEfetivo(U))) { toast('Acesso restrito.','err'); return }
+  const soGrupo = perfilEfetivo(U) === 'coordenador'
   const dados = await moFormRecado(soGrupo)
   if(!dados) return
   const { titulo, mensagem: msg, alvo, urgente } = dados
@@ -9365,7 +9365,7 @@ async function meusCancelar(tr, id) {
 }
 
 async function irAprovacoes() {
-  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  if(!['coordenador','superadmin'].includes(perfilEfetivo(U))) { toast('Acesso restrito.','err'); return }
   ativarMenu('aprov')
   document.getElementById('BODY').innerHTML = `
     <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Aprovações</div>
@@ -10280,7 +10280,7 @@ async function irProd() {
   // a tela alcancavel por quem soubesse o caminho — a licao do Relatorios, em 12/08.
   if(U.perfil === 'controle_interno') { toast('Esta tela nao faz parte do Controle Interno.','err'); return }
   ativarMenu('prod')
-  const podeFiltrarGrupo = U.perfil === 'coordenador' || U.perfil === 'superadmin'
+  const podeFiltrarGrupo = perfilEfetivo(U) === 'coordenador' || perfilEfetivo(U) === 'superadmin'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <!-- O "(NL)" saiu em 16/08/2026, por ordem do Richard. A unidade de produtividade e a
@@ -10923,7 +10923,7 @@ function boardDestroyCharts() {
 }
 
 async function irBoard() {
-  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Acesso restrito.','err'); return }
+  if(perfilEfetivo(U) !== 'coordenador' && perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito.','err'); return }
   ativarMenu('board')
   boardDestroyCharts()
   document.getElementById('BODY').innerHTML = `
@@ -11605,7 +11605,7 @@ function irRel() {
   // ⚠️ ESTA GUARDA NÃO EXISTIA até 12/08/2026 — a tela abria para qualquer perfil. Tirá-la
   // do menu do analista sem pôr a guarda deixaria a tela alcançável por quem soubesse o
   // caminho, que é exatamente a incoerência que a reorganização do menu foi corrigir.
-  if(!['coordenador','superadmin'].includes(U.perfil)) { toast('Acesso restrito à coordenação.','err'); return }
+  if(!['coordenador','superadmin'].includes(perfilEfetivo(U))) { toast('Acesso restrito à coordenação.','err'); return }
   ativarMenu('rel')
   const isAdmin = U.perfil==='superadmin'
   const isCoordi = U.perfil==='coordenador'
@@ -15373,7 +15373,7 @@ function renderPlan(rows) {
           <!-- Devolver ao estoque: SÓ superadmin, e só enquanto houver o que devolver. Numa
                TR concluída não há — todas as PCs estão baixadas, e baixada não volta.
                ⚠️ Esconder aqui é conveniência, não garantia: quem confere é o servidor. -->
-          ${U.perfil === 'superadmin' && !baixadaTr && !verComoAtivo() ? `
+          ${perfilEfetivo(U) === 'superadmin' && !baixadaTr && !verComoAtivo() ? `
           <button class="btn-acao" title="Devolver a TR inteira ao estoque"
             style="background:transparent;color:${corCab};border:1.5px solid ${baixadaTr?'var(--cb)':'rgba(255,255,255,.55)'};font-weight:700;white-space:nowrap;box-shadow:none;"
             onclick="event.stopPropagation();abrirDevM('${escHtml(r.tr)}')">↩ Devolver</button>` : ''}
@@ -15382,7 +15382,7 @@ function renderPlan(rows) {
                decide que a TR não é para ela.
                ⚠️ Numa TR concluída não aparece: todas as PCs estão baixadas e baixada não
                volta — são 334 TRs assim. Quem confere de verdade é o servidor. -->
-          ${U.perfil === 'analista' && !baixadaTr && !verComoAtivo() ? `
+          ${perfilEfetivo(U) === 'analista' && !baixadaTr && !verComoAtivo() ? `
           <button class="btn-acao" title="Pedir à coordenação a devolução desta TR ao estoque"
             style="background:transparent;color:${corCab};border:1.5px solid ${baixadaTr?'var(--cb)':'rgba(255,255,255,.55)'};font-weight:700;white-space:nowrap;box-shadow:none;"
             onclick="event.stopPropagation();abrirPedidoDev('${escHtml(r.tr)}')">↩ Solicitar devolução</button>` : ''}
@@ -15769,7 +15769,7 @@ async function pEnviarCI(tr, num) {
 
 async function pEstornar(tr, num) {
   if(verComoAtivo()) { toast('Estornar é decisão de coordenação sobre o trabalho dele. Saia do modo para estornar.','err'); return }
-  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
+  if(perfilEfetivo(U) !== 'coordenador' && perfilEfetivo(U) !== 'superadmin') { toast('Apenas coordenador ou superadmin podem estornar.','err'); return }
   // O caso que mais doía: 14 caracteres eram recusados DEPOIS de fechar, e o texto sumia.
   // Agora o contador mostra o quanto falta e o botão só libera no 15.
   const motivo = await moPrompt('Por que esta parcial está sendo estornada?', {
@@ -15848,7 +15848,7 @@ async function pVerParecer(tr, num) {
 //  GESTÃO DO GRUPO — COORDENAÇÃO
 // ══════════════════════════════════════
 async function irGestaoGrupo() {
-  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Acesso restrito.','err'); return }
+  if(perfilEfetivo(U) !== 'coordenador' && perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito.','err'); return }
   ativarMenu('coord')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -16005,14 +16005,14 @@ function perfilLabel(p) { return PERFIL_LABELS[p] || p }
 
 // Coordenador só pode gerenciar analistas (nunca outro coordenador nem a si mesmo)
 function admPodeGerenciar(u) {
-  if(U.perfil === 'superadmin') return true
-  if(U.perfil === 'coordenador') return u.perfil !== 'coordenador'
+  if(perfilEfetivo(U) === 'superadmin') return true
+  if(perfilEfetivo(U) === 'coordenador') return u.perfil !== 'coordenador'
   return false
 }
 
 function irAdmin() {
-  const souCoord = U.perfil === 'coordenador'
-  if(U.perfil !== 'superadmin' && !souCoord) { toast('Acesso restrito a SUPERADMIN e Coordenadores.','err'); return }
+  const souCoord = perfilEfetivo(U) === 'coordenador'
+  if(perfilEfetivo(U) !== 'superadmin' && !souCoord) { toast('Acesso restrito a SUPERADMIN e Coordenadores.','err'); return }
   ativarMenu('admin')
   const perfisModal = souCoord ? ['analista'] : PERFIS
   document.getElementById('BODY').innerHTML = `
@@ -16537,7 +16537,7 @@ function adminFiltrar() {
         <button class="btn-acao btn-ver" onclick="admEditarUsuario('${u.id}')" style="margin-right:3px;">✏️ Editar</button>
         <button class="btn-acao" style="background:#fff;color:var(--am);border:1.5px solid var(--am);" onclick="admAbrirSenha('${u.id}','${(u.nome||'').replace(/'/g,"\'")}')">🔑 Senha</button>
         <button class="btn-acao ${u.ativo?'btn-dev':'btn-ass'}" style="margin-left:3px;" onclick="admToggleAtivo('${u.id}',${u.ativo})">${u.ativo?'🚫 Desativar':'✅ Ativar'}</button>
-        ${U.perfil==='superadmin'?`<button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);margin-left:3px;" onclick="admExcluirUsuario('${u.id}','${(u.nome||'').replace(/'/g,"\\'")}')">🗑️ Excluir</button>`:''}
+        ${perfilEfetivo(U)==='superadmin'?`<button class="btn-acao" style="background:#fff;color:var(--r);border:1.5px solid var(--r);margin-left:3px;" onclick="admExcluirUsuario('${u.id}','${(u.nome||'').replace(/'/g,"\\'")}')">🗑️ Excluir</button>`:''}
         ` : '<span style="font-size:10px;color:var(--ct);">Somente SUPERADMIN</span>'}
       </td>
     </tr>`
@@ -16721,7 +16721,7 @@ async function admToggleAtivo(id, atual) {
 }
 
 async function admExcluirUsuario(id, nome) {
-  if(U.perfil !== 'superadmin') { toast('Apenas superadmin pode excluir usuários.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Apenas superadmin pode excluir usuários.','err'); return }
   try {
     const r = await fetch(`${API_URL}/prestacoes_contas?analista_id=${id}&limit=1`)
     const j = await r.json()
@@ -17071,7 +17071,7 @@ const ACMP_CORES = {
 async function irAcompanhamento() {
   // ⚠️ A TELA CONFERE, MAS QUEM IMPEDE É A ROTA. Aqui é só para não desenhar um caminho que
   // termina em 403 — a mesma escolha da Busca global.
-  if(U.perfil !== 'superadmin' || verComoAtivo()) { toast('Acesso restrito ao técnico do sistema.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin' || verComoAtivo()) { toast('Acesso restrito ao técnico do sistema.','err'); return }
   ativarMenu('acomp')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px;flex-wrap:wrap;">
@@ -17454,7 +17454,7 @@ const ciCorTecnico = (id) => {
 
 /** A tela. `#ciPainel` é o que o `procRecarregar` procura para saber que está aqui. */
 async function irCI() {
-  if(!['superadmin','coordenador','controle_interno'].includes(U.perfil)) { toast('Acesso restrito.','err'); return }
+  if(!['superadmin','coordenador','controle_interno'].includes(perfilEfetivo(U))) { toast('Acesso restrito.','err'); return }
   ativarMenu('ci')
   _ciAberto = null; _ciDecisao = null
   document.getElementById('BODY').innerHTML = `
@@ -20495,7 +20495,7 @@ async function trfConfirmar() {
 let PRIOR_DADOS = []
 
 async function irPrioridade() {
-  if(U.perfil !== 'superadmin') { toast('Acesso restrito.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito.','err'); return }
   ativarMenu('prior')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
@@ -20665,7 +20665,7 @@ let TR_DEVM = null
 let DEVM_PREVIA = null
 
 async function abrirDevM(tr) {
-  if(U.perfil !== 'superadmin') { toast('Ação restrita ao superadmin.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Ação restrita ao superadmin.','err'); return }
   if(verComoAtivo()) { toast('Devolver TR é decisão de coordenação. Saia do modo para devolver.','err'); return }
   TR_DEVM = tr
   DEVM_PREVIA = null
@@ -20815,7 +20815,7 @@ let _afastUsers = []
 let _afastEditId = null
 
 async function irAfastamentos() {
-  if(U.perfil !== 'superadmin' && U.perfil !== 'coordenador') { toast('Acesso restrito.','err'); return }
+  if(perfilEfetivo(U) !== 'superadmin' && perfilEfetivo(U) !== 'coordenador') { toast('Acesso restrito.','err'); return }
   ativarMenu('afast')
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -22345,9 +22345,9 @@ let _estLogDados = []
 let _estLogEventos = []
 
 async function irEstornosRealizados() {
-  if(U.perfil !== 'coordenador' && U.perfil !== 'superadmin') { toast('Acesso restrito.','err'); return }
+  if(perfilEfetivo(U) !== 'coordenador' && perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito.','err'); return }
   ativarMenu('estlog')
-  const souSuper = U.perfil === 'superadmin'
+  const souSuper = perfilEfetivo(U) === 'superadmin'
   document.getElementById('BODY').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
