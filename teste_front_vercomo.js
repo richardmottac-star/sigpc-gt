@@ -362,32 +362,62 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
   conf(/b\.title = pode \? '' : \(motivo \|\| ''\)/.test(html), 'com o motivo no title');
 }
 
-console.log('\n═══ 8c. O MENU ENCOLHE NO MODO ═══');
+console.log('\n═══ 8c. O MENU MOSTRA O QUE O ANALISTA VE (03/09/2026) ═══');
 {
   const ctxM = { console };
   vm.createContext(ctxM);
   const iM = html.indexOf('const SB_BLOCOS = ['), fM = html.indexOf('function renderSB()');
   vm.runInContext(html.slice(iM, fM) + `
-function _m(u, vc){ return sbMontar(u, vc) }`, ctxM);
+function _m(u, vc, alvo){ return sbMontar(u, vc, alvo) }`, ctxM);
 
   // ⚠️ Com dois papeis (14/08), o menu obedece ao papel ATIVO — e os tres blocos so
   // existem no TECNICO. Sem `papelAtivo`, o padrao e analista e o bloco superadmin nem sai.
   const sup = { id:4, perfil:'superadmin', grupo:'3', papelAtivo:'tecnico' };
+  const ana = { id:51, perfil:'analista', grupo:'3' };
   const normal = ctxM._m(sup, false).map(b => b.id);
-  const modo   = ctxM._m(sup, true);
+  const modo   = ctxM._m(sup, true, ana);
   conf(normal.length === 3, 'fora do modo, o superadmin ve os tres blocos');
   conf(modo.length === 1 && modo[0].id === 'analista',
        'no modo, so o bloco do analista', JSON.stringify(modo.map(b=>b.id)));
 
   const ids = modo[0].itens.map(i => i.id);
-  // ⚠️ Estoque e Estornar existem para AGIR, e nao mostram dado da pessoa. Deixa-los no
-  // menu seria oferecer um caminho que termina em botao cinza.
-  conf(!ids.includes('est'), 'ESTOQUE fica de fora — assumir TR e acao, nao leitura');
-  conf(!ids.includes('estornar'), 'ESTORNAR fica de fora pelo mesmo motivo');
+
+  // ⚠️ A DECISAO MUDOU EM 03/09/2026, e esta secao mudou junto. Ate aqui o modo escondia
+  // ESTOQUE e ESTORNAR por uma marca `soAcao` — "tela que so serve para AGIR nao entra". O
+  // Richard reverteu: o modo existe para ele enxergar O QUE A PESSOA ENXERGA, e um menu com
+  // menos itens que o dela nao serve para orientar ninguem.
+  //
+  // ⚠️ O QUE ESTA SECAO PROTEGE AGORA E MAIS FORTE do que a lista de excecoes antiga: o menu
+  // do modo tem de ser IGUAL, item a item e na mesma ordem, ao menu do proprio analista. Uma
+  // lista de "estes ficam de fora" precisaria ser lembrada a cada item novo; a igualdade nao.
+  const dele = ctxM._m(ana, false).flatMap(b => b.itens.map(i => i.id));
+  conf(JSON.stringify(ids) === JSON.stringify(dele),
+       'o menu do modo e IGUAL ao menu do proprio analista',
+       `modo=${JSON.stringify(ids)} dele=${JSON.stringify(dele)}`);
+
+  // ⚠️ O ESTOQUE ENTROU, e e o item que motivou a mudanca: e a tela de onde a pessoa assume
+  // TR, ou seja, exatamente a duvida que faz alguem pedir suporte.
+  conf(ids.includes('est'), 'ESTOQUE aparece — o analista tem essa tela');
+  // ⚠️ E O ESTORNAR CONTINUA FORA, agora pelo motivo CERTO: `pode:` e so-superadmin desde
+  // 18/08, e o `pode` passou a ser avaliado contra o ALVO. Nao ha excecao escrita a mao.
+  conf(!ids.includes('estornar'), 'ESTORNAR fica de fora porque o ANALISTA nao o tem');
   conf(ids.includes('plan'), 'Minha Planilha fica');
   conf(ids.includes('meuspedidos'), 'Meus pedidos fica');
   conf(ids.includes('prod'), 'Produtividade fica');
   conf(ids.includes('dash'), 'Dashboard fica');
+
+  // ⚠️ SEM O ALVO, O MODO NAO INVENTA UM. Cai no usuario que esta olhando — e e por isso que
+  // a `renderSB` passa `alvo()` explicitamente. Se um dia ela parar de passar, o menu volta a
+  // ser o do tecnico dentro do modo, e este teste diz qual e a diferenca.
+  const semAlvo = ctxM._m(sup, true).flatMap(b => b.itens.map(i => i.id));
+  conf(semAlvo.includes('estornar'),
+       'sem o alvo, o menu volta a ser o de quem olha — a `renderSB` precisa passar `alvo()`');
+  conf(/sbMontar\(U, verComoAtivo\(\), alvo\(\)\)/.test(html),
+       'e a renderSB passa os tres argumentos');
+
+  // ⚠️ A MARCA `soAcao` FOI REMOVIDA, nao comentada: era o recorte antigo, e propriedade que
+  // ninguem le e propriedade que engana quem for mexer aqui depois.
+  conf(!/soAcao:\s*true/.test(html), 'a marca `soAcao` saiu dos itens do menu');
 
   // E o item "Ver como" mora no bloco do superadmin.
   const vc = ctxM._m(sup, false).find(b => b.id === 'superadmin').itens.find(i => i.id === 'vercomo');

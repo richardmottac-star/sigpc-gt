@@ -960,6 +960,46 @@ input:focus, select:focus, textarea:focus { border-color: #00A05A; box-shadow: 0
 body { background:#F5F8F6; }
 .mc { background:#FCFDFC; }
 tbody tr:nth-child(even) { background:#F5F8F6; }
+
+/* ── 6) O modal "Solicitar devolução da TR" ─────────────────────────────────
+   ⚠️ A LISTA DE MOTIVOS PRECISA DE REGRA PRÓPRIA, e não é preferência de estilo: eram DUAS
+   regras genéricas do modal que a deformavam, e nenhuma das duas dava erro.
+
+   · `.mc-campo input` põe `width:100%` em TODO input do modal — inclusive no rádio. Dentro
+     de um flex row, o rádio de 100% encolhia o quanto o texto daquela linha exigisse, e cada
+     linha o parava num lugar diferente. Era a escada. Por isso ele ganha largura fixa E
+     `flex:0 0 auto`: sem o `flex`, o `width` sozinho ainda seria encolhido pelo flex-shrink.
+   · `.mc-campo label` põe `text-transform:uppercase`, e era ele que gritava os seis motivos.
+
+   ⚠️ E OS SELETORES CARREGAM `.mc-campo` DE PROPÓSITO. `.mc-campo label` tem especificidade
+   maior que `.dev-motivo` sozinho — o `display:block` dela venceria o `display:flex` daqui, e
+   a linha voltaria a empilhar. Empatar e torcer pela ordem do arquivo é o que quebra na
+   primeira vez que alguém move um bloco de lugar. */
+.mc-campo label.dev-motivo{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;
+  border:0.5px solid transparent;border-radius:var(--raio);cursor:pointer;margin-bottom:0;
+  text-transform:none;letter-spacing:0;font-weight:400;color:var(--te);}
+.mc-campo .dev-motivo input[type=radio]{width:15px;height:15px;flex:0 0 auto;
+  margin:1px 0 0;padding:0;border:0;border-radius:0;accent-color:var(--v);}
+.dev-motivo .dev-motivo-txt{flex:1 1 0;min-width:0;text-align:left;font-size:13px;line-height:1.4;}
+.dev-motivo .dev-motivo-sub{display:block;font-size:11.5px;color:var(--texto-muted);
+  line-height:1.35;margin-top:2px;}
+/* O subtexto vem do SERVIDOR em caixa baixa ("trabalho iniciado na planilha..."). A maiúscula
+   é de APRESENTAÇÃO e fica aqui — mexer no texto da rota faria a tela reescrever o dado. */
+.dev-motivo .dev-motivo-sub::first-letter{text-transform:uppercase;}
+.mc-campo label.dev-motivo.on{background:var(--vbg);border-color:var(--v);}
+
+/* O contador da justificativa divide a linha com o rótulo, e não herda o caixa-alta dele. */
+.mc-campo label.dev-lbl-linha{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+.dev-lbl-linha .dev-conta{font-size:11px;font-weight:400;color:var(--texto-muted);
+  text-transform:none;letter-spacing:0;text-align:right;flex:0 0 auto;}
+
+/* ⚠️ ENVIAR PEDIDO É VERDE — decisão do Richard, 03/09/2026. Vermelho é a cor de ação
+   destrutiva neste arquivo (`.mcok.rv` usa `var(--r)`), e pedir devolução não destrói nada:
+   ele abre um pedido que a coordenação ainda vai decidir.
+   ⚠️ O `:hover` VEM JUNTO. Sem ele o `.mcok:hover` genérico repintaria o botão com o
+   `--verde-escuro` no primeiro passar de mouse, e a cor mudaria sozinha. */
+.mcok.dev-enviar{background:#639922;color:#fff;}
+.mcok.dev-enviar:hover{background:#55831D;}
 </style>
 </head>
 <body>
@@ -1233,15 +1273,17 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
           Sem este nome a TR voltaria ao estoque para qualquer um pegar.</div>
       </div>
 
-      <div class="mc-campo"><label>Justificativa * <span id="devJustConta" style="font-weight:400;color:var(--ct);"></span></label>
+      <div class="mc-campo"><label class="dev-lbl-linha"><span>Justificativa *</span>
+          <span id="devJustConta" class="dev-conta"></span></label>
         <textarea id="devJust" rows="3" oninput="devPintarBotao()"
           placeholder="Quem decide vai ler isto."></textarea>
       </div>
 
       <div class="mcbt">
         <button class="mccn" onclick="fm('moDev')">Cancelar</button>
-        <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15). -->
-        <button class="mcok rv" id="btnConfDev" disabled onclick="confDev()">↩ Enviar pedido</button>
+        <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15).
+             ⚠️ E É VERDE, não `rv`: pedir devolução não é ação destrutiva. Ver `.dev-enviar`. -->
+        <button class="mcok dev-enviar" id="btnConfDev" disabled onclick="confDev()">↩ Enviar pedido</button>
       </div>
     </div>
   </div>
@@ -3004,7 +3046,7 @@ const SB_ITENS = [
   // ── Bloco do analista: o que todo mundo usa ─────────────────────────────────
   { id:'dash',  bloco:'analista', rotulo:'Dashboard',      acao:'irDash()',      pode:()=>true,
     icone:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
-  { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:naoEhCI, soAcao:true,
+  { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:naoEhCI,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
   { id:'plan',  bloco:'analista', rotulo:'Minha Planilha', acao:'irPlanilha()',  pode:naoEhCI,
     icone:'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z' },
@@ -3036,7 +3078,7 @@ const SB_ITENS = [
   // então não aparece no histórico da parcial nem responde "quem desfez esta baixa".
   // O "Corrigir situação" faz o mesmo com motivo obrigatório, destino escolhido e trilha —
   // é por lá que analista e coordenador passam agora.
-  { id:'estornar', bloco:'analista', rotulo:'Estornar Baixa', acao:'irEstornar()', soAcao:true,
+  { id:'estornar', bloco:'analista', rotulo:'Estornar Baixa', acao:'irEstornar()',
     pode:(u)=>u.perfil === 'superadmin',
     icone:'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z' },
   { id:'meuspedidos', bloco:'analista', rotulo:'Meus pedidos', acao:'irMeusPedidos()', pode:naoEhCI,
@@ -3203,12 +3245,34 @@ function comoPapelAtivo(u) {
   return u ? { ...u, perfil: perfilEfetivo(u) } : u
 }
 
-function sbMontar(u, verComo) {
-  const ef = comoPapelAtivo(u)
+/**
+ * O menu lateral.
+ *
+ * ⚠️ NO MODO "VER COMO", QUEM DECIDE O MENU É O ANALISTA VISTO — e não uma lista de exceções
+ * (03/09/2026, decisão do Richard). O modo existe para o técnico enxergar **o que a pessoa
+ * enxerga**; um menu com menos itens que o dela não serve para orientar ninguém.
+ *
+ * ⚠️ ISTO SUBSTITUI O `soAcao`, que era o recorte antigo e escondia o **Estoque de TRs**. A
+ * regra dele era "tela que só serve para AGIR não entra no modo", e o preço era o técnico não
+ * ver a tela de onde a pessoa assume TR — exatamente a dúvida que ele é chamado para resolver.
+ *
+ * ⚠️ E A TROCA NÃO ABRE NADA A MAIS, porque o `pode:` passa a ser avaliado contra o ALVO: o
+ * "Estornar Baixa" é `perfil === 'superadmin'` e continua fora, agora pelo motivo certo — o
+ * analista não o tem. Uma lista de exceções teria de ser lembrada item a item; esta é uma
+ * regra só, que é a lição da armadilha 21.
+ *
+ * ⚠️ E ISTO É COSMÉTICO, como sempre foi. As travas de AÇÃO não moram aqui: o `fetch` carimba
+ * a autoria, e as cinco recusas na origem (estornar, devolver TR, solicitar devolução, decidir
+ * e reabrir no C.I.) continuam de pé. O que muda é o que se VÊ, não o que se pode fazer.
+ *
+ * @param alvoU  o analista visto no modo. Entra por parâmetro, e não por `alvo()` lá dentro,
+ *               porque `teste_front_menu` compila esta função sozinha, sem o bloco do modo.
+ */
+function sbMontar(u, verComo, alvoU) {
+  const ef = comoPapelAtivo(verComo && alvoU ? alvoU : u)
   return SB_BLOCOS
     .filter(b => !verComo || b.id === 'analista')
-    .map(b => ({ ...b, itens: SB_ITENS.filter(i =>
-      i.bloco === b.id && i.pode(ef) && !(verComo && i.soAcao)) }))
+    .map(b => ({ ...b, itens: SB_ITENS.filter(i => i.bloco === b.id && i.pode(ef)) }))
     .filter(b => b.itens.length > 0)
 }
 
@@ -3226,7 +3290,7 @@ function renderSB() {
   }
   nav.style.display = ''
 
-  nav.innerHTML = sbMontar(U, verComoAtivo()).map(b => `
+  nav.innerHTML = sbMontar(U, verComoAtivo(), alvo()).map(b => `
     <div class="sb-sec">
       <div class="sb-lbl">${b.rotulo}</div>
       ${b.itens.map(i => `
@@ -9180,33 +9244,36 @@ let _meusPedidos = []
  * que o analista enxerga; esconder dele o texto que explica o caminho derrota o propósito da
  * tela. Esconder texto explicativo nunca foi guarda de nada — a guarda é a da ação.
  *
- * ⚠️ O QUE MUDA NO MODO É O LINK, NÃO A LINHA. O menu esconde o Estoque de propósito
- * (`soAcao`), por ser tela que só serve para AGIR e não mostra dado da pessoa; dar o link
- * aqui devolveria pela porta dos fundos o caminho que aquele modo tira. Então **a linha
- * continua inteira e o rótulo vira texto puro** — a pessoa lê onde o pedido nasce sem que a
- * tela ofereça um atalho que o modo removeu. É o oposto de sumir com a frase: some o clique,
- * fica a explicação.
+ * ⚠️ E OS DOIS LINKS VOLTARAM A SER LINKS NO MODO. Entre 03/09 de manhã e 03/09 à tarde o
+ * "Estoque de TRs" saía como texto puro aqui, porque o menu escondia aquela tela no modo
+ * (`soAcao`) e oferecer o atalho recriaria o caminho que o modo tirava. **Essa razão deixou de
+ * existir**: o modo passou a mostrar todas as telas do analista, Estoque inclusive, e um
+ * rótulo apagado apontando para uma tela que está ali ao lado no menu confundiria em vez de
+ * proteger.
  *
- * ⚠️ A "Minha Planilha" CONTINUA COM LINK no modo, porque ela continua no menu — não tem
- * `soAcao`, e mostra dado da pessoa. O "Solicitar devolução" lá dentro é que se esconde
- * sozinho com `!verComoAtivo()`, e isso é guarda de AÇÃO, na origem: a armadilha 13.
+ * ⚠️ O TERCEIRO ARGUMENTO DO `link` FICA, mesmo com os dois hoje em `true`. Ele é o lugar onde
+ * a próxima linha que precise degradar vai encaixar — e é o que impede que ela volte a ser
+ * resolvida sumindo com a frase, que foi o defeito de origem deste bloco.
+ *
+ * ⚠️ O "Solicitar devolução" da Minha Planilha continua se escondendo sozinho no modo, com
+ * `!verComoAtivo()`. Isso é guarda de AÇÃO, na origem — a armadilha 13 —, e não muda: o texto
+ * daqui explica onde o pedido nasce; quem decide pedir é a pessoa.
  */
 function meusOrientacao() {
   if(U.perfil === 'controle_interno') return ''
   // ⚠️ O TERCEIRO ARGUMENTO É "DÁ PARA IR DAQUI?". Quando não dá, o rótulo sai como texto e a
-  // frase fica de pé — nunca some a linha. Link que leva a um toast de recusa, ou que
-  // reabre um caminho que o modo tirou, é a armadilha 15 com outra roupa.
+  // frase fica de pé — nunca some a linha. Link que leva a um toast de recusa é a armadilha
+  // 15 com outra roupa.
   const link = (rot, fn, vai) => vai
     ? `<a href="javascript:void(0)" onclick="${fn}"
         style="color:var(--v);text-decoration:underline;cursor:pointer;">${rot}</a>`
     : `<span style="font-weight:500;color:var(--texto);">${rot}</span>`
-  const vc = verComoAtivo()
   return `
     <div style="background:var(--fundo-alt);border-radius:var(--raio);padding:12px 14px;margin-bottom:18px;">
       <div style="font-size:12px;font-weight:500;color:var(--texto);">
         Esta tela só lista. Para criar um pedido:</div>
       <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
-        <span style="font-weight:500;">Pedir vaga extra</span> — vá ao ${link('Estoque de TRs','irEst()', !vc)},
+        <span style="font-weight:500;">Pedir vaga extra</span> — vá ao ${link('Estoque de TRs','irEst()', true)},
         clique em Assumir na TR desejada. Se estiver acima do limite, aparece o botão de pedir vaga.</div>
       <div style="font-size:12px;color:var(--texto-secundario);line-height:1.65;">
         <span style="font-weight:500;">Devolver uma TR</span> — vá à ${link('Minha Planilha','irPlanilha()', true)},
@@ -9994,11 +10061,15 @@ async function abrirPedidoDev(tr) {
       <div style="background:#FDE8EA;border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--r);margin-bottom:11px;">
         <b>Não dá para pedir agora.</b><br>${escHtml(PED_PREVIA.motivo_bloqueio)}</div>` : ''}`
 
+    // ⚠️ NADA DE `style` INLINE AQUI — a forma da linha mora na classe `.dev-motivo`, no CSS.
+    // Estilo inline vence classe, e foi um inline que causou o defeito da armadilha 24; além
+    // disso é a classe que precisa carregar `.mc-campo` no seletor para vencer as regras
+    // genéricas do modal. O `data-mot` é o que liga a linha ao rádio na hora de pintar.
     document.getElementById('devMotivos').innerHTML = PED_PREVIA.motivos.map((m, i) => `
-      <label style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;">
-        <input type="radio" name="devMot" value="${escHtml(m.id)}" onchange="devTrocouMotivo()" style="margin-top:2px;">
-        <span><b>${i+1}.</b> ${escHtml(m.rotulo)}${m.subtexto
-          ? `<br><span style="font-size:10.5px;color:var(--ct);">${escHtml(m.subtexto)}</span>` : ''}</span>
+      <label class="dev-motivo" data-mot="${escHtml(m.id)}">
+        <input type="radio" name="devMot" value="${escHtml(m.id)}" onchange="devTrocouMotivo()">
+        <span class="dev-motivo-txt"><b>${i + 1}.</b> ${escHtml(m.rotulo)}${m.subtexto
+          ? `<span class="dev-motivo-sub">${escHtml(m.subtexto)}</span>` : ''}</span>
       </label>`).join('')
 
     devPintarBotao()
@@ -10083,7 +10154,13 @@ function devMotivoEscolhido() {
 }
 
 function devTrocouMotivo() {
-  const m = (PED_PREVIA?.motivos || []).find(x => x.id === devMotivoEscolhido())
+  const escolhido = devMotivoEscolhido()
+  // ⚠️ O FUNDO DO SELECIONADO É PINTADO AQUI, e não por `:has()` no CSS. O `:has()` resolveria
+  // em uma linha, mas um destaque que aparece só em alguns navegadores é pior do que nenhum —
+  // a pessoa não consegue conferir o que marcou, e não tem como saber por quê.
+  const linhas = document.querySelectorAll('#devMotivos .dev-motivo')
+  if (linhas) linhas.forEach(el => el.classList.toggle('on', el.dataset.mot === escolhido))
+  const m = (PED_PREVIA?.motivos || []).find(x => x.id === escolhido)
   document.getElementById('devIndicadoBox').style.display = (m && m.exigeIndicado) ? '' : 'none'
   devPintarBotao()
 }
@@ -10102,8 +10179,13 @@ function devPintarBotao() {
   // acendia o Enviar com um nome que o cadastro não reconhece.
   const indicado = devIndicadoEscolhido()
 
+  // ⚠️ O CONTADOR FALA A FRASE INTEIRA, e concorda em número. "(FALTAM 10)" gritava — herdava
+  // o caixa-alta de `.mc-campo label` — e "faltam 1 caracteres" é o mesmo erro do "2 parcialis"
+  // que já apareceu na tela do analista.
   const conta = document.getElementById('devJustConta')
-  if(conta) conta.textContent = just.length < 10 ? `(faltam ${10 - just.length})` : ''
+  const faltam = 10 - just.length
+  if(conta) conta.textContent = faltam <= 0 ? ''
+    : faltam === 1 ? 'falta 1 caractere' : `faltam ${faltam} caracteres`
 
   if(!PED_PREVIA)            return devBotao(false, 'Carregando a TR...')
   if(!PED_PREVIA.pode)       return devBotao(false, PED_PREVIA.motivo_bloqueio || 'Não é possível pedir agora.')

@@ -343,5 +343,155 @@ function _setMotivo(m){ _motivo = m }
        'o casamento por igualdade de nome saiu do arquivo');
 }
 
+
+console.log('\n═══ 10. O MODAL DE PEDIDO DE DEVOLUCAO — A LISTA DE MOTIVOS (03/09/2026) ═══');
+{
+  // ⚠️ O DEFEITO ERA DE CSS GENERICO, e nenhuma das duas causas dava erro:
+  //   · `.mc-campo input{width:100%}` valia tambem para o RADIO. Num flex row, o radio de
+  //     100% encolhia o quanto o texto daquela linha exigisse, e cada linha o parava num
+  //     lugar diferente — a escada que o Richard viu.
+  //   · `.mc-campo label{text-transform:uppercase}` gritava os seis motivos.
+  // Por isso esta secao mede o CSS, e nao so a marcacao: e no CSS que o conserto mora.
+  const css = html.slice(0, html.indexOf('</head>'));
+
+  const iL = css.indexOf('.mc-campo label.dev-motivo{');
+  const bloco = css.slice(iL, iL + 400);
+  conf(iL > 0, 'existe regra propria para a linha do motivo');
+  // ⚠️ O SELETOR CARREGA `.mc-campo` DE PROPOSITO: `.mc-campo label` tem especificidade maior
+  // que `.dev-motivo` sozinho, e o `display:block` dela venceria o `display:flex` daqui — a
+  // linha voltaria a empilhar. Ha teste porque empatar e torcer pela ordem do arquivo quebra
+  // na primeira vez que alguem move um bloco de lugar.
+  conf(/^\.mc-campo label\.dev-motivo\{/.test(bloco),
+       'e o seletor carrega `.mc-campo`, senao perde para `.mc-campo label`');
+  conf(/display:flex/.test(bloco), 'a linha e flex');
+  conf(/gap:10px/.test(bloco), 'com gap 10px');
+  conf(/align-items:flex-start/.test(bloco), 'align-items flex-start');
+  conf(/padding:9px 12px/.test(bloco), 'padding 9px 12px');
+  // O que desliga o caixa-alta herdado.
+  conf(/text-transform:none/.test(bloco), 'e DESLIGA o caixa-alta herdado de `.mc-campo label`');
+
+  const iR = css.indexOf('.mc-campo .dev-motivo input[type=radio]{');
+  const bR = css.slice(iR, iR + 260);
+  conf(iR > 0, 'o radio tem regra propria');
+  conf(/width:15px/.test(bR), 'radio de 15px');
+  // ⚠️ O `flex:0 0 auto` E O CONSERTO DA ESCADA, e o `width` sozinho NAO bastaria: o
+  // flex-shrink padrao e 1, e encolheria os 15px do mesmo jeito.
+  conf(/flex:0 0 auto/.test(bR), 'com flex 0 0 auto — e ISTO que impede a escada');
+  conf(/margin:1px 0 0/.test(bR), 'e margin-top 1px');
+
+  const iT = css.indexOf('.dev-motivo .dev-motivo-txt{');
+  const bT = css.slice(iT, iT + 220);
+  conf(/flex:1 1 0/.test(bT) && /min-width:0/.test(bT), 'o texto e flex 1 1 0 com min-width 0');
+  conf(/text-align:left/.test(bT), 'alinhado a ESQUERDA');
+  conf(/font-size:13px/.test(bT) && /line-height:1\.4/.test(bT), '13px, line-height 1.4');
+
+  const iS = css.indexOf('.dev-motivo .dev-motivo-sub{');
+  const bS = css.slice(iS, iS + 220);
+  conf(/font-size:11\.5px/.test(bS), 'a linha de apoio em 11.5px');
+  conf(/color:var\(--texto-muted\)/.test(bS), 'na cor var(--texto-muted)');
+
+  const iOn = css.indexOf('.mc-campo label.dev-motivo.on{');
+  const bOn = css.slice(iOn, iOn + 160);
+  conf(iOn > 0 && /background:var\(--vbg\)/.test(bOn), 'o selecionado ganha fundo var(--vbg)');
+  conf(/border-color:var\(--v\)/.test(bOn), 'e borda var(--v)');
+  conf(/border:0\.5px solid transparent/.test(bloco) && /border-radius:var\(--raio\)/.test(bloco),
+       'a borda nasce 0.5px transparente com raio var(--raio) — o nao selecionado nao pula de lugar');
+
+  // ── A marcacao ──────────────────────────────────────────────────────────────
+  // ⚠️ A ANCORA E O `map`, e nao `devMotivos`: o `abrirPedidoDev` tambem escreve
+  // `devMotivos.innerHTML = ''` no reset, LA EM CIMA — e o `indexOf` pegava essa, trazendo
+  // 2.300 caracteres de outro codigo junto. A fatia media o arquivo, nao a lista.
+  const iM = html.indexOf('PED_PREVIA.motivos.map(');
+  const bM = html.slice(iM, html.indexOf('</label>', iM));
+  conf(/<label class="dev-motivo" data-mot=/.test(bM), 'cada motivo e um <label class="dev-motivo">');
+  // ⚠️ SEM `style=` INLINE: estilo inline vence classe, e foi um inline que causou a
+  // armadilha 24. Aqui ele tambem impediria o seletor com `.mc-campo` de valer.
+  conf(!/style="/.test(bM), 'e NAO ha style inline na linha do motivo');
+  conf(/<span class="dev-motivo-txt">/.test(bM) && /<span class="dev-motivo-sub">/.test(bM),
+       'o texto e a linha de apoio tem classe propria');
+  conf(!/<br>/.test(bM), 'a linha de apoio nao usa <br> — ela e um bloco');
+
+  // ⚠️ A MAIUSCULA DA LINHA DE APOIO E CSS, e nao texto reescrito: o subtexto vem do SERVIDOR
+  // em caixa baixa, e a tela nao pode reescrever o dado da rota para enfeitar.
+  conf(/\.dev-motivo-sub::first-letter\{text-transform:uppercase;\}/.test(css),
+       'a maiuscula do subtexto e ::first-letter no CSS, nao texto reescrito');
+  conf(/escHtml\(m\.subtexto\)/.test(bM), 'e o subtexto continua vindo da rota, escapado');
+
+  // ── O estado selecionado ────────────────────────────────────────────────────
+  const iTr = html.indexOf('function devTrocouMotivo()');
+  const bTr = html.slice(iTr, html.indexOf('\n}', iTr));
+  conf(/classList\.toggle\('on', el\.dataset\.mot === escolhido\)/.test(bTr),
+       'devTrocouMotivo acende a linha escolhida e apaga as outras');
+  conf(!/:has\(/.test(css), 'e o destaque NAO depende de :has() no CSS');
+
+  // ── A ORDEM DOS CAMPOS: motivos, indicado, justificativa ────────────────────
+  // ⚠️ O INDICADO VEM ANTES DA JUSTIFICATIVA. Ele so aparece no motivo 1, e aparecer DEPOIS
+  // da justificativa faria o campo novo nascer abaixo do que a pessoa ja esta escrevendo.
+  const pMot = html.indexOf('<div id="devMotivos"');
+  const pInd = html.indexOf('id="devIndicadoBox"');
+  const pJus = html.indexOf('<textarea id="devJust"');
+  conf(pMot > 0 && pInd > pMot && pJus > pInd,
+       'a ordem no modal e motivos -> indicado -> justificativa',
+       `mot=${pMot} ind=${pInd} jus=${pJus}`);
+
+  // ── O contador da justificativa ─────────────────────────────────────────────
+  conf(/<span id="devJustConta" class="dev-conta">/.test(html), 'o contador tem classe propria');
+  const iC = css.indexOf('.dev-lbl-linha .dev-conta{');
+  const bC = css.slice(iC, iC + 220);
+  conf(/font-size:11px/.test(bC), 'contador em 11px');
+  conf(/color:var\(--texto-muted\)/.test(bC), 'na cor var(--texto-muted)');
+  conf(/text-transform:none/.test(bC), 'sem o caixa-alta do rotulo');
+  conf(/text-align:right/.test(bC), 'alinhado a direita');
+  conf(/justify-content:space-between/.test(css.slice(css.indexOf('.mc-campo label.dev-lbl-linha{'), css.indexOf('.mc-campo label.dev-lbl-linha{') + 200)),
+       'e divide a linha com o rotulo');
+
+  // ── O botao Enviar ──────────────────────────────────────────────────────────
+  // ⚠️ VERDE, e nao `rv`. O `rv` pinta com `var(--r)`, que e a cor de acao destrutiva deste
+  // arquivo — e pedir devolucao nao destroi nada: abre um pedido que a coordenacao decide.
+  conf(/<button class="mcok dev-enviar" id="btnConfDev"/.test(html),
+       'o Enviar usa a classe dev-enviar');
+  conf(!/<button class="mcok rv" id="btnConfDev"/.test(html), 'e nao e mais o vermelho `rv`');
+  conf(/\.mcok\.dev-enviar\{background:#639922;color:#fff;\}/.test(css), 'a cor e #639922 com texto branco');
+  // ⚠️ O `:hover` TEM DE EXISTIR: sem ele o `.mcok:hover` generico repintaria o botao com o
+  // `--verde-escuro` no primeiro passar de mouse, e a cor mudaria sozinha.
+  conf(/\.mcok\.dev-enviar:hover\{background:/.test(css),
+       'e ha :hover proprio, senao o .mcok:hover generico repinta o botao');
+}
+
+console.log('\n═══ 10b. O CONTADOR FALA A FRASE INTEIRA ═══');
+{
+  const iP = html.indexOf('function devIndicadoPintar()');
+  const fP = html.indexOf('async function confDev()');
+  const els = {};
+  ['devIndicado', 'devIndicadoAviso', 'devJust', 'devJustConta', 'btnConfDev'].forEach((id) => {
+    els[id] = { id, value: '', innerHTML: '', textContent: '', disabled: false, title: '', style: {} };
+  });
+  const c3 = {
+    console, escHtml: (s) => String(s == null ? '' : s), PED_ANALISTAS: [],
+    PED_PREVIA: { pode: true, motivo_bloqueio: null, motivos: [{ id: 'outro' }] },
+    _motivo: 'outro',
+    document: { getElementById: (id) => els[id] || null, querySelector: () => null, querySelectorAll: () => [] },
+  };
+  vm.createContext(c3);
+  vm.runInContext(html.slice(iP, fP) + `
+function devMotivoEscolhido(){ return _motivo }
+`, c3);
+
+  const conta = (txt) => { els.devJust.value = txt; c3.devPintarBotao(); return els.devJustConta.textContent; };
+  conf(conta('') === 'faltam 10 caracteres', 'vazio: "faltam 10 caracteres"', conta(''));
+  conf(conta('abcdefgh') === 'faltam 2 caracteres', 'com 8: "faltam 2 caracteres"', conta('abcdefgh'));
+  // ⚠️ "faltam 1 caracteres" e o mesmo erro do "2 parcialis" que ja apareceu na tela.
+  conf(conta('abcdefghi') === 'falta 1 caractere', 'com 9: SINGULAR, "falta 1 caractere"', conta('abcdefghi'));
+  conf(conta('abcdefghij') === '', 'com 10: o contador some');
+  conf(conta('texto bem mais longo que dez') === '', 'e passando de 10 continua vazio');
+  // ⚠️ RECORTADO AO `devPintarBotao`. A primeira versao proibia o formato no arquivo
+  // INTEIRO e reprovava por causa de OUTRO campo — a decisao do coordenador, que tem o
+  // mesmo texto e nao entrou nesta mudanca. Teste que mede fora do seu escopo acusa defeito
+  // onde nao ha.
+  const iPB = html.indexOf('function devPintarBotao()');
+  const bPB = html.slice(iPB, html.indexOf('\nasync function confDev()', iPB));
+  conf(!/\(faltam \$\{/.test(bPB), 'o formato antigo "(faltam N)" saiu do contador');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
 process.exit(falhou ? 1 : 0);
