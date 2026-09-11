@@ -1,14 +1,56 @@
-# SIGPC-GT — ESTADO EM 03/09/2026
+# SIGPC-GT — ESTADO EM 11/09/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
-> ⚠️ **O QUE ESTÁ ABAIXO DA LINHA "HISTÓRICO" É DE 17/08/2026 e ficou para trás.** Ele descreve
-> o Estoque de TRs e a faixa de avisos daquela semana, e continua útil como registro do que se
-> mediu — **não como estado**. O estado é este bloco.
+> ⚠️ **O bloco "ESTADO DE 03/09" e o "HISTÓRICO" abaixo ficaram para trás.** Continuam úteis como
+> registro do que se mediu — **não como estado**. O estado é o bloco de 11/09.
 
 ---
 
-## ▶ O ESTADO DE AGORA — leia isto primeiro
+## ▶ 11/09/2026 — O ESTADO DE AGORA. Nenhuma escrita no banco nesta sessão.
+
+Tudo foi **código** e **leitura**: os scripts de conferência rodaram em `BEGIN READ ONLY` com
+`ROLLBACK`. Nada de `INSERT/UPDATE`. O sistema está **ABERTO**.
+
+### O que foi publicado
+
+| commit | repo | o quê |
+|---|---|---|
+| `6b9b0c7` · `5bf4834` | `sigpc-gt` | **O processo SGPe no cartão da Minha Planilha**: a mãe numa etiqueta abaixo da entidade, o da PC na linha da parcela baixada e no bloco do C.I. Tudo pelo `procHtml` (link, lápis, vazio, inválido). |
+| `27c7472` | `sigpc-api`, `feature/baixa-por-parcial` | **`lib/sigef.js`, três correções:** (a) na âmbar "Baixada no SIGEF, aberta aqui", **só `nao_baixada` apaga a pílula, e é a ÚLTIMA declaração que decide** — `ja_estava`/`registrei_agora` confirmam a premissa e a pílula fica; SQL e JS com a mesma regra (antes o SQL nunca apagava e o JS apagava com qualquer resposta). (b) **PC na engenharia não conta** no card (`SQL_FORA_ENGENHARIA`, `IS DISTINCT FROM`). (c) O **cumulativo** desconta a engenharia **pela data do envio**, na forma do estorno e da invalidação (`eng_situacao IS DISTINCT FROM ... OR eng_enviada_em > corte`). Dry-run: **0 PCs mudam hoje** nos três; SQL × JS concordam nas 16.478 ativas; 12 cenários sintéticos no Postgres batem. `teste_sigef` 175 · 0. |
+| `f8d8345` | `sigpc-gt` | **O lote do C.I. alcança a parcela só de final** (`ciLotePode` sem `!pa.soFinal`). A pílula "N sem C.I." contava 59 finais e a caixa não nascia nelas. Medido: 339 finais já foram ao C.I., 25 em rodada 2 — o servidor nunca excluiu a final. |
+| — | `C:\Users\Richard\PENDENCIAS_POR_ANALISTA.md` | **38 analistas · 403 PCs**, só o que cada um resolve sozinho: Verificar registro no SIGEF 91 · Sem registro 96 · Devolvida com ressalvas pelo C.I. 216 (com quem devolveu e quando). Nenhuma linha cortada. Fora, de propósito: sem dono, NL residual, pré-GT, processo inválido. |
+
+⚠️ **`origin/main` do `sigpc-api` continua em `4329f1c`** — nunca push nem merge para lá.
+
+⚠️ **Nada disto foi aberto no navegador.** Olhar: a etiqueta da mãe no cabeçalho verde (um logo só,
+antes do número); o processo na linha da parcela baixada e no bloco do C.I.; a caixa de lote
+nascendo numa parcela só de final.
+
+### O levantamento das pílulas (11/09, só leitura, 16.478 PCs ativas)
+
+**1.716 pendências a regularizar** (1.634 PCs distintas) + 3.802 informativas (pré-GT 110, NL
+residual 3.692). Por tipo: Verificar final 91 · Sem registro 96 · **Aberta com baixa no SIGEF 385**
+· Processo inválido 137 · Sem C.I. 783 PCs/481 parcelas · Engenharia 7 · Ressalva do C.I. 216.
+Zero pendências de ação: Franciani, Claudia, Eduardo Pizolati, Jeisson.
+
+### O que ficou PENDENTE — decisão do Richard
+
+- [ ] **As 356 PCs "Baixada no SIGEF, aberta aqui" SEM DONO** (173 TRs; em **58 TRs** é a única
+      coisa que falta para concluir). Não aparecem em planilha nenhuma, e o Estoque não pinta a
+      pílula desde 30/08. O `sigef_status` já diz o parecer (AV = Regular, SV = com Ressalvas),
+      mas registrar baixa em massa sem dono é regra de negócio: em nome de quem fica?
+- [ ] **As 44 correções de processo SGPe inválido** (137 PCs em 42 TRs, 97 sem dono; a rota
+      corrige as irmãs juntas). Grafias: `-1` 58 · `AR355478172` 21 · `ADR19 0011181.2017` 19 ·
+      `ADR34-1028/2017` 18 · `ADR34- 1125/2017` 18 · `SCC7537` 2 · `SCC 6579` 1. Cada número
+      confirmado no SGPe antes de gravar; nunca em lote cego.
+- [ ] **Distribuir as listas do `PENDENCIAS_POR_ANALISTA.md` aos analistas** — ainda não foi
+      enviado a ninguém.
+- [ ] Os 12 processos-mãe inválidos (por TR) e os 1.813 `processo_pc` vazios (1.742 sem dono).
+
+---
+
+## ESTADO DE 03/09 (ficou para trás)
 
 **Duas escritas em produção em 02–03/09**, as duas no `sigpc-api`: a **primeira invalidação
 real** (`2021PC002840`) e a **limpeza do lixo de teste** (ids 2544 e 2545 de `parcela_historico`).
