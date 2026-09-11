@@ -18555,8 +18555,11 @@ const artigo = (n, f = true) => n === 1 ? (f ? 'a' : 'o') : (f ? 'as' : 'os')
 // passaria despercebida até alguém clicar. O teste pegou.
 function ciLoteLimpar() { _ciLoteTr = null; _ciLote = new Set(); ciLoteBarra() }
 
-/** Só a parcela do PASSO 2 entra. É a mesma regra que o servidor aplica. */
-const ciLotePode = (pa) => !!pa && !pa.soFinal && pa.num !== '—' && pPasso(pa) === 2
+/** Só a parcela do PASSO 2 entra, com nº de parcial — é o que `POST /parcela/ci_lote` exige.
+ *  ⚠️ A FINAL ENTRA (11/09/2026). Até aqui `!pa.soFinal` a deixava de fora, e o servidor nunca
+ *  teve essa regra: 339 finais já foram ao C.I., 25 voltaram em rodada 2. A pílula "sem C.I."
+ *  contava as 59 finais e a caixa não nascia nelas — quem clicava em selecionar não fechava a conta. */
+const ciLotePode = (pa) => !!pa && pa.num !== '—' && pPasso(pa) === 2
 
 function ciLoteToggle(tr, num, marcado) {
   if(_ciLoteTr && _ciLoteTr !== tr) { _ciLoteTr = null; _ciLote = new Set() }
