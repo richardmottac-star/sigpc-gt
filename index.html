@@ -15368,7 +15368,7 @@ function renderPlan(rows) {
           <span class="proc-sgpe" onclick="event.stopPropagation()"
             style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;background:#fff;color:var(--te);border:0.5px solid var(--borda-campo);border-radius:var(--raio);padding:4px 10px;font-size:12px;cursor:default;">
             ${sgpeLogoImg(22)}<span style="font-size:11px;color:var(--texto-muted);text-transform:none;">mãe</span>
-            ${procHtml(r.processo_mae, r.parciais[0]?.pcs[0]?.codigo_pc, 'processo_mae')}${sgpeIconeConsulta(r.processo_mae)}${procInvalido(r.processo_mae) ? procInvalidoTag(r.processo_mae, r.parciais[0]?.pcs[0]?.codigo_pc, 'processo_mae') : ''}
+            ${procHtml(r.processo_mae, r.parciais[0]?.pcs[0]?.codigo_pc, 'processo_mae')}${procInvalido(r.processo_mae) ? procInvalidoTag(r.processo_mae, r.parciais[0]?.pcs[0]?.codigo_pc, 'processo_mae') : ''}
           </span>
         </div>
 
@@ -15606,7 +15606,7 @@ function pCiBloco(r, pa) {
       <span style="background:${est.texto};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${est.rot}</span>
     </div>
     <div style="padding:4px 13px 0;font-size:11px;color:var(--ct);">
-      ${escHtml(pcRef)} · Parcela ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
+      ${escHtml(pcRef)} · <span class="proc-sgpe">${procHtml(pa.pcs[0]?.processo_pc, pcRef)}</span> · Parcela ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
       ${pa.ci_encerrado_em?` · encerrado em ${planData(pa.ci_encerrado_em)}`:''}
     </div>
 
