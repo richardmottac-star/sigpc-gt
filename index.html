@@ -1317,7 +1317,7 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
         <button class="mccn" onclick="fm('moSigef')">Fechar</button>
         <!-- Leva ao fluxo normal de parecer, com a parcela já aberta e posicionada.
              ⚠️ NÃO baixa nada daqui: a baixa continua sendo o passo do parecer. -->
-        <button class="mcok" id="btnSigefIr" style="display:none;" onclick="sigefIrParaParcela()">→ Ir para a parcela</button>
+        <button class="mcok" id="btnSigefIr" style="display:none;" onclick="sigefIrParaParcela()">→ Ir para a parcial</button>
         <!-- ⚠️ NASCE DESABILITADO, com o motivo no title (armadilha 15). -->
         <button class="mcok" id="btnSigefDecl" style="display:none;" disabled onclick="sigefDeclarar()">✓ Declarar</button>
       </div>
@@ -3837,7 +3837,7 @@ function renderDashCi() {
             <span style="color:${l.num};font-weight:500;">${l.rotulo}</span> — ${DASH_CI_FONTE[i]}</div>`).join('')}
         <div style="border-top:0.5px solid var(--borda-suave);margin-top:9px;padding-top:8px;
                     font-size:12px;color:var(--texto-muted);line-height:1.5;">
-          Unidade: parcela · Tabela: prestacoes_contas · Filtro: suas PCs com
+          Unidade: parcial · Tabela: prestacoes_contas · Filtro: suas PCs com
           <code style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">enviado_ci = true</code></div>
       </div>
 
@@ -4094,9 +4094,9 @@ function irDash() {
           <div class="mn-bd"><ol>
             <li>Abra <b>Estoque de TRs</b> no menu lateral.</li>
             <li>Use a busca por número da TR, nome da entidade ou processo SGPE. O filtro <b>Livre</b> mostra o que ainda não tem responsável.</li>
-            <li>Clique na TR para abrir o detalhe e confira entidade, objeto e parcelas antes de assumir.</li>
+            <li>Clique na TR para abrir o detalhe e confira entidade, objeto e parciais antes de assumir.</li>
             <li>Clique em <b>Assumir</b>. A TR passa a constar como sua e some do estoque livre dos colegas.</li>
-            <li><b>Atenção à NL:</b> ao assumir uma parcela, todas as parcelas da mesma NL (mesmo processo SGPE) vêm junto automaticamente. Isso é proposital — um parecer baixa todas elas de uma vez.</li>
+            <li><b>A TR vem inteira:</b> ao assumir, todas as PCs livres da TR passam para o seu nome de uma vez. Depois, o parecer é registrado por parcial e baixa juntas todas as PCs daquela parcial.</li>
           </ol></div>
         </div>
         <div class="mn-item" id="manual2">
@@ -5166,7 +5166,7 @@ async function abrirTR(tr) {
       const podeEnviarCI = pa && pPasso(pa) === 2 && p.parcial_num != null && p.parcial_num !== ''
       const quantas = pa ? pa.pcs.length : 1
       const acaoCI = `${tagsEstadoPC(p, false)}${podeEnviarCI ? ` <button class="btn-acao btn-ver"
-        title="Encaminha a parcela inteira — ${quantas} PC${quantas>1?'s':''}"
+        title="Encaminha a parcial inteira — ${quantas} PC${quantas>1?'s':''}"
         onclick="enviarAoCI('${escHtml(p.tr)}','${escHtml(String(p.parcial_num))}')">Enviar ao CI</button>` : ''}`
       const valorFmt = planMoedaPC(p)   // PC final nao tem valor proprio — ver planEhFinal
       return `<tr>
@@ -7613,7 +7613,7 @@ function bgMontarDoc(c) {
   const obsMarcas = (!resid.length && !preGt.length) ? '' : `
     <div class="obs">
       ${!resid.length ? '' : `<p><b>*</b> ${resid.length} prestaç${resid.length === 1 ? 'ão marcada usa' : 'ões marcadas usam'}
-        nota de liquidação que também aparece em outra parcela da mesma transferência
+        nota de liquidação que também aparece em outra parcial da mesma transferência
         ${trsResid === 1 ? '' : '(' + trsResid + ' transferências)'} — é o mesmo pagamento,
         quitado em partes. Cada prestação tem código próprio e conta separadamente.</p>`}
       ${!preGt.length ? '' : `<p><b>†</b> ${preGt.length} prestaç${preGt.length === 1 ? 'ão foi baixada' : 'ões foram baixadas'}
@@ -10051,7 +10051,7 @@ async function abrirPedidoDev(tr) {
 
     const a = PED_PREVIA.aviso
     document.getElementById('mDevI').innerHTML = `<strong>TR:</strong> ${escHtml(tr)}<br>
-      <strong>Parciais que voltam ao estoque:</strong> ${a.voltam} de ${a.total}`
+      <strong>PCs que voltam ao estoque:</strong> ${a.voltam} de ${a.total}`
 
     // O AVISO ANTES DE ENVIAR — quantas baixadas ficam no nome dele, e o que bloqueia.
     document.getElementById('devAviso').innerHTML = `
@@ -14925,14 +14925,14 @@ function dpxAbrir() {
 
   document.getElementById('dpxInfo').innerHTML =
     `<strong>TR:</strong> ${escHtml(d.tr || '—')} &nbsp;·&nbsp; `
-    + `<strong>Parcela:</strong> ${par ? escHtml(par) : '—'}<br>`
+    + `<strong>Parcial:</strong> ${par ? escHtml(par) : '—'}<br>`
     // ⚠️ "PCs NESTA PARCELA", e não "PCs alcançadas" — a diferença é medida e importa.
     // A restauração alcança exatamente as PCs da FOTO, que são as que a puxada levou; o
     // cartão conta as PCs da parcela HOJE. Nas 3 TRs em que a PC final divide `parcial_num`
     // com a parcial 1, e em qualquer parcela que ganhou PC depois da puxada, os dois números
     // divergem. Prometer "alcançadas" seria prometer um número que a tela não tem — o real
     // vem no aviso de sucesso, que usa o `count` da própria rota.
-    + `<strong>PCs nesta parcela:</strong> ${n || '—'} &nbsp;·&nbsp; `
+    + `<strong>PCs nesta parcial:</strong> ${n || '—'} &nbsp;·&nbsp; `
     + `<strong>Puxada em:</strong> ${escHtml(quando)}`;
 
   document.getElementById('dpxMotivo').value = '';
@@ -15606,7 +15606,7 @@ function pCiBloco(r, pa) {
       <span style="background:${est.texto};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${est.rot}</span>
     </div>
     <div style="padding:4px 13px 0;font-size:11px;color:var(--ct);">
-      ${escHtml(pcRef)} · <span class="proc-sgpe">${procHtml(pa.pcs[0]?.processo_pc, pcRef)}</span> · Parcela ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
+      ${escHtml(pcRef)} · <span class="proc-sgpe">${procHtml(pa.pcs[0]?.processo_pc, pcRef)}</span> · Parcial ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
       ${pa.ci_encerrado_em?` · encerrado em ${planData(pa.ci_encerrado_em)}`:''}
     </div>
 
@@ -15728,7 +15728,7 @@ async function pCiResponder(tr, num) {
 
   if(!await moConfirm('Devolver ao Controle Interno?', {
     titulo: 'Responder ao C.I.',
-    detalhe: `${tr} · Parcela ${num} — ${pa.pcs.length} PC${pa.pcs.length>1?'s':''}.\n\n` +
+    detalhe: `${tr} · Parcial ${num} — ${pa.pcs.length} PC${pa.pcs.length>1?'s':''}.\n\n` +
              'A sua resposta fica registrada na conversa e a parcial volta para a fila do ' +
              'controle interno.\n\nA sua baixa continua mantida.',
     okTexto: 'Responder e devolver', cancelarTexto: 'Voltar',
@@ -17294,7 +17294,7 @@ function acmpLinha(l, i) {
     <div style="font-size:12.5px;color:var(--ct);margin-top:4px;">
       ${semProc ? '<span style="color:#9AA8A0;">sem processo</span>' : procHtml(l.processo_pc, null, 'processo_pc')}
       · <b>${escHtml(l.tr || '—')}</b>
-      ${l.parcial_num ? ` · parcela ${escHtml(l.parcial_num)}` : ' · <span style="color:#9AA8A0;">TR inteira</span>'}
+      ${l.parcial_num ? ` · parcial ${escHtml(l.parcial_num)}` : ' · <span style="color:#9AA8A0;">TR inteira</span>'}
       ${l.n_pcs ? ` · ${l.n_pcs} PC${l.n_pcs>1?'s':''}` : ''}
       ${l.entidade ? ` · ${escHtml(l.entidade)}` : ''}
       ${l.analista_nome ? ` · analista <b>${escHtml(l.analista_nome)}</b>` : ''}
@@ -17816,22 +17816,22 @@ function ciReabrirAbrir(codigo_pc) {
       <div class="mcb">
         <div class="mci">
           <b>${semProc ? '—' : escHtml(normalizarProcesso(l.processo_pc))}</b><br>
-          ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')} ·
+          ${escHtml(l.tr)} · parcial ${escHtml(l.parcial_num || '—')} ·
           <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b><br>
           <span style="font-size:11.5px;">${escHtml(codigos.join(', '))}</span>
         </div>
         <div style="font-size:12.5px;color:var(--ct);line-height:1.6;margin-bottom:12px;">
-          A parcela volta para o analista como pendência dele.
+          A parcial volta para o analista como pendência dele.
           <b>A baixa e o encaminhamento ao C.I. continuam valendo.</b>
         </div>
         <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;
           margin-bottom:3px;">Motivo (obrigatório)</div>
         <textarea id="ciReabrirTxt" rows="3" oninput="ciReabrirMudou()"
-          placeholder="Por que esta parcela está voltando?"
+          placeholder="Por que esta parcial está voltando?"
           style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
             border-radius:7px;font-size:12.5px;font-family:inherit;resize:vertical;"></textarea>
         <div style="font-size:11.5px;color:var(--ct);margin-top:5px;">
-          O analista vai ler este texto — ele chega no sino e fica no histórico da parcela.</div>
+          O analista vai ler este texto — ele chega no sino e fica no histórico da parcial.</div>
         <div class="mcbt">
           <button class="btn-neutro" onclick="ciReabrirFechar()">Cancelar</button>
           <button id="ciReabrirBt" class="btn-acao" onclick="ciReabrirConfirmar()" disabled
@@ -17860,7 +17860,7 @@ function ciReabrirMudou() {
   if(!bt) return
   const t = (document.getElementById('ciReabrirTxt')?.value || '').trim()
   bt.disabled = !t
-  bt.title = t ? 'Devolver esta parcela ao analista' : 'Escreva o motivo — o analista vai lê-lo.'
+  bt.title = t ? 'Devolver esta parcial ao analista' : 'Escreva o motivo — o analista vai lê-lo.'
 }
 
 async function ciReabrirConfirmar() {
@@ -17885,7 +17885,7 @@ async function ciReabrirConfirmar() {
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     const n = j.data?.afetadas ?? (l.n_pcs || 1)
     ciReabrirFechar()
-    toast(`Parcela reaberta e devolvida ao analista — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
+    toast(`Parcial reaberta e devolvida ao analista — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
     _ciAberto = null; _ciDecisao = null
     await ciCarregar()
   } catch(e) {
@@ -18104,7 +18104,7 @@ function ciListaRender() {
       </div>
       <div style="font-size:12px;color:var(--ct);">
         Mostrando <b>${de.toLocaleString('pt-BR')}</b> a <b>${ate.toLocaleString('pt-BR')}</b>
-        de <b>${_ciTotal.toLocaleString('pt-BR')}</b> parcelas</div>
+        de <b>${_ciTotal.toLocaleString('pt-BR')}</b> parciais</div>
       <div style="display:flex;gap:5px;align-items:center;">
         ${nav('«', 1, _ciPagina > 1, 'Primeira página')}
         ${nav('‹', _ciPagina - 1, _ciPagina > 1, 'Página anterior')}
@@ -18228,7 +18228,7 @@ function ciLinha(l, i) {
           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${proc}${selo}</div>
         <div style="font-size:12px;color:var(--ct);margin-top:2px;"
           title="${escHtml(codigos.join(', '))}">
-          ${escHtml(l.tr)} · parcela ${escHtml(l.parcial_num || '—')} · <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b></div>
+          ${escHtml(l.tr)} · parcial ${escHtml(l.parcial_num || '—')} · <b>${nPcs} PC${nPcs > 1 ? 's' : ''}</b></div>
         <div style="font-size:12px;color:#9AA8A0;overflow:hidden;text-overflow:ellipsis;
           white-space:nowrap;" title="${escHtml(l.entidade||'')}">${escHtml(l.entidade || '—')}</div>
       </div>
@@ -18241,7 +18241,7 @@ function ciLinha(l, i) {
         ${podeReabrir
           ? `<button onclick="event.stopPropagation();ciReabrirAbrir('${escHtml(l.codigo_pc)}')"
                class="ci-bt-abrir" style="margin-right:7px;"
-               title="Devolver esta parcela ao analista — a baixa continua valendo"
+               title="Devolver esta parcial ao analista — a baixa continua valendo"
                >Reabrir</button>`
           : ''}
         <button onclick="ciExpandir('${escHtml(l.codigo_pc)}')" class="ci-bt-abrir"
@@ -18306,7 +18306,7 @@ function ciDetalhe(l) {
   // parecidas com palavras diferentes é onde a pessoa começa a achar que são três
   // impedimentos distintos — e o superadmin, que é isento em todo o resto do sistema, é
   // justamente quem mais precisa da frase sem rodeio.
-  const NAO_E_CI = 'Você não é técnico do Controle Interno — esta parcela não pode ser decidida por você.'
+  const NAO_E_CI = 'Você não é técnico do Controle Interno — esta parcial não pode ser decidida por você.'
 
   const dado = (rot, val) => `
     <div style="min-width:0;">
@@ -18339,7 +18339,7 @@ function ciDetalhe(l) {
         font-weight:700;margin-bottom:4px;">Parecer da analista</div>
       <div style="font-size:12.5px;color:#4A3A0C;white-space:pre-wrap;">${
         l.parecer_texto ? escHtml(l.parecer_texto)
-          : `<span style="color:#8A7A50;font-style:italic;">A analista baixou a parcela sem escrever um texto de parecer${
+          : `<span style="color:#8A7A50;font-style:italic;">A analista baixou a parcial sem escrever um texto de parecer${
               l.parecer_tipo ? ` (tipo: ${escHtml(l.parecer_tipo)})` : ''}. O parecer completo está no SIGEF.</span>`
       }</div>
     </div>`
@@ -18472,7 +18472,7 @@ async function ciConfirmar(codigo_pc) {
     // na fila de hoje — confirmar sem ver quais seria assinar em branco. E numa parcela
     // parcialmente encaminhada a lista é a única forma de o técnico ver que ela é menor do
     // que a parcela inteira.
-    detalhe: `${l.tr} · parcela ${l.parcial_num || '—'} · ${nPcs} PC${nPcs > 1 ? 's' : ''}\n` +
+    detalhe: `${l.tr} · parcial ${l.parcial_num || '—'} · ${nPcs} PC${nPcs > 1 ? 's' : ''}\n` +
       `${codigos.join(', ')}\n${l.entidade || ''}\n\n` +
       `${d.sub}\n\nEm qualquer das duas, a baixa da analista permanece.`,
     okTexto: deAcordo ? 'Encerrar no C.I.' : 'Devolver para correção',
@@ -18492,7 +18492,7 @@ async function ciConfirmar(codigo_pc) {
     // O número vem da RESPOSTA (`afetadas`), não do que a tela achava: se uma PC entrou ou
     // saiu da fila entre o carregamento e o clique, quem sabe o que aconteceu é o servidor.
     const n = j.data?.afetadas ?? nPcs
-    toast((deAcordo ? 'Parcela encerrada no Controle Interno' : 'Parcela devolvida à analista para correção')
+    toast((deAcordo ? 'Parcial encerrada no Controle Interno' : 'Parcial devolvida à analista para correção')
           + ` — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
     _ciAberto = null; _ciDecisao = null
     await ciCarregar()
@@ -18623,7 +18623,7 @@ async function ciLoteEnviar() {
     titulo: '🏛 Encaminhar ao Controle Interno',
     detalhe: `${tr} · ${r?.entidade||''}\n\n${lista}\n\n`
       + `${plural(sel.length,'parcial','parciais')} · ${plural(pcs,'PC','PCs')} · ${planMoeda(valor)}\n\n`
-      + 'Vai a parcela INTEIRA, não só as PCs que você vê. A sua baixa NÃO é desfeita — '
+      + 'Vai a parcial INTEIRA, não só as PCs que você vê. A sua baixa NÃO é desfeita — '
       + 'continua contando na sua produtividade, e o retorno do C.I. também não a cancela.',
     okTexto: `Encaminhar ${artigo(sel.length)} ${sel.length}`, cancelarTexto: 'Voltar',
   })) return
@@ -18654,9 +18654,9 @@ async function ciLoteEnviar() {
 }
 
 async function enviarAoCI(tr, parcialNum) {
-  if(!await moConfirm(`Encaminhar a Parcela ${parcialNum} da ${tr} ao Controle Interno?`, {
+  if(!await moConfirm(`Encaminhar a Parcial ${parcialNum} da ${tr} ao Controle Interno?`, {
     titulo: 'Encaminhar ao Controle Interno',
-    detalhe: 'Vai a parcela INTEIRA, não só esta PC. A sua baixa NÃO é desfeita — ela continua '
+    detalhe: 'Vai a parcial INTEIRA, não só esta PC. A sua baixa NÃO é desfeita — ela continua '
            + 'contando na sua produtividade, e o retorno do C.I. também não a cancela.',
     okTexto: 'Encaminhar', cancelarTexto: 'Voltar',
   })) return
@@ -18668,7 +18668,7 @@ async function enviarAoCI(tr, parcialNum) {
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-    toast(`Parcela encaminhada ao CI (${j.count} PC${j.count>1?'s':''}).`,'ok')
+    toast(`Parcial encaminhada ao CI (${j.count} PC${j.count>1?'s':''}).`,'ok')
     if(TR_DETALHE_ATUAL) abrirTR(TR_DETALHE_ATUAL)
   } catch(e) { toast('Erro: '+e.message,'err') }
 }
@@ -22902,7 +22902,7 @@ function pilulaNlResidual(pcs, opts) {
   return _pilula('NL com residual', '#8A6100', '#FDF6E7', '#EFDCA6',
     'NL com residual',
     `Esta prestação usa a nota de liquidação ${p0.codigo_nl || '—'}, que também aparece na `
-    + `parcela ${p0.nl_primeira_parcela || '—'}. É o mesmo pagamento, quitado em partes. `
+    + `parcial ${p0.nl_primeira_parcela || '—'}. É o mesmo pagamento, quitado em partes. `
     + `Cada prestação tem código próprio e conta separadamente na produtividade.`,
     (opts || {}).mini)
 }
@@ -23024,7 +23024,7 @@ function sigefAbrir(tag, ctx) {
     // um conjunto de prestações — ele precisa ver o conjunto antes de afirmar, e não só o
     // número. Era "Vale para a PC 2021PC002125", uma PC de cada vez, até 27/08.
     document.getElementById('sigefAlvo').innerHTML =
-      `Vale para a <b>parcela ${escHtml(String(_sigefCtx.parcial))}</b> da `
+      `Vale para a <b>parcial ${escHtml(String(_sigefCtx.parcial))}</b> da `
       + `<b>${escHtml(_sigefCtx.tr)}</b> — ${cods.length} PC${cods.length > 1 ? 's' : ''}: `
       + escHtml(cods.join(', '))
     sigefPintarBotao()
@@ -23075,7 +23075,7 @@ function sigefAbrir(tag, ctx) {
     && Array.isArray(p.sigef_declaracao) && p.sigef_declaracao.length)
   const todas = comDecl.length ? comDecl[0].sigef_declaracao : []
   document.getElementById('sigefHistorico').innerHTML = !todas.length ? '' :
-    `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">Declarações desta parcela</div>`
+    `<div style="font-size:11px;font-weight:800;color:var(--ct);margin-bottom:5px;">Declarações desta parcial</div>`
     + todas.slice().reverse().map(x => `<div style="font-size:11px;color:var(--ct);border-left:2px solid var(--cl);padding:3px 0 3px 8px;margin-bottom:4px;">
         <b>${escHtml(x.resposta_rotulo || x.resposta || '')}</b> — registro em ${escHtml(String(x.data_registro||'—'))}<br>
         <span style="color:#9AA8A0;">por ${escHtml(x.declarado_por_nome || ('id '+x.declarado_por))} · ${planDataTs(x.declarado_em)}</span>
@@ -23242,13 +23242,13 @@ async function sigefDeclarar() {
 
     const n = (j.data.alcancadas || []).length
     fm('moSigef')
-    toast(`Registro declarado na parcela ${_sigefCtx.parcial} — ${n} PC${n > 1 ? 's' : ''}.`)
+    toast(`Registro declarado na parcial ${_sigefCtx.parcial} — ${n} PC${n > 1 ? 's' : ''}.`)
     // ⚠️ O QUE FICOU DE FORA É DITO, e não escondido. Uma parcela pode ter a final em outra
     // situação: sem este aviso o analista sairia achando que resolveu a parcela inteira.
     const fora = (j.data.fora || []).filter(x => x.sigef_tag)
     if (fora.length) {
       setTimeout(() => toast(
-        `${fora.length} PC${fora.length > 1 ? 's' : ''} desta parcela em outra situação — declare à parte.`,
+        `${fora.length} PC${fora.length > 1 ? 's' : ''} desta parcial em outra situação — declare à parte.`,
         'err'), 3200)
     }
     if (typeof buscarPlan === 'function') buscarPlan()

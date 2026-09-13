@@ -529,7 +529,7 @@ conf(!/sessionStorage/.test(
 // pessoa acabou de abrir fecharia sozinho no meio da leitura.
 conf(/const fonteAberta = document\.getElementById\('dashCiFonteBtn'\)\?\.dataset\.aberto === '1'/.test(html),
      'e e lido do elemento antigo antes de repintar');
-conf(/Unidade: parcela · Tabela: prestacoes_contas/.test(html),
+conf(/Unidade: parcial · Tabela: prestacoes_contas/.test(html),
      'o rodape do bloco declara a unidade e a tabela');
 
 S('13d-3. O RODAPE DA ESPERA, que ficou como estava');

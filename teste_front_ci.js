@@ -229,7 +229,7 @@ console.log('\n═══ 4b. A OUTRA TELA (detalhe da TR) SEGUE A MESMA REGRA �
 
   conf(!/const podeEnviarCI = !p\.baixada/.test(html), 'a condicao invertida sumiu');
   conf(/pPasso\(pa\) === 2/.test(bAT), 'e quem decide agora e o pPasso — a MESMA funcao do cartao');
-  conf(/Encaminha a parcela inteira/.test(bAT), 'o title avisa que vai a parcela inteira');
+  conf(/Encaminha a parcial inteira/.test(bAT), 'o title avisa que vai a parcial inteira');
 
   const iEA = html.indexOf('async function enviarAoCI(tr, parcialNum) {');
   const bEA = html.slice(iEA, iEA + 1600);

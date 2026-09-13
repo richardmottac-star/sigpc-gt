@@ -177,8 +177,8 @@ conf(/font-size:12px;color:var\(--ct\);margin-top:2px/.test(B1), '2o degrau: PC 
 // PARCELA em 26/08, e uma linha passou a valer por VARIAS PCs. Um codigo so no texto
 // identificaria uma das nove e esconderia as outras oito; o degrau passou a dizer
 // TR · parcela · quantas PCs, com a lista completa no title.
-conf(/\$\{escHtml\(l\.tr\)\} · parcela \$\{escHtml\(l\.parcial_num \|\| '—'\)\} · <b>\$\{nPcs\}/.test(B),
-     'o segundo degrau e TR · parcela · N PCs');
+conf(/\$\{escHtml\(l\.tr\)\} · parcial \$\{escHtml\(l\.parcial_num \|\| '—'\)\} · <b>\$\{nPcs\}/.test(B),
+     'o segundo degrau e TR · parcial · N PCs');
 conf(/title="\$\{escHtml\(codigos\.join\(', '\)\)\}"/.test(B),
      'e os codigos das PCs da parcela vao no title');
 conf(/font-size:12px;color:#9AA8A0;overflow:hidden/.test(B1), '3o degrau: a entidade em 12px, cor mais fraca');
@@ -264,7 +264,7 @@ conf(/border-left:3px solid #BA7517/.test(B1), 'o parecer da analista em bloco a
 conf(/Parecer da analista/.test(B), 'com o rotulo');
 // ⚠️ O parecer e RARO — 26 de 958 medidos em 18/08. A tela precisa distinguir "a analista nao
 // escreveu nada" de "nao veio na consulta".
-conf(/A analista baixou a parcela sem escrever um texto de parecer/.test(B),
+conf(/A analista baixou a parcial sem escrever um texto de parecer/.test(B),
      'e diz quando a analista nao escreveu, em vez de ficar vazio');
 
 S('10. AS DUAS DECISOES');
@@ -301,7 +301,7 @@ for (const m of ['Esta PC já foi encerrada no Controle Interno.',
                  // ⚠️ REESCRITO: o texto antigo enunciava a REGRA ("o parecer e dado por um
                  // tecnico"); o novo fala com QUEM esta lendo ("voce nao e tecnico"). Botao
                  // cinza tem de dizer por que ESTA pessoa nao pode, e nao recitar o estatuto.
-                 'Você não é técnico do Controle Interno — esta parcela não pode ser decidida por você.'])
+                 'Você não é técnico do Controle Interno — esta parcial não pode ser decidida por você.'])
   conf(B.includes(m), `o motivo "${m.slice(0, 34)}..."`);
 // ⚠️ O BOTAO TOMA A COR DA OPCAO ESCOLHIDA — e o que liga a escolha ao ato.
 conf(/background:\$\{pode \? escolhida\.cor : '#B6C2BB'\}/.test(B), 'e o botao toma a cor da opcao escolhida');
