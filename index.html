@@ -5126,7 +5126,7 @@ async function abrirTR(tr) {
   document.getElementById('moTRB').innerHTML = '<div class="loading"><div class="spin"></div>Carregando...</div>'
 
   try {
-    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}`)
+    const r = await fetch(`${API_URL}/prestacoes_contas?tr=${encodeURIComponent(tr)}&arquivamento=1`)
     const j = sgpeAbsorver(await r.json())
     if(j.error) throw new Error(j.error.message || j.error)
     const pcs = j.data || []
@@ -5136,6 +5136,7 @@ async function abrirTR(tr) {
     const totalPcs = pcs.length
     const totalNls = new Set(pcs.map(p=>p.codigo_nl).filter(Boolean)).size
     const totalBaixadas = pcs.filter(p=>p.baixada).length
+    const trArq = pcs.some(p => p.arquivamento && p.arquivamento.tr_arquivada)
 
     const bdgClassPC = {livre:'st-livre',analise:'st-analise',diligencia:'st-diligencia',reanalise:'st-reanalise',baixada:'st-baixada'}
     const bdgTxtPC = {livre:'Livre',analise:'Em Análise',diligencia:'Diligência',reanalise:'Reanálise',baixada:'Baixada'}
@@ -5172,15 +5173,19 @@ async function abrirTR(tr) {
         title="Encaminha a parcial inteira — ${quantas} PC${quantas>1?'s':''}"
         onclick="enviarAoCI('${escHtml(p.tr)}','${escHtml(String(p.parcial_num))}')">Enviar ao CI</button>` : ''}`
       const valorFmt = planMoedaPC(p)   // PC final nao tem valor proprio — ver planEhFinal
-      return `<tr>
-        <td style="${tdS}white-space:nowrap;">${p.codigo_pc||'—'}</td>
-        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}</td>
-        <td style="${tdS}text-align:center;">${p.tipo||'—'}</td>
-        <td style="${tdS}">${p.codigo_nl||'—'}</td>
-        <td style="${tdS}text-align:right;">${valorFmt}</td>
-        <td style="${tdS}"><span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span></td>
-        <td style="${tdS}">${acao}</td>
-        <td style="${tdS}">${acaoCI}</td>
+      // PC de parcial arquivada com a TR aberta: esmaece em spans, e a pílula fica fora deles.
+      const esm = !trArq && p.arquivamento?.estado === 'arquivada'
+      const e = (h) => esm ? `<span style="opacity:.55;">${h}</span>` : h
+      const pil = arqPilulaParcial(p.arquivamento, p.arquivada_em, trArq)
+      return `<tr${esm ? ' style="background:#F2F4F3;"' : ''}>
+        <td style="${tdS}white-space:nowrap;">${e(p.codigo_pc||'—')}</td>
+        <td class="proc-sgpe" style="${tdS}white-space:nowrap;">${e(procHtml(p.processo_pc, p.codigo_pc))}</td>
+        <td style="${tdS}text-align:center;">${e(p.tipo||'—')}</td>
+        <td style="${tdS}">${e(p.codigo_nl||'—')}</td>
+        <td style="${tdS}text-align:right;">${e(valorFmt)}</td>
+        <td style="${tdS}">${e(`<span class="bdg ${bdgClassPC[p.status]||''}">${bdgTxtPC[p.status]||p.status||'—'}</span>`)}</td>
+        <td style="${tdS}">${e(acao)}</td>
+        <td style="${tdS}">${e(acaoCI)}${pil ? ' ' + pil : ''}${trArq && planEhFinal(p) ? ' ' + arqSecretario([p]) : ''}</td>
       </tr>`
     }).join('')
 
@@ -15211,8 +15216,11 @@ function renderPlan(rows) {
       // justamente no caso que ela existe para atender.
       // ── parcial ja baixada: verde, so leitura
       if(pa.baixada) {
+        // Parcial arquivada com a TR aberta: o conteúdo esmaece num span, e a pílula fica fora dele.
+        const esmaece = !r.arquivada && pa.arquivamento?.estado === 'arquivada'
+        const pilArq = arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)
         return `<div id="${planAncora(r.tr, pa.num)}" style="border-bottom:1px solid var(--cl);">
-          <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#F2FAF5;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:${esmaece ? '#F2F4F3' : '#F2FAF5'};flex-wrap:wrap;">
             ${/* ⚠️ A CAIXA SÓ EXISTE NO PASSO 2. No passo 1 não há o que encaminhar (o servidor
                   recusa com 'CI exige parecer prévio') e no passo 3 já foi. Caixa desabilitada
                   nos outros dois seria a armadilha 15 — aqui ela simplesmente não existe. */''}
@@ -15220,6 +15228,7 @@ function renderPlan(rows) {
               ${(_ciLoteTr === r.tr && _ciLote.has(String(pa.num))) ? 'checked' : ''}
               onclick="event.stopPropagation();ciLoteToggle('${escHtml(r.tr)}','${escHtml(String(pa.num))}',this.checked)"
               style="width:auto;cursor:pointer;margin:0;">` : ''}
+            ${esmaece ? '<span style="opacity:.55;display:flex;align-items:center;gap:11px;flex-wrap:wrap;min-width:0;">' : ''}
             <span style="background:var(--vc);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">✓ ${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
             <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)}
               ${/* O processo da PC: este ramo não tem tabela de PCs, e é aqui que se lê a
@@ -15231,8 +15240,11 @@ function renderPlan(rows) {
               ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro
                     lugares, e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
               ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
+            ${esmaece ? `<span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span></span>` : ''}
+            ${pilArq}
             <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-              <span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>
+              ${r.arquivada && pa.soFinal ? arqSecretario(pa.pcs) : ''}
+              ${esmaece ? '' : `<span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>`}
               ${/* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
                     Estornar e Encaminhar ao C.I. —, e as quatro frentes novas levariam a linha
                     a sete. Quem decide o que está ativo é o SERVIDOR, em GET /parcela/acoes;
@@ -15296,6 +15308,7 @@ function renderPlan(rows) {
             ${/* A âmbar mora AQUI: "baixada no SIGEF, aberta aqui" só existe em parcial
                   aberta. As outras três aparecem no ramo de cima, o das baixadas. */''}
             ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
+          ${arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)}
           <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${/* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
                   "Registrar parecer" e "Encaminhar ao C.I." saíram da linha e viraram os
@@ -15711,6 +15724,23 @@ function arqFaixaCi(r, pa) {
     <div style="margin:0 13px 9px;background:#fff;border:0.5px solid var(--borda-suave);border-radius:6px;padding:9px 13px;
                 font-size:12px;color:var(--texto-secundario);line-height:1.5;">
       <b style="color:var(--texto);">Ainda não dá para arquivar.</b> ${escHtml(arqFrase(a.motivo))}</div>`
+}
+
+// A pílula da parcial na linha. Some quando a TR inteira está arquivada — aí o cabeçalho cinza diz.
+function arqPilulaParcial(a, arquivadaEm, trArquivada) {
+  if(!a || trArquivada) return ''
+  if(a.estado === 'arquivada') return `<span style="display:inline-block;background:#4A3B8C;color:#fff;font-weight:700;font-size:11px;
+    border-radius:4px;padding:4px 11px;letter-spacing:0.02em;white-space:nowrap;">📁 ARQUIVADA · ${arqDia(arquivadaEm).slice(0, 5)}</span>`
+  if(a.estado === 'pronta') return `<span style="display:inline-block;background:#FDF2E0;border:0.5px solid #E8C88A;color:#854F0B;
+    font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;white-space:nowrap;">pronta para arquivar</span>`
+  if(a.final) return `<span style="display:inline-block;background:var(--fundo-alt);border:0.5px solid var(--borda-suave);
+    color:var(--texto-muted);font-size:11px;border-radius:4px;padding:3px 9px;line-height:1.4;max-width:420px;">${escHtml(arqFrase(a.motivo))}</span>`
+  return ''
+}
+
+function arqSecretario(pcs) {
+  const d = (pcs || []).map(p => p.baixa_secretario_em).find(Boolean)
+  return d ? `<span style="font-size:12px;color:var(--texto-secundario);font-weight:700;white-space:nowrap;">Secretário em ${arqDia(d)}</span>` : ''
 }
 
 let _arq = null
