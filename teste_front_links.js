@@ -156,8 +156,10 @@ console.log('\n═══ 7. TODA ROTA QUE RENDERIZA PROCESSO ABSORVE O MAPA ═�
   // Se este numero mudar, a pergunta e sempre a mesma: a tela que entrou/saiu desenha SGPe?
   //   · 13 desde 26/08/2026, com a tela ACOMPANHAMENTO (`acmpCarregar`): ela desenha o
   //     processo de cada linha da trilha pelo `procHtml`, e por isso absorve.
-  conf(direto + viaHelper + viaParalelo === 13,
-       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 13 telas absorvendo j.links`);
+  //   · 14 desde 13/09/2026, com o modal de ARQUIVAMENTO (`arqDados`): o da PC final desenha o
+  //     processo SGPe ao lado da data do Secretario, pelo `procHtml`.
+  conf(direto + viaHelper + viaParalelo === 14,
+       `${direto} diretos + ${viaHelper} pelo helper + ${viaParalelo} em paralelo = 14 telas absorvendo j.links`);
 
   // O helper PRECISA absorver — se alguem tirar o sgpeAbsorver de dentro dele, quatro telas
   // perdem o link de uma vez, em silencio.

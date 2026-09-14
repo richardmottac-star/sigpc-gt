@@ -3129,6 +3129,9 @@ const SB_ITENS = [
     icone:'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z' },
   { id:'estlog', bloco:'coordenacao', rotulo:'Estornos Realizados', acao:'irEstornosRealizados()', pode:eCoord,
     icone:'M12 8v4l3 3 .75-.75-2.5-2.5V8H12zm0-6a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z' },
+  // O coordenador vê o grupo dele e o superadmin tudo — quem recorta é a GET /arquivamento.
+  { id:'arquiv', bloco:'coordenacao', rotulo:'PCs e TRs arquivadas', acao:'irArquivadas()', pode:eCoord,
+    icone:'M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z' },
   // ⚠️ ESTE ITEM TAMBÉM ABRE A FILA (24/08/2026, decisão do Richard). São DOIS itens com o
   // mesmo rótulo — este, para coordenador e superadmin, e o do bloco `analista`, para os três
   // técnicos do C.I. Em 24/08 só o outro foi trocado, e o superadmin continuou caindo na tela
@@ -10622,6 +10625,8 @@ function prodCardGrande(d) {
           : 'Todas as baixadas já foram encaminhadas ao Controle Interno.'}</div>
     </div>
 
+    ${prodArqBloco(u)}
+
     <div style="padding:15px 18px;">
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
         ${PROD_SIT.map(s => `
@@ -10680,6 +10685,7 @@ function prodAbrirCard(id) {
       ◀ Voltar à lista</button>
     ${prodCardGrande(d)}`
   prodAnimar()
+  prodArqCarregar()
 }
 
 function prodRender(dados) {
@@ -10703,6 +10709,7 @@ function prodRender(dados) {
     }
     cont.innerHTML = prodCardGrande(dados[0])
     prodAnimar()
+    prodArqCarregar()
     return
   }
 
@@ -13208,6 +13215,9 @@ async function buscarPlan() {
   try {
     const params = new URLSearchParams({ analista_id: alvo().id, limit: 9999, offset: 0 })
     if(U.setorialFiltro) params.set('setorial_id', U.setorialFiltro)
+    // O estado do arquivamento vem pendurado em cada PC (`p.arquivamento`), pela regra do
+    // servidor — a faixa do bloco do C.I. e o cabeçalho cinza da TR arquivada só desenham.
+    params.set('arquivamento', '1')
     if(busca) params.set('busca', busca)
     // ⚠️ TRÊS PARÂMETROS, E QUEM COMBINA É O SERVIDOR. A rota soma os três com AND desde
     // 31/08. Recortar aqui o que o termo único não pegou seria a tela decidindo o que o banco
@@ -13274,6 +13284,7 @@ async function buscarPlan() {
           ci_situacao:    pa.pcs.find(x=>x.ci_situacao)?.ci_situacao || null,
           ci_rodada:      pa.pcs.reduce((n,x)=>Math.max(n, x.ci_rodada||0), 0),
           ci_encerrado_em: pa.pcs.find(x=>x.ci_encerrado_em)?.ci_encerrado_em || null,
+          arquivamento:   pa.pcs.find(x=>x.arquivamento)?.arquivamento || null,
           maxDias: dias.length ? Math.max(...dias) : null
         }
       })
@@ -13295,7 +13306,11 @@ async function buscarPlan() {
         total_pcs: parciais.reduce((s,p)=>s+p.qtd,0),
         valor: parciais.reduce((s,p)=>s+p.valor,0),
         soFinal: parciais.every(p=>p.soFinal),
-        pendentes: parciais.filter(p=>!p.baixada).reduce((s,p)=>s+p.qtd,0)
+        pendentes: parciais.filter(p=>!p.baixada).reduce((s,p)=>s+p.qtd,0),
+        // TR arquivada é o servidor quem diz (`tr_arquivada`); a data é a do arquivamento da
+        // final, que é o que encerra a TR.
+        arquivada: parciais.some(p => p.arquivamento && p.arquivamento.tr_arquivada),
+        arquivada_em: parciais.find(p => p.soFinal)?.pcs[0]?.arquivada_em || null
       }
     })
 
@@ -15327,21 +15342,24 @@ function renderPlan(rows) {
     // toda baixada que nunca foi ao C.I. é justamente a dívida que ninguém enxerga: o
     // cabeçalho verde diz "✓ concluída" e a pessoa passa adiante.
     const semCi     = planSemCi(r)
-    const fundoCab  = baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
+    // A TR ARQUIVADA recua mais que a concluída: cinza, riscada, e a pílula no lugar da situação.
+    const arqTr     = !!r.arquivada
+    const fundoCab  = arqTr ? '#EEF1EF' : baixadaTr ? 'var(--vbg)' : 'var(--header-grad)'
     const corCab    = baixadaTr ? 'var(--te)'  : '#fff'
-    const corSuave  = baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
+    const corSuave  = arqTr ? '#8A938D' : baixadaTr ? 'var(--ct)'  : 'rgba(255,255,255,.88)'
     const pilula    = baixadaTr ? 'background:var(--cl);color:var(--ct);' : 'background:rgba(255,255,255,.18);'
 
     return `<div id="${planAncora(r.tr, null)}" style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:${r.expandida?'13px':'7px'};${r.fixada?'border-left:4px solid var(--az);':''}">
       <div onclick="planToggle('${escHtml(r.tr)}')" title="${r.expandida?'Recolher':'Ver as parciais desta TR'}"
-        style="background:${fundoCab};color:${corCab};padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;${baixadaTr?'border-bottom:1px solid var(--cb);':''}">
+        style="background:${fundoCab};color:${corCab};padding:${r.expandida?'12px 16px':'10px 16px'};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;${arqTr?'border:0.5px solid #DCE2DE;opacity:.72;':baixadaTr?'border-bottom:1px solid var(--cb);':''}">
 
         ${planAlfinete(r)}
 
         <div style="min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <b style="font-size:15px;">${escHtml(r.tr||'—')}</b>
-            ${baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
+            <b style="font-size:15px;${arqTr?'color:#78827C;text-decoration:line-through;':''}">${escHtml(r.tr||'—')}</b>
+            ${arqTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#DCE2DE;color:#5C6661;">📁 Arquivada</span>`
+              : baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
             ${/* ⚠️ A ETIQUETA VIROU O GATILHO DA SELEÇÃO EM LOTE (16/08/2026). Ela já existia e
                   já contava certo; ganhou um `onclick` em vez de nascer um controle novo ao
                   lado. Só é clicável na Minha Planilha, onde a seleção faz sentido — o
@@ -15373,6 +15391,7 @@ function renderPlan(rows) {
         </div>
 
         <div style="margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
+          ${arqTr ? `<span style="font-size:11.5px;color:#5C6661;white-space:nowrap;">arquivada em ${arqDia(r.arquivada_em)}</span>` : ''}
           <span style="font-size:11px;color:${corSuave};text-align:right;line-height:1.5;">
             <span style="display:inline-block;${pilula}border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;"
               title="A PC final não é uma parcial — é contada à parte">${r.qtdParciais} parcia${r.qtdParciais>1?'is':'l'}${
@@ -15614,6 +15633,7 @@ function pCiBloco(r, pa) {
                 font-size:12px;color:#2E7D32;font-weight:700;">
       ✓ A sua baixa está mantida. Ela contou quando você encaminhou ao C.I.
     </div>
+    ${arqFaixaCi(r, pa)}
 
     <div id="pciConv-${escHtml(chave)}" style="padding:0 13px 11px;">
       ${msgs === undefined
@@ -15633,6 +15653,566 @@ function pCiBloco(r, pa) {
     </div>`:''}
   </div>`
 }
+
+// ── ARQUIVAMENTO ──────────────────────────────────────────────────────────────
+// A regra é do servidor (sigpc-api/lib/arquivamento.js). A tela desenha o que as rotas
+// devolvem — `p.arquivamento`, os blocos `arquivar`/`desarquivar` da /parcela/acoes e a
+// GET /arquivamento — e não decide nem conta (armadilha 16).
+
+const ARQ_SUPERVISAO = ['coordenador', 'superadmin']
+const ARQ_MOTIVO_MIN = 15
+const arqPodeDesarq = () => ARQ_SUPERVISAO.includes(perfilEfetivo(U))
+
+// As datas chegam como 'AAAA-MM-DD' ou como timestamp em texto, com fuso ou sem fuso guardando UTC.
+function arqDia(s) {
+  if(!s) return '—'
+  const x = String(s).trim().replace(' ', 'T')
+  if(/^\d{4}-\d{2}-\d{2}$/.test(x)) return dataBr(x)
+  const [d, h = ''] = x.split('T')
+  const hora = /[+-]\d{2}(:?\d{2})?$/.test(h) ? h.replace(/([+-]\d{2}):?(\d{2})?$/, (_, a, b) => a + ':' + (b || '00'))
+    : /Z$/i.test(h) ? h : h + 'Z'
+  return planDataTs(d + 'T' + hora)
+}
+
+// Encerradas pela carga de 16/08 não têm data de devolução — decisão do Richard: não inventar.
+function arqDevolveu(a) {
+  if(a.ci_devolveu_em) return arqDia(a.ci_devolveu_em)
+  return a.ci_devolveu_carga ? '— (carga de 16/08)' : '—'
+}
+
+const arqFrase = (m) => { const t = String(m || '').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : '' }
+const arqArgs = (tr, num, setorial) => `'${escHtml(tr)}','${escHtml(String(num))}','${escHtml(setorial || '')}'`
+const arqParcialRot = (l) => l.final ? 'Final' : escHtml(String(l.parcial_num))
+
+function arqFaixaCi(r, pa) {
+  const a = pa.arquivamento
+  if(!a) return ''
+  const ref = pa.pcs[0] || {}
+  const args = arqArgs(r.tr, pa.num, ref.setorial_id)
+  if(a.estado === 'pronta') return `
+    <div style="margin:0 13px 9px;background:#fff;border:0.5px solid #E8C88A;border-radius:6px;padding:10px 13px;
+                display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1 1 260px;font-size:12.5px;color:#854F0B;line-height:1.5;">
+        <b>Esta parcial está pronta para arquivar.</b>
+        O C.I. devolveu — arquive se você já resolveu, ou responda ao C.I. se precisar de mais documentos.</div>
+      <button class="btn-acao" onclick="arqAbrir(${args})"
+        style="background:${a.final ? 'var(--v)' : '#5C6661'};color:#fff;font-weight:800;padding:8px 15px;white-space:nowrap;">
+        ${a.final ? '📁 Arquivar e encerrar a TR' : '📁 Arquivar parcial'}</button>
+    </div>`
+  if(a.estado === 'arquivada') return `
+    <div style="margin:0 13px 9px;background:#EEF1EF;border:0.5px solid #DCE2DE;border-radius:6px;padding:9px 13px;
+                display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12.5px;color:#5C6661;">
+      <span style="flex:1 1 240px;"><b>📁 ${a.final ? 'PC final arquivada — TR encerrada' : 'Parcial arquivada'}</b>
+        em ${arqDia(ref.arquivada_em)}.</span>
+      ${arqPodeDesarq() ? `<button class="btn-neutro" onclick="desarqAbrir(${args})"
+        style="padding:5px 12px;font-size:12px;font-weight:700;">Desarquivar</button>` : ''}
+    </div>`
+  return `
+    <div style="margin:0 13px 9px;background:#fff;border:0.5px solid var(--borda-suave);border-radius:6px;padding:9px 13px;
+                font-size:12px;color:var(--texto-secundario);line-height:1.5;">
+      <b style="color:var(--texto);">Ainda não dá para arquivar.</b> ${escHtml(arqFrase(a.motivo))}</div>`
+}
+
+let _arq = null
+
+// Qualquer tela abre pelo mesmo caminho: a TR pela /prestacoes_contas, as ações pela /parcela/acoes.
+async function arqDados(tr, num, setorial) {
+  const q = new URLSearchParams({ tr, limit: 9999, offset: 0 })
+  if(setorial) q.set('setorial_id', setorial)
+  const j = await fetchListaCompleta(`${API_URL}/prestacoes_contas?${q}`)
+  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  const daTr = (j.data || []).filter(p => p.tr === tr)
+  const pcs = daTr.filter(p => String(p.parcial_num) === String(num))
+  if(!pcs.length) throw new Error('Parcial não encontrada.')
+  const ja = await (await fetch(`${API_URL}/parcela/acoes?codigo_pc=${encodeURIComponent(pcs[0].codigo_pc)}&usuario_id=${U.id}`)).json()
+  if(ja.error) throw new Error(ja.error.message || JSON.stringify(ja.error))
+  if(!ja.data || !ja.data.arquivar) throw new Error('A rota não devolveu o estado do arquivamento desta parcial.')
+  return { daTr, pcs, acoes: ja.data }
+}
+
+function arqMontar(html) {
+  const d = document.createElement('div')
+  d.id = 'arqMo'
+  d.className = 'mo open'
+  d.innerHTML = html
+  d.onclick = arqFechar
+  document.body.appendChild(d)
+  document.addEventListener('keydown', arqEsc, true)
+}
+
+function arqEsc(e) { if(e.key === 'Escape') { e.stopPropagation(); arqFechar() } }
+
+function arqFechar() {
+  const d = document.getElementById('arqMo')
+  if(d) d.remove()
+  document.removeEventListener('keydown', arqEsc, true)
+  _arq = null
+}
+
+// Botão apagado leva o motivo no title (armadilha 12).
+function arqBotao(bt, aceso, cor, titulo) {
+  if(!bt) return
+  bt.disabled = !aceso
+  bt.style.background = aceso ? cor : ''
+  bt.style.color = aceso ? '#fff' : ''
+  bt.title = titulo || ''
+}
+
+const arqFaixaErro = (m) => `<div style="background:#FBEDED;border:0.5px solid #E0A0A0;border-radius:6px;padding:9px 13px;
+  font-size:12.5px;color:#A32D2D;line-height:1.5;margin-bottom:12px;">${escHtml(arqFrase(m))}</div>`
+
+async function arqAbrir(tr, num, setorial) {
+  if(document.getElementById('arqMo') || _arq) return
+  _arq = { carregando: true }
+  let dd
+  try { dd = await arqDados(tr, num, setorial) }
+  catch(e) { _arq = null; toast('Erro: ' + e.message, 'err'); return }
+  const a = dd.acoes.arquivar
+  _arq = { acao: 'arquivar', tr, parcial_num: String(num), setorial_id: setorial || dd.pcs[0].setorial_id,
+           final: !!a.final, pode: !!a.pode, motivo: a.motivo || '' }
+  arqMontar(a.final ? arqHtmlFinal(a, dd) : arqHtmlParcial(a, dd))
+  if(a.final) arqFinalMudou()
+  else arqBotao(document.getElementById('arqBt'), _arq.pode, '#5C6661', _arq.pode ? 'Arquivar esta parcial' : arqFrase(_arq.motivo))
+}
+
+function arqHtmlParcial(a, dd) {
+  const num = escHtml(String(a.parcial_num))
+  const n = a.n_pcs || dd.pcs.length
+  const resto = (a.pendentes || []).map(String).filter(x => x !== String(a.parcial_num))
+  const temFinal = dd.daTr.some(planEhFinal)
+  const falta = resto.length
+    ? `Depois desta, ${resto.length === 1 ? `falta arquivar a Parcial ${escHtml(resto[0])}` : `faltam arquivar as Parciais ${escHtml(resto.join(', '))}`}${temFinal ? ' e, por último, a PC final, que encerra a TR.' : '.'}`
+    : (temFinal ? 'Depois desta, falta só a PC final — é ela que encerra a TR.' : 'Depois desta, todas as parciais da TR estão arquivadas.')
+  return `
+  <div class="mc" style="width:500px;" onclick="event.stopPropagation()">
+    <div class="mch" style="background:var(--fundo-alt);"><h3>Arquivar Parcial ${num}</h3>
+      <button class="mcx" onclick="arqFechar()" aria-label="Fechar">✕</button></div>
+    <div class="mcb">
+      <div class="mci">
+        <b>${escHtml(a.tr)}</b> · Parcial ${num} · <b>${n} PC${n > 1 ? 's' : ''}</b><br>
+        C.I. devolveu: <b>${arqDevolveu(a)}</b>
+      </div>
+      <div style="font-size:12.5px;color:var(--texto-secundario);line-height:1.6;margin-bottom:12px;">
+        Arquivar encerra esta parcial e ${n > 1 ? `as ${n} PCs dela` : 'a PC dela'}. A baixa e a produtividade não mudam — elas já contaram quando foram ao C.I.</div>
+      ${a.pode ? `
+      <div style="background:#FDF2E0;border-left:3px solid #E8C88A;border-radius:0 6px 6px 0;padding:9px 13px;
+        font-size:12.5px;color:#854F0B;line-height:1.5;margin-bottom:12px;"><b>A TR continua aberta.</b> ${falta}</div>` : arqFaixaErro(a.motivo)}
+      <div class="mc-campo"><label>Observação (opcional)</label>
+        <textarea id="arqObs" rows="3" maxlength="2000" placeholder="Fica no histórico da parcial"></textarea></div>
+      <div class="mcbt">
+        <button class="btn-neutro" onclick="arqFechar()">Cancelar</button>
+        <button id="arqBt" class="btn-acao" onclick="arqConfirmar()" disabled
+          style="padding:8px 17px;font-size:13px;font-weight:800;">Arquivar parcial</button>
+      </div>
+    </div>
+  </div>`
+}
+
+function arqHtmlFinal(a, dd) {
+  const okParc = !(a.pendentes || []).length
+  const okFinal = !!a.final_baixada
+  const ok = !!a.pode
+  const pf = dd.pcs[0]
+  const proc = procVazio(pf.processo_pc) ? procHtml(pf.processo_mae, pf.codigo_pc, 'processo_mae') : procHtml(pf.processo_pc, pf.codigo_pc)
+  const linha = (certo, rot, det) => `
+    <div style="display:flex;gap:9px;align-items:baseline;font-size:12.5px;padding:3px 0;">
+      <span style="flex:0 0 14px;font-weight:800;color:${certo ? '#3B6D11' : '#A32D2D'};">${certo ? '✓' : '✕'}</span>
+      <span style="flex:1;color:var(--texto);">${rot}</span>
+      <span style="color:var(--texto-muted);white-space:nowrap;">${det}</span></div>`
+  return `
+  <div class="mc" style="width:520px;" onclick="event.stopPropagation()">
+    <div class="mch" style="background:${ok ? '#EDF5E3' : '#FDF2E0'};"><h3>Arquivar a PC final e encerrar a TR</h3>
+      <button class="mcx" onclick="arqFechar()" aria-label="Fechar">✕</button></div>
+    <div class="mcb">
+      <div class="mci">
+        <b>${escHtml(a.tr)}</b> · PC final ${escHtml(dd.pcs.map(p => p.codigo_pc).join(', '))}<br>
+        C.I. devolveu: <b>${arqDevolveu(a)}</b>
+      </div>
+      <div style="background:#fff;border:0.5px solid var(--borda-suave);border-radius:var(--raio);padding:10px 13px;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:700;color:var(--texto);margin-bottom:5px;">Conferência antes de encerrar</div>
+        ${linha(okParc, 'Todas as parciais arquivadas', `${a.parciais_arquivadas} de ${a.parciais_total}`)}
+        ${linha(okFinal, 'PC final baixada no sistema', okFinal ? arqDia(a.data_baixa_final) : 'não baixada')}
+      </div>
+      <div style="background:#E7F0FA;border-left:3px solid #378ADD;border-radius:0 6px 6px 0;padding:10px 13px;margin-bottom:12px;">
+        <div style="font-size:12.5px;font-weight:700;color:#0C447C;">Confira no SIGEF a baixa do Secretário</div>
+        <div style="font-size:12px;color:#185FA5;line-height:1.5;margin:3px 0 9px;">
+          Abra a TR no SIGEF e veja a data em que o Secretário deu a baixa. Sem ela a TR não encerra.</div>
+        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+          <label style="font-size:11px;color:#0C447C;font-weight:700;">Data da baixa do Secretário (obrigatória)
+            <input id="arqData" type="date" oninput="arqFinalMudou()" onchange="arqFinalMudou()"
+              style="display:block;margin-top:3px;padding:6px 9px;border:1px solid var(--borda-campo);border-radius:var(--raio);font-size:13px;font-family:inherit;"></label>
+          <span class="proc-sgpe" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:0.5px solid var(--borda-campo);
+            border-radius:var(--raio);padding:4px 10px;font-size:12px;">${sgpeLogoImg(20)}${proc}</span>
+        </div>
+      </div>
+      ${ok ? `
+      <div style="background:#EDF5E3;border-left:3px solid #97C459;border-radius:0 6px 6px 0;padding:9px 13px;
+        font-size:12.5px;color:#27500A;line-height:1.5;margin-bottom:4px;">
+        <b>A TR será arquivada.</b> Passa a aparecer em cinza na sua planilha. A produtividade não muda.</div>` : arqFaixaErro(a.motivo)}
+      <div class="mcbt">
+        <button class="btn-neutro" onclick="arqFechar()">Cancelar</button>
+        <button id="arqBt" class="btn-acao" onclick="arqConfirmar()" disabled
+          style="padding:8px 17px;font-size:13px;font-weight:800;">Arquivar e encerrar a TR</button>
+      </div>
+    </div>
+  </div>`
+}
+
+function arqFinalMudou() {
+  if(!_arq || !_arq.final) return
+  const v = (document.getElementById('arqData')?.value || '').trim()
+  arqBotao(document.getElementById('arqBt'), _arq.pode && !!v, 'var(--v)',
+    !_arq.pode ? arqFrase(_arq.motivo) : v ? 'Arquivar a PC final e encerrar a TR' : 'Informe a data da baixa do Secretário no SIGEF.')
+}
+
+async function arqConfirmar() {
+  if(!_arq || _arq.acao !== 'arquivar' || !_arq.pode) return
+  const bt = document.getElementById('arqBt')
+  const corpo = { tr: _arq.tr, parcial_num: _arq.parcial_num, setorial_id: _arq.setorial_id, usuario_id: U.id }
+  if(_arq.final) {
+    corpo.baixa_secretario_em = (document.getElementById('arqData')?.value || '').trim()
+    if(!corpo.baixa_secretario_em) return
+  } else {
+    const o = (document.getElementById('arqObs')?.value || '').trim()
+    if(o) corpo.obs = o
+  }
+  const rotulo = bt ? bt.textContent : ''
+  if(bt) { bt.disabled = true; bt.textContent = 'Arquivando...' }
+  try {
+    const r = await fetch(`${API_URL}/parcela/arquivar`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const d = j.data || {}
+    const final = _arq.final, num = _arq.parcial_num
+    arqFechar()
+    toast(d.ja_estava ? 'Esta parcial já estava arquivada.'
+      : final ? 'PC final arquivada — a TR está encerrada.'
+      : `Parcial ${num} arquivada — ${d.arquivadas} PC${d.arquivadas > 1 ? 's' : ''}.`, 'ok')
+    arqRecarregar()
+  } catch(e) {
+    // O modal fica aberto com a mensagem da rota, e o botão volta ao estado de antes.
+    toast('Erro: ' + e.message, 'err')
+    if(bt) bt.textContent = rotulo
+    if(_arq && _arq.final) arqFinalMudou()
+    else arqBotao(bt, true, '#5C6661', 'Arquivar esta parcial')
+  }
+}
+
+async function desarqAbrir(tr, num, setorial) {
+  if(document.getElementById('arqMo') || _arq) return
+  _arq = { carregando: true }
+  let dd
+  try { dd = await arqDados(tr, num, setorial) }
+  catch(e) { _arq = null; toast('Erro: ' + e.message, 'err'); return }
+  const a = dd.acoes.arquivar
+  const d = dd.acoes.desarquivar || { pode: false, motivo: 'A rota não devolveu o desarquivamento desta parcial.' }
+  _arq = { acao: 'desarquivar', tr, parcial_num: String(num), setorial_id: setorial || dd.pcs[0].setorial_id,
+           pode: !!d.pode, motivo: d.motivo || '' }
+  const quem = d.arquivada_por != null ? (_usrPorId.get(Number(d.arquivada_por))?.nome || `usuário ${d.arquivada_por}`) : '—'
+  const rot = a.final ? 'PC final' : `Parcial ${escHtml(String(num))}`
+  // A TR só volta a ficar ativa quando ela estava encerrada; senão, é a parcial que volta.
+  const texto = a.final || a.tr_arquivada
+    ? `A TR volta a aparecer ativa na planilha do analista. A data da baixa do Secretário é apagada e terá de ser informada de novo.${a.final ? '' : ' A PC final é desarquivada junto.'}`
+    : 'A parcial volta a ficar ativa na planilha do analista.'
+  arqMontar(`
+  <div class="mc" style="width:490px;" onclick="event.stopPropagation()">
+    <div class="mch" style="background:var(--fundo-alt);"><h3>Desarquivar a ${rot}</h3>
+      <button class="mcx" onclick="arqFechar()" aria-label="Fechar">✕</button></div>
+    <div class="mcb">
+      <div class="mci">
+        <b>${escHtml(tr)}</b> · ${rot}<br>
+        Arquivada por <b>${escHtml(quem)}</b> em <b>${arqDia(d.arquivada_em)}</b>
+      </div>
+      <div style="font-size:12.5px;color:var(--texto-secundario);line-height:1.6;margin-bottom:12px;">${texto}</div>
+      ${d.pode ? '' : arqFaixaErro(d.motivo)}
+      <div class="mc-campo">
+        <label class="dev-lbl-linha">Motivo (obrigatório) <span class="dev-conta" id="desarqConta"></span></label>
+        <textarea id="desarqTxt" rows="3" maxlength="500" oninput="desarqMudou()"
+          placeholder="Por que esta parcial está voltando? Fica no histórico."></textarea>
+      </div>
+      <div class="mcbt">
+        <button class="btn-neutro" onclick="arqFechar()">Cancelar</button>
+        <button id="arqBt" class="btn-acao" onclick="desarqConfirmar()" disabled
+          style="padding:8px 17px;font-size:13px;font-weight:800;">Desarquivar</button>
+      </div>
+    </div>
+  </div>`)
+  desarqMudou()
+  const t = document.getElementById('desarqTxt'); if(t) t.focus()
+}
+
+function desarqMudou() {
+  if(!_arq || _arq.acao !== 'desarquivar') return
+  const n = (document.getElementById('desarqTxt')?.value || '').trim().length
+  const falta = Math.max(0, ARQ_MOTIVO_MIN - n)
+  const c = document.getElementById('desarqConta')
+  if(c) c.textContent = falta ? `falta${falta > 1 ? 'm' : ''} ${falta} caractere${falta > 1 ? 's' : ''}` : '✓'
+  arqBotao(document.getElementById('arqBt'), _arq.pode && !falta, '#B9552F',
+    !_arq.pode ? arqFrase(_arq.motivo) : falta ? `O motivo precisa de ao menos ${ARQ_MOTIVO_MIN} caracteres.` : 'Desarquivar')
+}
+
+async function desarqConfirmar() {
+  if(!_arq || _arq.acao !== 'desarquivar' || !_arq.pode) return
+  const motivo = (document.getElementById('desarqTxt')?.value || '').trim()
+  if(motivo.length < ARQ_MOTIVO_MIN) return
+  const bt = document.getElementById('arqBt')
+  if(bt) { bt.disabled = true; bt.textContent = 'Desarquivando...' }
+  try {
+    const r = await fetch(`${API_URL}/parcela/desarquivar`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr: _arq.tr, parcial_num: _arq.parcial_num, setorial_id: _arq.setorial_id,
+                             usuario_id: U.id, motivo }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const d = j.data || {}
+    arqFechar()
+    toast(d.ja_estava ? 'Esta parcial não estava arquivada.'
+      : `Desarquivada — ${d.desarquivadas} PC${d.desarquivadas > 1 ? 's' : ''}${d.final_junto ? ', e a PC final voltou junto' : ''}.`, 'ok')
+    arqRecarregar()
+  } catch(e) {
+    toast('Erro: ' + e.message, 'err')
+    if(bt) bt.textContent = 'Desarquivar'
+    desarqMudou()
+  }
+}
+
+// Depois de arquivar ou desarquivar, repinta a tela de onde o modal saiu.
+function arqRecarregar() {
+  if(document.getElementById('planConteudo')) buscarPlan()
+  if(document.getElementById('prodArq')) prodArqCarregar()
+  if(document.getElementById('arqCoord')) arqCoordCarregar()
+}
+
+function arqSituacaoHtml(l) {
+  const args = arqArgs(l.tr, l.parcial_num, l.setorial_id)
+  const desarq = arqPodeDesarq() ? ` <button class="btn-neutro" onclick="desarqAbrir(${args})"
+      style="padding:2px 9px;font-size:11px;font-weight:700;margin-left:6px;">Desarquivar</button>` : ''
+  if(l.estado === 'arquivada') return l.final
+    ? `<span style="color:#3B6D11;font-weight:700;">TR encerrada · Secretário ${arqDia(l.baixa_secretario_em)}</span>${desarq}`
+    : `<span style="color:#5C6661;">parcial arquivada</span>${desarq}`
+  if(l.estado === 'pronta') return `<button class="btn-acao" onclick="arqAbrir(${args})"
+      style="background:${l.final ? 'var(--v)' : '#5C6661'};color:#fff;font-weight:800;padding:4px 12px;font-size:11.5px;">Arquivar</button>`
+  return `<span style="font-size:11.5px;color:var(--texto-muted);line-height:1.4;">${escHtml(arqFrase(l.motivo))}</span>`
+}
+
+// Os três cards e o texto do "Fonte" de cada um, na mesma ordem e na mesma cor.
+const ARQ_CARDS = [
+  { k:'prontas',             rotulo:'Prontas para arquivar', apoio:'o C.I. devolveu e falta arquivar',             bg:'#FDF2E0', num:'#854F0B' },
+  { k:'parciais_arquivadas', rotulo:'Parciais arquivadas',   apoio:'encerradas depois da devolutiva do C.I.',      bg:'#EEF1EF', num:'#5C6661' },
+  { k:'trs_encerradas',      rotulo:'TRs encerradas',        apoio:'PC final arquivada, com a data do Secretário', bg:'#EDF5E3', num:'#3B6D11' },
+]
+const ARQ_FONTE = [
+  'parciais que o C.I. devolveu (encerrada, ou com ressalva) com todas as PCs baixadas, sem diligência aberta e ainda não arquivadas. A PC final só entra depois de todas as parciais da TR arquivadas. Não conta: a reaberta pelo SGPe e a que está na fila do C.I.',
+  'parciais com todas as PCs arquivadas. Não conta: a PC final — ela aparece como TR encerrada.',
+  'TRs com a PC final arquivada. Uma por TR.',
+]
+const ARQ_FONTE_BASE = 'Vem da rota GET /arquivamento, que lê prestacoes_contas e o último evento do C.I. em parcela_historico. Unidade: a parcial (no terceiro, a TR). PC invalidada não entra. Arquivar não altera a produtividade.'
+
+function arqFonteHtml(id, aberta, extra) {
+  return `<div id="${id}" ${aberta ? '' : 'hidden'} style="margin-top:10px;background:var(--fundo-alt);border:0.5px solid var(--borda-suave);
+    border-radius:var(--raio);padding:10px 13px;font-size:11.5px;color:var(--texto-secundario);line-height:1.55;">
+    <div style="margin-bottom:5px;">${ARQ_FONTE_BASE}${extra ? ' ' + extra : ''}</div>
+    ${ARQ_CARDS.map((c, i) => `<div><b style="color:${c.num};">${c.rotulo}:</b> ${ARQ_FONTE[i]}</div>`).join('')}
+  </div>`
+}
+
+// O estado do "Fonte" mora no próprio botão (data-aberto), e a repintura o lê do botão antigo.
+function arqFonteBtn(id, blocoId, aberta) {
+  return `<button id="${id}" data-aberto="${aberta ? '1' : '0'}" onclick="arqFonte(this,'${blocoId}')"
+    style="border:0.5px solid ${aberta ? 'var(--v)' : 'var(--borda-suave)'};background:${aberta ? 'var(--vbg)' : 'transparent'};
+      color:${aberta ? 'var(--v)' : 'var(--texto-secundario)'};border-radius:20px;padding:3px 11px;font-size:11px;
+      font-weight:700;font-family:inherit;cursor:pointer;">Fonte</button>`
+}
+
+function arqFonte(btn, blocoId) {
+  const abrir = btn.dataset.aberto !== '1'
+  btn.dataset.aberto = abrir ? '1' : '0'
+  const b = document.getElementById(blocoId)
+  if(b) b.hidden = !abrir
+  btn.style.background  = abrir ? 'var(--vbg)' : 'transparent'
+  btn.style.borderColor = abrir ? 'var(--v)'   : 'var(--borda-suave)'
+  btn.style.color       = abrir ? 'var(--v)'   : 'var(--texto-secundario)'
+}
+
+function arqChip(rotulo, n, on, acao) {
+  return `<button onclick="${acao}" title="${on ? 'Clique para tirar o filtro' : 'Filtrar por ' + rotulo}"
+    style="border:1.5px solid ${on ? 'var(--v)' : 'var(--cb)'};background:${on ? 'var(--v)' : '#fff'};color:${on ? '#fff' : (n ? 'var(--te)' : 'var(--ct)')};
+      border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;
+      display:inline-flex;align-items:center;gap:6px;${n ? '' : 'opacity:.55;'}">${rotulo}
+    <span style="background:${on ? 'rgba(255,255,255,.25)' : 'var(--cl)'};color:${on ? '#fff' : 'var(--ct)'};
+      border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;">${n}</span></button>`
+}
+
+const ARQ_TH = 'text-align:left;padding:7px 9px;font-size:10.5px;font-weight:700;color:var(--texto-muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--borda-suave);white-space:nowrap;'
+const ARQ_TD = 'padding:7px 9px;border-bottom:0.5px solid var(--borda-suave);vertical-align:top;'
+
+// ── Produtividade: o bloco "Arquivamento", logo abaixo do caminho das baixadas ──
+let _prodArq = null, _prodArqChip = null, _prodArqUid = null
+
+function prodArqBloco(u) {
+  return `<div id="prodArq" data-uid="${escHtml(String(u.id))}" style="padding:15px 18px;border-bottom:1px solid var(--cl);">
+    <div style="font-size:13px;font-weight:600;color:var(--te);">Arquivamento</div>
+    <div style="font-size:12px;color:var(--ct);margin-top:6px;">Carregando...</div></div>`
+}
+
+async function prodArqCarregar() {
+  const el = document.getElementById('prodArq')
+  if(!el) return
+  const uid = el.dataset.uid
+  if(uid !== _prodArqUid) { _prodArqChip = null; _prodArqUid = uid }
+  try {
+    const j = await (await fetch(`${API_URL}/arquivamento?usuario_id=${U.id}&analista_id=${encodeURIComponent(uid)}`)).json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    if(document.getElementById('prodArq')?.dataset.uid !== uid) return
+    _prodArq = j.data
+    prodArqPintar()
+  } catch(e) {
+    const x = document.getElementById('prodArq')
+    if(x) x.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--te);">Arquivamento</div>
+      <div style="font-size:12px;color:#A32D2D;margin-top:6px;">Não deu para carregar o arquivamento: ${escHtml(e.message)}</div>`
+  }
+}
+
+function prodArqPintar() {
+  const el = document.getElementById('prodArq')
+  if(!el || !_prodArq) return
+  const c = _prodArq.contagens || {}
+  const linhas = _prodArq.linhas || []
+  const fonteAberta = document.getElementById('prodArqFonteBtn')?.dataset.aberto === '1'
+  const arquivadas = linhas.filter(l => l.estado === 'arquivada')
+  const lista = _prodArqChip === 'arquivadas' ? arquivadas
+    : _prodArqChip === 'prontas' ? linhas.filter(l => l.estado === 'pronta') : linhas
+  const seu = String(el.dataset.uid) === String(alvo().id)
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:600;color:var(--te);">Arquivamento</div>
+      ${arqFonteBtn('prodArqFonteBtn', 'prodArqFonte', fonteAberta)}
+    </div>
+    <div style="font-size:11.5px;color:var(--ct);margin-top:3px;">
+      Depois que o C.I. devolve, a parcial é arquivada. Arquivar não altera a contagem — ela já contou quando foi ao C.I.</div>
+    ${arqFonteHtml('prodArqFonte', fonteAberta)}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:11px;">
+      ${ARQ_CARDS.map(k => `
+        <div style="background:${k.bg};border-radius:10px;padding:11px 12px;">
+          <div style="font-size:24px;font-weight:500;line-height:1;color:${k.num};">${c[k.k] ?? 0}</div>
+          <div style="font-size:12px;color:${k.num};font-weight:700;margin-top:4px;">${k.rotulo}</div>
+          <div style="font-size:11px;color:var(--ct);margin-top:2px;">${k.apoio}</div>
+        </div>`).join('')}
+    </div>
+    ${c.prontas ? `
+    <div style="background:#FDF2E0;border-left:3px solid #E8C88A;border-radius:0 6px 6px 0;padding:9px 13px;margin-top:11px;
+                display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="flex:1 1 220px;font-size:12.5px;color:#854F0B;font-weight:700;">
+        ${c.prontas} parcia${c.prontas > 1 ? 'is' : 'l'} esperando ${seu ? 'o seu arquivamento' : 'arquivamento'}</span>
+      <button class="btn-acao" onclick="prodArqVer()" style="background:#5C6661;color:#fff;font-weight:800;padding:6px 13px;">Ver e arquivar</button>
+    </div>` : ''}
+    <div id="prodArqTab" style="margin-top:12px;">
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;">
+        ${arqChip('Arquivadas', arquivadas.length, _prodArqChip === 'arquivadas', "prodArqChip('arquivadas')")}
+        ${arqChip('Prontas para arquivar', c.prontas || 0, _prodArqChip === 'prontas', "prodArqChip('prontas')")}
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr>${['TR', 'Parcial', 'PCs', 'C.I. devolveu', 'Arquivada em', 'Situação'].map(t => `<th style="${ARQ_TH}">${t}</th>`).join('')}</tr></thead>
+          <tbody>${lista.length ? lista.map(l => `<tr>
+            <td style="${ARQ_TD}white-space:nowrap;font-weight:700;">${escHtml(l.tr)}</td>
+            <td style="${ARQ_TD}">${arqParcialRot(l)}</td>
+            <td style="${ARQ_TD}">${l.n_pcs}</td>
+            <td style="${ARQ_TD}white-space:nowrap;">${arqDevolveu(l)}</td>
+            <td style="${ARQ_TD}white-space:nowrap;">${l.arquivada_em ? arqDia(l.arquivada_em) : '—'}</td>
+            <td style="${ARQ_TD}">${arqSituacaoHtml(l)}</td></tr>`).join('')
+            : `<tr><td colspan="6" style="${ARQ_TD}color:var(--ct);text-align:center;">Nenhuma parcial neste recorte.</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`
+}
+
+function prodArqChip(id) { _prodArqChip = _prodArqChip === id ? null : id; prodArqPintar() }
+
+function prodArqVer() {
+  _prodArqChip = 'prontas'
+  prodArqPintar()
+  document.getElementById('prodArqTab')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// ── Coordenação: "PCs e TRs arquivadas" ──
+let _arqCoord = null, _arqCoordChip = 'todas'
+
+// A contagem de cada chip vem da rota; o filtro só escolhe as linhas que a rota mandou.
+const ARQ_COORD_CHIPS = [
+  { id:'todas',    rotulo:'Todas',                 conta:'total',               teste: () => true },
+  { id:'trs',      rotulo:'TRs encerradas',        conta:'trs_encerradas',      teste: l => l.final && l.estado === 'arquivada' },
+  { id:'parciais', rotulo:'Só parciais',           conta:'parciais_arquivadas', teste: l => !l.final && l.estado === 'arquivada' },
+  { id:'prontas',  rotulo:'Prontas para arquivar', conta:'prontas',             teste: l => l.estado === 'pronta' },
+]
+
+async function irArquivadas() {
+  if(!ARQ_SUPERVISAO.includes(perfilEfetivo(U))) { toast('Esta tela é da coordenação.', 'err'); return }
+  ativarMenu('arquiv')
+  const icone = (SB_ITENS.find(i => i.id === 'arquiv') || {}).icone || ''
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="flex:0 0 42px;width:42px;height:42px;border-radius:11px;background:#5C6661;
+        display:inline-flex;align-items:center;justify-content:center;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#EEF1EF"><path d="${icone}"/></svg>
+      </span>
+      <div style="min-width:0;">
+        <h2 style="font-size:19px;font-weight:800;color:var(--te);">PCs e TRs arquivadas</h2>
+        <div style="font-size:12.5px;color:var(--ct);">Encerradas depois da devolutiva do Controle Interno.</div>
+      </div>
+    </div>
+    <div id="arqCoord"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await arqCoordCarregar()
+}
+
+async function arqCoordCarregar() {
+  if(!document.getElementById('arqCoord')) return
+  try {
+    const j = await (await fetch(`${API_URL}/arquivamento?usuario_id=${U.id}`)).json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _arqCoord = j.data
+    arqCoordPintar()
+  } catch(e) {
+    const x = document.getElementById('arqCoord')
+    if(x) x.innerHTML = `<div style="padding:20px;color:#A32D2D;font-size:13px;">Não deu para carregar: ${escHtml(e.message)}</div>`
+  }
+}
+
+function arqCoordPintar() {
+  const el = document.getElementById('arqCoord')
+  if(!el || !_arqCoord) return
+  const c = _arqCoord.contagens || {}
+  const chip = ARQ_COORD_CHIPS.find(x => x.id === _arqCoordChip) || ARQ_COORD_CHIPS[0]
+  const lista = (_arqCoord.linhas || []).filter(chip.teste)
+  const fonteAberta = document.getElementById('arqCoordFonteBtn')?.dataset.aberto === '1'
+  const esc = _arqCoord.escopo || {}
+  const escopo = esc.grupo ? `Grupo ${escHtml(String(esc.grupo))}` : 'Todos os grupos'
+  el.innerHTML = `
+  <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:14px 16px;">
+    <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+      ${ARQ_COORD_CHIPS.map(x => arqChip(x.rotulo, c[x.conta] ?? 0, x.id === chip.id, `arqCoordChip('${x.id}')`)).join('')}
+      <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ct);">
+        ${escopo} ${arqFonteBtn('arqCoordFonteBtn', 'arqCoordFonte', fonteAberta)}</span>
+    </div>
+    ${arqFonteHtml('arqCoordFonte', fonteAberta, 'O coordenador vê o grupo dele; o superadmin, todos. "Todas" inclui as parciais que o C.I. devolveu e ainda não podem arquivar, com o motivo.')}
+    <div style="overflow-x:auto;margin-top:11px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr>${['Analista', 'Grupo', 'TR', 'Parcial', 'Arquivada em', 'Situação'].map(t => `<th style="${ARQ_TH}">${t}</th>`).join('')}</tr></thead>
+        <tbody>${lista.length ? lista.map(l => `<tr>
+          <td style="${ARQ_TD}">${escHtml(l.analista_nome || '—')}</td>
+          <td style="${ARQ_TD}">${l.grupo != null ? escHtml(String(l.grupo)) : '—'}</td>
+          <td style="${ARQ_TD}white-space:nowrap;font-weight:700;">${escHtml(l.tr)}</td>
+          <td style="${ARQ_TD}">${arqParcialRot(l)}</td>
+          <td style="${ARQ_TD}white-space:nowrap;">${l.arquivada_em ? arqDia(l.arquivada_em) : '—'}</td>
+          <td style="${ARQ_TD}">${arqSituacaoHtml(l)}</td></tr>`).join('')
+          : `<tr><td colspan="6" style="${ARQ_TD}color:var(--ct);text-align:center;">Nenhuma parcial neste recorte.</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`
+}
+
+function arqCoordChip(id) { _arqCoordChip = id; arqCoordPintar() }
 
 /**
  * A conversa do C.I. — TODAS as rodadas, na ordem em que foram escritas.

@@ -143,8 +143,10 @@ console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
   // 'transf' (Transferir prestacoes de contas) e 'acomp' (Acompanhamento). Nenhuma das duas
   // precisou de excecao escrita a mao — caem pela mesma regra do papel efetivo, que e
   // exatamente o que esta secao existe para provar.
+  // ⚠️ E SAO 18 DESDE 13/09/2026: 'arquiv' (PCs e TRs arquivadas), da coordenacao — `pode:eCoord`,
+  // e no papel analista o superadmin nao e coordenador.
   const SOMEM = ['board','rel','vercomo','coord','aprov','afast','estlog','ci','faixa','recado',
-                 'admin','bglobal','prior','config','estornar','transf','acomp'];
+                 'admin','bglobal','prior','config','estornar','transf','acomp','arquiv'];
   const comoTec = idsDe(superad);
   const comoAn  = idsDe(superAn);
 
