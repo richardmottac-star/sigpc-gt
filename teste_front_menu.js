@@ -402,7 +402,10 @@ function _conta(u){ return contaProdutividade(u) }`, ctxP);
   conf(!/if\(u\.perfil !== 'coordenador'\) usuariosPorId/.test(html),
        'nao sobrou a regra antiga, que so excluia coordenador');
   // O Board agrega por PC: sem exclusao explicita, dependeria de "o C.I. nunca ter PC".
-  conf(/foraDaProd\.has\(String\(r\.analista_id\)\)/.test(html),
+  // ⚠️ Desde 14/09/2026 e uma lista de INCLUSAO, o mesmo recorte da Produtividade: so entra
+  // PC cujo dono passa em contaProdutividade — e todos os blocos agregam so sobre ela.
+  conf(/if\(contaProdutividade\(u\)\) elegiveis\.set\(String\(u\.id\), u\)/.test(html)
+       && /const comDono = data\.filter\(donoDe\)/.test(html),
        'o Board exclui EXPLICITAMENTE, nao por acidente');
 
   // ⚠️ O Quadro 2 do CGE resolve por outro caminho: lista de INCLUSAO. Se um dia virar

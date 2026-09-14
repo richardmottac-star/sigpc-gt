@@ -10934,6 +10934,51 @@ function boardDestroyCharts() {
   _boardCharts = []
 }
 
+// O "Fonte" dos três blocos do Board — colado na conta que ele explica (`boardCarregar`, logo abaixo).
+const BOARD_REGRA = 'PC baixada, ou encaminhada ao C.I. com parecer.'
+const BOARD_NAO_CONTA = 'baixa anterior a 12/08/2025, PC com pendência de registro no SIGEF, PC na engenharia, PC invalidada.'
+const BOARD_FONTES = [
+  { id:'boardFonteCards', itens:[
+      'Total PCs: o acervo inteiro da setorial, com e sem dono.',
+      'Concluídas: as PCs com dono que contam produtividade.',
+      '% Concluído: Concluídas ÷ PCs com dono.',
+      'Em análise, Diligência e Reanálise: as PCs pela situação em que estão.',
+      'Sem dono: as PCs sem analista — o passivo do acervo.' ],
+    denominador:'as PCs com dono — de analista cadastrado na setorial que entra na produtividade (coordenador e C.I. ficam fora).',
+    extra:'As PCs sem dono ficam fora da conta da equipe e aparecem no card cinza.' },
+  { id:'boardFonteGrupos', itens:[
+      'Total: as PCs com dono, pelo grupo do analista no cadastro.',
+      '✓: as que contam produtividade.',
+      '⚠: as que estão em diligência.',
+      'Percentual: ✓ ÷ Total.' ],
+    denominador:'as PCs com dono do grupo; as sem dono não entram.' },
+  { id:'boardFonteTop', itens:[
+      'Barra verde: as PCs do analista que contam produtividade.',
+      'Barra cinza: as demais PCs dele — o total menos a verde.',
+      'Os 20 analistas com mais PCs na barra verde, em ordem decrescente.' ] },
+]
+
+function boardFonteHtml(id, aberta) {
+  const f = BOARD_FONTES.find(x => x.id === id)
+  const linha = (rot, txt) => `<div><b style="color:var(--texto);">${rot}</b> ${txt}</div>`
+  return `<div id="${id}" ${aberta ? '' : 'hidden'} style="margin-top:8px;background:var(--fundo-alt);border:0.5px solid var(--borda-suave);
+    border-radius:var(--raio);padding:10px 13px;font-size:11.5px;color:var(--texto-secundario);line-height:1.55;">
+    ${f.itens.map(t => `<div>${t}</div>`).join('')}
+    <div style="margin-top:5px;">
+      ${linha('Unidade:', 'PC.')}${linha('Regra:', BOARD_REGRA)}${linha('Não conta:', BOARD_NAO_CONTA)}
+      ${f.denominador ? linha('Denominador:', f.denominador) : ''}${f.extra ? `<div>${f.extra}</div>` : ''}
+    </div>
+  </div>`
+}
+
+// O título de um bloco com o "Fonte" no canto — o mesmo botão do arquivamento (`arqFonteBtn`).
+function boardTitulo(texto, id, aberta) {
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <div style="font-size:12px;font-weight:700;">${texto}</div>
+    ${arqFonteBtn(id + 'Btn', id, aberta)}
+  </div>`
+}
+
 async function irBoard() {
   if(perfilEfetivo(U) !== 'coordenador' && perfilEfetivo(U) !== 'superadmin') { toast('Acesso restrito.','err'); return }
   ativarMenu('board')
@@ -10962,64 +11007,74 @@ async function boardCarregar() {
   const cont = document.getElementById('boardCont')
   if(!cont) return
   const sid = document.getElementById('boardSid')?.value || U.setorialFiltro || 'FCEE'
+  // O "Fonte" aberto sobrevive ao Atualizar: o estado é lido dos botões antigos antes de sumirem.
+  const fonteAberta = Object.fromEntries(BOARD_FONTES.map(f => [f.id, document.getElementById(f.id + 'Btn')?.dataset.aberto === '1']))
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
     const data = await fetchTodasPCs(sid)
 
+    // ⚠️ A REGRA C, A MESMA DA TELA PRODUTIVIDADE (14/09/2026). Até aqui os três blocos contavam
+    // `status === 'baixada'`, e o Board mostrava 4.582 concluídas onde a Produtividade mostrava
+    // 4.153: entravam a baixa anterior ao GT, a pendência de registro no SIGEF e a engenharia.
+    // A conta vem PRONTA do servidor (`sigef_conta`, lib/sigef.js) — a tela soma, não decide.
+    //
+    // ⚠️ A EQUIPE É MEDIDA PELO QUE RECEBEU. "Com dono" é a PC de analista cadastrado na setorial
+    // que entra na produtividade (`contaProdutividade`: fora coordenador e C.I.) — o mesmo recorte
+    // da Produtividade. As sem dono são o passivo do acervo: aparecem num card próprio e não
+    // entram em denominador nenhum. Eram 7.662 no denominador do "% Concluído".
+    const { data: todosUsers } = await db.from('usuarios').select('id,nome,perfil,grupo').eq('setorial_id', sid)
+    const elegiveis = new Map()
+    ;(todosUsers||[]).forEach(u => { if(contaProdutividade(u)) elegiveis.set(String(u.id), u) })
+    const donoDe = (r) => r.analista_id ? elegiveis.get(String(r.analista_id)) : null
+
     const total = data.length
-    const baixadas = data.filter(r=>r.status==='baixada').length
+    const comDono = data.filter(donoDe)
+    const semDono = data.filter(r => !r.analista_id).length
+    const concluidas = comDono.filter(r => r.sigef_conta === true).length
     const dilig = data.filter(r=>r.status==='diligencia').length
     const analise = data.filter(r=>r.status==='analise').length
     const reanalise = data.filter(r=>r.status==='reanalise').length
     const ctrl = data.filter(r=>r.enviado_ci).length
-    const pct = total>0?Math.round(baixadas/total*100):0
+    // `baixadas` sobra só para a pizza, que é a distribuição por SITUAÇÃO — e lá o rótulo diz "Baixadas".
+    const baixadas = data.filter(r=>r.status==='baixada').length
+    const pct = comDono.length>0?Math.round(concluidas/comDono.length*100):0
 
-    // Stats por grupo (prestacoes_contas.grupo já vem preenchido por linha)
-    const grupos = {1:{total:0,bx:0,dilig:0,nome:`G1 — ${COORD_GRUPO[1]}`},2:{total:0,bx:0,dilig:0,nome:`G2 — ${COORD_GRUPO[2]}`},3:{total:0,bx:0,dilig:0,nome:`G3 — ${COORD_GRUPO[3]}`}}
-    data.forEach(r => {
-      const g = r.grupo
-      if(g && grupos[g]) {
-        grupos[g].total++
-        if(r.status==='baixada') grupos[g].bx++
-        if(r.status==='diligencia') grupos[g].dilig++
-      }
+    // ⚠️ O GRUPO É O DO DONO NO CADASTRO, e não `prestacoes_contas.grupo`. A coluna da PC está
+    // vazia em 823 PCs com dono (646 delas do G3, medido em 14/09), e essas PCs sumiam das barras:
+    // o G3 aparecia com 68% quando a Produtividade dizia 47%. Era erro de unidade, não de regra.
+    const grupos = {1:{total:0,conta:0,dilig:0,nome:`G1 — ${COORD_GRUPO[1]}`},2:{total:0,conta:0,dilig:0,nome:`G2 — ${COORD_GRUPO[2]}`},3:{total:0,conta:0,dilig:0,nome:`G3 — ${COORD_GRUPO[3]}`}}
+    comDono.forEach(r => {
+      const gr = grupos[donoDe(r).grupo]
+      if(!gr) return
+      gr.total++
+      if(r.sigef_conta === true) gr.conta++
+      if(r.status==='diligencia') gr.dilig++
     })
 
-    // Stats por analista (top analistas para o gráfico) — agrupado por analista_id, nome completo via usuarios
-    const { data: todosUsers } = await db.from('usuarios').select('id,nome,perfil').eq('setorial_id', sid)
-    const nomePorId = {}
-    // ⚠️ `perfil` entrou no SELECT em 12/08 só para esta exclusão. O Board agrega por
-    // `analista_id`, então um técnico do C.I. só apareceria se tivesse PC — o que não
-    // acontece, porque ele não assume TR. Mas a exclusão aqui é EXPLÍCITA de propósito:
-    // depender de "ele nunca vai ter PC" é depender de acidente, e uma atribuição errada
-    // colocaria um efetivo no gráfico de produtividade sem ninguém entender por quê.
-    const foraDaProd = new Set()
-    ;(todosUsers||[]).forEach(u => {
-      nomePorId[u.id] = u.nome
-      if(!contaProdutividade(u)) foraDaProd.add(String(u.id))
-    })
+    // O Top 20: a barra verde é a conta conciliada do analista, a cinza é o resto das PCs dele.
     const mapaAn = {}
-    data.forEach(r => {
-      if(!r.analista_id) return
-      if(foraDaProd.has(String(r.analista_id))) return
-      if(!mapaAn[r.analista_id]) mapaAn[r.analista_id] = {total:0,bx:0}
-      mapaAn[r.analista_id].total++
-      if(r.status==='baixada') mapaAn[r.analista_id].bx++
+    comDono.forEach(r => {
+      const id = String(r.analista_id)
+      if(!mapaAn[id]) mapaAn[id] = {total:0,conta:0}
+      mapaAn[id].total++
+      if(r.sigef_conta === true) mapaAn[id].conta++
     })
     const analistas = Object.entries(mapaAn)
-      .map(([id,v]) => ({nome:nomePorId[id]||('Analista #'+id),...v,pct:v.total>0?Math.round(v.bx/v.total*100):0}))
-      .sort((a,b) => b.bx - a.bx)
+      .map(([id,v]) => ({nome:elegiveis.get(id)?.nome||('Analista #'+id),...v}))
+      .sort((a,b) => b.conta - a.conta)
       .slice(0, 20)
 
     cont.innerHTML = `
       <!-- Cards resumo -->
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;">
+      ${boardTitulo(`Resumo — ${escHtml(sid)}`, 'boardFonteCards', fonteAberta.boardFonteCards)}
+      ${boardFonteHtml('boardFonteCards', fonteAberta.boardFonteCards)}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0 6px;">
         <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
           <div style="font-size:26px;font-weight:800;color:var(--te);">${total}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Total PCs</div>
         </div>
         <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--v);">
-          <div style="font-size:26px;font-weight:800;color:var(--v);">${baixadas}</div>
+          <div style="font-size:26px;font-weight:800;color:var(--v);">${concluidas}</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluídas</div>
         </div>
         <div style="background:#FCFDFC;border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid #1565C0;">
@@ -11038,13 +11093,19 @@ async function boardCarregar() {
           <div style="font-size:26px;font-weight:800;color:var(--v);">${pct}%</div>
           <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Concluído</div>
         </div>
+        <div style="background:var(--fundo-alt);border-radius:10px;padding:12px;text-align:center;box-shadow:var(--sombra);border-top:3px solid var(--borda-campo);">
+          <div style="font-size:26px;font-weight:800;color:var(--texto-muted);">${semDono}</div>
+          <div style="font-size:9px;color:var(--ct);text-transform:uppercase;letter-spacing:.5px;">Sem dono</div>
+        </div>
       </div>
+      <div style="font-size:12px;color:var(--texto-muted);line-height:1.45;margin-bottom:14px;">
+        Os números seguem a mesma regra da tela Produtividade. PC baixada ou encaminhada ao C.I. com parecer, descontadas as anteriores ao GT, as pendentes de registro no SIGEF e as que estão na engenharia.</div>
 
       <!-- Barra de progresso geral -->
       <div style="background:#FCFDFC;border-radius:10px;padding:14px 18px;box-shadow:var(--sombra);margin-bottom:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-size:13px;font-weight:700;">Progresso Geral — ${sid}</div>
-          <div style="font-size:12px;color:var(--ct);">${baixadas} de ${total} PCs concluídas</div>
+          <div style="font-size:12px;color:var(--ct);">${concluidas} de ${comDono.length} PCs com dono concluídas</div>
         </div>
         <div style="background:#E8EEEB;border-radius:10px;height:14px;overflow:hidden;">
           <div style="height:14px;border-radius:10px;background:linear-gradient(90deg,var(--v),var(--vc));width:${pct}%;transition:width 1s;"></div>
@@ -11055,16 +11116,18 @@ async function boardCarregar() {
       </div>
 
       <!-- Cards por grupo + gráficos -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+      ${boardTitulo('Por grupo', 'boardFonteGrupos', fonteAberta.boardFonteGrupos)}
+      ${boardFonteHtml('boardFonteGrupos', fonteAberta.boardFonteGrupos)}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:8px 0 14px;">
         ${[1,2,3].map(g => {
           const gr = grupos[g]
-          const gpct = gr.total>0?Math.round(gr.bx/gr.total*100):0
+          const gpct = gr.total>0?Math.round(gr.conta/gr.total*100):0
           const gcor = gpct>=70?'var(--v)':gpct>=40?'var(--am)':'var(--r)'
           return `<div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
             <div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--te);">${gr.nome}</div>
             <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
               <span>Total: <strong>${gr.total}</strong></span>
-              <span style="color:var(--v);">✓ ${gr.bx}</span>
+              <span style="color:var(--v);">✓ ${gr.conta}</span>
               <span style="color:var(--am);">⚠ ${gr.dilig}</span>
             </div>
             <div style="background:#E8EEEB;border-radius:8px;height:10px;overflow:hidden;margin-bottom:4px;">
@@ -11078,15 +11141,16 @@ async function boardCarregar() {
       <!-- Gráficos lado a lado -->
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:14px;">
         <div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
-          <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Produtividade por Analista (Top 20)</div>
-          <div style="height:320px;"><canvas id="chartBarras"></canvas></div>
+          ${boardTitulo('Produtividade por Analista (Top 20)', 'boardFonteTop', fonteAberta.boardFonteTop)}
+          ${boardFonteHtml('boardFonteTop', fonteAberta.boardFonteTop)}
+          <div style="height:320px;margin-top:10px;"><canvas id="chartBarras"></canvas></div>
         </div>
         <div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
           <div style="font-size:12px;font-weight:700;margin-bottom:10px;">Distribuição por Situação</div>
           <div style="height:220px;"><canvas id="chartPizza"></canvas></div>
           <div style="margin-top:10px;font-size:10px;">
             <div style="display:flex;flex-direction:column;gap:4px;">
-              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--verde-primario);flex-shrink:0;"></span> Concluídas: <strong>${baixadas}</strong></div>
+              <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--verde-primario);flex-shrink:0;"></span> Baixadas: <strong>${baixadas}</strong></div>
               <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#1565C0;flex-shrink:0;"></span> Em Análise: <strong>${analise}</strong></div>
               <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#F57F17;flex-shrink:0;"></span> Diligência: <strong>${dilig}</strong></div>
               <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#6A1B9A;flex-shrink:0;"></span> Reanálise: <strong>${reanalise}</strong></div>
@@ -11106,8 +11170,8 @@ async function boardCarregar() {
           data: {
             labels: analistas.map(a => a.nome),
             datasets: [
-              { label: 'Concluídas', data: analistas.map(a => a.bx), backgroundColor: '#006B3C', borderRadius: 4 },
-              { label: 'Pendentes', data: analistas.map(a => a.total - a.bx), backgroundColor: '#E8EEEB', borderRadius: 4 }
+              { label: 'Concluídas', data: analistas.map(a => a.conta), backgroundColor: '#006B3C', borderRadius: 4 },
+              { label: 'Demais PCs', data: analistas.map(a => a.total - a.conta), backgroundColor: '#E8EEEB', borderRadius: 4 }
             ]
           },
           options: {
@@ -11128,7 +11192,7 @@ async function boardCarregar() {
         const c2 = new Chart(ctxPie, {
           type: 'doughnut',
           data: {
-            labels: ['Concluídas','Em Análise','Diligência','Reanálise','Ctrl. Interno','Outros'],
+            labels: ['Baixadas','Em Análise','Diligência','Reanálise','Ctrl. Interno','Outros'],
             datasets: [{ data: [baixadas,analise,dilig,reanalise,ctrl,Math.max(0,pendOther)],
               backgroundColor: ['#006B3C','#1565C0','#F57F17','#6A1B9A','#283593','#BDBDBD'],
               borderWidth: 2, borderColor: '#fff' }]
