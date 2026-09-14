@@ -15629,18 +15629,27 @@ function pCiBloco(r, pa) {
   const msgs = _pciMsgs.get(chave)
   const podeResponder = pa.ci_situacao === 'com_analista'
   const pcRef = pa.pcs[0]?.codigo_pc || ''
+  // A opção do C.I. e o complemento vêm prontos do servidor, com o estado do arquivamento.
+  const opCi = CI_OPCOES.find(o => o.id === pa.arquivamento?.ci_opcao)
+  const complCi = pa.arquivamento?.ci_complemento || ''
 
   return `
   <div style="margin:0 16px 12px;border:1.5px solid ${est.borda};border-radius:9px;overflow:hidden;background:#fff;">
     <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;background:${est.fundo};flex-wrap:wrap;">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="${est.texto}"><path d="${CI_ESCUDO}"/></svg>
       <span style="font-size:13px;font-weight:800;color:${est.texto};">Controle interno</span>
-      <span style="background:${est.texto};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${est.rot}</span>
+      ${opCi ? `<span style="background:${opCi.cor};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${opCi.rot}</span>`
+        : `<span style="background:${est.texto};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${est.rot}</span>`}
     </div>
     <div style="padding:4px 13px 0;font-size:11px;color:var(--ct);">
       ${escHtml(pcRef)} · <span class="proc-sgpe">${procHtml(pa.pcs[0]?.processo_pc, pcRef)}</span> · Parcial ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
       ${pa.ci_encerrado_em?` · encerrado em ${planData(pa.ci_encerrado_em)}`:''}
     </div>
+    ${complCi ? `
+    <div style="margin:9px 13px 0;background:var(--fundo-alt);border-radius:6px;padding:8px 12px;">
+      <div style="font-size:10.5px;font-weight:700;color:var(--texto-muted);margin-bottom:2px;">Complemento do C.I.</div>
+      <div style="font-size:12.5px;color:var(--texto);line-height:1.5;white-space:pre-line;">${escHtml(complCi)}</div>
+    </div>` : ''}
 
     <div style="margin:9px 13px;background:#F1F8E9;border:1px solid #C5E1A5;border-radius:7px;padding:8px 12px;
                 font-size:12px;color:#2E7D32;font-weight:700;">
@@ -15702,16 +15711,27 @@ function arqFaixaCi(r, pa) {
   if(!a) return ''
   const ref = pa.pcs[0] || {}
   const args = arqArgs(r.tr, pa.num, ref.setorial_id)
-  if(a.estado === 'pronta') return `
+  if(a.estado === 'pronta') {
+    // A faixa fala a opção do C.I.; sem opção (a reaberta antiga), fica o texto geral.
+    const pend = a.ci_opcao === 'com_pendencia'
+    const texto = a.ci_opcao === 'de_acordo'
+      ? '<b>O C.I. está de acordo.</b> Confira o registro no SGPe e arquive esta parcial.'
+      : pend ? '<b>Há pendência a resolver.</b> Confira o processo no SGPe e tome as providências. Depois, arquive se resolveu, ou responda ao C.I. se precisar de mais documentos da entidade.'
+      : '<b>Esta parcial está pronta para arquivar.</b> O C.I. devolveu — arquive se você já resolveu, ou responda ao C.I. se precisar de mais documentos.'
+    const responde = pend && pa.ci_situacao === 'com_analista'
+    return `
     <div style="margin:0 13px 9px;background:#fff;border:0.5px solid #E8C88A;border-radius:6px;padding:10px 13px;
                 display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div style="flex:1 1 260px;font-size:12.5px;color:#854F0B;line-height:1.5;">
-        <b>Esta parcial está pronta para arquivar.</b>
-        O C.I. devolveu — arquive se você já resolveu, ou responda ao C.I. se precisar de mais documentos.</div>
-      <button class="btn-acao" onclick="arqAbrir(${args})"
-        style="background:${a.final ? 'var(--v)' : '#5C6661'};color:#fff;font-weight:800;padding:8px 15px;white-space:nowrap;">
-        ${a.final ? '📁 Arquivar e encerrar a TR' : '📁 Arquivar parcial'}</button>
+      <div style="flex:1 1 260px;font-size:12.5px;color:#854F0B;line-height:1.5;">${texto}</div>
+      <span style="display:inline-flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-acao" onclick="arqAbrir(${args})"
+          style="background:${a.final ? 'var(--v)' : '#5C6661'};color:#fff;font-weight:800;padding:8px 15px;white-space:nowrap;">
+          ${a.final ? '📁 Arquivar e encerrar a TR' : '📁 Arquivar parcial'}</button>
+        ${responde ? `<button class="btn-neutro" onclick="pCiFocar('${escHtml(`${r.tr}|${pa.num}`)}')"
+          style="padding:8px 15px;font-weight:700;white-space:nowrap;">Responder ao C.I.</button>` : ''}
+      </span>
     </div>`
+  }
   if(a.estado === 'arquivada') return `
     <div style="margin:0 13px 9px;background:#EEF1EF;border:0.5px solid #DCE2DE;border-radius:6px;padding:9px 13px;
                 display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12.5px;color:#5C6661;">
@@ -17990,17 +18010,52 @@ const CI_CHIPS = [
   { id:'encerradas', rot:'Encerradas' },
 ]
 
-// As duas decisões. O texto é o do Richard, e ele viaja inteiro: vai para o rádio, para a
-// notificação da analista e para a linha do histórico. Escrever a mesma frase em três lugares
-// garante que um deles fique para trás quando ela mudar.
-const CI_DECISOES = [
-  { id:'de_acordo', cor:'#3B6D11', bg:'#EAF3DE',
-    rot:'Parecer do analista em acordo, baixado',
-    sub:'Encerra o ciclo. A PC sai da fila e vai para Encerradas.' },
-  { id:'ressalva',  cor:'#BA7517', bg:'#FAEEDA',
-    rot:'Parecer para correção, verificar o processo no SGPe',
-    sub:'Volta para a analista corrigir. A baixa dela permanece.' },
+// As duas opções do C.I. — as MESMAS na decisão e na reabertura (Richard, 14/09/2026). O texto
+// que a analista lê no sino e na conversa sai do servidor (lib/ci.js, OPCOES); aqui ficam o
+// rótulo e o apoio do rádio e a cor da pílula do cartão, e têm de dizer o mesmo que lá.
+const CI_OPCOES = [
+  { id:'de_acordo',     cor:'#639922', rot:'De acordo',
+    apoio:'O C.I. concorda com o parecer. A analista confere o registro no SGPe e arquiva a parcial.' },
+  { id:'com_pendencia', cor:'#BA7517', rot:'Com pendência',
+    apoio:'Falta providência. A analista confere o processo no SGPe, resolve, e então arquiva ou responde ao C.I.' },
 ]
+const CI_SEM_OPCAO = 'Escolha uma das duas opções acima para continuar. O complemento sozinho não registra a decisão.'
+const CI_COMPLEMENTO_PH = 'Diga o que a analista precisa saber, se houver algo além da opção acima.'
+
+// As duas opções como rádios, com o título e a linha de apoio — a decisão e a reabertura usam
+// este mesmo desenho. `acao` é a função chamada com o id da opção.
+function ciOpcoesHtml(nome, escolhida, livre, acao, titulo) {
+  return `
+    <div style="font-size:12.5px;font-weight:700;color:var(--texto);">Decisão do Controle Interno <span style="color:#A32D2D;">*</span></div>
+    <div style="font-size:12px;color:var(--texto-secundario);line-height:1.45;margin:2px 0 8px;">
+      Escolha uma das duas. Ela vira a mensagem que a analista lê no cartão dela.</div>
+    ${CI_OPCOES.map(o => {
+      const on = escolhida === o.id
+      return `
+    <label ${titulo ? `title="${escHtml(titulo)}"` : ''}
+      style="display:flex;gap:10px;align-items:flex-start;padding:10px 13px;border-radius:var(--raio);margin-bottom:7px;
+      cursor:${livre ? 'pointer' : 'not-allowed'};border:0.5px solid ${on ? 'var(--v)' : 'var(--borda-suave)'};
+      background:${on ? 'var(--vbg)' : '#fff'};opacity:${livre ? 1 : .55};">
+      <input type="radio" name="${nome}" value="${o.id}" ${on ? 'checked' : ''} ${livre ? '' : 'disabled'}
+        onchange="${acao}('${o.id}')" style="margin-top:3px;accent-color:var(--v);flex:0 0 auto;">
+      <span style="min-width:0;">
+        <span style="display:block;font-size:13.5px;font-weight:600;color:var(--texto);">${o.rot}</span>
+        <span style="display:block;font-size:12px;color:var(--texto-secundario);line-height:1.45;margin-top:2px;">${o.apoio}</span>
+      </span>
+    </label>`
+    }).join('')}`
+}
+
+const ciCriticaHtml = () => `<div style="background:#FBEDED;border-left:3px solid #E0A0A0;border-radius:0 6px 6px 0;
+  padding:8px 12px;font-size:12px;color:#A32D2D;line-height:1.45;margin-top:2px;">${CI_SEM_OPCAO}</div>`
+
+// "Responder ao C.I." da faixa de ação leva ao campo de resposta que já existe no bloco.
+function pCiFocar(chave) {
+  const t = document.getElementById('pciTxt-' + chave)
+  if(!t) return
+  t.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  t.focus()
+}
 
 let _ciDados = []
 let _ciResumo = { cards:{}, chips:{} }
@@ -18009,7 +18064,7 @@ let _ciAnalistas = []
 let _ciTotal = 0
 let _ciChip = 'fila'
 let _ciAberto = null          // codigo_pc da PC expandida — UMA por vez
-let _ciDecisao = null         // 'de_acordo' | 'ressalva' — a escolha na PC aberta
+let _ciDecisao = null         // 'de_acordo' | 'com_pendencia' — a escolha na PC aberta
 
 // ⚠️ OS DOIS BLOCOS DE BUSCA SÃO EXCLUDENTES, e a decisão é do Richard: usar um limpa o
 // outro. Combiná-los pareceria mais poderoso e devolveria vazio silencioso toda vez que o
@@ -18434,18 +18489,19 @@ function ciReabrirAbrir(codigo_pc) {
           A parcial volta para o analista como pendência dele.
           <b>A baixa e o encaminhamento ao C.I. continuam valendo.</b>
         </div>
-        <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;
-          margin-bottom:3px;">Motivo (obrigatório)</div>
-        <textarea id="ciReabrirTxt" rows="3" oninput="ciReabrirMudou()"
-          placeholder="Por que esta parcial está voltando?"
+        <div id="ciReabrirOps">${ciOpcoesHtml('ciReabrirOp', null, true, 'ciReabrirEscolher')}</div>
+        <div id="ciReabrirCrit">${ciCriticaHtml()}</div>
+        <div style="margin-top:9px;font-size:12px;font-weight:600;color:var(--texto);margin-bottom:3px;">Complemento (opcional)</div>
+        <textarea id="ciReabrirTxt" rows="3"
+          placeholder="${CI_COMPLEMENTO_PH}"
           style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--cb);
             border-radius:7px;font-size:12.5px;font-family:inherit;resize:vertical;"></textarea>
         <div style="font-size:11.5px;color:var(--ct);margin-top:5px;">
-          O analista vai ler este texto — ele chega no sino e fica no histórico da parcial.</div>
+          A opção e o complemento chegam no sino do analista e ficam no histórico da parcial.</div>
         <div class="mcbt">
           <button class="btn-neutro" onclick="ciReabrirFechar()">Cancelar</button>
           <button id="ciReabrirBt" class="btn-acao" onclick="ciReabrirConfirmar()" disabled
-            title="Escreva o motivo — o analista vai lê-lo."
+            title="${CI_SEM_OPCAO}"
             style="padding:8px 17px;font-size:13px;">Reabrir</button>
         </div>
       </div>
@@ -18464,21 +18520,34 @@ function ciReabrirFechar() {
   document.removeEventListener('keydown', ciReabrirEsc, true)
 }
 
-/** O botão nasce cinza e só acende com motivo escrito — armadilha 15, com o motivo no title. */
+/** A escolha da opção na reabertura: repinta só as opções — o complemento fica como está. */
+function ciReabrirEscolher(id) {
+  const d = document.getElementById('ciReabrirMo')
+  if(!d) return
+  d.dataset.opcao = id
+  const ops = document.getElementById('ciReabrirOps')
+  if(ops) ops.innerHTML = ciOpcoesHtml('ciReabrirOp', id, true, 'ciReabrirEscolher')
+  ciReabrirMudou()
+}
+
+/** O botão nasce cinza e só acende com a opção escolhida — armadilha 12, com o motivo no title. */
 function ciReabrirMudou() {
   const bt = document.getElementById('ciReabrirBt')
   if(!bt) return
-  const t = (document.getElementById('ciReabrirTxt')?.value || '').trim()
-  bt.disabled = !t
-  bt.title = t ? 'Devolver esta parcial ao analista' : 'Escreva o motivo — o analista vai lê-lo.'
+  const op = document.getElementById('ciReabrirMo')?.dataset.opcao || ''
+  bt.disabled = !op
+  bt.title = op ? 'Devolver esta parcial ao analista' : CI_SEM_OPCAO
+  const cr = document.getElementById('ciReabrirCrit')
+  if(cr) cr.innerHTML = op ? '' : ciCriticaHtml()
 }
 
 async function ciReabrirConfirmar() {
   const d = document.getElementById('ciReabrirMo')
   if(!d) return
   const l = _ciDados.find(x => x.codigo_pc === d.dataset.pc)
+  const opcao = d.dataset.opcao || ''
   const txt = (document.getElementById('ciReabrirTxt')?.value || '').trim()
-  if(!l || !txt) return
+  if(!l || !opcao) return
 
   const bt = document.getElementById('ciReabrirBt')
   if(bt) { bt.disabled = true; bt.textContent = 'Reabrindo...' }
@@ -18486,7 +18555,7 @@ async function ciReabrirConfirmar() {
     const r = await fetch(`${API_URL}/ci/reabrir`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ tr:l.tr, parcial_num:l.parcial_num, setorial_id:l.setorial_id,
-                             texto:txt, autor_id:U.id })
+                             opcao, texto:txt, autor_id:U.id })
     })
     const j = await r.json()
     // ⚠️ A MENSAGEM É A QUE A ROTA DEVOLVEU, e não uma traduzida aqui. Ela distingue o 403
@@ -18954,28 +19023,10 @@ function ciDetalhe(l) {
       }</div>
     </div>`
 
-  // ⚠️ Os dois rádios trazem CADA UM a sua consequência escrita embaixo. O rótulo diz o que a
-  // pessoa escolhe; o subtexto diz o que acontece depois — e é o "a baixa dela permanece" que
-  // impede a leitura de que devolver à analista desfaz a produtividade dela.
-  const opcoes = CI_DECISOES.map(d => {
-    const on = _ciDecisao === d.id
-    const livre = minha && naFila
-    return `
-    <label ${!minha ? `title="${escHtml(NAO_E_CI)}"` : ''}
-      style="display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:9px;
-      cursor:${livre ? 'pointer' : 'not-allowed'};margin-bottom:8px;
-      border:1.5px solid ${on ? d.cor : 'var(--cb)'};background:${on ? d.bg : '#fff'};
-      opacity:${livre ? 1 : .55};">
-      <input type="radio" name="ciDec" value="${d.id}" ${on ? 'checked' : ''} ${livre ? '' : 'disabled'}
-        onchange="ciEscolher('${d.id}')" style="margin-top:2px;accent-color:${d.cor};flex:0 0 auto;">
-      <span style="min-width:0;">
-        <span style="display:block;font-size:13px;font-weight:${on?700:600};color:${on ? d.cor : 'var(--te)'};">${d.rot}</span>
-        <span style="display:block;font-size:11.5px;color:var(--ct);margin-top:2px;">${d.sub}</span>
-      </span>
-    </label>`
-  }).join('')
+  // As duas opções do C.I., as mesmas da reabertura — ver `ciOpcoesHtml`.
+  const opcoes = ciOpcoesHtml('ciDec', _ciDecisao, minha && naFila, 'ciEscolher', !minha ? NAO_E_CI : '')
 
-  const escolhida = CI_DECISOES.find(d => d.id === _ciDecisao)
+  const escolhida = CI_OPCOES.find(d => d.id === _ciDecisao)
   const pode = !!escolhida && minha && naFila
   const motivo = !naFila
     ? (l.ci_situacao === 'encerrado' ? 'Esta PC já foi encerrada no Controle Interno.'
@@ -18993,14 +19044,12 @@ function ciDetalhe(l) {
         : `Devolvida à analista para correção — rodada ${l.ci_rodada || 1}. Ela volta para a fila quando responder.`}
     </div>` : `
     <div>
-      <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;
-        font-weight:700;margin-bottom:7px;">Decisão do Controle Interno</div>
       ${opcoes}
+      ${minha && !escolhida ? ciCriticaHtml() : ''}
       <div style="margin-top:9px;">
-        <div style="font-size:10px;color:#9AA8A0;text-transform:uppercase;letter-spacing:.05em;
-          margin-bottom:3px;">Observação (opcional)</div>
+        <div style="font-size:12px;font-weight:600;color:var(--texto);margin-bottom:3px;">Complemento (opcional)</div>
         <textarea id="ciObs" rows="2" ${minha ? '' : 'disabled'}
-          placeholder="Um complemento para a analista, se houver."
+          placeholder="${CI_COMPLEMENTO_PH}"
           style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--cb);
             border-radius:7px;font-size:12.5px;font-family:inherit;resize:vertical;"></textarea>
       </div>
@@ -19068,7 +19117,7 @@ function ciEscolher(decisao) {
 async function ciConfirmar(codigo_pc) {
   if(verComoAtivo()) { toast('Decidir no C.I. é do técnico do Controle Interno, não do analista.','err'); return }
   const l = _ciDados.find(x => x.codigo_pc === codigo_pc)
-  const d = CI_DECISOES.find(x => x.id === _ciDecisao)
+  const d = CI_OPCOES.find(x => x.id === _ciDecisao)
   if(!l || !d) return
   const codigos = Array.isArray(l.codigos_pc) ? l.codigos_pc : [l.codigo_pc].filter(Boolean)
   const nPcs = l.n_pcs || codigos.length || 1
@@ -19084,8 +19133,8 @@ async function ciConfirmar(codigo_pc) {
     // que a parcela inteira.
     detalhe: `${l.tr} · parcial ${l.parcial_num || '—'} · ${nPcs} PC${nPcs > 1 ? 's' : ''}\n` +
       `${codigos.join(', ')}\n${l.entidade || ''}\n\n` +
-      `${d.sub}\n\nEm qualquer das duas, a baixa da analista permanece.`,
-    okTexto: deAcordo ? 'Encerrar no C.I.' : 'Devolver para correção',
+      `${d.apoio}\n\nEm qualquer das duas, a baixa da analista permanece.`,
+    okTexto: deAcordo ? 'Encerrar no C.I.' : 'Devolver à analista',
     cancelarTexto: 'Voltar',
   })) return
 
@@ -19095,14 +19144,14 @@ async function ciConfirmar(codigo_pc) {
     const r = await fetch(`${API_URL}/ci/decidir`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ tr:l.tr, parcial_num:l.parcial_num, setorial_id:l.setorial_id,
-                             decisao:d.id, texto:obs, autor_id:U.id })
+                             opcao:d.id, texto:obs, autor_id:U.id })
     })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
     // O número vem da RESPOSTA (`afetadas`), não do que a tela achava: se uma PC entrou ou
     // saiu da fila entre o carregamento e o clique, quem sabe o que aconteceu é o servidor.
     const n = j.data?.afetadas ?? nPcs
-    toast((deAcordo ? 'Parcial encerrada no Controle Interno' : 'Parcial devolvida à analista para correção')
+    toast((deAcordo ? 'De acordo — parcial encerrada no Controle Interno' : 'Com pendência — parcial devolvida à analista')
           + ` — ${n} PC${n > 1 ? 's' : ''}.`, 'ok')
     _ciAberto = null; _ciDecisao = null
     await ciCarregar()

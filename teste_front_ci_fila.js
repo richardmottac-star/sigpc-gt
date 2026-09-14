@@ -267,24 +267,40 @@ conf(/Parecer da analista/.test(B), 'com o rotulo');
 conf(/A analista baixou a parcial sem escrever um texto de parecer/.test(B),
      'e diz quando a analista nao escreveu, em vez de ficar vazio');
 
-S('10. AS DUAS DECISOES');
-conf(/const CI_DECISOES = \[/.test(B), 'as duas numa lista so');
-conf(/id:'de_acordo', cor:'#3B6D11', bg:'#EAF3DE'/.test(B), 'a primeira em verde');
-conf(/rot:'Parecer do analista em acordo, baixado'/.test(B), 'com o texto exato do Richard');
-conf(/sub:'Encerra o ciclo\. A PC sai da fila e vai para Encerradas\.'/.test(B), 'e a consequencia embaixo');
-conf(/id:'ressalva',\s*cor:'#BA7517', bg:'#FAEEDA'/.test(B), 'a segunda em ambar');
-conf(/rot:'Parecer para correção, verificar o processo no SGPe'/.test(B), 'com o texto exato');
-// ⚠️ E o "a baixa dela permanece" e o que impede a leitura de que devolver a analista desfaz
-// a produtividade dela.
-conf(/sub:'Volta para a analista corrigir\. A baixa dela permanece\.'/.test(B), 'e a garantia da baixa');
-conf(/font-size:11\.5px;color:var\(--ct\);margin-top:2px/.test(B1), 'o subtexto em 11.5px cinza');
-conf(/border:1\.5px solid \$\{on \? d\.cor : 'var\(--cb\)'\}/.test(B), 'a opcao escolhida ganha a borda na cor dela');
-conf(/background:\$\{on \? d\.bg : '#fff'\}/.test(B), 'e o fundo claro correspondente');
-conf(/accent-color:\$\{d\.cor\}/.test(B), 'o proprio radio na cor da opcao');
-conf(/type="radio" name="ciDec"/.test(B), 'sao radios, e so um vale por vez');
+S('10. AS DUAS OPCOES — as mesmas na decisao e na reabertura (14/09/2026)');
+conf(/const CI_OPCOES = \[/.test(B), 'as duas numa lista so');
+conf(!/CI_DECISOES/.test(B), 'e a lista antiga, de rotulos longos, saiu');
+conf(/id:'de_acordo',\s*cor:'#639922', rot:'De acordo'/.test(B), 'a primeira: "De acordo", pilula em #639922');
+conf(B.includes("apoio:'O C.I. concorda com o parecer. A analista confere o registro no SGPe e arquiva a parcial.'"),
+     'com o apoio exato do Richard');
+conf(/id:'com_pendencia', cor:'#BA7517', rot:'Com pendência'/.test(B), 'a segunda: "Com pendência", pilula em #BA7517');
+conf(B.includes("apoio:'Falta providência. A analista confere o processo no SGPe, resolve, e então arquiva ou responde ao C.I.'"),
+     'com o apoio exato');
+const opc = corpo('ciOpcoesHtml');
+conf(/font-size:13\.5px;font-weight:600;color:var\(--texto\)/.test(opc), 'o rotulo em 13.5px, peso 600');
+conf(!/text-transform:uppercase/.test(opc), 'e nunca em maiusculas');
+conf(/font-size:12px;color:var\(--texto-secundario\);line-height:1\.45/.test(opc), 'o apoio em 12px, texto secundario, 1.45');
+conf(/border:0\.5px solid \$\{on \? 'var\(--v\)' : 'var\(--borda-suave\)'\}/.test(opc), 'a escolhida ganha borda 0.5px var(--v)');
+conf(/background:\$\{on \? 'var\(--vbg\)' : '#fff'\}/.test(opc), 'e fundo var(--vbg)');
+conf(/type="radio" name="\$\{nome\}"/.test(opc), 'sao radios, e so um vale por vez');
+conf(/Decisão do Controle Interno <span style="color:#A32D2D;">\*<\/span>/.test(opc), 'o titulo "Decisão do Controle Interno *"');
+conf(/Escolha uma das duas\. Ela vira a mensagem que a analista lê no cartão dela\./.test(opc), 'e a linha de apoio embaixo');
+conf(/ciOpcoesHtml\('ciDec', _ciDecisao/.test(B) && /ciOpcoesHtml\('ciReabrirOp'/.test(B),
+     'o MESMO desenho na decisao e na reabertura');
 
-S('11. A OBSERVACAO E O CONFIRMAR');
-conf(/Observação \(opcional\)/.test(B), 'a caixa e OPCIONAL, nas duas decisoes');
+S('11. O COMPLEMENTO, A CRITICA E O CONFIRMAR');
+conf(/Complemento \(opcional\)/.test(B) && !/Observação \(opcional\)/.test(B), 'o campo virou "Complemento (opcional)"');
+conf(B.includes("const CI_COMPLEMENTO_PH = 'Diga o que a analista precisa saber, se houver algo além da opção acima.'"),
+     'com o placeholder do Richard');
+conf(B.includes("const CI_SEM_OPCAO = 'Escolha uma das duas opções acima para continuar. O complemento sozinho não registra a decisão.'"),
+     'a critica diz que o complemento sozinho nao registra');
+conf(/background:#FBEDED;border-left:3px solid #E0A0A0/.test(corpo('ciCriticaHtml') || B), 'em vermelho, com a borda a esquerda');
+conf(/\$\{minha && !escolhida \? ciCriticaHtml\(\) : ''\}/.test(B), 'e aparece na decisao enquanto nada foi escolhido');
+const reab = corpo('ciReabrirMudou');
+conf(/bt\.disabled = !op/.test(reab) && /ciCriticaHtml\(\)/.test(reab), 'na reabertura o botao so acende com a opcao, e a critica some junto');
+conf(!/Motivo \(obrigatório\)/.test(B), 'e o motivo livre da reabertura saiu');
+conf(/opcao, texto:txt, autor_id:U\.id/.test(B) && /opcao:d\.id, texto:obs, autor_id:U\.id/.test(B),
+     'as duas escritas mandam a opcao, e o texto vai como complemento');
 conf(/id="ciObs"/.test(B), 'e tem um campo so');
 // ⚠️ O TEXTO E GUARDADO E DEVOLVIDO ao repintar. Sem isto, quem escrevesse a observacao antes
 // de escolher a opcao perderia o que digitou — calado, que e a pior maneira de perder texto.
