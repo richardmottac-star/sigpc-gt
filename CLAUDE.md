@@ -7,6 +7,28 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 **Última sessão:** 03/09/2026 — ver `SESSAO.md`. **DUAS escritas em produção em 02–03/09**
 (a primeira invalidação real e a limpeza do lixo de teste); nenhuma outra.
 
+> ## ▶ 17/09/2026 — A ABA GESTÃO (menu do analista, logo abaixo do Dashboard)
+>
+> Adaptada da gestão do Convênio Simplificado do SIG, a pedido do Richard (protótipo aprovado em
+> 16–17/09). **Lista** — abas TRs e PCs (esta em blocos por TR, com "Ver ficha da TR"), ano da TR,
+> funil de cinco etapas, faixa de prazos, filtros — e **ficha da TR** — faixa verde com a
+> ilustração de prestação de contas, "Falta agora", etapas, dados, parciais (com o botão de
+> arquivar SÓ na parcial pronta, pelo `arqAbrir` de sempre), tramitação no SGPe com "Atualizar
+> agora", linha do tempo (`GET /parcela/historico` da TR) e anotações (`anotacoes_tr`, a mesma da
+> Minha Planilha; sem botão no "ver como").
+>
+> ⚠️ **O bloco é CONTÍGUO**, de `const GES_ETAPAS` até a `function toast` — estilo com prefixo
+> `#gesApp`, nada no CSS global. **A tela não conta:** funil, etapas, prazo e C.I. da ficha vêm de
+> `GET /gestao` (`sigpc-api/lib/gestao.js`).
+> ⚠️ `arqRecarregar` ganhou a linha da Gestão; `AC_EV_LABEL` ganhou `arquivamento`,
+> `arquivamento_desfeito`, `ci_decidiu` e `ci_reabriu`.
+> ⚠️ **15 telas absorvem `j.links`** agora (`teste_front_links.js`).
+>
+> **Testes:** `teste_front_gestao.js` nova, **46 · 0**. As falhas que sobram **já existiam** — conferidas
+> contra o `index.html` do `HEAD`: `busca_global` 1 · `devolucao` 2 · `menu` 2.
+> ⚠️ **Só a PRÉVIA LOCAL foi aberta** (o bloco real com dados montados pela `lib/gestao.js`); a tela
+> no ar depende de publicar primeiro o `sigpc-api`.
+
 > ## ▶ 02–03/09/2026 — A PC INVALIDADA, O ANEL DO C.I. E O BOTÃO "FONTE"
 >
 > **✅ NASCEU A PC INVALIDADA — resíduo de carga que SAI DAS CONTAGENS SEM SAIR DA TABELA.**

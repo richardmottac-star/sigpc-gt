@@ -3046,6 +3046,10 @@ const SB_ITENS = [
   // ── Bloco do analista: o que todo mundo usa ─────────────────────────────────
   { id:'dash',  bloco:'analista', rotulo:'Dashboard',      acao:'irDash()',      pode:()=>true,
     icone:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
+  // ⚠️ A GESTÃO (17/09/2026) é leitura do acervo do analista — o recorte é da GET /gestao, pelo
+  // perfil efetivo. Fora do Controle Interno, como a Minha Planilha.
+  { id:'gestao', bloco:'analista', rotulo:'Gestão',        acao:'irGestao()',    pode:naoEhCI,
+    icone:'M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z' },
   { id:'est',   bloco:'analista', rotulo:'Estoque TRs',    acao:'irEst()',       pode:naoEhCI,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
   { id:'plan',  bloco:'analista', rotulo:'Minha Planilha', acao:'irPlanilha()',  pode:naoEhCI,
@@ -14896,6 +14900,10 @@ const AC_EV_LABEL = {
   // `assumir_tr`, que é a analista assumindo a TR para ANALISAR — outra coisa, outra pessoa.
   ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
   ci_passou:'🏛 C.I. passou a demanda',
+  // Os eventos do arquivamento (sigpc-api/lib/arquivamento.js) e da decisão do C.I. — entraram
+  // em 17/09/2026, quando a linha do tempo da Gestão passou a mostrar a TR inteira.
+  arquivamento:'📁 Arquivada', arquivamento_desfeito:'↩ Desarquivada',
+  ci_decidiu:'🏛 C.I. decidiu', ci_reabriu:'🏛 C.I. reabriu',
 };
 
 // ══════════════════════════════════════
@@ -16111,6 +16119,7 @@ function arqRecarregar() {
   if(document.getElementById('planConteudo')) buscarPlan()
   if(document.getElementById('prodArq')) prodArqCarregar()
   if(document.getElementById('arqCoord')) arqCoordCarregar()
+  if(document.getElementById('gesApp')) gesRecarregar()
 }
 
 function arqSituacaoHtml(l) {
@@ -23997,6 +24006,688 @@ async function sigefDeclarar() {
   } finally {
     btn.textContent = '✓ Declarar'
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  GESTÃO — o caminho de cada PC do analista, da análise ao arquivamento (17/09/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+// Adaptada da gestão do Convênio Simplificado do SIG, a pedido do Richard (16–17/09/2026).
+// Duas telas: a LISTA (abas TRs e PCs, ano, funil de cinco etapas, prazos, filtros) e a FICHA
+// da TR (faixa verde, "falta agora", etapas, dados, parciais, SGPe, linha do tempo, anotações).
+//
+// ⚠️ A TELA NÃO CONTA E NÃO DECIDE (armadilha 16). A etapa de cada PC e da TR, o prazo e as
+// contagens do funil — por ano — vêm prontos de GET /gestao (sigpc-api/lib/gestao.js). Aqui só
+// se desenha e se recorta a lista.
+//
+// ⚠️ O PRAZO SEGUE O CORTE_PRAZO. Data anterior ao corte é carimbo de lote do acervo, e sai
+// como "sem prazo definido" — nunca como vencida (decisão do Richard, 10/08/2026).
+//
+// ⚠️ A POSIÇÃO NO SGPe é a que o rodízio automático grava (`job_sgpe_situacao.js`). O botão
+// "Atualizar agora" antecipa o rodízio para UM processo, pelo mesmo SQL do job.
+//
+// ⚠️ ESTE BLOCO É CONTÍGUO DE PROPÓSITO (lição do `ciBolha`, 28/08): estilo, lista, ficha, SGPe,
+// linha do tempo e anotação moram aqui, juntos.
+
+const GES_ETAPAS = [
+  { k:'analise',   rot:'Em análise',           apoio:'parecer ainda não registrado', cor:'#1565C0' },
+  { k:'baixada',   rot:'Baixadas',             apoio:'falta encaminhar ao C.I.',     cor:'#C2410C' },
+  { k:'no_ci',     rot:'No Controle Interno',  apoio:'aguardando a devolutiva',      cor:'#00838F' },
+  { k:'devolvida', rot:'Devolvidas pelo C.I.', apoio:'o C.I. já devolveu',           cor:'#854F0B' },
+  { k:'arquivada', rot:'Arquivadas',           apoio:'parciais e TRs encerradas',    cor:'#5C6661' },
+]
+const GES_ET = Object.fromEntries(GES_ETAPAS.map(e => [e.k, e]))
+GES_ET.encerrada = { k:'encerrada', rot:'TR encerrada', apoio:'', cor:'#3B6D11' }
+
+// O que falta e o que a etapa quer dizer — texto da faixa da ficha, uma cópia só.
+const GES_DESC = {
+  analise:   'Há PC desta TR ainda sem parecer registrado.',
+  baixada:   'A PC foi baixada, mas o passo 3 de 3 continua aberto.',
+  no_ci:     'A PC está na fila do Controle Interno.',
+  devolvida: 'O Controle Interno devolveu e a PC espera o arquivamento.',
+  encerrada: 'Todas as parciais e a PC final estão arquivadas.',
+}
+
+let _ges = null
+const _gesF = { aba:'trs', ano:'todos', etapa:null, busca:'', sit:'', prazo:'', tr:null, proc:null }
+
+// ── estilo, uma vez só, com prefixo próprio — nada aqui toca o CSS global ──
+function gesEstilo() {
+  if (document.getElementById('gesCss')) return
+  const s = document.createElement('style')
+  s.id = 'gesCss'
+  s.textContent = `
+#gesApp{font-family:'Barlow',sans-serif;color:var(--te);}
+#gesApp .ges-card{background:#fff;border-radius:12px;border:1px solid #E1E9E4;}
+#gesApp .ges-btn{border:1.5px solid var(--cb);background:#fff;color:var(--te);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+#gesApp .ges-btn.v{background:var(--v);border-color:var(--v);color:#fff;}
+#gesApp .ges-btn:disabled{opacity:.55;cursor:not-allowed;}
+#gesApp .ges-lbl{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--ct);}
+#gesApp .ges-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+#gesApp .ges-cab h2{font-size:18px;font-weight:800;}
+#gesApp .ges-cab p{font-size:12px;color:var(--ct);}
+#gesApp .ges-abas{display:inline-flex;border:1.5px solid var(--cb);border-radius:8px;overflow:hidden;background:#fff;}
+#gesApp .ges-abas button{border:0;background:#fff;padding:6px 13px;font-size:12px;font-weight:700;color:var(--ct);font-family:inherit;cursor:pointer;}
+#gesApp .ges-abas button.on{background:var(--v);color:#fff;}
+#gesApp .ges-anos{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0;}
+#gesApp .ges-anos button{border:1.5px solid var(--cb);background:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--ct);font-family:inherit;cursor:pointer;}
+#gesApp .ges-anos button.on{background:var(--v);border-color:var(--v);color:#fff;}
+#gesApp .ges-funil{display:grid;grid-template-columns:repeat(5,1fr);margin-bottom:12px;overflow:hidden;}
+#gesApp .ges-etp{padding:13px 15px;border-right:1px solid #E6EDE9;cursor:pointer;position:relative;}
+#gesApp .ges-etp:last-child{border-right:0;}
+#gesApp .ges-etp:hover{background:#F7FAF8;}
+#gesApp .ges-etp.on{background:var(--vbg);}
+#gesApp .ges-etp.on:after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--v);}
+#gesApp .ges-etp .t{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;letter-spacing:.5px;color:var(--ct);text-transform:uppercase;}
+#gesApp .ges-etp .n{width:19px;height:19px;border-radius:50%;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;}
+#gesApp .ges-etp .q{font-size:28px;font-weight:700;margin-top:6px;line-height:1;}
+#gesApp .ges-etp .q small{font-size:12px;font-weight:500;color:var(--ct);}
+#gesApp .ges-etp .val{font-size:12.5px;font-weight:700;margin:4px 0 6px;}
+#gesApp .ges-leg{list-style:none;margin:2px 0 0;padding:0;}
+#gesApp .ges-leg li{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ct);padding:2px 0;border-bottom:1px dotted #E1E9E4;}
+#gesApp .ges-leg li:last-child{border-bottom:0;}
+#gesApp .ges-leg li b{color:var(--te);}
+#gesApp .ges-apoio{font-size:12px;color:var(--ct);}
+#gesApp .ges-alerta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 15px;margin-bottom:12px;border-left:4px solid var(--r);font-size:13px;}
+#gesApp .ges-alerta .tit{font-size:12px;font-weight:800;color:var(--r);letter-spacing:.4px;text-transform:uppercase;}
+#gesApp .ges-alerta b{font-size:15px;}
+#gesApp .ges-filtros{padding:9px 13px;margin-bottom:8px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;}
+#gesApp .ges-filtros .fg{display:flex;flex-direction:column;gap:3px;}
+#gesApp .ges-filtros select,#gesApp .ges-filtros input{border:1.5px solid var(--cb);border-radius:7px;padding:6px 9px;font-size:12.5px;font-family:inherit;color:var(--te);background:#fff;}
+#gesApp .ges-resumo{font-size:12px;color:var(--ct);margin:4px 2px 8px;}
+#gesApp .ges-resumo b{color:var(--te);}
+#gesApp .ges-wrap{overflow-x:auto;}
+#gesApp table.ges-g{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1100px;}
+#gesApp table.ges-g th{background:var(--v);color:#fff;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;padding:9px 8px;text-align:left;font-weight:700;white-space:nowrap;}
+#gesApp table.ges-g th:first-child{border-radius:10px 0 0 0;}
+#gesApp table.ges-g th:last-child{border-radius:0 10px 0 0;}
+#gesApp table.ges-g td{padding:9px 8px;border-bottom:1px solid #E8EEEA;vertical-align:top;background:#fff;}
+#gesApp table.ges-g tr:nth-child(even) td{background:#FAFCFB;}
+#gesApp table.ges-g tbody tr.ges-lin{cursor:pointer;}
+#gesApp table.ges-g tbody tr.ges-lin:hover td{background:#EEF7F1;}
+#gesApp tr.ges-grp td{background:#EAF3ED !important;border-top:2px solid var(--v);padding:10px;}
+#gesApp tr.ges-pcl td:first-child{padding-left:20px;border-left:3px solid #CFE3D6;}
+#gesApp .ges-grp-cab{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+#gesApp .ges-tr{font-weight:800;white-space:nowrap;}
+#gesApp .ges-ent{min-width:230px;max-width:320px;}
+#gesApp .ges-mono{white-space:nowrap;}
+#gesApp .ges-venc{color:#B3261E;font-weight:700;}
+#gesApp small{display:block;font-size:11px;}
+#gesApp .ges-dias{font-size:12.5px;font-weight:700;white-space:nowrap;}
+#gesApp .ges-bar{height:6px;border-radius:4px;background:#E3EAE6;overflow:hidden;margin-top:4px;width:90px;}
+#gesApp .ges-bar i{display:block;height:100%;background:#00A85E;}
+#gesApp .ges-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;}
+#gesApp .ges-etapa{font-size:12.5px;white-space:nowrap;}
+#gesApp .ges-sit{display:block;font-size:11.5px;color:var(--ct);margin-top:3px;padding-left:14px;}
+#gesApp .ges-dil{color:#C2410C;font-weight:700;}
+#gesApp .ges-volta{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+#gesApp .ges-volta a{color:var(--v);font-weight:700;font-size:13px;cursor:pointer;}
+#gesApp .ges-ficha{overflow:hidden;}
+#gesApp .ges-banner{background:linear-gradient(0deg,#004D2B,var(--v));color:#fff;padding:18px 22px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden;}
+#gesApp .ges-banner>div{position:relative;z-index:1;}
+#gesApp .ges-marca{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:170px;opacity:.13;pointer-events:none;}
+#gesApp .ges-tags{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+#gesApp .ges-tag{border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:800;letter-spacing:.5px;}
+#gesApp .ges-banner h1{font-family:'Barlow Condensed',sans-serif;font-size:36px;letter-spacing:1px;margin:6px 0 4px;color:#fff;}
+#gesApp .ges-mae{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;}
+#gesApp .ges-mae a{color:#fff !important;}
+#gesApp .ges-quem{display:flex;gap:10px;align-items:center;margin-top:12px;}
+#gesApp .ges-av{width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;}
+#gesApp .ges-quem small{font-size:10px;letter-spacing:.7px;opacity:.75;font-weight:700;}
+#gesApp .ges-quem b{font-size:14px;}
+#gesApp .ges-dir{border-left:1px solid rgba(255,255,255,.25);padding-left:20px;min-width:270px;align-self:center;}
+#gesApp .ges-dir .lb{font-size:10px;letter-spacing:.7px;opacity:.8;font-weight:700;}
+#gesApp .ges-dir .vl{font-size:26px;font-weight:800;display:flex;align-items:center;gap:12px;justify-content:space-between;}
+#gesApp .ges-dir p{font-size:11.5px;opacity:.85;border-top:1px solid rgba(255,255,255,.2);margin-top:8px;padding-top:6px;}
+#gesApp .ges-faixa{display:flex;gap:14px;padding:14px 20px;background:#F1F4F2;border-left:5px solid #F57F17;flex-wrap:wrap;align-items:flex-start;}
+#gesApp .ges-faixa .ic{width:34px;height:34px;border-radius:8px;background:var(--te);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+#gesApp .ges-faixa h3{font-size:20px;font-weight:700;display:inline;}
+#gesApp .ges-faixa .desc{font-size:13px;color:var(--ct);margin-left:6px;}
+#gesApp .ges-faixa .ln{font-size:12.5px;color:var(--ct);margin-top:4px;}
+#gesApp .ges-faixa .ln b{color:var(--te);}
+#gesApp .ges-onde{background:#fff;border:1px solid #E1E9E4;border-radius:8px;padding:8px 12px;margin-top:8px;}
+#gesApp .ges-passos{display:flex;padding:12px 20px;border-bottom:1px solid #E6EDE9;flex-wrap:wrap;}
+#gesApp .ges-ps{flex:1;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#9AA7A0;min-width:170px;}
+#gesApp .ges-ps .b{width:24px;height:24px;border-radius:50%;border:2px solid #C9D4CE;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
+#gesApp .ges-ps.ok{color:var(--v);}
+#gesApp .ges-ps.ok .b{background:var(--v);border-color:var(--v);color:#fff;}
+#gesApp .ges-ps.at{color:var(--te);}
+#gesApp .ges-ps.at .b{border-color:#F57F17;color:#F57F17;background:#FFF8E1;}
+#gesApp .ges-ps .l{flex:1;height:2px;background:#DCE4DF;margin:0 8px;}
+#gesApp .ges-ps.ok .l{background:var(--v);}
+#gesApp .ges-ps small{font-weight:500;font-size:10.5px;color:var(--ct);}
+#gesApp .ges-campos{display:grid;grid-template-columns:repeat(4,1fr);gap:0 24px;padding:14px 20px 16px;}
+#gesApp .ges-cp{padding:8px 0;border-bottom:1px dashed #DCE4DF;}
+#gesApp .ges-cp div{font-size:13.5px;font-weight:600;margin-top:2px;}
+#gesApp .ges-cp i{color:var(--ct);font-weight:500;}
+#gesApp .ges-bloco{padding:14px 16px;margin-top:12px;}
+#gesApp .ges-bloco h4{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--ct);margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#gesApp .ges-bloco h4 .sp{margin-left:auto;display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;}
+#gesApp .ges-grid2{display:grid;grid-template-columns:1.7fr 1fr;gap:12px;margin-top:12px;}
+#gesApp table.ges-p{width:100%;border-collapse:collapse;font-size:12.5px;}
+#gesApp table.ges-p th{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--ct);text-align:left;padding:6px 8px;border-bottom:1px solid var(--cb);white-space:nowrap;}
+#gesApp table.ges-p td{padding:8px;border-bottom:1px solid #EEF2EF;vertical-align:top;}
+#gesApp .ges-arq{display:inline-block;background:#4A3B8C;color:#fff;font-weight:700;font-size:11px;border-radius:4px;padding:3px 9px;white-space:nowrap;}
+#gesApp .ges-tl{list-style:none;position:relative;padding:0 0 0 18px;margin:0;}
+#gesApp .ges-tl:before{content:'';position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:#DCE4DF;}
+#gesApp .ges-tl li{position:relative;padding:0 0 11px;}
+#gesApp .ges-tl li:before{content:'';position:absolute;left:-17px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--v);}
+#gesApp .ges-tl li b{font-size:12.5px;}
+#gesApp .ges-tl li span{display:block;font-size:11.5px;color:var(--ct);}
+#gesApp .ges-nota{background:#FFFBEA;border:1px solid #F1E3A8;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:8px;white-space:pre-wrap;}
+#gesApp .ges-nota small{color:var(--ct);font-size:10.5px;margin-top:3px;white-space:normal;}
+@media (max-width:1100px){#gesApp .ges-funil{grid-template-columns:repeat(2,1fr);}#gesApp .ges-campos{grid-template-columns:repeat(2,1fr);}#gesApp .ges-grid2{grid-template-columns:1fr;}}
+`
+  document.head.appendChild(s)
+}
+
+// ── utilitários ──
+const gesBrl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
+const gesPlural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+const gesNorm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const gesSit = (s) => s === 'Diligência' ? '<span class="ges-dil">Diligência</span>' : escHtml(s || '—')
+const gesParcialRot = (p) => p.final ? 'PC final' : 'Parcial ' + escHtml(String(p.parcial_num ?? '—'))
+const gesParciaisTxt = (t) => t.n_parciais === 0 && t.tem_final ? 'só PC final'
+  : gesPlural(t.n_parciais, 'parcial', 'parciais') + (t.tem_final ? ' + final' : '')
+const gesProc = (bruto) => bruto ? `<span onclick="event.stopPropagation()">${procHtml(bruto)}</span>` : '—'
+
+function gesDot(k) {
+  const e = GES_ET[k] || GES_ET.analise
+  return `<b class="ges-etapa"><span class="ges-dot" style="background:${e.cor}"></span>${e.rot}</b>`
+}
+
+function gesDiasHtml(n) {
+  if (n == null) return '<span style="color:var(--ct)">—</span>'
+  const cor = n <= 15 ? '#1B5E3A' : n <= 45 ? '#C2410C' : '#B3261E'
+  return `<span class="ges-dias" style="color:${cor}">${gesPlural(n, 'dia', 'dias')}</span>`
+}
+
+function gesPrazoHtml(pz) {
+  if (!pz) return '<span style="color:var(--ct)">—</span>'
+  if (pz.tipo === 'sem') return '<span style="color:var(--ct)">sem prazo</span>'
+  if (pz.tipo === 'importado') return `<span style="color:var(--ct)" title="Data do acervo importado: antes de ${planData(_ges.corte_prazo)} ela não é prazo.">sem prazo definido</span>`
+  if (pz.tipo === 'vencido') return `<span class="ges-venc ges-mono">${planData(pz.data)}</span><small class="ges-venc">vencido há ${gesPlural(-pz.dias, 'dia', 'dias')}</small>`
+  return `<span class="ges-mono">${planData(pz.data)}</span><small style="color:${pz.tipo === 'vence' ? '#C2410C' : 'var(--ct)'}">${pz.dias === 0 ? 'vence hoje' : 'em ' + gesPlural(pz.dias, 'dia', 'dias')}</small>`
+}
+
+function gesSgpeLinha(sg) {
+  if (!sg) return '<i style="color:var(--ct);font-size:12px;">ainda não sincronizado</i>'
+  if (sg.resultado && sg.resultado !== 'OK')
+    return `<i style="color:var(--ct);font-size:12px;">${sg.resultado === 'NAO_ENCONTRADO' ? 'não encontrado no portal' : sg.resultado === 'SIGILOSO' ? 'processo sigiloso' : 'sem leitura do portal'}</i>`
+  const setor = sg.setor_sigla || sg.setor_nome || '—'
+  const extra = [sg.desde ? 'desde ' + planData(sg.desde) : '', sg.dias_no_setor != null ? gesPlural(sg.dias_no_setor, 'dia', 'dias') + ' no setor' : '']
+    .filter(Boolean).join(' · ')
+  return `<span style="font-size:12px;">→ <b>${escHtml(setor)}</b>${extra ? `<small style="color:var(--ct)">${extra}</small>` : ''}</span>`
+}
+
+// ── entrada ──
+async function irGestao(trAlvo) {
+  if (U.perfil === 'controle_interno') { toast('Esta tela não faz parte do Controle Interno.', 'err'); return }
+  ativarMenu('gestao')
+  gesEstilo()
+  Object.assign(_gesF, { etapa:null, busca:'', sit:'', prazo:'', tr: trAlvo || null, proc:null })
+  document.getElementById('BODY').innerHTML =
+    '<div id="gesApp"><div class="loading"><div class="spin"></div>Carregando a gestão...</div></div>'
+  await gesCarregar()
+}
+
+async function gesCarregar() {
+  if (!document.getElementById('gesApp')) return
+  try {
+    const r = await fetch(`${API_URL}/gestao?usuario_id=${U.id}&analista_id=${alvo().id}`)
+    const j = sgpeAbsorver(await r.json())
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (!document.getElementById('gesApp')) return
+    _ges = j.data
+    if (_gesF.ano !== 'todos' && !_ges.contagens[_gesF.ano]) _gesF.ano = 'todos'
+    if (_gesF.tr && !_ges.trs.some(t => t.tr === _gesF.tr)) _gesF.tr = null
+    gesPintar()
+  } catch (e) {
+    const x = document.getElementById('gesApp')
+    if (x) x.innerHTML = `<div class="ges-card" style="padding:18px;color:#A32D2D;">Não deu para carregar a gestão: ${escHtml(e.message)}</div>`
+  }
+}
+
+// Depois de arquivar pela ficha, o `arqRecarregar` chama esta.
+function gesRecarregar() { gesCarregar() }
+
+function gesPintar() {
+  const el = document.getElementById('gesApp')
+  if (!el || !_ges) return
+  const t = _gesF.tr ? _ges.trs.find(x => x.tr === _gesF.tr) : null
+  if (t) {
+    el.innerHTML = gesFichaHtml(t)
+    gesSgpeCarregar(false)
+    gesHistCarregar(t.tr)
+    gesAnotCarregar(t.tr)
+  } else {
+    el.innerHTML = gesListaHtml()
+    gesTabela()
+  }
+}
+
+function gesFiltro(campo, valor) {
+  if (campo === 'etapa') _gesF.etapa = _gesF.etapa === valor ? null : valor
+  else _gesF[campo] = valor
+  gesPintar()
+}
+
+function gesAbrir(tr) { _gesF.tr = tr; _gesF.proc = null; gesPintar(); window.scrollTo(0, 0) }
+function gesVoltar() { _gesF.tr = null; gesPintar() }
+
+// ── LISTA ──
+function gesListaHtml() {
+  const c = _ges.contagens[_gesF.ano] || _ges.contagens.todos
+  const outro = verComoAtivo() ? alvo().nome : null
+  const funil = GES_ETAPAS.map((e, i) => {
+    let apoio
+    if (e.k === 'analise') {
+      const s = Object.entries(c.situacoes || {}).sort((a, b) => b[1] - a[1])
+      apoio = s.length
+        ? `<ul class="ges-leg">${s.map(([k, n]) => `<li><span>${gesSit(k)}</span><b>${n}</b></li>`).join('')}</ul>`
+        : `<div class="ges-apoio">${e.apoio}</div>`
+    } else if (e.k === 'devolvida') {
+      apoio = `<div class="ges-apoio">${gesPlural(c.prontas, 'pronta', 'prontas')} para arquivar</div>`
+    } else if (e.k === 'arquivada') {
+      apoio = `<div class="ges-apoio">${gesPlural(c.trs_encerradas, 'TR encerrada', 'TRs encerradas')}</div>`
+    } else {
+      apoio = `<div class="ges-apoio">${e.apoio}</div>`
+    }
+    return `<div class="ges-etp ${_gesF.etapa === e.k ? 'on' : ''}" onclick="gesFiltro('etapa','${e.k}')" title="Clique para filtrar a lista por esta etapa">
+      <div class="t"><span class="n" style="background:${e.cor}">${i + 1}</span>${e.rot}</div>
+      <div class="q">${c[e.k]} <small style="display:inline">${c[e.k] === 1 ? 'PC' : 'PCs'}</small></div>
+      <div class="val">${gesBrl(c['valor_' + e.k])}</div>
+      ${apoio}
+    </div>`
+  }).join('')
+
+  const sits = Object.keys((_ges.contagens.todos || {}).situacoes || {}).sort()
+  const opt = (v, rot, atual) => `<option value="${escHtml(v)}" ${atual === v ? 'selected' : ''}>${escHtml(rot)}</option>`
+  const anos = _ges.anos.map(a => `<button class="${_gesF.ano === a ? 'on' : ''}" onclick="gesFiltro('ano','${a}')">${a === 'sem_ano' ? 'sem ano' : a}</button>`).join('')
+
+  return `
+    <div class="ges-cab">
+      <div><h2>Gestão — ${outro ? escHtml(outro) : 'minhas TRs'}</h2>
+        <p>Da TR assumida à TR encerrada · o caminho de cada PC até o arquivamento</p></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="ges-abas">
+          <button class="${_gesF.aba === 'trs' ? 'on' : ''}" onclick="gesFiltro('aba','trs')">TRs</button>
+          <button class="${_gesF.aba === 'pcs' ? 'on' : ''}" onclick="gesFiltro('aba','pcs')">PCs</button>
+        </div>
+        <button class="ges-btn" onclick="gesCarregar()">⟳ Atualizar</button>
+      </div>
+    </div>
+    <div class="ges-anos"><span class="ges-lbl" style="margin-right:4px;">Ano da TR</span>
+      <button class="${_gesF.ano === 'todos' ? 'on' : ''}" onclick="gesFiltro('ano','todos')">Todos</button>${anos}
+    </div>
+    <div class="ges-card ges-funil">${funil}</div>
+    <div class="ges-card ges-alerta">
+      <span class="tit">Prazos e pendências</span>
+      <span><b style="color:#B3261E">${c.vencidas}</b> ${c.vencidas === 1 ? 'PC com prazo vencido' : 'PCs com prazo vencido'}</span>
+      <span><b style="color:#C2410C">${c.vencem}</b> ${c.vencem === 1 ? 'vence' : 'vencem'} nos próximos 30 dias</span>
+      <span><b>${c.diligencias}</b> ${c.diligencias === 1 ? 'diligência aberta' : 'diligências abertas'}</span>
+      <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="ges-btn" onclick="gesFiltro('prazo','vencido')">Ver vencidas</button>
+        <button class="ges-btn" onclick="gesFiltro('prazo','vence')">Ver as de 30 dias</button>
+        <button class="ges-btn" onclick="gesFiltro('sit','Diligência')">Ver diligências</button>
+      </span>
+    </div>
+    <div class="ges-card ges-filtros">
+      <div class="fg"><span class="ges-lbl">Buscar</span>
+        <input id="gesBusca" placeholder="TR, entidade ou processo" value="${escHtml(_gesF.busca)}"
+          oninput="_gesF.busca=this.value;gesTabela()" style="width:220px;"></div>
+      <div class="fg"><span class="ges-lbl">Situação</span>
+        <select onchange="gesFiltro('sit',this.value)">${opt('', 'Todas', _gesF.sit)}${sits.map(s => opt(s, s, _gesF.sit)).join('')}</select></div>
+      <div class="fg"><span class="ges-lbl">Prazo</span>
+        <select onchange="gesFiltro('prazo',this.value)">${opt('', 'Todos', _gesF.prazo)}${opt('vencido', 'Vencidas', _gesF.prazo)}${opt('vence', 'A vencer em 30 dias', _gesF.prazo)}${opt('importado', 'Acervo importado, sem prazo definido', _gesF.prazo)}</select></div>
+      ${_gesF.etapa ? `<span class="ges-btn" style="cursor:pointer;border-color:var(--v);color:var(--v);" onclick="gesFiltro('etapa','${_gesF.etapa}')" title="Tirar o filtro">Etapa: ${GES_ET[_gesF.etapa].rot} ✕</span>` : ''}
+      <button class="ges-btn" onclick="Object.assign(_gesF,{busca:'',sit:'',prazo:'',etapa:null});gesPintar()">Limpar</button>
+    </div>
+    <div id="gesTab"></div>`
+}
+
+function gesRecorte() {
+  const b = gesNorm(_gesF.busca.trim())
+  const casaPc = (p) => (!_gesF.etapa || p.etapa === _gesF.etapa)
+    && (!_gesF.sit || (p.etapa === 'analise' && p.situacao === _gesF.sit))
+    && (!_gesF.prazo || (p.prazo && p.prazo.tipo === _gesF.prazo))
+  const casaBusca = (t, p) => !b || gesNorm([t.tr, t.entidade, t.processo_mae, p.processo_pc, p.codigo_pc].join(' ')).includes(b)
+  return _ges.trs
+    .filter(t => _gesF.ano === 'todos' || String(t.ano == null ? 'sem_ano' : t.ano) === _gesF.ano)
+    .map(t => ({ t, pcs: t.pcs.filter(p => casaPc(p) && casaBusca(t, p)) }))
+    .filter(x => x.pcs.length)
+}
+
+function gesTabela() {
+  const el = document.getElementById('gesTab')
+  if (!el || !_ges) return
+  const lista = gesRecorte()
+  const leituras = _ges.trs.map(t => t.sgpe_atual && t.sgpe_atual.checado_em).filter(Boolean).sort()
+  const sync = leituras.length ? ` · SGPe lido pelo rodízio até ${planDataHora(leituras[leituras.length - 1])}` : ''
+
+  if (_gesF.aba === 'trs') {
+    el.innerHTML = `<div class="ges-resumo"><b>${lista.length}</b> ${lista.length === 1 ? 'TR' : 'TRs'} neste recorte${sync}</div>
+      <div class="ges-wrap"><table class="ges-g"><thead><tr>
+        <th>Ano</th><th>TR</th><th>Entidade</th><th>Processo mãe</th><th>Parciais</th><th>Valor</th>
+        <th>Etapa / situação</th><th>Prazo mais próximo</th><th>Parado há</th><th>Onde está no SGPe</th>
+      </tr></thead><tbody>${lista.length ? lista.map(({ t }) => {
+        const pct = t.n_pcs ? Math.round(t.n_baixadas / t.n_pcs * 100) : 0
+        const sits = t.situacoes.filter(s => s !== 'Em análise')
+        return `<tr class="ges-lin" onclick="gesAbrir('${escHtml(t.tr)}')">
+          <td>${t.ano ?? '—'}</td>
+          <td class="ges-tr">${escHtml(t.tr)}</td>
+          <td class="ges-ent">${escHtml(t.entidade || '—')}</td>
+          <td class="ges-mono">${gesProc(t.processo_mae)}</td>
+          <td class="ges-mono">${gesParciaisTxt(t)}
+            <div class="ges-bar"><i style="width:${pct}%"></i></div>
+            <small style="color:var(--ct)">${t.n_baixadas} de ${t.n_pcs} baixadas</small></td>
+          <td class="ges-mono" style="font-weight:700;">${gesBrl(t.valor_total)}</td>
+          <td>${gesDot(t.etapa)}${sits.length ? `<span class="ges-sit">${sits.map(gesSit).join(' · ')}</span>` : ''}</td>
+          <td>${gesPrazoHtml(t.prazo_proximo)}</td>
+          <td>${gesDiasHtml(t.dias_parado)}</td>
+          <td>${gesSgpeLinha(t.sgpe_atual)}</td>
+        </tr>`
+      }).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--ct);padding:22px;">Nenhuma TR neste recorte.</td></tr>'}
+      </tbody></table></div>`
+    return
+  }
+
+  // Aba PCs — em BLOCOS: o cabeçalho da TR uma vez só, e as PCs dela embaixo.
+  const nPcs = lista.reduce((s, x) => s + x.pcs.length, 0)
+  el.innerHTML = `<div class="ges-resumo"><b>${nPcs}</b> ${nPcs === 1 ? 'PC' : 'PCs'} em <b>${lista.length}</b> ${lista.length === 1 ? 'TR' : 'TRs'} neste recorte${sync}</div>
+    <div class="ges-wrap"><table class="ges-g"><thead><tr>
+      <th>Parcial</th><th>PC</th><th>Processo SGPe</th><th>Valor</th><th>Etapa</th><th>Situação</th>
+      <th>Prazo de análise</th><th>Controle Interno</th><th>Arquivada em</th>
+    </tr></thead><tbody>${lista.length ? lista.map(({ t, pcs }) => `
+      <tr class="ges-grp"><td colspan="9"><div class="ges-grp-cab">
+        <span class="ges-tr" style="font-size:14.5px;">${escHtml(t.tr)}</span>
+        <span style="font-weight:600;">${escHtml(t.entidade || '—')}</span>
+        <span class="ges-mono">${gesProc(t.processo_mae)}</span>
+        <span style="color:var(--ct);font-size:12px;white-space:nowrap;">${gesParciaisTxt(t)} · ${t.n_baixadas} de ${t.n_pcs} baixadas</span>
+        ${gesDot(t.etapa)}
+        <button class="ges-btn v" style="margin-left:auto;" onclick="gesAbrir('${escHtml(t.tr)}')">Ver ficha da TR →</button>
+      </div></td></tr>
+      ${pcs.map(p => `<tr class="ges-pcl">
+        <td style="font-weight:700;white-space:nowrap;">${gesParcialRot(p)}</td>
+        <td class="ges-mono">${escHtml(p.codigo_pc)}</td>
+        <td class="ges-mono">${gesProc(p.processo_pc)}</td>
+        <td class="ges-mono">${p.valor ? gesBrl(p.valor) : '—'}</td>
+        <td>${gesDot(p.etapa)}</td>
+        <td>${p.etapa === 'analise' ? gesSit(p.situacao) : escHtml(p.situacao || '—')}</td>
+        <td>${p.etapa === 'analise' ? gesPrazoHtml(p.prazo) : '<span style="color:var(--ct)">—</span>'}</td>
+        <td>${p.ci_devolveu_em ? `devolveu em ${planData(p.ci_devolveu_em)}` : p.ci_devolveu_carga ? 'devolveu (carga de 16/08)' : p.etapa === 'no_ci' ? 'na fila' : '—'}</td>
+        <td class="ges-mono">${p.arquivada_em ? planData(p.arquivada_em) : '—'}</td>
+      </tr>`).join('')}`).join('')
+      : '<tr><td colspan="9" style="text-align:center;color:var(--ct);padding:22px;">Nenhuma PC neste recorte.</td></tr>'}
+    </tbody></table></div>`
+}
+
+// ── FICHA DA TR ──
+function gesFalta(t) {
+  const devParc = t.pcs.some(p => p.etapa === 'devolvida' && !p.final)
+  return {
+    analise:   t.diligencia ? 'Concluir a diligência aberta' : 'Registrar o parecer e baixar a PC',
+    baixada:   'Encaminhar ao Controle Interno',
+    no_ci:     'Aguardar a devolutiva do Controle Interno',
+    devolvida: devParc ? 'Arquivar a parcial devolvida' : 'Arquivar a PC final, com a data da baixa do Secretário no SIGEF',
+    encerrada: 'Nada — a TR está encerrada',
+  }[t.etapa] || '—'
+}
+
+function gesOnde(t) {
+  const dias = (d) => d ? ` <span style="color:var(--ct)">— ${gesPlural(Math.max(0, Math.round((Date.parse(_ges.hoje + 'T12:00:00Z') - Date.parse(d + 'T12:00:00Z')) / 864e5)), 'dia', 'dias')} na etapa</span>` : ''
+  if (t.etapa === 'devolvida') {
+    const p = t.pcs.find(x => x.etapa === 'devolvida')
+    return p && p.ci_devolveu_em ? `Controle Interno devolveu · desde ${planData(p.ci_devolveu_em)}${dias(p.ci_devolveu_em)}`
+      : 'Controle Interno devolveu (carga de 16/08, sem data)'
+  }
+  if (t.etapa === 'no_ci') return 'Na fila do Controle Interno'
+  if (t.etapa === 'baixada') return 'Baixada — falta encaminhar ao Controle Interno'
+  if (t.etapa === 'encerrada') {
+    const f = t.pcs.find(p => p.final && p.baixa_secretario_em)
+    return `TR encerrada${f ? ` · baixa do Secretário em ${planData(f.baixa_secretario_em)}` : ''}`
+  }
+  return `Na sua análise${t.ultima_mov ? ` · última movimentação em ${planData(t.ultima_mov)}` : ''}`
+}
+
+const GES_MARCA = `<svg class="ges-marca" viewBox="0 0 240 170" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M40 12h72l28 28v108a10 10 0 0 1-10 10H40a10 10 0 0 1-10-10V22a10 10 0 0 1 10-10z"/>
+  <path d="M112 12v28h28"/>
+  <path d="M46 62l7 7 13-15M78 62h40M46 92l7 7 13-15M78 92h30M46 122l7 7 13-15M78 122h22"/>
+  <circle cx="172" cy="112" r="34"/>
+  <path d="M196 136l30 30"/>
+  <text x="172" y="121" text-anchor="middle" font-family="Barlow, sans-serif" font-size="26" font-weight="800" fill="#fff" stroke="none">R$</text>
+</svg>`
+
+function gesFichaHtml(t) {
+  const e = GES_ET[t.etapa] || GES_ET.analise
+  const pct = t.n_pcs ? Math.round(t.n_baixadas / t.n_pcs * 100) : 0
+  const ordem = { analise:0, baixada:1, no_ci:2, devolvida:3, encerrada:5 }
+  const pos = ordem[t.etapa] ?? 0
+  const passos = [['Análise', 'parecer e baixa'], ['Baixa', 'PC baixada'], ['Controle Interno', 'encaminhada e devolvida'], ['Arquivamento', 'parciais e PC final']]
+  const lim = [1, 2, 3, 5], ini = [0, 1, 2, 3]
+  const estPasso = (i) => pos >= lim[i] ? 'ok' : pos >= ini[i] ? 'at' : ''
+  const ring = `<svg width="54" height="54" viewBox="0 0 54 54"><circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="5"/>
+    <circle cx="27" cy="27" r="22" fill="none" stroke="#7CE0A8" stroke-width="5" stroke-dasharray="${(pct / 100 * 138.2).toFixed(1)} 138.2" transform="rotate(-90 27 27)" stroke-linecap="round"/>
+    <text x="27" y="31" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Barlow">${pct}%</text></svg>`
+  const nDev = t.n_ci_devolvidas || 0
+  const nFila = t.n_no_ci || 0
+  const arqCel = (p) => {
+    if (p.arquivada_em || p.etapa === 'arquivada') return `<span class="ges-arq">📁 ${p.arquivada_em ? planData(p.arquivada_em) : 'arquivada'}</span>`
+    const a = p.arquivamento
+    if (!a) return '<span style="color:var(--ct)">—</span>'
+    if (a.estado === 'pronta') return `<button class="ges-btn v" style="padding:4px 10px;" onclick="arqAbrir(${arqArgs(t.tr, p.parcial_num, p.setorial_id)})">📁 ${p.final ? 'Arquivar e encerrar' : 'Arquivar'}</button>`
+    return `<span style="font-size:11.5px;color:var(--ct);">${escHtml(arqFrase(a.motivo) || 'ainda não dá para arquivar')}</span>`
+  }
+
+  return `
+    <div class="ges-volta"><a onclick="gesVoltar()">← Todas as TRs</a>
+      <button class="ges-btn" onclick="irPlanilha('${escHtml(t.tr)}')">Abrir na Minha Planilha →</button></div>
+    <div class="ges-card ges-ficha">
+      <div class="ges-banner">
+        ${GES_MARCA}
+        <div>
+          <div class="ges-tags"><span class="ges-tag">PRESTAÇÃO DE CONTAS</span>
+            <span style="font-size:11px;font-weight:700;opacity:.85;">TERMO DE REPASSE</span>
+            ${t.ano ? `<span class="ges-tag">${t.ano}</span>` : ''}${t.grupo != null ? `<span class="ges-tag">G${escHtml(String(t.grupo))}</span>` : ''}</div>
+          <h1>${escHtml(t.tr)}</h1>
+          <span class="ges-mae">${sgpeLogoImg(16)} MÃE ${gesProc(t.processo_mae)}</span>
+          <div class="ges-quem"><div class="ges-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div>
+            <div><small>ENTIDADE</small><b>${escHtml(t.entidade || '—')}</b></div></div>
+        </div>
+        <div class="ges-dir">
+          <div class="lb">VALOR DAS PARCIAIS</div>
+          <div class="vl">${gesBrl(t.valor_total)} ${ring}</div>
+          <p>${t.n_baixadas} de ${t.n_pcs} PCs baixadas · ${gesPlural(t.n_arquivadas, 'arquivada', 'arquivadas')}</p>
+        </div>
+      </div>
+      <div class="ges-faixa" style="border-left-color:${e.cor}">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <div style="flex:1;min-width:280px;">
+          <h3>${e.rot}</h3><span class="desc">${GES_DESC[t.etapa] || ''}</span>
+          ${t.dias_parado != null ? `<div class="ln">◷ Sem movimentação há <b>${gesPlural(t.dias_parado, 'dia', 'dias')}</b></div>` : ''}
+          <div class="ln">→ Falta agora: <b>${gesFalta(t)}</b></div>
+          <div class="ges-onde"><div class="ges-lbl">Onde está agora</div>
+            <div style="font-size:13px;font-weight:700;margin-top:2px;">${gesOnde(t)}</div></div>
+        </div>
+        <button class="ges-btn" style="align-self:center;" onclick="irPlanilha('${escHtml(t.tr)}')">ABRIR NA MINHA PLANILHA</button>
+      </div>
+      <div class="ges-passos">${passos.map((p, i) => `<div class="ges-ps ${estPasso(i)}"><span class="b">${estPasso(i) === 'ok' ? '✓' : i + 1}</span><div>${p[0]}<small>${p[1]}</small></div>${i < 3 ? '<span class="l"></span>' : ''}</div>`).join('')}</div>
+      <div class="ges-campos">
+        <div class="ges-cp"><span class="ges-lbl">Entidade</span><div>${escHtml(t.entidade || '—')}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Setorial</span><div>FCEE</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Grupo</span><div>${t.grupo != null ? escHtml(String(t.grupo)) : '<i>—</i>'}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Analista</span><div>${escHtml(alvo().nome || '—')}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Processo mãe (SGPe)</span><div>${gesProc(t.processo_mae)}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Parciais</span><div>${t.n_parciais === 0 && t.tem_final ? 'só PC final' : gesPlural(t.n_parciais, 'parcial', 'parciais') + (t.tem_final ? ' + PC final' : '')}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">PCs baixadas</span><div>${t.n_baixadas} de ${t.n_pcs}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Assumida em</span><div>${t.dt_assumida ? planData(t.dt_assumida) : '<i>não registrado</i>'}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Prazo mais próximo</span><div>${t.prazo_proximo ? gesPrazoHtml(t.prazo_proximo) : '<i>sem PC com prazo</i>'}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Controle Interno</span><div>${nDev || nFila ? `${gesPlural(nDev, 'devolvida', 'devolvidas')} · ${nFila} na fila` : '<i>ainda não foi ao C.I.</i>'}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Arquivamento</span><div>${t.etapa === 'encerrada' ? 'TR encerrada' : `${t.n_arquivadas} de ${t.n_pcs} ${t.n_arquivadas === 1 ? 'arquivada' : 'arquivadas'}`}</div></div>
+        <div class="ges-cp"><span class="ges-lbl">Última movimentação</span><div>${t.ultima_mov ? planData(t.ultima_mov) : '<i>—</i>'}</div></div>
+      </div>
+    </div>
+
+    <div class="ges-card ges-bloco">
+      <h4>Parciais e PCs</h4>
+      <div class="ges-wrap"><table class="ges-p"><thead><tr>
+        <th>Parcial</th><th>PC</th><th>Processo SGPe</th><th>Valor</th><th>Situação</th><th>Etapa</th>
+        <th>Prazo de análise</th><th>Baixada em</th><th>C.I. devolveu</th><th>Arquivamento</th>
+      </tr></thead><tbody>${t.pcs.map(p => `<tr>
+        <td style="font-weight:700;white-space:nowrap;">${gesParcialRot(p)}</td>
+        <td class="ges-mono">${escHtml(p.codigo_pc)}</td>
+        <td class="ges-mono">${gesProc(p.processo_pc)}</td>
+        <td class="ges-mono">${p.valor ? gesBrl(p.valor) : '—'}</td>
+        <td>${p.etapa === 'analise' ? gesSit(p.situacao) : escHtml(p.situacao || '—')}</td>
+        <td>${gesDot(p.etapa)}</td>
+        <td>${p.etapa === 'analise' ? gesPrazoHtml(p.prazo) : '<span style="color:var(--ct)">—</span>'}</td>
+        <td class="ges-mono">${p.data_baixa ? planData(p.data_baixa) : '—'}</td>
+        <td class="ges-mono">${p.ci_devolveu_em ? planData(p.ci_devolveu_em) : p.ci_devolveu_carga ? 'carga de 16/08' : '—'}</td>
+        <td>${arqCel(p)}</td>
+      </tr>`).join('')}</tbody></table></div>
+    </div>
+
+    <div class="ges-card ges-bloco" id="gesSgpe"></div>
+
+    <div class="ges-grid2">
+      <div class="ges-card ges-bloco" style="margin-top:0;"><h4>Linha do tempo</h4><div id="gesHist"><div class="loading" style="padding:12px;">Carregando...</div></div></div>
+      <div class="ges-card ges-bloco" style="margin-top:0;"><h4>Anotações</h4><div id="gesAnot"><div class="loading" style="padding:12px;">Carregando...</div></div></div>
+    </div>`
+}
+
+// ── SGPe da ficha ──
+function gesProcessos(t) {
+  const lista = []
+  if (t.processo_mae && !procVazio(t.processo_mae)) lista.push({ processo: t.processo_mae, rot: 'Processo mãe' })
+  const porProc = new Map()
+  for (const p of t.pcs) {
+    if (!p.processo_pc || procVazio(p.processo_pc)) continue
+    if (!porProc.has(p.processo_pc)) porProc.set(p.processo_pc, [])
+    porProc.get(p.processo_pc).push(p.final ? 'PC final' : 'Parcial ' + p.parcial_num)
+  }
+  for (const [processo, rots] of porProc) if (processo !== t.processo_mae) lista.push({ processo, rot: [...new Set(rots)].join(', ') })
+  return lista
+}
+
+async function gesSgpeCarregar(atualizar) {
+  const t = _ges && _gesF.tr ? _ges.trs.find(x => x.tr === _gesF.tr) : null
+  const box = document.getElementById('gesSgpe')
+  if (!t || !box) return
+  const procs = gesProcessos(t)
+  if (!procs.length) {
+    box.innerHTML = '<h4>Tramitação no SGPe</h4><i style="color:var(--ct);font-size:12.5px;">Esta TR não tem processo SGPe válido cadastrado.</i>'
+    return
+  }
+  if (!_gesF.proc || !procs.some(p => p.processo === _gesF.proc))
+    _gesF.proc = (t.sgpe_atual && procs.some(p => p.processo === t.sgpe_atual.processo)) ? t.sgpe_atual.processo : procs[0].processo
+  const sel = procs.length > 1
+    ? `<select onchange="_gesF.proc=this.value;gesSgpeCarregar(false)" style="border:1.5px solid var(--cb);border-radius:7px;padding:4px 8px;font-size:12px;font-family:inherit;">
+        ${procs.map(p => `<option value="${escHtml(p.processo)}" ${p.processo === _gesF.proc ? 'selected' : ''}>${escHtml(normalizarProcesso(p.processo))} — ${escHtml(p.rot)}</option>`).join('')}</select>`
+    : `<span style="font-weight:600;">${escHtml(normalizarProcesso(procs[0].processo))}</span>`
+  const cab = (link, ocupado) => `<h4>${sgpeLogoImg(16)} Tramitação no SGPe ${sel}
+      <span class="sp">
+        <button class="ges-btn" id="gesSgpeBt" ${ocupado ? 'disabled' : ''} onclick="gesSgpeCarregar(true)">⟳ ${ocupado ? 'Consultando...' : 'Atualizar agora'}</button>
+        ${link ? `<a class="ges-btn" href="${escHtml(link)}" target="_blank" rel="noopener">Abrir no SGPe ↗</a>`
+               : '<button class="ges-btn" disabled title="Este processo ainda não tem link do SGPe no sistema">Abrir no SGPe ↗</button>'}
+      </span></h4>`
+  const proc = _gesF.proc
+  box.innerHTML = cab(null, true) + '<div class="loading" style="padding:10px;">Carregando...</div>'
+  try {
+    const r = atualizar
+      ? await fetch(`${API_URL}/sgpe/situacao/atualizar`, { method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ processo: proc, usuario_id: U.id }) })
+      : await fetch(`${API_URL}/sgpe/situacao?${new URLSearchParams({ processo: proc })}`)
+    const j = await r.json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (_gesF.proc !== proc || !document.getElementById('gesSgpe')) return
+    const d = j.data || {}
+    if (atualizar) toast(d.aviso || (d.atualizado ? 'Posição atualizada pelo portal do SGPe.' : 'Posição consultada.'), 'ok')
+    const s = d.situacao
+    let corpo
+    if (!d.valido) corpo = '<i style="color:var(--ct);font-size:12.5px;">Este número não é um processo que o sistema reconheça.</i>'
+    else if (!s) corpo = '<i style="color:var(--ct);font-size:12.5px;">Ainda não sincronizado. O rodízio automático passa por todos os processos; para ver agora, use “Atualizar agora”.</i>'
+    else if (s.resultado !== 'OK') corpo = `<i style="color:var(--ct);font-size:12.5px;">${s.resultado === 'NAO_ENCONTRADO' ? 'O portal público não encontrou este processo.' : s.resultado === 'SIGILOSO' ? 'Processo sigiloso — o portal não mostra a tramitação.' : 'Sem leitura do portal para este processo.'} Última tentativa em ${planDataHora(s.checado_em)}.</i>`
+    else {
+      const tr = d.tramitacoes || []
+      corpo = `<div style="font-size:13px;">Está em <b>${escHtml(s.setor_sigla || '—')}</b>${s.setor_nome ? ` <span style="color:var(--ct)">(${escHtml(s.setor_nome)})</span>` : ''}${s.desde ? ` desde <b>${planData(s.desde)}</b>` : ''}${s.dias_no_setor != null ? ` <span style="color:var(--ct)">— ${gesPlural(s.dias_no_setor, 'dia', 'dias')} no setor</span>` : ''}</div>
+        <div style="font-size:11.5px;color:var(--ct);margin-top:3px;">${s.situacao_portal ? `Situação no portal: ${escHtml(s.situacao_portal)} · ` : ''}${s.assunto ? `${escHtml(s.assunto)} · ` : ''}lido em ${planDataHora(s.checado_em)}</div>
+        ${tr.length ? `<div class="ges-wrap" style="margin-top:8px;"><table class="ges-p"><thead><tr><th>#</th><th>Setor</th><th>Recebido</th><th>Encaminhado</th><th>Permanência</th><th>Quem encaminhou</th></tr></thead>
+          <tbody>${tr.slice(0, 8).map(x => `<tr><td>${x.ordem}</td><td><b>${escHtml(x.setor_sigla || '—')}</b>${x.setor_nome ? `<small style="color:var(--ct)">${escHtml(x.setor_nome)}</small>` : ''}</td>
+            <td class="ges-mono">${x.dt_recebto ? planData(x.dt_recebto) : '—'}</td><td class="ges-mono">${x.dt_encaminha ? planData(x.dt_encaminha) : '<i style="color:var(--ct)">em aberto</i>'}</td>
+            <td class="ges-mono">${x.permanencia_dias != null ? gesPlural(x.permanencia_dias, 'dia', 'dias') : '—'}</td><td>${escHtml(x.quem_encaminhou || '—')}</td></tr>`).join('')}</tbody></table>
+          ${tr.length > 8 ? `<small style="color:var(--ct);margin-top:4px;">mostrando os 8 trâmites mais recentes de ${tr.length}</small>` : ''}</div>` : ''}`
+    }
+    box.innerHTML = cab(d.link, false) + corpo
+  } catch (e) {
+    if (_gesF.proc !== proc || !document.getElementById('gesSgpe')) return
+    box.innerHTML = cab(null, false) + `<div style="color:#A32D2D;font-size:12.5px;">${escHtml(e.message)}</div>`
+  }
+}
+
+// ── linha do tempo — a mesma trilha do "Histórico da parcial", da TR inteira ──
+async function gesHistCarregar(tr) {
+  const box = document.getElementById('gesHist')
+  if (!box) return
+  try {
+    const q = { tr, setorial_id: U.setorialFiltro || 'FCEE' }
+    const j = await (await fetch(`${API_URL}/parcela/historico?${new URLSearchParams(q)}`)).json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (_gesF.tr !== tr || !document.getElementById('gesHist')) return
+    const lista = (j.data || []).slice(0, 30)
+    box.innerHTML = lista.length ? `<ul class="ges-tl">${lista.map(h => `<li>
+        <b>${AC_EV_LABEL[h.evento] || escHtml(String(h.evento || '').replace(/_/g, ' '))}${h.valor_novo ? ` · ${escHtml(h.valor_novo)}` : ''}</b>
+        <span>${planDataHora(h.criado_em)}${h.parcial_num ? ` · parcial ${escHtml(String(h.parcial_num))}` : ''}${h.observacao ? ` · ${escHtml(h.observacao)}` : ''}</span>
+      </li>`).join('')}</ul>${(j.data || []).length > 30 ? `<small style="color:var(--ct)">mostrando os 30 registros mais recentes de ${(j.data || []).length}</small>` : ''}`
+      : '<i style="color:var(--ct);font-size:12.5px;">Nenhuma mudança registrada ainda. As ações feitas pelo sistema a partir de 12/08/2026 aparecem aqui.</i>'
+  } catch (e) {
+    if (document.getElementById('gesHist')) box.innerHTML = `<div style="color:#A32D2D;font-size:12.5px;">Erro ao carregar: ${escHtml(e.message)}</div>`
+  }
+}
+
+// ── anotações — a MESMA `anotacoes_tr` da Minha Planilha: uma linha por gravação, a primeira
+// é a atual e as demais são o histórico. No modo "ver como" não há botão (armadilha 13).
+let _gesAnot = []
+async function gesAnotCarregar(tr) {
+  const box = document.getElementById('gesAnot')
+  if (!box) return
+  try {
+    const j = await (await fetch(`${API_URL}/anotacoes_tr?tr=${encodeURIComponent(tr)}`)).json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (_gesF.tr !== tr || !document.getElementById('gesAnot')) return
+    _gesAnot = j.data || []
+    const atual = _gesAnot[0], antigas = _gesAnot.slice(1)
+    const botao = verComoAtivo() ? ''
+      : `<div style="text-align:right;margin-top:6px;"><button class="ges-btn v" onclick="gesAnotar('${escHtml(tr)}')">${atual ? 'Editar anotação' : '+ Adicionar anotação'}</button></div>`
+    box.innerHTML = (atual
+      ? `<div class="ges-nota">${escHtml(atual.texto || '')}<small>${escHtml(atual.analista_nome || '')} · ${planDataHora(atual.criado_em)}</small></div>
+         ${antigas.length ? `<details><summary style="font-size:11px;color:var(--ct);cursor:pointer;">histórico · ${gesPlural(antigas.length, 'anterior', 'anteriores')}</summary>
+           ${antigas.map(a => `<div style="margin:6px 0;font-size:11.5px;color:var(--ct);white-space:pre-wrap;">${escHtml(a.texto || '')}<small>${escHtml(a.analista_nome || '')} · ${planDataHora(a.criado_em)}</small></div>`).join('')}</details>` : ''}`
+      : '<i style="color:var(--ct);display:block;margin-bottom:6px;font-size:12.5px;">Nenhuma anotação.</i>') + botao
+  } catch (e) {
+    if (document.getElementById('gesAnot')) box.innerHTML = `<div style="color:#A32D2D;font-size:12.5px;">Erro ao carregar: ${escHtml(e.message)}</div>`
+  }
+}
+
+async function gesAnotar(tr) {
+  if (verComoAtivo()) return
+  const atual = _gesAnot[0]
+  const texto = await moPrompt('Anotação:', {
+    titulo: `Anotação da TR ${tr}`,
+    detalhe: atual ? 'O texto atual vem preenchido. Ao salvar, entra como anotação nova — a anterior fica no histórico.' : null,
+    valor: atual ? atual.texto : '',
+    linhas: 4, obrigatorio: true, okTexto: 'Salvar anotação',
+  })
+  if (texto === null) return
+  try {
+    const r = await fetch(`${API_URL}/anotacoes_tr`, {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ tr, texto: texto.trim(), analista_id: U.id, analista_nome: U.nome }),
+    })
+    const j = await r.json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    toast('Anotação salva!', 'ok')
+    gesAnotCarregar(tr)
+  } catch (e) { toast('Erro ao salvar: ' + e.message, 'err') }
 }
 
 function toast(msg, tipo='ok') {
