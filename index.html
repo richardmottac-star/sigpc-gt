@@ -24368,7 +24368,7 @@ function gesTabela() {
     el.innerHTML = `<div class="ges-resumo"><b>${lista.length}</b> ${lista.length === 1 ? 'TR' : 'TRs'} neste recorte${sync}</div>
       <div class="ges-wrap"><table class="ges-g"><thead><tr>
         <th>Ano</th><th>TR</th><th>Entidade</th><th>Processo mãe</th><th>Parciais</th><th>Valor</th>
-        <th>Etapa / situação</th><th>Prazo mais próximo</th><th>Parado há</th><th>Onde está no SGPe</th>
+        <th>Etapa / situação</th><th>Onde está no SGPe</th>
       </tr></thead><tbody>${lista.length ? lista.map(({ t }) => {
         const pct = t.n_pcs ? Math.round(t.n_baixadas / t.n_pcs * 100) : 0
         const sits = t.situacoes.filter(s => s !== 'Em análise')
@@ -24382,11 +24382,9 @@ function gesTabela() {
             <small style="color:var(--ct)">${t.n_baixadas} de ${t.n_pcs} baixadas</small></td>
           <td class="ges-mono" style="font-weight:700;">${gesBrl(t.valor_total)}</td>
           <td>${gesDot(t.etapa)}${sits.length ? `<span class="ges-sit">${sits.map(gesSit).join(' · ')}</span>` : ''}</td>
-          <td>${gesPrazoHtml(t.prazo_proximo)}</td>
-          <td>${gesDiasHtml(t.dias_parado)}</td>
           <td>${gesSgpeLinha(t.sgpe_atual)}</td>
         </tr>`
-      }).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--ct);padding:22px;">Nenhuma TR neste recorte.</td></tr>'}
+      }).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--ct);padding:22px;">Nenhuma TR neste recorte.</td></tr>'}
       </tbody></table></div>`
     return
   }
