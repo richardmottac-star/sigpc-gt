@@ -144,6 +144,15 @@ body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-siz
 .mn-bd li{font-size:12.5px;line-height:1.55;color:var(--ct);margin-bottom:7px;}
 .mn-bd li b{color:var(--te);}
 .mn-top p{color:#fff;}
+/* O selo de novidade do cartao do manual. O pulso e anel de sombra, e nao escala: escala
+   empurraria o titulo ao lado a cada ciclo. */
+.mn-selo{display:inline-block;margin-left:9px;background:#FFC93C;color:#4A3200;font-size:9.5px;
+  font-weight:800;letter-spacing:.09em;text-transform:uppercase;border-radius:20px;padding:3px 9px;
+  vertical-align:2px;animation:mnSelo 2.6s ease-out infinite;}
+@keyframes mnSelo{0%{box-shadow:0 0 0 0 rgba(255,201,60,.75)}70%{box-shadow:0 0 0 10px rgba(255,201,60,0)}
+  100%{box-shadow:0 0 0 0 rgba(255,201,60,0)}}
+/* Quem pediu menos movimento fica com o selo parado — o recado e o mesmo. */
+@media (prefers-reduced-motion: reduce){.mn-selo{animation:none;}}
 .mn-qt{font-size:10px;font-weight:700;color:var(--ct);background:var(--vbg);border-radius:20px;padding:2px 8px;margin-left:auto;flex-shrink:0;}
 .mn-ch{margin-left:8px;}
 .mn-tag{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#6A1B9A;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;}
@@ -4085,7 +4094,7 @@ function irDash() {
     <div class="mn" id="manualCard">
       <div class="mn-top" onclick="manualCardTg(event)">
         <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5l-1-.75L9 9V4zm9 16H6V4h1v9l3-2.25L13 13V4h5v16z"/></svg>
-        <div><h3>Manual do Analista</h3><p>Todas as telas do sistema, com o passo a passo — clique no capítulo</p></div>
+        <div><h3>Manual do Analista <span class="mn-selo">Novidade</span></h3><p>Todas as telas do sistema, com o passo a passo — clique no capítulo</p></div>
         <a class="btn-guia" href="assets/manual/Manual_Analista_SIGPC-GT.pdf" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="text-decoration:none;">Manual em PDF</a>
         <svg class="mn-seta" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
       </div>
