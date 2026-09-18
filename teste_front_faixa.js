@@ -5,7 +5,7 @@
 //
 // A regra, decidida pelo Richard em 16/08/2026:
 //   E A MESMA FAIXA, ROLANDO IGUAL -- muda so O LUGAR.
-//   Dashboard      -> logo abaixo da Estrutura de Governanca.
+//   Dashboard      -> logo ACIMA da Estrutura de Governanca (trocado em 18/09/2026).
 //   demais telas   -> no rodape, como sempre foi.
 //   e uma de cada vez: no Dashboard o rodape fica VAZIO.
 //
@@ -155,7 +155,7 @@ conf(/<div id="faixaBloco"><\/div>/.test(html), 'o elemento do bloco existe');
 // ⚠️ Ele tem de vir DEPOIS da Estrutura de Governanca — foi onde o Richard pediu.
 const iGov = html.indexOf('Estrutura de Governança do Grupo de Trabalho');
 const iBloco = html.indexOf('<div id="faixaBloco">');
-conf(iGov > 0 && iBloco > iGov, 'e vem logo abaixo da Estrutura de Governanca');
+conf(iGov > 0 && iBloco < iGov, 'e vem logo ACIMA da Estrutura de Governanca');
 
 // ⚠️ O `ativarMenu('dash')` chama `faixaTela` ANTES de o BODY ser reescrito: naquele instante
 // o #faixaBloco ainda nao existe. Sem uma segunda chamada depois do innerHTML, o bloco nasce
