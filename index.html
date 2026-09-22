@@ -20484,7 +20484,17 @@ let _trfCarregando = false
 // Ela lê `data_saida` — NUNCA `ativo`, que nos sete dispensados continua `true` por decisão
 // do Richard: o dispensado precisa terminar o que ficou em curso. São colunas diferentes e
 // podem discordar, e uma segunda definição divergiria no primeiro ajuste.
-const trfEhAnalista = (u) => u && u.perfil === 'analista'
+// ⚠️ O SUPERADMIN ENTRA NAS DUAS LISTAS (22/09/2026). Ele analisa acervo como qualquer
+// analista — tem PCs próprias e conta na produtividade pela mesma regra do `contaProdutividade`
+// —, e ficar de fora tinha um custo concreto: para repassar uma TR que estava com ele, o único
+// caminho era assumi-la pelo Estoque e repassar, deixando na trilha a marca de que ELE assumiu.
+// Quem continua fora são o coordenador e o Controle Interno, que não recebem acervo.
+const trfEhAnalista = (u) => u && (u.perfil === 'analista' || u.perfil === 'superadmin')
+
+// A origem ESTOQUE não é uma pessoa: é o acervo sem dono. O valor viaja como texto até o
+// servidor, que o reconhece pela `transf.ehEstoque` — a mesma palavra nos dois lados.
+const TRF_ESTOQUE = 'estoque'
+const trfDoEstoque = () => (document.getElementById('trfDe')?.value || '') === TRF_ESTOQUE
 
 // ⚠️ OS COORDENADORES FICAM NUMA LISTA PRÓPRIA, porque `_trfUsuarios` é filtrada por
 // `trfEhAnalista` — só `perfil === 'analista'` entra nela. O termo procurava o coordenador ali
@@ -20502,7 +20512,7 @@ async function irTransferir() {
   _trfTrs = []; _trfSel = new Set()
   document.getElementById('BODY').innerHTML = `
     <div class="cab"><h2>Transferir prestações de contas</h2>
-      <div class="sub">Move as PCs abertas de um analista para outro, e a TR junto.</div></div>
+      <div class="sub">Move as PCs abertas de um analista para outro — ou encaminha PCs livres do estoque — e a TR junto.</div></div>
 
     ${/* ⚠️ AS DUAS ABAS DIVIDEM A MESMA TELA porque respondem à mesma pergunta em tempos
           diferentes: "para quem mando" e "o que já mandei". Separá-las em dois itens de menu
@@ -20520,6 +20530,11 @@ async function irTransferir() {
       <div style="margin-top:3px;color:#6B5A2C;">
         A TR vai para o novo analista e as PCs abertas vão junto. As baixadas ficam no nome de
         quem as analisou.</div>
+      ${/* ⚠️ A REGRA DO ESTOQUE FICA NA MESMA FAIXA, e não numa segunda caixa: são duas
+            origens da MESMA tela, e quem lê precisa ver as duas antes de escolher. */''}
+      <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #D9C79B;color:#6B5A2C;">
+        Escolhendo <b>Estoque</b> como origem, o que se move são as PCs <b>livres</b>: elas
+        passam a ter dono, saem da fila de quem quiser assumir e o analista é avisado.</div>
     </div>
 
     <div class="filtros">
@@ -20553,6 +20568,8 @@ async function irTransferir() {
     </div>
     ${/* A faixa cinza da dispensa — vazia até o "De" escolhido ser um dispensado. */''}
     <div id="trfDispensa" style="margin:-4px 2px 14px;"></div>
+    ${/* A carga do destino: aparece quando o "Para" é escolhido, e avisa sem barrar. */''}
+    <div id="trfCarga" style="margin:-8px 2px 14px;"></div>
 
     <div id="trfLista"></div>
 
@@ -20587,7 +20604,11 @@ async function trfCarregarUsuarios() {
   // ⚠️ O "DE" TRAZ OS DISPENSADOS, e é o caso principal da tela: o acervo que ficou parado é
   // justamente o de quem saiu. Eles vêm com a etiqueta no próprio rótulo, porque um seletor
   // fechado não mostra a faixa cinza de baixo.
-  de.innerHTML = '<option value="">Escolha o analista de origem</option>'
+  // ⚠️ O ESTOQUE VEM PRIMEIRO, e separado por uma linha divisória: ele não é uma pessoa, e
+  // misturá-lo no meio dos nomes faria procurá-lo em ordem alfabética.
+  de.innerHTML = '<option value="">Escolha a origem</option>'
+    + `<option value="${TRF_ESTOQUE}">📦 Estoque — PCs sem dono</option>`
+    + '<option value="" disabled>──────────</option>'
     + _trfUsuarios.map(u => `<option value="${u.id}">${escHtml(u.nome)}${
         ehDispensado(u) ? ' — dispensado' : ''}</option>`).join('')
 
@@ -20630,13 +20651,57 @@ function trfParaMudou() {
   const tem = paraId ? trfPortariaDe(paraId) : null
   // ⚠️ A CAIXA SÓ APARECE QUANDO FALTA. Mostrá-la sempre, preenchida, convidaria a corrigir à
   // mão um dado oficial que já está no banco.
-  if(box) box.style.display = (paraId && !tem) ? '' : 'none'
+  //
+  // ⚠️ E DO ESTOQUE ELA NÃO APARECE NUNCA: sem analista de origem não há termo de repasse a
+  // emitir, e é o termo que precisa da vigência. Decisão do Richard, 22/09/2026 — exigir ali
+  // travaria quase todo encaminhamento, porque só quem substituiu alguém tem portaria
+  // registrada. O servidor dispensa pela mesma condição.
+  if(box) box.style.display = (paraId && !tem && !trfDoEstoque()) ? '' : 'none'
+  trfCargaDestino(paraId)
   trfBotao()
+}
+
+/**
+ * A carga do analista de destino — quantas TRs ele já tem e qual é o limite dele.
+ *
+ * ⚠️ ELA AVISA E NÃO BARRA, por decisão do Richard (22/09/2026): a mesma forma do pedido de
+ * devolução pelo motivo 1, em que a carga aparece e quem decide é quem tem a caneta. O
+ * encaminhamento do estoque é exceção operacional, e travá-lo obrigaria a liberar vaga antes
+ * justamente na hora em que a situação já é fora do comum.
+ *
+ * ⚠️ E O NÚMERO VEM DO SERVIDOR (`/limite_tr/situacao`), que é quem conta ocupadas e limite
+ * para o botão Assumir. Contar aqui seria uma segunda fonte para o mesmo número — e um dia os
+ * dois diriam coisas diferentes sobre o mesmo analista (armadilha 16).
+ */
+async function trfCargaDestino(paraId) {
+  const cx = document.getElementById('trfCarga')
+  if(!cx) return
+  if(!paraId) { cx.innerHTML = ''; return }
+  try {
+    const j = await (await fetch(`${API_URL}/limite_tr/situacao?analista_id=${paraId}`)).json()
+    const d = (j && j.data) || {}
+    const u = _trfUsuarios.find(x => x.id === paraId)
+    const nome = u ? String(u.nome || '').split(' ')[0] : 'O analista'
+    const oc = Number(d.ocupadas) || 0
+    const lim = d.semLimite ? null : (Number(d.limite) || 0)
+    const acima = lim != null && oc >= lim
+    cx.innerHTML = `<div style="font-size:11.5px;color:${acima ? '#8A5A00' : 'var(--ct)'};
+      background:${acima ? '#FDF6E9' : 'transparent'};border-radius:6px;padding:${acima ? '6px 9px' : '0'};">
+      ${escHtml(nome)} está com <b>${oc}</b> ${oc === 1 ? 'TR' : 'TRs'}${
+        lim != null ? ` · limite <b>${lim}</b>` : ' · sem limite'}${
+        acima ? ' — <b>já está no limite</b>, e o encaminhamento não fica barrado por isso.' : '.'}</div>`
+  } catch(e) {
+    // Um erro aqui não pode impedir o encaminhamento: o aviso é informativo.
+    cx.innerHTML = ''
+  }
 }
 
 /** Escolheu o "De": mostra a dispensa, se houver, e carrega as TRs dele. */
 function trfDeMudou() {
-  const id = parseInt(document.getElementById('trfDe')?.value || '0', 10)
+  // ⚠️ O VALOR É LIDO CRU, e só depois vira número: com `parseInt` primeiro, "estoque" virava
+  // `NaN` e caía no mesmo ramo do "nada escolhido" — a origem nova não existiria.
+  const bruto = document.getElementById('trfDe')?.value || ''
+  const id = parseInt(bruto || '0', 10)
   const u = _trfUsuarios.find(x => x.id === id)
   const cx = document.getElementById('trfDispensa')
   if(cx) {
@@ -20648,9 +20713,28 @@ function trfDeMudou() {
       : ''
   }
   _trfSel = new Set()
+  _trfBusca = ''
+  // A caixa da portaria depende da origem: do estoque não há termo de repasse a emitir.
+  trfParaMudou()
+  if(bruto === TRF_ESTOQUE) { trfCarregarTrs(TRF_ESTOQUE); return }
   if(!id) { _trfTrs = []; trfRender(); return }
   trfCarregarTrs(id)
 }
+
+// O termo que recorta a lista do estoque — TR, entidade ou processo, do lado do servidor.
+let _trfBusca = ''
+
+// ⚠️ O TETO DA LISTA, E ELE EXISTE POR DUAS RAZÕES. Medido em 22/09/2026: o estoque tem 709
+// TRs com PC livre, somando 5.917 PCs.
+//   · desenhar 709 linhas de uma vez trava a tela por um instante a cada clique, porque a
+//     lista inteira é redesenhada a cada marcação;
+//   · e, pior, o "marcar todas" viraria um botão que move 5.917 PCs num clique — um engano de
+//     um clique só, sem volta na mesma tela.
+// Quem passa do teto refina pela busca, que é feita no servidor.
+const TRF_MAX = 200
+
+/** As TRs que a lista realmente desenha — e as únicas que o "marcar todas" alcança. */
+function trfVisiveis() { return _trfTrs.slice(0, TRF_MAX) }
 
 async function trfCarregarTrs(id) {
   const cont = document.getElementById('trfLista')
@@ -20661,12 +20745,22 @@ async function trfCarregarTrs(id) {
   try {
     // ⚠️ A LISTA JÁ TEM ROTA: `resumo_tr` devolve uma linha por TR com `total_pcs` e
     // `baixadas`. As ABERTAS são a diferença — a rota não precisou mudar para esta tela.
-    const p = new URLSearchParams({ analista_id: id, setorial_id: U.setorialFiltro || 'FCEE' })
+    // ⚠️ A MESMA ROTA RESPONDE AS DUAS ORIGENS, e no estoque ela responde com `pcs_livres` —
+    // a contagem que sai da `assumir.PC_LIVRE_SQL`, a definição única de livre. Contar aqui
+    // "sem dono" por conta própria reabriria o vão de 16/08, em que 87 PCs apareciam livres na
+    // tela e o servidor recusava com "nenhuma PC livre nesta TR".
+    const doEstoque = id === TRF_ESTOQUE
+    const p = new URLSearchParams({ setorial_id: U.setorialFiltro || 'FCEE' })
+    if(!doEstoque) p.set('analista_id', id)
+    // ⚠️ A BUSCA VAI PARA O SERVIDOR, e não filtra a lista já baixada: o estoque tem centenas
+    // de TRs, e recortar no navegador faria o cabeçalho contar só o pedaço visível.
+    if(doEstoque && _trfBusca) p.set('busca', _trfBusca)
     const j = await (await fetch(`${API_URL}/prestacoes_contas/resumo_tr?${p}`)).json()
     if(j.error) throw new Error(j.error.message || 'Não foi possível carregar as TRs.')
     _trfTrs = (j.data || [])
       .map(t => ({ tr: t.tr, entidade: t.entidade,
-                   abertas: Math.max(0, (Number(t.total_pcs) || 0) - (Number(t.baixadas) || 0)) }))
+                   abertas: doEstoque ? (Number(t.pcs_livres) || 0)
+                     : Math.max(0, (Number(t.total_pcs) || 0) - (Number(t.baixadas) || 0)) }))
       // ⚠️ TR SEM PC ABERTA NÃO ENTRA: não há o que transferir nela, e uma linha com "0 PCs"
       // convidaria a marcá-la para nada.
       .filter(t => t.abertas > 0)
@@ -20692,23 +20786,45 @@ function trfRender() {
   if(!cont) return
   const de = document.getElementById('trfDe')?.value || ''
   if(!de) { cont.innerHTML = ''; trfBotao(); return }
+  const doEstoque = de === TRF_ESTOQUE
+  // ⚠️ A CAIXA DE BUSCA FICA FORA DO "SE TEM LISTA", e é por isso que ela é montada aqui: sem
+  // ela, uma busca sem resultado apagaria o próprio campo e a pessoa não teria como corrigir
+  // o termo — só recomeçando pela origem.
+  const busca = doEstoque ? `
+    <div class="filtros" style="margin-bottom:10px;">
+      <div class="fg" style="flex:1 1 320px;"><label>Buscar no estoque</label>
+        <input type="text" id="trfQ" value="${escHtml(_trfBusca)}" placeholder="TR, entidade, processo, NL ou PC"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();trfBuscar()}"></div>
+      <div class="fg"><label>&nbsp;</label>
+        <button class="btn-acao btn-ass" onclick="trfBuscar()" style="padding:7px 14px;">Buscar</button></div>
+      ${_trfBusca ? `<div class="fg"><label>&nbsp;</label>
+        <button class="btn-limpar" onclick="trfLimparBusca()">Limpar</button></div>` : ''}
+    </div>` : ''
   if(!_trfTrs.length) {
-    cont.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:24px;
-      text-align:center;font-size:12.5px;color:var(--ct);">Este analista não tem PC aberta — não há o que transferir.</div>`
+    cont.innerHTML = busca + `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:24px;
+      text-align:center;font-size:12.5px;color:var(--ct);">${doEstoque
+        ? (_trfBusca ? 'Nenhuma TR do estoque para esta busca.' : 'Não há PC livre no estoque.')
+        : 'Este analista não tem PC aberta — não há o que transferir.'}</div>`
     trfBotao(); return
   }
-  const totalPcs = _trfTrs.reduce((n, t) => n + t.abertas, 0)
-  const todas = _trfSel.size === _trfTrs.length
+  const vis = trfVisiveis()
+  const cortou = _trfTrs.length - vis.length
+  const totalPcs = vis.reduce((n, t) => n + t.abertas, 0)
+  const todas = vis.length > 0 && vis.every(t => _trfSel.has(t.tr))
   const sel = trfPcsSelecionadas()
 
-  cont.innerHTML = `
+  cont.innerHTML = busca + `
     <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1.5px solid var(--cb);">
         <input type="checkbox" id="trfTodas" ${todas ? 'checked' : ''} onchange="trfMarcarTodas(this.checked)"
           title="Marcar ou desmarcar todas as TRs" style="width:15px;height:15px;cursor:pointer;">
         <span style="font-size:12.5px;font-weight:700;color:var(--te);">
-          ${totalPcs} ${totalPcs === 1 ? 'PC aberta' : 'PCs abertas'} em
-          ${_trfTrs.length} ${_trfTrs.length === 1 ? 'TR' : 'TRs'}</span>
+          ${totalPcs} ${doEstoque ? (totalPcs === 1 ? 'PC livre' : 'PCs livres')
+                                  : (totalPcs === 1 ? 'PC aberta' : 'PCs abertas')} em
+          ${vis.length} ${vis.length === 1 ? 'TR' : 'TRs'}</span>
+        ${cortou > 0 ? `<span style="font-size:11px;color:#8A5A00;background:#FDF6E9;
+          border-radius:6px;padding:2px 8px;" title="Use a busca para chegar às demais">
+          mais ${cortou} fora da lista — refine a busca</span>` : ''}
         <span style="margin-left:auto;font-size:12px;color:${sel ? 'var(--v)' : 'var(--ct)'};font-weight:700;">
           ${sel} ${sel === 1 ? 'selecionada' : 'selecionadas'}</span>
       </div>
@@ -20716,7 +20832,7 @@ function trfRender() {
             sem teto, os botões do rodapé sairiam da tela e a pessoa marcaria sem ver o que
             está prestes a mover. */''}
       <div style="max-height:230px;overflow-y:auto;">
-        ${_trfTrs.map(t => {
+        ${vis.map(t => {
           const on = _trfSel.has(t.tr)
           return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
             border-top:1px solid var(--cl);background:${on ? '#F4F8F2' : '#fff'};">
@@ -20740,7 +20856,8 @@ function trfRender() {
                   `nowrap` ela não quebra nunca — e os 84px cabem "83 abertas" com folga, que
                   é a maior TR do acervo. */''}
             <span style="flex:0 0 84px;text-align:right;white-space:nowrap;font-size:12px;color:var(--ct);">
-              ${t.abertas} ${t.abertas === 1 ? 'aberta' : 'abertas'}</span>
+              ${t.abertas} ${doEstoque ? (t.abertas === 1 ? 'livre' : 'livres')
+                                        : (t.abertas === 1 ? 'aberta' : 'abertas')}</span>
           </label>`
         }).join('')}
       </div>
@@ -20748,8 +20865,30 @@ function trfRender() {
   trfBotao()
 }
 
+/** Busca no estoque: recarrega a lista pelo termo, e a seleção antiga não sobrevive.
+ *
+ * ⚠️ A SELEÇÃO É ZERADA DE PROPÓSITO. Marcar três TRs, trocar o termo e transferir levaria
+ * junto TRs que já não estão à vista — o oposto do que a pessoa vê na tela na hora de clicar.
+ */
+function trfBuscar() {
+  _trfBusca = (document.getElementById('trfQ')?.value || '').trim()
+  _trfSel = new Set()
+  trfCarregarTrs(TRF_ESTOQUE)
+}
+
+function trfLimparBusca() {
+  _trfBusca = ''
+  _trfSel = new Set()
+  trfCarregarTrs(TRF_ESTOQUE)
+}
+
+/**
+ * ⚠️ MARCA SÓ O QUE ESTÁ À VISTA. Com o estoque inteiro na origem são 709 TRs e 5.917 PCs, e
+ * um "marcar todas" que alcançasse a lista inteira moveria tudo isso num clique — sobre TRs
+ * que a pessoa nem viu passar na tela.
+ */
 function trfMarcarTodas(on) {
-  _trfSel = on ? new Set(_trfTrs.map(t => t.tr)) : new Set()
+  _trfSel = on ? new Set(trfVisiveis().map(t => t.tr)) : new Set()
   trfRender()
 }
 
@@ -20762,7 +20901,7 @@ function trfCancelar() {
   const de = document.getElementById('trfDe'); if(de) de.value = ''
   const para = document.getElementById('trfPara'); if(para) para.value = ''
   const cx = document.getElementById('trfDispensa'); if(cx) cx.innerHTML = ''
-  _trfTrs = []; _trfSel = new Set()
+  _trfTrs = []; _trfSel = new Set(); _trfBusca = ''
   trfRender()
 }
 
@@ -20791,11 +20930,14 @@ function trfBotao() {
   const jaTem = paraId ? trfPortariaDe(paraId) : null
   const pNum = (document.getElementById('trfPortaria')?.value || '').trim()
   const pEm = (document.getElementById('trfPortariaEm')?.value || '').trim()
-  const faltaPortaria = !!paraId && !jaTem && !(pNum && pEm)
+  const faltaPortaria = !!paraId && !jaTem && !(pNum && pEm) && !trfDoEstoque()
   const motivo = !para ? 'Escolha para quem transferir.'
     : !_trfSel.size ? 'Marque ao menos uma TR.'
     : faltaPortaria ? 'Informe o número e a data de publicação da portaria.' : ''
-  const rotulo = `Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}`
+  // ⚠️ O VERBO MUDA COM A ORIGEM: do estoque a PC não muda de dono, ela GANHA um. "Transferir"
+  // ali faria procurar de quem ela saiu.
+  const rotulo = trfDoEstoque() ? `Encaminhar ${n} ${n === 1 ? 'PC' : 'PCs'}`
+                                : `Transferir ${n} ${n === 1 ? 'PC' : 'PCs'}`
   if(motivo) {
     wrap.innerHTML = `
       <button class="btn-acao" disabled title="${escHtml(motivo)}"
@@ -21472,18 +21614,28 @@ function trfHistHtml() {
 }
 
 async function trfConfirmar() {
-  const deId = parseInt(document.getElementById('trfDe')?.value || '0', 10)
+  const bruto = document.getElementById('trfDe')?.value || ''
+  const doEstoque = bruto === TRF_ESTOQUE
+  const deId = doEstoque ? null : parseInt(bruto || '0', 10)
   const paraId = parseInt(document.getElementById('trfPara')?.value || '0', 10)
   const trs = _trfTrs.filter(t => _trfSel.has(t.tr)).map(t => t.tr)
   const n = trfPcsSelecionadas()
-  if(!deId || !paraId || !trs.length) return
-  const uDe = _trfUsuarios.find(x => x.id === deId)
+  if((!doEstoque && !deId) || !paraId || !trs.length) return
+  const uDe = deId ? _trfUsuarios.find(x => x.id === deId) : null
   const uPara = _trfUsuarios.find(x => x.id === paraId)
+  // ⚠️ A PERGUNTA MUDA COM A ORIGEM, e não é só o verbo: do estoque a frase das baixadas não
+  // se aplica (não há produtividade de ninguém em jogo) e o que a pessoa precisa confirmar é
+  // que as PCs passam a ter dono e saem da fila de quem quiser assumir.
   const okConf = await moConfirm(
-    `Transferir ${n} ${n === 1 ? 'PC aberta' : 'PCs abertas'} em ${trs.length} ${
-      trs.length === 1 ? 'TR' : 'TRs'} de ${uDe ? uDe.nome : deId} para ${uPara ? uPara.nome : paraId}?`,
-    { titulo: 'Confirmar a transferência',
-      detalhe: 'As PCs já baixadas não são transferidas — a produtividade delas continua com quem analisou.' })
+    doEstoque
+      ? `Encaminhar ${n} ${n === 1 ? 'PC livre' : 'PCs livres'} do estoque em ${trs.length} ${
+          trs.length === 1 ? 'TR' : 'TRs'} para ${uPara ? uPara.nome : paraId}?`
+      : `Transferir ${n} ${n === 1 ? 'PC aberta' : 'PCs abertas'} em ${trs.length} ${
+          trs.length === 1 ? 'TR' : 'TRs'} de ${uDe ? uDe.nome : deId} para ${uPara ? uPara.nome : paraId}?`,
+    { titulo: doEstoque ? 'Confirmar o encaminhamento' : 'Confirmar a transferência',
+      detalhe: doEstoque
+        ? 'Elas saem do estoque e passam a constar na planilha do analista, que é avisado.'
+        : 'As PCs já baixadas não são transferidas — a produtividade delas continua com quem analisou.' })
   if(!okConf) return
 
   const bt = document.getElementById('trfBt')
@@ -21494,7 +21646,7 @@ async function trfConfirmar() {
       // ⚠️ A PORTARIA SÓ VAI QUANDO A TELA A PEDIU. Quando a `substituicao` responde, quem
       // resolve é o servidor, lendo a MESMA tabela — mandar daqui um valor digitado por cima
       // do oficial criaria duas versões do mesmo dado.
-      body: JSON.stringify({ de_id: deId, para_id: paraId, trs,
+      body: JSON.stringify({ de_id: doEstoque ? TRF_ESTOQUE : deId, para_id: paraId, trs,
         portaria: (document.getElementById('trfPortaria')?.value || '').trim() || undefined,
         portaria_em: (document.getElementById('trfPortariaEm')?.value || '').trim() || undefined,
         usuario_id: U.id, setorial_id: U.setorialFiltro || 'FCEE' }),
@@ -21502,8 +21654,10 @@ async function trfConfirmar() {
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || 'Não foi possível transferir.')
     const d = j.data || {}
-    toast(`${d.transferidas} ${d.transferidas === 1 ? 'PC transferida' : 'PCs transferidas'}`
-      + `${d.ficaram_baixadas ? ` · ${d.ficaram_baixadas} baixadas ficaram` : ''}.`, 'ok')
+    toast(doEstoque
+      ? `${d.transferidas} ${d.transferidas === 1 ? 'PC encaminhada' : 'PCs encaminhadas'} do estoque.`
+      : `${d.transferidas} ${d.transferidas === 1 ? 'PC transferida' : 'PCs transferidas'}`
+        + `${d.ficaram_baixadas ? ` · ${d.ficaram_baixadas} baixadas ficaram` : ''}.`, 'ok')
     // ⚠️ RECARREGA A LISTA DO "DE": depois da transferência aquelas TRs não são mais dele, e
     // deixar a lista de pé convidaria a clicar de novo sobre um estado que já mudou.
     _trfSel = new Set()

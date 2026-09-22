@@ -116,8 +116,11 @@ conf(/t\.entidade/.test(bloco), 'a linha traz a entidade');
 // ⚠️ NA LINHA E SO "N abertas": em 92px o "2 PCs abertas" quebrava em duas e desalinhava as
 // vizinhas. A unidade fica dita UMA vez, no cabecalho da lista, em cima de todas — repeti-la
 // em cada linha e a palavra ocupando o lugar do numero.
-conf(/\$\{t\.abertas\} \$\{t\.abertas === 1 \? 'aberta' : 'abertas'\}/.test(bloco),
-     'e quantas abertas ela tem, sem repetir "PCs"');
+// ⚠️ A LINHA GANHOU O RAMO DO ESTOQUE (22/09/2026) — "N livres" em vez de "N abertas". O que
+// o teste guarda continua sendo o mesmo: a unidade nao se repete na linha, nos dois ramos.
+conf(/\(t\.abertas === 1 \? 'livre' : 'livres'\)/.test(bloco)
+     && /\(t\.abertas === 1 \? 'aberta' : 'abertas'\)/.test(bloco),
+     'e quantas ela tem, sem repetir "PCs" — livres no estoque, abertas no analista');
 // ⚠️ E O nowrap E O QUE FECHA O CASO, nao a largura: com flex:0 0 a celula nao estica, entao
 // so encurtar o texto torna a quebra improvavel — nao impossivel.
 conf(/flex:0 0 84px;text-align:right;white-space:nowrap/.test(bloco),
@@ -154,7 +157,8 @@ S('9b. O BOTAO LIGADO NA ROTA');
 conf(/onclick="trfConfirmar\(\)"/.test(bloco), 'com "Para" e TR marcada, o botao chama a gravacao');
 conf(/fetch\(`\$\{API_URL\}\/transferencia`/.test(bloco), 'e ela vai para POST /transferencia');
 conf(/method: 'POST'/.test(bloco), 'por POST');
-conf(/de_id: deId, para_id: paraId, trs/.test(bloco), 'mandando de_id, para_id e as TRs marcadas');
+conf(/de_id: doEstoque \? TRF_ESTOQUE : deId, para_id: paraId, trs/.test(bloco),
+     'mandando de_id — ou a palavra estoque —, para_id e as TRs marcadas');
 conf(/usuario_id: U\.id/.test(bloco), 'e o usuario_id — e por ele que o servidor le o perfil no BANCO');
 // ⚠️ SO AS TRs MARCADAS VAO, e nao a lista inteira: a selecao e o que a pessoa conferiu.
 conf(/_trfTrs\.filter\(t => _trfSel\.has\(t\.tr\)\)\.map\(t => t\.tr\)/.test(bloco),
@@ -360,8 +364,8 @@ S('18g. A PORTARIA DO DESTINO NA TELA');
 conf(/function trfPortariaDe\(paraId\)/.test(bloco), 'a tela sabe quando o banco ja tem a portaria');
 conf(/\/substituicao/.test(bloco), 'lendo da substituicao');
 conf(/id="trfPortariaBox"/.test(bloco), 'ha a caixa dos dois campos');
-conf(/box\.style\.display = \(paraId && !tem\) \? '' : 'none'/.test(bloco),
-     'e ela so aparece quando FALTA');
+conf(/box\.style\.display = \(paraId && !tem && !trfDoEstoque\(\)\) \? '' : 'none'/.test(bloco),
+     'e ela so aparece quando FALTA — e nunca quando a origem e o estoque');
 conf(/id="trfPortaria"/.test(bloco) && /id="trfPortariaEm"/.test(bloco), 'o numero e a data');
 conf(/faltaPortaria \? 'Informe o número e a data de publicação da portaria\.'/.test(bloco),
      'e sem eles o botao fica cinza com o motivo');
@@ -639,5 +643,83 @@ S('O REPASSE DESFEITO NO HISTORICO (01/09/2026)');
   conf(hist.indexOf('r.desfeito') < hist.indexOf('r.ciencias_esperadas'),
        'o ramo do desfeito e conferido antes da cobranca normal');
 }
+
+S('A ORIGEM ESTOQUE NA TELA (22/09/2026)');
+{
+  // ⚠️ O SUPERADMIN ENTRA NAS LISTAS. Sem ele, repassar uma TR que estava com o proprio
+  // superadmin exigia o caminho torto: assumir pelo Estoque e so entao repassar — e a trilha
+  // ficava com a marca de que ELE assumiu.
+  conf(/const trfEhAnalista = \(u\) => u && \(u\.perfil === 'analista' \|\| u\.perfil === 'superadmin'\)/.test(bloco),
+       'o superadmin entra nas listas de origem e de destino');
+
+  // A palavra e a MESMA dos dois lados: a tela manda 'estoque' e o servidor le pela ehEstoque.
+  conf(/const TRF_ESTOQUE = 'estoque'/.test(bloco), 'a origem estoque tem um nome so, numa constante');
+  conf(/trfDoEstoque = \(\) => \(document\.getElementById\('trfDe'\)\?\.value \|\| ''\) === TRF_ESTOQUE/.test(bloco),
+       'e quem responde "a origem e o estoque?" e uma funcao unica');
+  conf(/<option value="\$\{TRF_ESTOQUE\}">/.test(bloco), 'ela aparece como opcao no seletor de origem');
+
+  // ⚠️ O VALOR E LIDO CRU ANTES DO parseInt: com parseInt primeiro, "estoque" virava NaN e
+  // caia no ramo do "nada escolhido" — a origem nova nao existiria.
+  conf(/const bruto = document\.getElementById\('trfDe'\)\?\.value \|\| ''/.test(bloco)
+       && /if\(bruto === TRF_ESTOQUE\) \{ trfCarregarTrs\(TRF_ESTOQUE\); return \}/.test(bloco),
+       'o seletor e lido como texto antes de virar numero');
+
+  // ⚠️ A CONTAGEM DO ESTOQUE E `pcs_livres`, que sai da assumir.PC_LIVRE_SQL no servidor.
+  // Derivar "sem dono" aqui reabriria o vao de 16/08: 87 PCs apareciam livres na tela e o
+  // servidor recusava com "nenhuma PC livre nesta TR".
+  conf(/doEstoque \? \(Number\(t\.pcs_livres\) \|\| 0\)/.test(bloco),
+       'no estoque a tela conta pelo pcs_livres do servidor, e nao por conta propria');
+  conf(/if\(!doEstoque\) p\.set\('analista_id', id\)/.test(bloco),
+       'e a mesma rota resumo_tr responde as duas origens');
+
+  // ⚠️ A BUSCA VAI AO SERVIDOR. O estoque tem centenas de TRs; filtrar no navegador faria o
+  // cabecalho contar so o pedaco visivel (armadilha 16).
+  conf(/if\(doEstoque && _trfBusca\) p\.set\('busca', _trfBusca\)/.test(bloco),
+       'a busca do estoque e feita pelo servidor');
+  conf(/function trfBuscar\(\)[\s\S]{0,200}_trfSel = new Set\(\)/.test(bloco),
+       'e trocar o termo zera a selecao, para nao levar TR que saiu da vista');
+
+  // ⚠️ SEM ANALISTA DE ORIGEM NAO HA TERMO DE REPASSE, entao a portaria nao e exigida — nem
+  // no botao nem na caixa. Decisao do Richard, 22/09/2026.
+  conf(/const faltaPortaria = .*&& !trfDoEstoque\(\)/.test(bloco),
+       'o botao nao cobra portaria quando a origem e o estoque');
+
+  // O verbo muda com a origem: do estoque a PC nao muda de dono, ela GANHA um.
+  conf(/trfDoEstoque\(\) \? `Encaminhar \$\{n\}/.test(bloco), 'o botao diz Encaminhar, e nao Transferir');
+  conf(/titulo: doEstoque \? 'Confirmar o encaminhamento' : 'Confirmar a transferencia'/
+         .test(bloco.normalize('NFD').replace(/[̀-ͯ]/g, '')),
+       'e a confirmacao pergunta pelo encaminhamento');
+  conf(/PCs encaminhadas' \} do estoque\.`/.test(bloco) || /'PC encaminhada' : 'PCs encaminhadas'/.test(bloco),
+       'e o aviso de sucesso fala em encaminhamento');
+
+  // ⚠️ A CARGA DO DESTINO AVISA E NAO BARRA — decisao do Richard. E o numero vem do servidor,
+  // da mesma rota que o botao Assumir usa: contar aqui seria uma segunda fonte.
+  conf(/fetch\(`\$\{API_URL\}\/limite_tr\/situacao\?analista_id=\$\{paraId\}`\)/.test(bloco),
+       'a carga do destino vem do /limite_tr/situacao, a mesma fonte do Assumir');
+  conf(/nao fica barrado por isso/.test(bloco.normalize('NFD').replace(/[̀-ͯ]/g, '')),
+       'e o aviso diz, na propria frase, que nao barra');
+  conf(/id="trfCarga"/.test(bloco), 'e ha lugar na tela para esse aviso');
+
+  // A regra do estoque fica na MESMA faixa bege da regra das baixadas: sao duas origens da
+  // mesma tela, e quem le precisa ver as duas antes de escolher.
+  conf(/Escolhendo <b>Estoque<\/b> como origem/.test(bloco),
+       'a faixa do topo explica tambem a origem estoque');
+}
+
+
+S('O TETO DA LISTA E O MARCAR TODAS (22/09/2026)');
+{
+  // ⚠️ MEDIDO: 709 TRs com PC livre, 5.917 PCs. Sem teto, o "marcar todas" moveria tudo isso
+  // num clique — sobre TRs que a pessoa nem viu passar na tela.
+  conf(/const TRF_MAX = 200/.test(bloco), 'a lista tem teto');
+  conf(/function trfVisiveis\(\) \{ return _trfTrs\.slice\(0, TRF_MAX\) \}/.test(bloco),
+       'e quem diz o que esta a vista e uma funcao unica');
+  conf(/_trfSel = on \? new Set\(trfVisiveis\(\)\.map\(t => t\.tr\)\)/.test(bloco),
+       'o marcar todas alcanca SO o que esta a vista');
+  conf(/const cortou = _trfTrs.length - vis.length/.test(bloco)
+       && /refine a busca/.test(bloco),
+       'e a tela avisa quantas ficaram de fora, com o que fazer');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);
