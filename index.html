@@ -522,11 +522,13 @@ tr:last-child td{border-bottom:none;}
 @media(max-width:900px){ .online-rot{display:none;} }
 /* O lapis de corrigir processo: invisivel ate o mouse passar na linha. Quando NAO ha link
    ele ja nasce visivel em ambar — ali o convite a corrigir e a informacao mais util. */
-.proc-lapis{transition:opacity 120ms;}
+.proc-lapis{transition:transform 120ms,color 120ms;display:inline-block;}
+/* ⚠️ O HOVER CRESCE, em vez de revelar: o lápis já está visível, e o que falta é dizer que ele
+   responde ao clique. Revelar no hover foi o que o escondeu de quem não sabia que ele existia. */
+.proc-lapis:hover{transform:scale(1.25);}
 /* ⚠️ O LÁPIS NASCE VISÍVEL (22/09/2026) — ver o porquê no procHtml. O hover ESCURECE, e não
    revela mais: revelar era o que o escondia de quem não sabia que ele existia. */
-.proc-lapis:hover{opacity:1 !important;color:var(--v) !important;}
-tr:hover .proc-lapis, td:hover .proc-lapis, .proc-sgpe:hover .proc-lapis{opacity:.9 !important;}
+tr:hover .proc-lapis, td:hover .proc-lapis, .proc-sgpe:hover .proc-lapis{opacity:1;}
 </style>
 <style>
 /* ═══ IDENTIDADE VISUAL INSTITUCIONAL (identidade_sigpc.css) ═══ */
@@ -5878,7 +5880,8 @@ function procHtml(bruto, codigo_pc, campo) {
     ? 'Corrigir o processo mãe — vale para toda a TR'
     : 'Corrigir o processo desta PC'
   return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
-    title="${dica}" style="cursor:pointer;margin-left:5px;font-size:11px;${semLink ? 'color:#B8860B;' : 'color:var(--ct);opacity:.55;'}">✎</span>`
+    title="${dica}" style="cursor:pointer;margin-left:6px;font-size:13px;line-height:1;
+      ${semLink ? 'color:#B8860B;' : 'color:var(--v);'}">✎</span>`
 }
 
 
@@ -7217,8 +7220,25 @@ document.addEventListener('keydown', (e) => {
 // ninguém revisa — a mesma decisão do bloco de voz do `avisar.ps1`.
 
 /** Analista, coordenador e superadmin corrigem. No modo "ver como", ninguém. */
+/**
+ * ⚠️ O MODO "AGIR PELA CONTA DE" NÃO BARRA MAIS A CORREÇÃO DO PROCESSO (22/09/2026).
+ *
+ * Havia aqui um `!verComoAtivo()`, e ele era uma SÉTIMA trava escondida num auxiliar — fora
+ * das seis que o `teste_front_vercomo.js` nomeia uma a uma. O efeito, relatado pelo Richard:
+ * ele entrava pela conta da analista justamente para consertar o processo dela, e o lápis
+ * sumia; voltando ao próprio papel, o lápis reaparecia sobre TRs que não são dele.
+ *
+ * ⚠️ E A REGRA DE 14/08 JÁ DIZIA QUAL É O CORTE: recusam no modo as DECISÕES sobre o trabalho
+ * do analista — estornar, devolver, pedir devolução, decidir e reabrir no C.I. Corrigir o
+ * número do processo no SGPe não é decisão sobre o trabalho dele: é cadastro errado para todo
+ * mundo, e quem estiver com a TR na mão deve poder consertar.
+ *
+ * ⚠️ A AUTORIA CONTINUA CERTA, e é o que torna isto seguro: a rota grava `analista_id` = o
+ * DONO e `executado_por` = quem clicou (server.js, correção de 16/08). A trilha diz "executado
+ * por Richard" sem transformar o trabalho da analista em trabalho dele.
+ */
 function podeEditarProcesso() {
-  return !!U && !verComoAtivo() && ['analista','coordenador','superadmin'].includes(U.perfil)
+  return !!U && ['analista','coordenador','superadmin'].includes(U.perfil)
 }
 
 // ══════════════════════════════════════

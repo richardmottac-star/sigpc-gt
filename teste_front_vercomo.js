@@ -304,6 +304,17 @@ console.log('\n═══ 8b. A TELA DEIXA CLARO QUE NADA E ACIONAVEL ═══')
   // garantia de que ler o sino de outro no modo nunca marca a notificacao dele como lida.
   // A sexta, de 26/08, e o `ciReabrirAbrir` — reabrir uma parcela encerrada e do tecnico do
   // C.I., e nao passa a ser do analista so porque alguem esta agindo pela conta dele.
+  // ⚠️ E HAVIA UMA SETIMA TRAVA ESCONDIDA — tirada em 22/09/2026. O `podeEditarProcesso`
+  // trazia um `!verComoAtivo()` dentro do proprio booleano, fora deste bloco e fora da
+  // contagem abaixo: o lapis de corrigir o processo SGPe sumia justamente de quem entrava
+  // pela conta da analista para consertar o processo dela. Corrigir cadastro errado nao e
+  // DECISAO sobre o trabalho do analista — e o corte que a regra de 14/08 fixou.
+  //
+  // ⚠️ E O QUE TORNA ISSO SEGURO E A AUTORIA: a rota grava analista_id = o DONO e
+  // executado_por = quem clicou. A trilha diz quem executou sem mudar de quem e o trabalho.
+  conf(!/function podeEditarProcesso\(\)[\s\S]{0,200}?verComoAtivo/.test(html),
+       'corrigir o processo SGPe AGE no modo — nao e decisao sobre o trabalho do analista');
+
   const travas = (html.match(/if\(verComoAtivo\(\)\) \{ toast\(/g) || []).length;
   conf(travas === 6, 'as travas sao SEIS, nem mais nem menos', String(travas));
   const iMT = html.indexOf('async function sinoMarcarTodas');
