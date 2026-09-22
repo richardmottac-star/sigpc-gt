@@ -367,8 +367,11 @@ conf(/id="trfPortariaBox"/.test(bloco), 'ha a caixa dos dois campos');
 conf(/box\.style\.display = \(paraId && !tem && !trfDoEstoque\(\)\) \? '' : 'none'/.test(bloco),
      'e ela so aparece quando FALTA — e nunca quando a origem e o estoque');
 conf(/id="trfPortaria"/.test(bloco) && /id="trfPortariaEm"/.test(bloco), 'o numero e a data');
-conf(/faltaPortaria \? 'Informe o número e a data de publicação da portaria\.'/.test(bloco),
-     'e sem eles o botao fica cinza com o motivo');
+// ⚠️ MAS ELES NAO TRAVAM MAIS O BOTAO (22/09/2026, ordem do Richard): a transferencia acontece
+// sem portaria. Quem exige e o TERMO — e la a recusa diz qual campo do cadastro falta.
+conf(!/faltaPortaria/.test(bloco), 'e a falta deles NAO deixa mais o botao cinza');
+conf(/A transferência acontece do mesmo jeito/.test(bloco),
+     'e a propria caixa diz, em texto, que a transferencia nao depende deles');
 
 S('19. O DESFAZER');
 // ⚠️ A CONFIRMACAO E MODAL, E NAO JANELA FLUTUANTE — ordem do Richard: desfazer move o acervo
@@ -679,10 +682,12 @@ S('A ORIGEM ESTOQUE NA TELA (22/09/2026)');
   conf(/function trfBuscar\(\)[\s\S]{0,200}_trfSel = new Set\(\)/.test(bloco),
        'e trocar o termo zera a selecao, para nao levar TR que saiu da vista');
 
-  // ⚠️ SEM ANALISTA DE ORIGEM NAO HA TERMO DE REPASSE, entao a portaria nao e exigida — nem
-  // no botao nem na caixa. Decisao do Richard, 22/09/2026.
-  conf(/const faltaPortaria = .*&& !trfDoEstoque\(\)/.test(bloco),
-       'o botao nao cobra portaria quando a origem e o estoque');
+  // ⚠️ A CAIXA DA PORTARIA NAO APARECE NO ESTOQUE, e desde 22/09 ela nao trava o botao em
+  // caminho nenhum — o motivo do botao cinza ficou so com os dois que sao do proprio ato:
+  // falta escolher o destino, ou falta marcar TR.
+  conf(/const motivo = !para \? 'Escolha para quem transferir\.'\s*\n\s*: !_trfSel\.size \? 'Marque ao menos uma TR\.' : ''/
+         .test(bloco.replace(/\r\n/g, '\n')),
+       'os unicos motivos de o botao ficar cinza sao o destino e a TR');
 
   // O verbo muda com a origem: do estoque a PC nao muda de dono, ela GANHA um.
   conf(/trfDoEstoque\(\) \? `Encaminhar \$\{n\}/.test(bloco), 'o botao diz Encaminhar, e nao Transferir');

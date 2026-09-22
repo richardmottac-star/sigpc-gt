@@ -20549,20 +20549,22 @@ async function irTransferir() {
     </div>
     ${/* ⚠️ SÓ APARECEM QUANDO O BANCO NÃO SABE. A portaria de designação do destino define a
           VIGÊNCIA do termo, e a tabela `substituicao` já a guarda para quem é substituto de
-          alguém — nos dois repasses que existem hoje ela responde sozinha. Pedir um dado que
-          o banco tem seria fazer digitar o que já está escrito, e digitar cria divergência.
-          Quando ela NÃO responde, os dois campos são obrigatórios: sem vigência o termo não
-          é emitido, e sem termo a transferência não deve acontecer. */''}
+          alguém. Pedir um dado que o banco tem seria fazer digitar o que já está escrito, e
+          digitar cria divergência.
+
+          ⚠️ E ELES SÃO OPCIONAIS DESDE 22/09/2026, ordem do Richard: a transferência acontece
+          sem eles. O que depende da portaria é o TERMO, que pode ser emitido depois — travar o
+          movimento do acervo por causa do documento era burocracia no lugar errado. */''}
     <div id="trfPortariaBox" style="display:none;">
       <div class="filtros" style="border-left:4px solid #BA7517;">
         <div style="flex:0 0 100%;font-size:12px;color:#4A3A0C;">
           <b>Não há portaria de designação registrada para este analista.</b>
-          Informe o número e a data de publicação — é essa data que define a partir de quando
-          o termo vale.</div>
-        <div class="fg"><label>Portaria nº *</label>
+          A transferência acontece do mesmo jeito — estes campos só são necessários para
+          emitir o termo, e podem ficar em branco agora.</div>
+        <div class="fg"><label>Portaria nº</label>
           <input type="text" id="trfPortaria" placeholder="203/2026" style="width:150px;"
             oninput="trfBotao()"></div>
-        <div class="fg"><label>Publicada em *</label>
+        <div class="fg"><label>Publicada em</label>
           <input type="date" id="trfPortariaEm" style="width:165px;" onchange="trfBotao()"></div>
       </div>
     </div>
@@ -20923,17 +20925,13 @@ function trfBotao() {
   if(!wrap) return
   const para = document.getElementById('trfPara')?.value || ''
   const n = trfPcsSelecionadas()
-  // ⚠️ A PORTARIA ENTRA NA CONTA DO BOTÃO. Sem vigência o termo não é emitido, e sem termo a
-  // transferência não deve acontecer — deixar gravar e recusar o documento depois seria criar
-  // um repasse que não se pode documentar.
-  const paraId = parseInt(para || '0', 10)
-  const jaTem = paraId ? trfPortariaDe(paraId) : null
-  const pNum = (document.getElementById('trfPortaria')?.value || '').trim()
-  const pEm = (document.getElementById('trfPortariaEm')?.value || '').trim()
-  const faltaPortaria = !!paraId && !jaTem && !(pNum && pEm) && !trfDoEstoque()
+  // ⚠️ A PORTARIA SAIU DA CONTA DO BOTÃO — decisão do Richard, 22/09/2026, que revê a regra
+  // dele de 01/09. Ela travava o MOVIMENTO DO ACERVO, que é trabalho, por causa de um
+  // DOCUMENTO que pode ser emitido depois. São duas perguntas diferentes, e agora cada uma é
+  // respondida no seu lugar: a transferência acontece; o termo é que continua exigindo a
+  // portaria e a data de ingresso, e diz qual campo falta quando alguém tenta emiti-lo.
   const motivo = !para ? 'Escolha para quem transferir.'
-    : !_trfSel.size ? 'Marque ao menos uma TR.'
-    : faltaPortaria ? 'Informe o número e a data de publicação da portaria.' : ''
+    : !_trfSel.size ? 'Marque ao menos uma TR.' : ''
   // ⚠️ O VERBO MUDA COM A ORIGEM: do estoque a PC não muda de dono, ela GANHA um. "Transferir"
   // ali faria procurar de quem ela saiu.
   const rotulo = trfDoEstoque() ? `Encaminhar ${n} ${n === 1 ? 'PC' : 'PCs'}`
