@@ -523,7 +523,10 @@ tr:last-child td{border-bottom:none;}
 /* O lapis de corrigir processo: invisivel ate o mouse passar na linha. Quando NAO ha link
    ele ja nasce visivel em ambar — ali o convite a corrigir e a informacao mais util. */
 .proc-lapis{transition:opacity 120ms;}
-tr:hover .proc-lapis, td:hover .proc-lapis, .proc-sgpe:hover .proc-lapis{opacity:1 !important;}
+/* ⚠️ O LÁPIS NASCE VISÍVEL (22/09/2026) — ver o porquê no procHtml. O hover ESCURECE, e não
+   revela mais: revelar era o que o escondia de quem não sabia que ele existia. */
+.proc-lapis:hover{opacity:1 !important;color:var(--v) !important;}
+tr:hover .proc-lapis, td:hover .proc-lapis, .proc-sgpe:hover .proc-lapis{opacity:.9 !important;}
 </style>
 <style>
 /* ═══ IDENTIDADE VISUAL INSTITUCIONAL (identidade_sigpc.css) ═══ */
@@ -5864,10 +5867,18 @@ function procHtml(bruto, codigo_pc, campo) {
   // mouse em cima é lápis que ninguém acha — e aqui ele é a única saída da etiqueta.
   if(vazio) return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','')"
     title="Informar o processo SGPe desta PC" style="cursor:pointer;margin-left:5px;font-size:12px;color:#B45309;">✎</span>`
-  // Discreto: só aparece ao passar o mouse na linha. Âmbar quando não há link — ali o
-  // convite a corrigir é a informação mais útil da célula.
+  // ⚠️ O LÁPIS DEIXOU DE SE ESCONDER (22/09/2026). Ele nascia em `opacity:0` e só aparecia
+  // com o mouse na linha — "discreto" na intenção, invisível na prática: o próprio Richard
+  // não conseguiu chegar na caixa de correção, e ele conhece o sistema inteiro. Um caminho que
+  // o dono do sistema não acha é um caminho que não existe.
+  //
+  // ⚠️ E O TÍTULO DIZ O QUE A CORREÇÃO ALCANÇA, porque os dois campos alcançam coisas
+  // diferentes: a mãe é da TR inteira; o da PC, das PCs com o mesmo processo.
+  const dica = campo === 'processo_mae'
+    ? 'Corrigir o processo mãe — vale para toda a TR'
+    : 'Corrigir o processo desta PC'
   return `${corpo}<span class="proc-lapis" onclick="event.stopPropagation();procEditar('${escHtml(codigo_pc)}','${campo || 'processo_pc'}','${escHtml(String(bruto ?? ''))}')"
-    title="Corrigir o processo SGPe" style="cursor:pointer;margin-left:5px;font-size:11px;${semLink ? 'color:#B8860B;opacity:.85;' : 'opacity:0;'}">✎</span>`
+    title="${dica}" style="cursor:pointer;margin-left:5px;font-size:11px;${semLink ? 'color:#B8860B;' : 'color:var(--ct);opacity:.55;'}">✎</span>`
 }
 
 
@@ -7233,9 +7244,17 @@ async function procEditar(codigo_pc, campo, atual) {
   document.getElementById('moProcEd').classList.add('open')
   document.getElementById('procEdTit').textContent =
     campo === 'processo_mae' ? '✎ Corrigir o processo SGPe da TR' : '✎ Corrigir o processo SGPe da PC'
+  // ⚠️ O MODAL DIZ O QUE VAI ACONTECER, e não só o que está errado. A pergunta que a
+  // analista faz depois de salvar é "por que a TR continua mostrando o processo velho?" — e a
+  // resposta é o alcance da correção. Escrever isso na hora de corrigir é mais barato que
+  // explicar depois.
+  const alcance = campo === 'processo_mae'
+    ? 'Vale para <b>todas as PCs desta TR</b> — o processo mãe é um só por TR.'
+    : 'Vale para as PCs desta TR que hoje têm <b>este mesmo processo</b>.'
   document.getElementById('procEdInfo').innerHTML =
-    `<strong>${campo === 'processo_mae' ? 'Processo mãe' : 'PC'}:</strong> ${escHtml(codigo_pc)}<br>` +
-    `<strong>Hoje:</strong> ${escHtml(atual || '—')}`
+    `<strong>${campo === 'processo_mae' ? 'Processo mãe, a partir da PC' : 'PC'}:</strong> ${escHtml(codigo_pc)}<br>` +
+    `<strong>Hoje:</strong> ${escHtml(atual || '—')}<br>` +
+    `<span style="color:var(--ct);">${alcance}</span>`
   // ⚠️ QUEM QUEBRA O TEXTO ATUAL CONTINUA SENDO O `procPartes`, e não o `campoProcPartir` do
   // componente. Os dois respondem perguntas diferentes: o do componente devolve `null` para
   // o que não forma processo — que é o certo numa colagem —, e aqui o valor atual é
@@ -7379,13 +7398,13 @@ async function procEdSalvar() {
     if(d.link) {
       // Resolveu sozinho: guarda no cache da tela e fecha. O manual nem chega a aparecer.
       _sgpeCache.set(d.texto, d.link)
-      toast(`Processo corrigido para ${d.texto}${d.pcs > 1 ? ` (${d.pcs} PCs)` : ''} — link gerado.${conv}`,'ok')
+      toast(`Processo corrigido para ${d.texto}${procQuantas(d)} — link gerado.${conv}`,'ok')
       fm('moProcEd'); _procEd = null
       procRecarregar()
       return
     }
     // Não resolveu: AGORA sim o manual.
-    toast(`Processo salvo como ${d.texto}, mas sem link.${conv}`,'ok')
+    toast(`Processo salvo como ${d.texto}${procQuantas(d)}, mas sem link.${conv}`,'ok')
     document.getElementById('procEdManual').style.display = ''
     document.getElementById('procEdManualMot').textContent = d.motivo || 'O SGPe não devolveu este processo.'
     document.getElementById('procEdUrl').focus()
@@ -7449,6 +7468,18 @@ async function procEdSalvarLink() {
 }
 
 /** Repinta a tela em que a pessoa está — o lápis vive em onze. */
+/**
+ * "em 2 PCs da TR 2021TR001666" — o que a correção alcançou de fato.
+ *
+ * ⚠️ O NÚMERO VEM DO SERVIDOR, que é quem gravou. A tela contar por conta própria seria uma
+ * segunda fonte para a mesma pergunta — e foi justamente não saber quantas PCs mudaram que
+ * fez a correção parecer que não salvou.
+ */
+function procQuantas(d) {
+  if(!d || !d.pcs) return ''
+  return ` em ${d.pcs} ${d.pcs === 1 ? 'PC' : 'PCs'}${d.tr ? ' da TR ' + escHtml(d.tr) : ''}`
+}
+
 function procRecarregar() {
   if(typeof buscarPlan === 'function' && document.getElementById('planConteudo')) return buscarPlan()
   if(typeof buscar === 'function' && document.getElementById('tbl')) { PAG = 0; return buscar() }
