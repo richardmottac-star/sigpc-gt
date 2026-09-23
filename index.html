@@ -16032,14 +16032,31 @@ function pCiBloco(r, pa) {
   // A opção do C.I. e o complemento vêm prontos do servidor, com o estado do arquivamento.
   const opCi = CI_OPCOES.find(o => o.id === pa.arquivamento?.ci_opcao)
   const complCi = pa.arquivamento?.ci_complemento || ''
+  // ⚠️ COM O PROCESSO AINDA NO C.I., O BLOCO INTEIRO MUDA DE COR E A PÍLULA VERDE SAI. Era ela
+  // que dava a garantia visual do acordo — e a opção "de_acordo" dessas parciais é DEDUZIDA do
+  // `encerrado` da carga de 16/08, não de uma decisão. Verde no topo e "não dá para arquivar"
+  // logo abaixo é a tela contradizendo a si mesma.
+  const noCi = arqNoCi(pa.arquivamento)
+  const vis = noCi ? { fundo:'#FFF4F4', texto:'#7A2E2E', borda:'#F0C4C4' } : est
 
   return `
-  <div style="margin:0 16px 12px;border:1.5px solid ${est.borda};border-radius:9px;overflow:hidden;background:#fff;">
-    <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;background:${est.fundo};flex-wrap:wrap;">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="${est.texto}"><path d="${CI_ESCUDO}"/></svg>
-      <span style="font-size:13px;font-weight:800;color:${est.texto};">Controle interno</span>
-      ${opCi ? `<span style="background:${opCi.cor};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${opCi.rot}</span>`
+  <div style="margin:0 16px 12px;border:1.5px solid ${vis.borda};border-radius:9px;overflow:hidden;background:#fff;">
+    <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;background:${vis.fundo};flex-wrap:wrap;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="${vis.texto}"><path d="${CI_ESCUDO}"/></svg>
+      <span style="font-size:13px;font-weight:800;color:${vis.texto};">Controle interno</span>
+      ${/* ⚠️ A PÍLULA DIZ DE ONDE VEIO A OPÇÃO (22/09/2026). Quando ela foi DEDUZIDA — a
+            parcial encerrada pela carga de 16/08, sem técnico, sem data e sem mensagem —, o
+            rótulo "De acordo" sozinho afirma um acordo que ninguém deu. São 788 parciais em
+            234 TRs, medidas em 22/09. A dedução continua, porque a parcial precisa seguir
+            para o arquivamento; o que muda é a tela deixar de afirmar demais. */''}
+      ${noCi ? `<span style="background:#5C6661;color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">no C.I.${
+          noCi.desde ? ` desde ${escHtml(noCi.desde)}` : ''}</span>
+        <span style="font-size:10px;color:var(--ct);background:var(--fundo-alt);border:1px solid var(--cl);border-radius:20px;padding:2px 8px;">sem devolução registrada</span>`
+        : opCi ? `<span style="background:${opCi.cor};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${opCi.rot}${
+          pa.arquivamento?.ci_opcao_deduzida ? ' · deduzida' : ''}</span>`
         : `<span style="background:${est.texto};color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 10px;">${est.rot}</span>`}
+      ${!noCi && pa.arquivamento?.ci_opcao_deduzida ? `<span title="Nenhum técnico do Controle Interno registrou esta decisão no sistema: a situação veio da carga de 16/08/2026. O que vale é o registro no SGPe."
+        style="font-size:10px;color:var(--ct);background:var(--fundo-alt);border:1px solid var(--cl);border-radius:20px;padding:2px 8px;cursor:help;">sem técnico registrado</span>` : ''}
     </div>
     <div style="padding:4px 13px 0;font-size:11px;color:var(--ct);">
       ${escHtml(pcRef)} · <span class="proc-sgpe">${procHtml(pa.pcs[0]?.processo_pc, pcRef)}</span> · Parcial ${escHtml(String(pa.num))}${pa.ci_rodada>1?` · rodada ${pa.ci_rodada}`:''}
@@ -16060,7 +16077,7 @@ function pCiBloco(r, pa) {
     <div id="pciConv-${escHtml(chave)}" style="padding:0 13px 11px;">
       ${msgs === undefined
         ? '<div style="font-size:11.5px;color:var(--ct);">Carregando a conversa...</div>'
-        : pCiConversaHtml(msgs)}
+        : pCiConversaHtml(msgs, pa.arquivamento?.ci_opcao_deduzida, noCi)}
     </div>
 
     ${podeResponder?`
@@ -16102,6 +16119,13 @@ function arqDevolveu(a) {
   return a.ci_devolveu_carga ? '— (carga de 16/08)' : '—'
 }
 
+// ⚠️ O PROCESSO AINDA ESTA COM O C.I. (23/09/2026) — e quem diz e o servidor. A tela nao
+// sabe o que e "setor do controle interno": ela recebe `ci_no_sgpe` pronto no estado do
+// arquivamento e so desenha. Perguntar aqui seria a tela decidindo (armadilha 16), e no dia
+// em que a FCEE criasse um segundo setor de controle a tela e a rota discordariam.
+const arqNoCi = (a) => (a && a.ci_no_sgpe) || null
+const arqNoCiDias = (d) => d && d.dias != null ? `há ${d.dias} dia${d.dias === 1 ? '' : 's'}` : 'agora'
+
 const arqFrase = (m) => { const t = String(m || '').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : '' }
 const arqArgs = (tr, num, setorial) => `'${escHtml(tr)}','${escHtml(String(num))}','${escHtml(setorial || '')}'`
 const arqParcialRot = (l) => l.final ? 'Final' : escHtml(String(l.parcial_num))
@@ -16114,7 +16138,16 @@ function arqFaixaCi(r, pa) {
   if(a.estado === 'pronta') {
     // A faixa fala a opção do C.I.; sem opção (a reaberta antiga), fica o texto geral.
     const pend = a.ci_opcao === 'com_pendencia'
-    const texto = a.ci_opcao === 'de_acordo'
+    // ⚠️ A FRASE MUDA QUANDO A OPÇÃO FOI DEDUZIDA, e não é preciosismo: "O C.I. está de
+    // acordo" é afirmação sobre o que uma pessoa decidiu, e nessas 788 parciais ninguém
+    // decidiu — o `encerrado` veio da carga de 16/08. É a mesma correção que o anel do
+    // Dashboard recebeu em 02/09, quando o rótulo "C.I. de acordo" afirmava um acordo que
+    // 1.577 PCs nunca receberam. O caminho do arquivamento não muda.
+    const texto = a.ci_opcao_deduzida
+      ? (a.ci_opcao === 'de_acordo'
+          ? '<b>Encerrada no C.I. pela carga de 16/08/2026.</b> Não há decisão de técnico registrada no sistema — o que vale é o registro no SGPe. Confira e arquive esta parcial.'
+          : '<b>Voltou do C.I. com ressalva, sem decisão registrada no sistema.</b> A situação veio da carga de 16/08/2026 — confira o processo no SGPe, tome as providências e arquive, ou responda ao C.I. se precisar de mais documentos da entidade.')
+      : a.ci_opcao === 'de_acordo'
       ? '<b>O C.I. está de acordo.</b> Confira o registro no SGPe e arquive esta parcial.'
       : pend ? '<b>Há pendência a resolver.</b> Confira o processo no SGPe e tome as providências. Depois, arquive se resolveu, ou responda ao C.I. se precisar de mais documentos da entidade.'
       : '<b>Esta parcial está pronta para arquivar.</b> O C.I. devolveu — arquive se você já resolveu, ou responda ao C.I. se precisar de mais documentos.'
@@ -16140,6 +16173,31 @@ function arqFaixaCi(r, pa) {
       ${arqPodeDesarq() ? `<button class="btn-neutro" onclick="desarqAbrir(${args})"
         style="padding:5px 12px;font-size:12px;font-weight:700;">Desarquivar</button>` : ''}
     </div>`
+  // ⚠️ ESTE RAMO EXISTE PORQUE O GENERICO ABAIXO NAO BASTAVA. O sistema chamava estas
+  // parciais de "prontas para arquivar" e oferecia o botão — 634 das 797, medidas em 23/09,
+  // uma parada no C.I. há 167 dias. Arquivar ali encerrava o que o C.I. ainda não devolveu, e
+  // não dava erro nenhum: parecia tarefa cumprida.
+  //
+  // ⚠️ O BOTÃO CINZA NÃO É MUDO: o motivo fica ao lado, em texto, e o processo vira link para
+  // a pessoa conferir no SGPe — com a hora da leitura que sustenta a afirmação. Afirmar sem
+  // dizer de quando é a leitura é pedir que ela acredite.
+  const noCi = arqNoCi(a)
+  if(noCi) return `
+    <div style="margin:0 13px 9px;background:#FFF4F4;border:1px solid #F0C4C4;border-radius:6px;padding:11px 13px;
+                font-size:12.5px;color:#7A2E2E;line-height:1.55;">
+      <b>Ainda não dá para arquivar: o processo está no Controle Interno.</b><br>
+      No SGPe ele está em <b>${escHtml(noCi.setor || 'um setor do C.I.')}${noCi.setor_nome ? ' — ' + escHtml(noCi.setor_nome) : ''}</b>${
+        noCi.desde ? ` desde <b>${escHtml(noCi.desde)}</b>` : ''}${noCi.dias != null ? `, ${escHtml(arqNoCiDias(noCi))}` : ''}.
+      Enquanto o C.I. não devolver o processo com o parecer, esta parcial não se arquiva.
+      <div style="margin-top:7px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-acao" disabled title="O Controle Interno ainda não devolveu o processo no SGPe."
+          style="background:#EDEFEE;color:#8A948F;border:1px solid #DCE2DE;font-weight:800;padding:8px 15px;
+                 white-space:nowrap;cursor:not-allowed;">📁 Arquivar${a.final ? ' e encerrar a TR' : ' parcial'}</button>
+        <span style="font-size:11.5px;color:#7A2E2E;">o C.I. ainda não devolveu</span>
+        <span class="proc-sgpe" style="font-size:11.5px;">${procHtml(ref.processo_pc, ref.codigo_pc)}</span>
+        ${noCi.lido_em ? `<span style="font-size:11px;color:#8A7070;">leitura do SGPe de ${escHtml(noCi.lido_em)}</span>` : ''}
+      </div>
+    </div>`
   return `
     <div style="margin:0 13px 9px;background:#fff;border:0.5px solid var(--borda-suave);border-radius:6px;padding:9px 13px;
                 font-size:12px;color:var(--texto-secundario);line-height:1.5;">
@@ -16153,6 +16211,12 @@ function arqPilulaParcial(a, arquivadaEm, trArquivada) {
     border-radius:4px;padding:4px 11px;letter-spacing:0.02em;white-space:nowrap;">📁 ARQUIVADA · ${arqDia(arquivadaEm).slice(0, 5)}</span>`
   if(a.estado === 'pronta') return `<span style="display:inline-block;background:#FDF2E0;border:0.5px solid #E8C88A;color:#854F0B;
     font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;white-space:nowrap;">pronta para arquivar</span>`
+  // ⚠️ A PÍLULA É O QUE A PESSOA LÊ DE RELANCE, e era ela que dizia "pronta para arquivar"
+  // na linha de uma parcial cujo processo estava no C.I. Agora diz há quanto tempo está lá —
+  // e em vermelho, como o resto do bloco.
+  const noCi = arqNoCi(a)
+  if(noCi) return `<span style="display:inline-block;background:#FFF4F4;border:1px solid #F0C4C4;color:#7A2E2E;
+    font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;white-space:nowrap;">no Controle Interno ${escHtml(arqNoCiDias(noCi))}</span>`
   if(a.final) return `<span style="display:inline-block;background:var(--fundo-alt);border:0.5px solid var(--borda-suave);
     color:var(--texto-muted);font-size:11px;border-radius:4px;padding:3px 9px;line-height:1.4;max-width:420px;">${escHtml(arqFrase(a.motivo))}</span>`
   return ''
@@ -16677,9 +16741,19 @@ function arqCoordChip(id) { _arqCoordChip = id; arqCoordPintar() }
  * ⚠️ A ordem é `criado_em`, que é como a rota devolve. A rodada diz em que volta a mensagem
  * nasceu; quem responde "o que veio antes" é o relógio.
  */
-function pCiConversaHtml(msgs) {
+function pCiConversaHtml(msgs, deduzida, noCi) {
+  // ⚠️ O SILÊNCIO TEM DOIS MOTIVOS, e dizer qual é poupa a pergunta. Na parcial cuja
+  // situação veio da carga não há mensagem porque não houve conversa — nenhum técnico
+  // escreveu. Na outra, a conversa apenas ainda não começou.
   if(!msgs || !msgs.length)
-    return '<div style="font-size:11.5px;color:var(--ct);">Nada ainda. O parecer está no SIGEF.</div>'
+    // ⚠️ E O TERCEIRO MOTIVO É O MAIS IMPORTANTE: o C.I. não escreveu porque ainda está com
+    // o processo. Sem essa linha, o silêncio parece descuido do C.I., e a analista fica
+    // esperando uma mensagem que não tem por que chegar ainda.
+    return noCi
+      ? '<div style="font-size:11.5px;color:var(--ct);">Sem mensagem do Controle Interno: o processo ainda está com eles no SGPe.</div>'
+      : deduzida
+      ? '<div style="font-size:11.5px;color:var(--ct);">Sem mensagem do Controle Interno: esta parcial foi encerrada pela carga de 16/08/2026, e não houve conversa registrada.</div>'
+      : '<div style="font-size:11.5px;color:var(--ct);">Nada ainda. O parecer está no SIGEF.</div>'
   // A mesma mensagem foi gravada para cada PC da parcela; mostra-se uma vez.
   const vistas = new Set()
   return msgs.filter(m => {
