@@ -1,6 +1,132 @@
-# SIGPC-GT — ESTADO EM 11/09/2026
+# SIGPC-GT — ESTADO EM 27/09/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
+
+> ⚠️ **O bloco de 11/09 e os anteriores ficaram para trás.** Continuam úteis como registro do que
+> se mediu — **não como estado**. O estado é o bloco de 27/09, logo abaixo.
+
+---
+
+## ▶ 27/09/2026 — O ESTADO DE AGORA. Nenhuma escrita no banco desde 03/09.
+
+Duas frentes: **a trava do C.I. no arquivamento** (publicada em 23/09) e **a produtividade**
+(regra validada, implantação **retida de propósito** até a coordenação ler o relatório).
+
+---
+
+### 1. A TRAVA DO C.I. NO ARQUIVAMENTO — NO AR
+
+| commit | repo | o quê |
+|---|---|---|
+| `c2b0c8e` | `sigpc-api`, `feature/baixa-por-parcial` | a regra e o SQL |
+| `834f8ec` | `sigpc-gt` | a tela |
+
+**A regra:** enquanto o processo estiver, no SGPe, **dentro do Controle Interno**, a parcial não é
+"pronta para arquivar" e **não arquiva** — nem pela tela, nem pela rota.
+
+⚠️ **O sistema mandava arquivar o que o C.I. ainda não tinha devolvido.** Medido em 23/09:
+**634 das 797** parciais que ele chamava de prontas tinham o processo em `FCEE/CONIN`, em **186
+TRs**; a que o Richard viu na tela estava lá havia **167 dias**. Arquivar ali **não dava erro** —
+encerrava a parcial e a tirava da lista. O defeito não parecia defeito: parecia tarefa cumprida.
+
+**Onde a regra mora, e por que aí:**
+- `sigpc-api/lib/sgpe-situacao.js` — `SETOR_CI`, `ehSetorCI` (JS) e `sqlSetorCI` (SQL). ⚠️ **Um dono
+  só:** três cópias de um `LIKE '%CONIN%'` divergiriam no dia em que a FCEE criasse um segundo setor
+  de controle, e **a que ficasse para trás seria a que deixa arquivar**.
+- `lib/arquivamento.js` — a regra entra na **`bloqueioDeFatos`**, a única cópia, e por isso a leitura
+  da tela e o `POST /parcela/arquivar` recusam **com a mesma frase**.
+- ⚠️ **O `LEFT JOIN` da leitura mora numa CTE própria (`arq_sgpe`), NUNCA dentro da `arq_parc`** —
+  aquela faz `COUNT(*) AS n_pcs` e monta as listas de códigos: uma situação repetida pela chave
+  normalizada **multiplicaria as PCs e inflaria número que a tela mostra**. Conferido no ar: o
+  `n_pcs` continua igual à contagem real.
+- ⚠️ **`FOR UPDATE OF p`** na `SQL_PARCELA`: trancar a linha do cache do SGPe não protege nada e
+  brigaria com o job do rodízio, que escreve nela a cada hora.
+- ⚠️ **A frase acionável vem primeiro:** diligência, "falta baixar" e "na fila do C.I." falam **antes**
+  da trava nova. Todas bloqueiam igual — o que muda é o que a pessoa lê.
+- ⚠️ **Sem leitura do SGPe, nada muda.** Afirmar que está no C.I. sem ter lido seria o mesmo erro na
+  direção contrária.
+
+**Na tela:** faixa vermelha com setor, desde quando e há quantos dias; botão cinza **sem `onclick`**,
+com o motivo **ao lado em texto**; o processo como link pelo `procHtml`; e **a hora da leitura do
+SGPe**. A pílula passou de "pronta para arquivar" a "no Controle Interno há N dias", a pílula verde
+do acordo saiu do cabeçalho e a conversa vazia ganhou o terceiro motivo ("o processo ainda está com
+eles"). Vai junto a **etiqueta da opção deduzida** (22/09, servidor `a21ad78`).
+
+**Medido no ar depois de publicar:** as prontas caíram de **797 para 161**; **727 parciais**
+bloqueadas por esta regra. `/gestao`, `/arquivamento` e `/parcela/acoes` respondem normalmente.
+
+**Testes:** `teste_arquivamento_trava_ci.js` **44 · 0** e `teste_front_trava_ci.js` **24 · 0**.
+As falhas que sobram são **anteriores**: `sgpe_portal` 2 · `sgpe_situacao` 1 (mede lote 300, e o job
+passou a 600) · `busca_global` 1 · `devolucao` 2 · `menu` 2 · `front_busca` (`perfilEfetivo is not
+defined`, conferido contra o `HEAD`).
+
+- [ ] **NÃO ABERTO NO NAVEGADOR.** Abrir a parcial 4 do caso e ver a faixa vermelha, o botão cinza
+      e o link do SGPe.
+
+---
+
+### 2. A PRODUTIVIDADE — REGRA VALIDADA, IMPLANTAÇÃO RETIDA
+
+**A coordenação confirmou em 27/09 que o documento de 18/09 está correto e não alterou nada.**
+⚠️ **A implantação NÃO começou, e é decisão do Richard:** o relatório novo **corrige um número que
+ela já recebeu**, e mudar a tela antes de ela ler faria o percentual do grupo cair sem explicação —
+e é ela quem assina os relatórios da CGE.
+
+**A régua validada** (resposta de 17/09): conta a **PC baixada com parecer registrado** — o
+encaminhamento ao C.I. **deixa de contar**; apuração desde **01/08/2025**; **12/mês** de ago a
+dez/2025, **zero** em jan/2026, **10/mês** de fev/2026 em diante (**140** acumulados até set/2026);
+**proporcional por dias sobre base 30** para quem entrou ou saiu; **meta congelada na data de saída**,
+e o dispensado **continua somando no grupo**; os quatro informados: Eduardo **35**, Jeisson **17**,
+Carla **12**, Fabiana **12**.
+
+**A medição de 27/09** (só leitura, pela API; 16.478 PCs; 49 integrantes — coordenador e C.I. fora):
+
+| | hoje | com a regra nova |
+|---|---|---|
+| o que conta | 4.350 | **4.319** |
+| meta | 5.041 | **5.918** |
+| % do GT | 86% | **73%** |
+
+Por grupo — G1 109% → 92% (meta 1.730 → 2.031) · G2 87% → 74% (1.630 → 1.891) · G3 63% → 52%
+(1.681 → 1.996).
+
+⚠️ **A PRODUÇÃO QUASE NÃO MUDA — QUEM MUDA É A META.** Só **7 PCs** contam hoje apenas por terem ido
+ao C.I. sem baixa, e **24** estão baixadas sem parecer. Quem derruba o percentual é a meta subindo de
+120 fixos para 140 acumulados.
+
+⚠️ **O QUADRO DO ITEM 5 DO DOCUMENTO DE 18/09 TINHA DOIS ERROS** — os dois aumentavam a queda:
+1. **Erro de soma:** meta nova **6.336** onde a própria tabela do documento dá **5.918**. O Grupo 2
+   batia exato (1.891); G1 e G3 vinham inflados em **193** e **225**.
+2. **Populações diferentes:** o **"98% de hoje" foi calculado SEM os 7 dispensados**, enquanto o "67%"
+   os incluía. Medido: com todos, hoje é **86%**; sem os dispensados, **98%** — o número do documento.
+   ⚠️ Pela regra validada (B4/B8) **o dispensado entra nas duas leituras, ou em nenhuma**.
+   **Esta é a armadilha da implantação: fixar a população antes de comparar percentual.**
+
+⚠️ **As 14 metas individuais da tabela de 18/09 batem uma a uma com a medição de hoje** — o erro
+estava só no quadro-resumo, não na régua nem nas datas.
+
+**Como a conta é feita hoje, e o que muda:** hoje o servidor usa
+`lib/sigef.js` → `SQL_BASE_PRODUTIVIDADE = (p.baixada = true OR p.enviado_ci = true)`, e a tela soma o
+`p.sigef_conta` que vem **pronto** (armadilha 16). A regra nova é **o mesmo `sigef_conta` exigindo,
+além dele, `baixada` e `parecer_tipo`** — assim todos os descontos atuais (tag do SIGEF, pré-GT,
+engenharia, estorno, invalidada) continuam valendo iguais.
+
+**O que está salvo** (nenhum tem credencial):
+
+| arquivo | o quê |
+|---|---|
+| `medir_produtividade_20260927.js` | a medição inteira: metas, portarias, acervo, meta calculada |
+| `gerar_relatorio_produtividade.js` | o documento em HTML |
+| `imprimir_pdf.js` | HTML → PDF pelo Edge headless (CDP), sem biblioteca |
+| `comparativo_produtividade_20260927.json` | o resultado medido, 49 linhas |
+| `~/Downloads/RELATORIO_PRODUTIVIDADE_GT_2026-09-27.pdf` | **o que vai para a coordenação** (tom impessoal) |
+| `~/Downloads/PRODUTIVIDADE_HOJE_x_REGRA_NOVA_2026-09-27.html` | a mesma medição, para ler na tela |
+
+**Quando ela responder, a ordem é:** a regra única no servidor → as três telas lendo dela
+(Produtividade, Board da Coordenação, Relatório do CGE) → conferência dos números antes de publicar.
+No Board, o rótulo **"Total" passa a "PCs recebidas"** e a meta ganha linha própria.
+
+---
 
 > ⚠️ **O bloco "ESTADO DE 03/09" e o "HISTÓRICO" abaixo ficaram para trás.** Continuam úteis como
 > registro do que se mediu — **não como estado**. O estado é o bloco de 11/09.
