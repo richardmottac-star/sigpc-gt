@@ -9187,7 +9187,10 @@ function notifQuando(iso) {
 
 // Dias que a lida ainda fica antes de ser apagada. O dono do número é
 // `job_notificacoes.js` (DIAS_GUARDA_LIDA); aqui só se explica ao usuário.
-const NOTIF_GUARDA_DIAS = 15
+// ⚠️ 15 -> 60 EM 27/09/2026, junto com o servidor (job_notificacoes.DIAS_GUARDA_LIDA). O sino
+// passou a marcar como lido AO ABRIR, e "lida" deixou de significar "lida" para significar
+// "esteve na sua frente" — em 15 dias sumiria recado que ninguem leu de fato.
+const NOTIF_GUARDA_DIAS = 60
 
 async function sinoCarregar() {
   if(!U || !U.id) return
@@ -9202,7 +9205,7 @@ async function sinoCarregar() {
     // tinha 7 avisos de diligência vencendo no dia, e leu "Nada novo por aqui".
     //
     // ⚠️ MARCAR COMO LIDA CONTINUA SENDO DO USUÁRIO LOGADO, e isso não é assimetria por
-    // descuido: notificação lida é apagada 15 dias depois da leitura (`limparLidas`). Se o
+    // descuido: notificação lida é apagada 60 dias depois da leitura (`limparLidas`). Se o
     // Richard marcasse as 7 da Sandra, elas sumiriam antes de ela ver — e o prazo das 7
     // vencia naquele mesmo dia. Ver `sinoClicar` e `sinoMarcarTodas`.
     // ⚠️ DOIS IDS, E ELES SÃO DIFERENTES DE PROPÓSITO:
@@ -9234,10 +9237,23 @@ function sinoPintar() {
   bad.style.display = _notifNaoLidas ? '' : 'none'
 }
 
+/**
+ * A batida do relogio do sino.
+ *
+ * ⚠️ COM O PAINEL ABERTO, A CARGA ESPERA (27/09/2026). A lista traz so as NAO LIDAS, e abrir
+ * o sino passou a marcar como lido o que apareceu — sem esta pausa, a recarga de 60 s
+ * esvaziaria a lista debaixo dos olhos de quem esta lendo. Ao fechar, a proxima batida traz o
+ * que sobrou.
+ */
+function sinoTique() {
+  if(document.getElementById('sinoPainel')) return
+  sinoCarregar()
+}
+
 function sinoIniciar() {
   if(_sinoTimer) clearInterval(_sinoTimer)
   sinoCarregar()
-  _sinoTimer = setInterval(sinoCarregar, SINO_SEG * 1000)
+  _sinoTimer = setInterval(sinoTique, SINO_SEG * 1000)
 }
 
 function sinoAbrir(ev) {
@@ -9252,7 +9268,7 @@ function sinoAbrir(ev) {
   p.onclick = (e) => e.stopPropagation()
   document.getElementById('sinoBox').appendChild(p)
   sinoRender()
-  sinoCarregar()
+  sinoCarregar().then(() => sinoMarcarVistas())
   // Fecha ao clicar fora. `once` evita empilhar um ouvinte a cada abertura.
   setTimeout(() => document.addEventListener('click', () => {
     const el = document.getElementById('sinoPainel'); if(el) el.remove()
@@ -9363,6 +9379,41 @@ async function sinoClicar(id, link) {
   else if(repId)                             trfTermo(repId)
   else if(alvoPlan[0] === '#planilha')       irPlanilha(alvoPlan[1] || null, alvoPlan[2] || null)
   else if(link === '#aprovacoes')            irAprovacoes()
+}
+
+/**
+ * O QUE O SINO ACABOU DE MOSTRAR VIRA LIDO — 27/09/2026, decisao do Richard.
+ *
+ * ⚠️ ISTO NASCEU DE UM ENTUPIMENTO MEDIDO: ate aqui so o CLIQUE no aviso marcava, e quase
+ * ninguem clica em aviso antigo. Resultado: **465 avisos urgentes nao lidos**, em **49 das 56
+ * pessoas**, o mais velho de 12/08 — e, como o urgente nao lido vinha primeiro, eles empurravam
+ * o recado do dia para a nona linha. A Geisa tinha 30 de 30 por ler.
+ *
+ * ⚠️ E NAO SOME DA TELA NA HORA, ao contrario do clique. O clique e "ja tratei disto", e tirar
+ * da frente e o certo. Abrir o sino e "estou lendo agora": apagar a lista debaixo dos olhos de
+ * quem abriu seria o oposto do que se quer. Some na proxima carga, quando a pessoa ja saiu.
+ *
+ * ⚠️ SO O QUE ESTA NA TELA, e nao a caixa inteira: os ids vao daqui para o servidor. O
+ * "marcar_todas" continua existindo, no link do topo, para quem quer zerar de proposito.
+ *
+ * ⚠️ E NO MODO "AGIR PELA CONTA DE" NAO MARCA NADA — marcar o aviso de outra pessoa comecaria
+ * o relogio dos 60 dias sobre algo que ela nunca viu.
+ */
+async function sinoMarcarVistas() {
+  if(verComoAtivo()) return
+  if(!document.getElementById('sinoPainel')) return
+  const ids = (_notifs || []).filter(n => !n.lida_em && Number(n.destinatario_id) === Number(U.id))
+    .map(n => n.id)
+  if(!ids.length) return
+  try {
+    await fetch(`${API_URL}/notificacao/marcar_lidas`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ destinatario_id: U.id, ids }) })
+  } catch(e) { return }   // a proxima abertura tenta de novo
+  // O contador zera agora; a lista continua como esta, para quem esta lendo.
+  _notifs.forEach(n => { if(ids.includes(n.id)) n.lida_em = new Date().toISOString() })
+  _notifNaoLidas = Math.max(0, _notifNaoLidas - ids.length)
+  sinoPintar()
 }
 
 async function sinoMarcarTodas() {
