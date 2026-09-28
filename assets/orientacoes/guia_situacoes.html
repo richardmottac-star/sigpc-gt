@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>O que fazer em cada situação — SIGPC-GT</title>
+<style>
+  :root{--v:#006B3C;--t:#14281D;--ct:#5C6661;--cb:#DCE2DE;--f:#F4F7F5;--fundo:#EDF1EE;
+        --vm:#7A2E2E;--vmf:#FFF4F4;--vmb:#F0C4C4;--am:#854F0B;--amb:#E8C88A;--amf:#FDF8EC;
+        --az:#1A4E8A;--azf:#EAF1F9;--azb:#C7D9EC}
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 16px 60px;background:var(--fundo);color:var(--t);
+       font-family:"Barlow","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.6}
+  .caixa{max-width:960px;margin:0 auto}
+  header{background:var(--v);color:#fff;border-radius:14px;padding:22px 26px;margin-bottom:18px}
+  header .et{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+  header h1{margin:5px 0 6px;font-size:25px;line-height:1.25}
+  header p{margin:0;font-size:14px;opacity:.94}
+  .cartao{background:#fff;border-radius:13px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:20px 24px;margin-bottom:18px}
+  h2{font-size:18px;margin:0 0 4px;color:var(--v)}
+  .sit{font-size:13px;color:var(--ct);font-style:italic;margin:0 0 12px;padding-left:12px;border-left:3px solid var(--cb)}
+  h3{font-size:15px;margin:16px 0 4px}
+  p{margin:0 0 12px}
+  .passo{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
+  .num{flex:0 0 28px;height:28px;border-radius:50%;background:#C62828;color:#fff;font-weight:800;
+       display:inline-flex;align-items:center;justify-content:center;font-size:14px;margin-top:1px}
+  .passo > div{flex:1 1 auto;min-width:0}
+  figure{margin:12px 0 4px}
+  img{width:100%;height:auto;display:block;border:1px solid var(--cb);border-radius:9px;background:#fff}
+  figcaption{font-size:12px;color:var(--ct);margin-top:6px}
+  .box{border-radius:9px;padding:12px 15px;margin:12px 0;font-size:14px;line-height:1.55}
+  .aviso{background:var(--vmf);border:1px solid var(--vmb);color:var(--vm)}
+  .nota{background:var(--amf);border:1px solid var(--amb);color:var(--am)}
+  .ok{background:#F4F9EE;border:1px solid #C5E1A5;color:#2E5D2E}
+  .info{background:var(--azf);border:1px solid var(--azb);color:var(--az)}
+  ul{margin:8px 0 12px;padding-left:20px} li{margin:5px 0}
+  .fim{text-align:center;font-size:12.5px;color:var(--ct);margin-top:22px}
+  .ind{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+  .ind a{background:var(--f);border:1px solid var(--cb);border-radius:20px;padding:6px 13px;font-size:13px;
+         color:var(--t);text-decoration:none;font-weight:600}
+  code{background:var(--f);border:1px solid var(--cb);border-radius:4px;padding:1px 6px;font-size:13px}
+</style>
+</head>
+<body><div class="caixa">
+
+<header>
+  <div class="et">SIGPC-GT · Orientação prática</div>
+  <h1>O que fazer em cada situação</h1>
+  <p>As cinco perguntas que mais chegam, respondidas com o caminho na tela — passo a passo.</p>
+</header>
+
+<div class="cartao">
+  <b>Antes de tudo, a régua do sistema.</b> Cada parcial percorre <b>três passos</b>, e a tela sempre
+  diz em qual deles ela está:
+  <ul>
+    <li><b>Passo 1</b> — analisar e <b>registrar o parecer</b>.</li>
+    <li><b>Passo 2</b> — <b>encaminhar ao Controle Interno</b>. A sua baixa já contou aqui, e não se desfaz.</li>
+    <li><b>Passo 3</b> — o C.I. devolve, e a parcial <b>arquiva</b>.</li>
+  </ul>
+  <div class="ok"><b>O que acontece no SGPe e no SIGEF não chega sozinho ao sistema.</b> Se a parcial
+  já foi ao C.I. por lá, aqui ela continua no passo 2 até alguém registrar — e é por isso que
+  aparecem juntas dezenas de parciais "faltando encaminhar".</div>
+  <div class="ind">
+    <a href="#s1">1 · Falta encaminhar ao C.I. (dezenas de uma vez)</a>
+    <a href="#s2">2 · Está na fila do C.I. e não sai</a>
+    <a href="#s3">3 · Não dá para arquivar: processo no C.I.</a>
+    <a href="#s4">4 · O número do processo está errado</a>
+    <a href="#s5">5 · A PC final</a>
+  </div>
+</div>
+
+<div class="cartao" id="s1">
+  <h2>1. "Já analisei tudo, mas o sistema diz que falta encaminhar ao Controle Interno"</h2>
+  <p class="sit">"Essas PCs já foram analisadas e estão arquivadas no SGPe e com o parecer anexado ao
+  SIGEF. Entretanto, manualmente, não consigo colocar essa situação no sistema."</p>
+
+  <p>A parcial está no <b>passo 2 de 3</b>: baixada, com parecer, e ainda não encaminhada ao C.I.
+  <b>aqui dentro</b>. Enquanto isso não for feito, ela não chega ao arquivamento — mesmo que no SGPe
+  o caminho já tenha sido percorrido.</p>
+
+  <p><b>E não precisa ser uma a uma.</b> Dá para marcar várias e encaminhar todas juntas:</p>
+
+  <div class="passo"><span class="num">1</span><div>
+    Na <b>Minha Planilha</b>, abra a TR e marque a <b>caixinha</b> à esquerda de cada parcial que está
+    no passo 2. Elas precisam ser da mesma TR.</div></div>
+  <div class="passo"><span class="num">2</span><div>
+    Para uma só, o caminho também existe no menu <b>Ações ▾</b> da linha → <b>Encaminhar ao C.I.</b></div></div>
+
+  <figure>
+    <img src="fig1_lote.png" alt="Linhas de parciais no passo 2, com a caixinha de seleção à esquerda e o menu Ações à direita.">
+    <figcaption>As caixinhas só aparecem nas parciais que <b>podem</b> ser encaminhadas — as que estão
+    no passo 2. Os valores estão cobertos nesta imagem de exemplo.</figcaption>
+  </figure>
+
+  <div class="passo"><span class="num">3</span><div>
+    Conforme você marca, aparece uma <b>barra azul no rodapé</b> com a contagem. Clique em
+    <b>"🏛 Encaminhar as N ao C.I."</b>, confira a lista na confirmação e confirme.</div></div>
+
+  <div class="ok"><b>A sua baixa não é desfeita.</b> Ela contou quando você encaminhou ao C.I., e o
+  retorno do C.I. também não a cancela. O encaminhamento leva a <b>parcial inteira</b>, não só a PC que
+  você está vendo.</div>
+
+  <div class="nota"><b>Se o C.I. já se manifestou fora do sistema</b> — parecer no SIGEF e processo já
+  tramitado —, encaminhe assim mesmo e avise o Controle Interno: eles registram a devolutiva e a
+  parcial vai direto para "pronta para arquivar". É o registro que falta, não a análise.</div>
+</div>
+
+<div class="cartao" id="s2">
+  <h2>2. "Está na fila do Controle Interno e não sai de lá"</h2>
+  <p class="sit">A parcial mostra <b>Passo 3 de 3 · No Controle Interno</b> e a etiqueta azul
+  <b>"Na fila"</b>.</p>
+
+  <p>Isso quer dizer que o encaminhamento <b>foi feito</b> e o C.I. ainda não registrou a devolutiva
+  <b>no sistema</b>. Não há nada para você fazer na tela: quem destrava é o Controle Interno.</p>
+
+  <figure>
+    <img src="fig2_lapis.png" alt="Parcial no passo 3, com a etiqueta Na fila e o bloco do Controle Interno.">
+    <figcaption>O <b>2</b> mostra onde a tela diz há quantos dias a parcial está esperando.</figcaption>
+  </figure>
+
+  <div class="info"><b>O que você pode fazer:</b> se o C.I. já devolveu pelo SGPe e o parecer está no
+  SIGEF, avise a equipe do Controle Interno com o número da TR e da parcial. O registro deles é o que
+  libera o arquivamento aqui.</div>
+</div>
+
+<div class="cartao" id="s3">
+  <h2>3. "Não consigo arquivar, e a faixa fala em Controle Interno"</h2>
+  <p class="sit">"A parcial 32 ainda está sendo analisada pelo Controle Interno."</p>
+
+  <p>Desde 23/09 a parcial <b>não arquiva enquanto o processo estiver, no SGPe, dentro do Controle
+  Interno</b> — mesmo que a tela já mostre o acordo do C.I. Antes disso o sistema deixava arquivar, e
+  isso encerrava a parcial antes de o C.I. devolver.</p>
+
+  <figure>
+    <img src="passo1_travada.png" alt="Faixa vermelha explicando que o processo está no Controle Interno, com o botão Consultar o SGPe agora.">
+    <figcaption>A faixa diz o setor, desde quando, e a hora da última leitura do SGPe.</figcaption>
+  </figure>
+
+  <div class="passo"><span class="num">1</span><div>Confira no SGPe se o C.I. já encaminhou o processo
+    para outro setor — o número do processo, na faixa, é link.</div></div>
+  <div class="passo"><span class="num">2</span><div>Clique em <b>"Consultar o SGPe agora"</b>. O sistema
+    lê a posição do processo na hora, sem esperar a leitura automática.</div></div>
+  <div class="passo"><span class="num">3</span><div>Se já saiu do C.I., a faixa confirma o setor e o
+    botão de arquivar libera ali mesmo.</div></div>
+
+  <figure>
+    <img src="passo2_liberada.png" alt="Faixa confirmando que o processo saiu do Controle Interno e já pode arquivar.">
+    <figcaption>Quando já saiu, a tela avisa — você não precisa abrir o SGPe para descobrir.</figcaption>
+  </figure>
+</div>
+
+<div class="cartao" id="s4">
+  <h2>4. "O número do processo SGPe está errado"</h2>
+  <p class="sit">"A vinculação do processo está errada; o correto é outro número."</p>
+
+  <p>O número do processo tem um <b>lápis</b> ao lado, em todas as telas em que ele aparece. Clique
+  nele, corrija sigla, número e ano, e salve — o sistema busca o link do SGPe sozinho.</p>
+
+  <div class="aviso"><b>O que mudou em 27/09, e é importante:</b> a correção agora vale <b>só para a
+  parcial em que você está</b>. Quando o mesmo número estiver em <b>outras parciais</b> da mesma TR, o
+  modal avisa quais são e deixa você escolher entre corrigir só a sua ou todas. Antes, corrigir uma
+  mudava todas as que tinham aquele número — era o defeito relatado.</div>
+
+  <div class="nota"><b>Processo mãe</b> é diferente: ele é <b>um por TR</b>, então corrigir a mãe vale
+  para a TR inteira. A tela diz isso no próprio modal.</div>
+</div>
+
+<div class="cartao" id="s5">
+  <h2>5. A PC final</h2>
+  <p>A final arquiva <b>por último</b>, e o sistema pede duas coisas:</p>
+  <ul>
+    <li><b>todas as parciais já arquivadas</b>;</li>
+    <li>a <b>data da baixa do Secretário no SIGEF</b>, que você digita na hora de arquivar.</li>
+  </ul>
+  <figure>
+    <img src="passo3_final.png" alt="A faixa da PC final, com o aviso do passo a mais da baixa do Secretário.">
+    <figcaption>Na final, o aviso da data do Secretário aparece antes do clique.</figcaption>
+  </figure>
+  <p>Com a final arquivada, a TR está encerrada.</p>
+</div>
+
+<div class="cartao">
+  <h2>Em uma linha cada</h2>
+  <ul>
+    <li><b>Faltou encaminhar ao C.I.?</b> Marque as caixinhas e use a barra azul do rodapé.</li>
+    <li><b>Na fila do C.I.?</b> Aguarde o registro do Controle Interno — e avise-os se já devolveram por fora.</li>
+    <li><b>Faixa vermelha do C.I.?</b> "Consultar o SGPe agora" e, se saiu, arquive.</li>
+    <li><b>Número errado?</b> Lápis — e repare na pergunta sobre as outras parciais.</li>
+    <li><b>Final?</b> Só depois de todas as parciais, com a data do Secretário.</li>
+  </ul>
+  <div class="info">Ficou alguma situação fora destas? Escreva com <b>TR, parcial e o que a tela mostra</b> —
+  é o suficiente para eu conferir o caso no sistema.</div>
+</div>
+
+<div class="fim">SIGPC-GT · Grupo de Trabalho de Prestação de Contas — FCEE · setembro de 2026</div>
+
+</div></body></html>
