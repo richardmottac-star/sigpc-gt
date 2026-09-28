@@ -9,8 +9,9 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 ## ▶ 27/09/2026 — O ESTADO DE AGORA. Nenhuma escrita no banco desde 03/09.
 
-Duas frentes: **a trava do C.I. no arquivamento** (publicada em 23/09) e **a produtividade**
-(regra validada, implantação **retida de propósito** até a coordenação ler o relatório).
+Três frentes: **a trava do C.I. no arquivamento** (23/09, e a segunda leva na noite de 27/09), **a
+produtividade** (regra validada, implantação **retida de propósito** até a coordenação ler o relatório)
+e **o aviso da funcionalidade para a equipe** — novidade, recado e repositório, gravados em produção.
 
 ---
 
@@ -125,6 +126,68 @@ engenharia, estorno, invalidada) continuam valendo iguais.
 **Quando ela responder, a ordem é:** a regra única no servidor → as três telas lendo dela
 (Produtividade, Board da Coordenação, Relatório do CGE) → conferência dos números antes de publicar.
 No Board, o rótulo **"Total" passa a "PCs recebidas"** e a meta ganha linha própria.
+
+---
+
+
+### 3. A TRAVA DO C.I., SEGUNDA LEVA — e o aviso para a equipe (27/09, à noite)
+
+| commit | repo | o quê |
+|---|---|---|
+| `c7832d3` | `sigpc-api` | a leitura vencida, e a posição do SGPe sempre |
+| `bb7eaf2` | `sigpc-gt` | o botão de consultar o SGPe e a faixa que confirma |
+| `193e5a3` | `sigpc-gt` | o guia didático e as três imagens |
+
+**O caso que abriu isto** (Richard, a partir de um print): a parcial 2 da **`2020TR000655`** (Marisa,
+processo `SCC 13667/2021`). Em **24/09** a Sirlene registrou às **13h41** *"o C.I. concorda com o
+parecer, a analista confere o registro no SGPe e arquiva"* — e a leitura do SGPe que a tela usava era
+das **11h04**, duas horas e meia ANTES. A tela mostrava, na mesma altura, a mensagem do C.I. mandando
+arquivar e a faixa dizendo que não dava. Ela esperou **um dia**; arquivou em 25/09 às 13h27.
+
+⚠️ **O RODÍZIO É AUTOMÁTICO, MAS NÃO É INSTANTÂNEO** — e a janela entre uma leitura e a seguinte é
+onde o caso mora. Medido em 27/09: **7.780 processos** no universo, 600 por rodada, de hora em hora —
+**13 horas** para dar a volta; a leitura mais velha entre as travadas tinha 19 h, a mediana 7 h.
+
+**O que mudou:**
+- ⚠️ **A LEITURA VENCIDA NÃO TRAVA** (`leituraVencida`): devolutiva do C.I. registrada DEPOIS da última
+  leitura do SGPe libera — o fato novo vence a foto velha. **E não é "o C.I. decidiu, então libera"**:
+  se a leitura for posterior, ela continua mandando, porque o processo pode ter voltado ao C.I. depois.
+- **A posição do SGPe passa a vir SEMPRE** (`sgpe` no estado), e não só quando trava: é ela que deixa a
+  mesma faixa dizer *"já saiu do C.I., está em FCEE/SEPCO, pode arquivar"* a quem ainda não arquivou.
+  ⚠️ O recorte por setor saiu do `WHERE` e virou um `CASE`; **o `no_ci` vai decidido para a tela**.
+  ⚠️ **Sem o recorte no WHERE, o `DISTINCT ON` podia escolher uma PC irmã que já saiu** numa parcela
+  cujo processo ainda está no C.I., e a trava sumiria sozinha — a PC no C.I. ganhou prioridade no
+  `ORDER BY`, com teste.
+- **O botão "Consultar o SGPe agora"** dentro da faixa, com a logo do SGPe, pela MESMA rota do
+  "Atualizar agora" da Gestão (`POST /sgpe/situacao/atualizar`). ⚠️ **Ele não arquiva nada** — só relê
+  e regrava a posição. E a tela **não julga o setor**.
+- **Na PC final, o passo 4**: o arquivamento ainda pedirá a data da baixa do Secretário no SIGEF.
+- ⚠️ **"há 0 dias" não se diz** — foi a prévia que mostrou a frase saindo *"desde 24/09/2026, há 0
+  dias"*. Com a data, ela basta; sem data, "chegou hoje". Corrigido nos dois lados.
+
+**Testes:** `teste_arquivamento_trava_ci.js` **63 · 0** · `teste_front_trava_ci.js` **48 · 0**. E uma
+checagem de `teste_arquivamento_opcao` media a assinatura antiga da conversa do C.I. (de 23/09) — era o
+teste que estava velho, não a tela.
+
+**O aviso para a equipe — TRÊS ESCRITAS em produção, autorizadas pelo Richard:**
+| onde | o quê |
+|---|---|
+| **Novidade id 6** | categoria *Regra de negócio*, público Todos, com imagem e botão "Guia completo" |
+| **Recado** | *"Arquivamento: agora a tela consulta o SGPe na hora"* — **55 enviadas, 55 pessoas** |
+| **Repositório id 12** | *"GUIA — ARQUIVAR A PARCIAL..."*, em Orientações |
+
+⚠️ **AS IMAGENS DO GUIA SÃO A FAIXA DE VERDADE**, desenhada pela própria função do `index.html` num DOM
+de mentira — e não um desenho parecido. Guia com mockup envelhece na primeira mudança da tela e passa a
+ensinar o que não existe mais. Ficam em `assets/novidades/`, servidas pelo Pages (conferidas: 200).
+
+**Conferido depois de gravar:** a novidade aparece como não lida; o recado está na caixa de Marisa,
+Noici, Gustavo, Márcia (C.I.) e Aline; o item 12 no repositório; e o guia e as três imagens respondem
+200 no GitHub Pages. ⚠️ Na conferência, `limite=8` na rota da notificação **mentiu** — a lista não vem
+por data pura, e o recado novo ficava fora das oito primeiras. Com `limite=100`, está lá.
+
+- [ ] **NADA DISTO FOI ABERTO NO NAVEGADOR.** Olhar: a faixa vermelha com o botão na parcial travada;
+      o clique em "Consultar o SGPe agora" num processo que já saiu do C.I.; a faixa verde confirmando
+      o setor; a Novidade na aba e o sino com o recado.
 
 ---
 
