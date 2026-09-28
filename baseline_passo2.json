@@ -1,0 +1,176 @@
+{
+ "em": "2026-09-28T02:02:54.886Z",
+ "passo2": 346,
+ "passo2_pcs": 594,
+ "analistas": 33,
+ "na_fila": 978,
+ "prontas": 168,
+ "arquivadas": 137,
+ "por_analista": {
+  "7": {
+   "nome": "Aline",
+   "parcelas": 1,
+   "pcs": 4
+  },
+  "9": {
+   "nome": "Cris",
+   "parcelas": 20,
+   "pcs": 26
+  },
+  "10": {
+   "nome": "Daiana",
+   "parcelas": 6,
+   "pcs": 7
+  },
+  "11": {
+   "nome": "Daniela",
+   "parcelas": 24,
+   "pcs": 40
+  },
+  "13": {
+   "nome": "Gabriele",
+   "parcelas": 6,
+   "pcs": 14
+  },
+  "14": {
+   "nome": "Guilherme",
+   "parcelas": 2,
+   "pcs": 4
+  },
+  "15": {
+   "nome": "Ivonete",
+   "parcelas": 2,
+   "pcs": 3
+  },
+  "16": {
+   "nome": "Marcelo",
+   "parcelas": 1,
+   "pcs": 1
+  },
+  "17": {
+   "nome": "Marisa",
+   "parcelas": 34,
+   "pcs": 51
+  },
+  "19": {
+   "nome": "Sandra Rocha",
+   "parcelas": 5,
+   "pcs": 19
+  },
+  "20": {
+   "nome": "Tatiana",
+   "parcelas": 18,
+   "pcs": 44
+  },
+  "24": {
+   "nome": "Elisandra",
+   "parcelas": 37,
+   "pcs": 58
+  },
+  "25": {
+   "nome": "Geisa",
+   "parcelas": 56,
+   "pcs": 112
+  },
+  "26": {
+   "nome": "Gislainy",
+   "parcelas": 1,
+   "pcs": 2
+  },
+  "27": {
+   "nome": "Grace Oliveira",
+   "parcelas": 30,
+   "pcs": 71
+  },
+  "28": {
+   "nome": "Isabel",
+   "parcelas": 4,
+   "pcs": 11
+  },
+  "30": {
+   "nome": "Miriam",
+   "parcelas": 1,
+   "pcs": 1
+  },
+  "31": {
+   "nome": "Noici",
+   "parcelas": 5,
+   "pcs": 9
+  },
+  "33": {
+   "nome": "Rita",
+   "parcelas": 12,
+   "pcs": 22
+  },
+  "35": {
+   "nome": "Tanimeri",
+   "parcelas": 2,
+   "pcs": 2
+  },
+  "37": {
+   "nome": "Clodoaldo",
+   "parcelas": 19,
+   "pcs": 20
+  },
+  "38": {
+   "nome": "Elquier",
+   "parcelas": 3,
+   "pcs": 3
+  },
+  "39": {
+   "nome": "Everaldo",
+   "parcelas": 7,
+   "pcs": 12
+  },
+  "40": {
+   "nome": "Goreti",
+   "parcelas": 8,
+   "pcs": 8
+  },
+  "41": {
+   "nome": "Graciane",
+   "parcelas": 1,
+   "pcs": 1
+  },
+  "42": {
+   "nome": "Grazielly",
+   "parcelas": 3,
+   "pcs": 3
+  },
+  "43": {
+   "nome": "Higor",
+   "parcelas": 4,
+   "pcs": 4
+  },
+  "45": {
+   "nome": "Juliana",
+   "parcelas": 19,
+   "pcs": 23
+  },
+  "46": {
+   "nome": "Marlene",
+   "parcelas": 6,
+   "pcs": 7
+  },
+  "48": {
+   "nome": "Samoel",
+   "parcelas": 1,
+   "pcs": 1
+  },
+  "50": {
+   "nome": "Willian",
+   "parcelas": 4,
+   "pcs": 4
+  },
+  "51": {
+   "nome": "Janaina",
+   "parcelas": 2,
+   "pcs": 5
+  },
+  "72": {
+   "nome": "Jeisson",
+   "parcelas": 2,
+   "pcs": 2
+  }
+ }
+}
