@@ -12128,8 +12128,10 @@ function irRel() {
       <div style="display:flex;gap:6px;">
         <button onclick="relMudaAba('geral')" id="relAbaGeral" style="padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;border-radius:6px;cursor:pointer;">Analítico</button>
         ${(isAdmin||isCoordi)?`<button onclick="relMudaAba('cge')" id="relAbaCGE" style="padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;">CGE</button>`:''}
+        ${(isAdmin||isCoordi)?`<button onclick="relMudaAba('ger')" id="relAbaGer" style="padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:1.5px solid var(--cb);border-radius:6px;cursor:pointer;">Gerenciais</button>`:''}
       </div>
     </div>
+    ${(isAdmin||isCoordi) ? relPainelGerHtml() : ''}
     <!-- PAINEL ANALÍTICO -->
     <div id="relPainelGeral">
     <!-- FILTROS -->
@@ -12288,10 +12290,156 @@ function relMudaAba(aba) {
   _relAbaAtual = aba
   document.getElementById('relPainelGeral').style.display = aba==='geral' ? '' : 'none'
   document.getElementById('relPainelCGE').style.display = aba==='cge' ? '' : 'none'
+  const pGer = document.getElementById('relPainelGer')
+  if(pGer) pGer.style.display = aba==='ger' ? '' : 'none'
   const bG = document.getElementById('relAbaGeral')
   const bC = document.getElementById('relAbaCGE')
+  const bX = document.getElementById('relAbaGer')
   if(bG) { bG.style.background = aba==='geral'?'var(--v)':'#fff'; bG.style.color = aba==='geral'?'#fff':'var(--ct)'; bG.style.border = aba==='geral'?'none':'1.5px solid var(--cb)' }
   if(bC) { bC.style.background = aba==='cge'?'var(--az)':'#fff'; bC.style.color = aba==='cge'?'#fff':'var(--ct)'; bC.style.border = aba==='cge'?'none':'1.5px solid var(--cb)' }
+  if(bX) { bX.style.background = aba==='ger'?'#4A3B8C':'#fff'; bX.style.color = aba==='ger'?'#fff':'var(--ct)'; bX.style.border = aba==='ger'?'none':'1.5px solid var(--cb)' }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  RELATORIOS GERENCIAIS  (27/09/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ NASCEU DE UM PEDIDO QUE JA ERA UM DIAGNOSTICO: o Richard pediu "um relatorio de analista
+// que nunca acessou o sistema" e completou — "isso deveria ja ter em alguma aba". Tinha razao:
+// a tela de Relatorios so sabia fazer o do CGE, e todo levantamento gerencial virava arquivo
+// solto fora do sistema.
+//
+// ⚠️ E O TIMBRE E O DO SISTEMA (`docCabecalho` + `DOC_CSS`), o mesmo do relatorio do CGE e do
+// termo de repasse. Um segundo papel timbrado divergiria no primeiro ajuste, e documento
+// oficial com cabecalho de outra versao e erro que so aparece depois de assinado.
+
+const GER_RELATORIOS = [
+  { id:'acesso', rot:'Acesso ao sistema', cor:'#4A3B8C',
+    sub:'Quem nunca acessou e quem está sem acessar há mais de 30 dias, com a portaria de saída quando houver.',
+    gerar:'gerAcesso()' },
+]
+
+function relPainelGerHtml() {
+  return `<div id="relPainelGer" style="display:none;">
+    <div style="font-size:12.5px;color:var(--ct);margin-bottom:12px;">
+      Relatórios de gestão do Grupo de Trabalho. Cada um abre em documento próprio, no papel
+      timbrado do sistema, com os botões de imprimir / salvar em PDF e baixar .doc.
+    </div>
+    ${GER_RELATORIOS.map(r => `
+      <div style="background:#fff;border:1px solid var(--cb);border-radius:10px;padding:14px 16px;margin-bottom:12px;
+                  display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1 1 320px;min-width:0;">
+          <div style="font-size:14px;font-weight:800;color:${r.cor};">${escHtml(r.rot)}</div>
+          <div style="font-size:12px;color:var(--ct);margin-top:2px;">${escHtml(r.sub)}</div>
+        </div>
+        <button class="btn-acao" onclick="${r.gerar}"
+          style="background:${r.cor};color:#fff;font-weight:800;padding:8px 16px;white-space:nowrap;">Gerar documento</button>
+      </div>`).join('')}
+  </div>`
+}
+
+/**
+ * O RELATORIO DE ACESSO — quem nunca entrou, e quem parou de entrar.
+ *
+ * ⚠️ A DATA VEM DO CADASTRO (`ultimo_acesso`), gravada a cada entrada. Nao ha estimativa: ou a
+ * pessoa entrou e ha data, ou nunca entrou e o campo e nulo.
+ *
+ * ⚠️ E A PORTARIA DE SAIDA ENTRA NA MESMA LINHA, de proposito. Sem ela, o relatorio vira uma
+ * lista de gente que "ignora o sistema" — e na medicao de 27/09 os CINCO que nunca acessaram
+ * eram, todos, dispensados do GT por portaria. Um numero sem essa coluna produz cobranca
+ * indevida, que e pior que nao ter relatorio nenhum.
+ */
+async function gerAcesso() {
+  toast('Levantando os acessos...','ok')
+  try {
+    const [ju, js] = await Promise.all([
+      (await fetch(`${API_URL}/usuarios`)).json(),
+      (await fetch(`${API_URL}/substituicao`)).json(),
+    ])
+    if(ju.error) throw new Error(ju.error.message || 'Nao foi possivel ler os cadastros.')
+    const us = ju.data || []
+    const saida = new Map()
+    ;(js.data || []).forEach(x => { if(x.dispensado_id != null) saida.set(Number(x.dispensado_id), x) })
+
+    const PERFIL = { analista:'Analista', coordenador:'Coordenador', superadmin:'Administrador',
+                     controle_interno:'Controle Interno' }
+    const diasDe = (d) => d ? Math.floor((Date.now() - Date.parse(d)) / 86400000) : null
+    const linhas = us.map(u => ({
+      nome:u.nome, perfil:PERFIL[u.perfil] || u.perfil, grupo:u.grupo==null?'—':String(u.grupo),
+      criado:u.criado_em, ultimo:u.ultimo_acesso, ativo:u.ativo, aprovado:u.aprovado,
+      dias:diasDe(u.ultimo_acesso), saiu:saida.get(Number(u.id)) || null,
+    }))
+    const nunca = linhas.filter(u => !u.ultimo).sort((a,b) => a.nome.localeCompare(b.nome))
+    const parados = linhas.filter(u => u.ultimo && u.dias > 30).sort((a,b) => b.dias - a.dias)
+    const semana = linhas.filter(u => u.ultimo && u.dias <= 7).length
+    const hoje = linhas.filter(u => u.dias === 0).length
+    const agora = new Date()
+    const carimbo = agora.toLocaleDateString('pt-BR') + ' às '
+      + agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })
+
+    const tabela = (lista, comDias) => `
+    <table>
+      <thead><tr>
+        <th class="tc" style="width:26px;">#</th><th>Nome</th><th style="width:96px;">Perfil</th>
+        <th class="tc" style="width:46px;">Grupo</th><th class="tc" style="width:74px;">Cadastrado</th>
+        <th class="tc" style="width:${comDias?96:74}px;">${comDias?'Último acesso':'Situação'}</th>
+        <th>Observação</th>
+      </tr></thead>
+      <tbody>${lista.map((u,i) => `<tr>
+        <td class="tc">${i+1}</td><td>${escHtml(u.nome)}</td><td>${escHtml(u.perfil)}</td>
+        <td class="tc">${escHtml(u.grupo)}</td><td class="tc">${dataBr(String(u.criado||'').slice(0,10))}</td>
+        <td class="tc">${comDias
+          ? `${dataBr(String(u.ultimo||'').slice(0,10))}<br><span style="font-size:8px;">há ${u.dias} dias</span>`
+          : (u.aprovado ? 'Aprovado' : 'Sem aprovação')}</td>
+        <td>${u.saiu
+          ? `Dispensado pela Portaria ${escHtml(u.saiu.portaria)}, de ${dataBr(String(u.saiu.data_publicacao||'').slice(0,10))}.`
+          : (u.ativo ? '' : 'Cadastro inativo.')}</td>
+      </tr>`).join('')}</tbody>
+    </table>`
+
+    const doc = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório de acesso ao sistema — SIGPC-GT</title>
+<style>${DOC_CSS}</style></head><body>
+${DOC_ACOES}
+<div class="paper">
+${docCabecalho()}
+<h2>Relatório de acesso ao sistema</h2>
+<div class="ficha">
+  <p><b>Objeto:</b> integrantes cadastrados que nunca acessaram o sistema e os que estão sem acesso há mais de 30 dias.</p>
+  <p><b>Emitido em:</b> ${carimbo}</p>
+  <p><b>Fonte:</b> campo <i>ultimo_acesso</i> do cadastro de usuários, gravado a cada entrada no sistema.</p>
+</div>
+<div class="cont">
+  <div><b>${linhas.length}</b>cadastros</div>
+  <div><b>${nunca.length}</b>nunca acessaram</div>
+  <div><b>${parados.length}</b>parados há +30 dias</div>
+  <div><b>${semana}</b>na última semana</div>
+  <div><b>${hoje}</b>hoje</div>
+</div>
+<div class="sec">1. Nunca acessaram o sistema</div>
+${nunca.length ? tabela(nunca,false) : '<p>Nenhum cadastro nesta condição.</p>'}
+<div class="sec">2. Sem acessar há mais de 30 dias</div>
+${parados.length ? tabela(parados,true) : '<p>Nenhum cadastro nesta condição.</p>'}
+<div class="obs">
+  ${nunca.length ? `<p><b>Leitura do quadro 1.</b> ${nunca.filter(u=>u.saiu).length} dos ${nunca.length} cadastros
+  que nunca acessaram correspondem a integrantes <b>dispensados do Grupo de Trabalho por portaria</b>, conforme a
+  coluna Observação. Os cadastros permanecem para preservar o histórico de produtividade e a autoria dos pareceres
+  já registrados.</p>` : ''}
+  ${nunca.filter(u=>!u.saiu).length ? `<p><b>Atenção.</b> ${nunca.filter(u=>!u.saiu).map(u=>u.nome).join(', ')}
+  ${nunca.filter(u=>!u.saiu).length===1?'não tem':'não têm'} portaria de saída registrada e nunca
+  ${nunca.filter(u=>!u.saiu).length===1?'acessou':'acessaram'} o sistema.</p>` :
+  '<p><b>Conclusão.</b> Não há, nesta data, integrante em exercício sem acesso ao sistema.</p>'}
+</div>
+<div class="rodape">
+  SIGPC-GT — Sistema de Gestão de Prestações de Contas do Grupo de Trabalho · Fundação Catarinense de Educação
+  Especial · documento gerado pelo sistema em ${carimbo}.
+</div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    if(!w) { toast('Permita pop-ups para gerar o documento.','err'); return }
+    w.document.write(doc); w.document.close()
+  } catch(e) { toast('Erro: '+e.message,'err') }
 }
 
 let _cgeDados = []
