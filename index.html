@@ -1744,6 +1744,20 @@ tbody tr:nth-child(even) { background:#F5F8F6; }
   </div>
 </div>
 
+<div class="mo" id="moCiSgpe">
+  <div class="mc">
+    <div class="mch v"><h3 id="moCiSgpeTit">🏛 Devolutiva pelo SGPe</h3><button class="mcx" onclick="fm('moCiSgpe')">✕</button></div>
+    <div class="mcb">
+      <div id="moCiSgpeCorpo"></div>
+    </div>
+    <div class="mcf">
+      <button class="btn-neutro" onclick="fm('moCiSgpe')">Cancelar</button>
+      <button class="btn-acao" id="moCiSgpeBt" disabled onclick="ciSgpeConfirmar()"
+        style="background:var(--v);color:#fff;font-weight:800;">Registrar devolutiva</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="moPuxarCi">
   <div class="mc">
     <div class="mch v"><h3>↩ Puxar de volta do Controle Interno</h3><button class="mcx" onclick="fm('moPuxarCi')">✕</button></div>
@@ -15433,6 +15447,25 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
                              : (d.baixada ? null : 'Registre o parecer antes de encaminhar')),
       true));
 
+    // ⚠️ O ATALHO DE QUEM JA FOI AO C.I. PELO SGPe (28/09/2026).
+    //
+    // Nasceu de um caso da Clara: a parcial estava baixada e com parecer, o processo já tinha
+    // ido ao Controle Interno e voltado NO SGPe — e o sistema pedia para mandar de novo, só
+    // para o C.I. registrar o que já fizera dez meses antes. Do Richard: "eles têm muita
+    // demanda, e mandar só para fazer esse trâmite é muito ruim".
+    //
+    // ⚠️ O ITEM ABRE UMA CONFERÊNCIA, e não executa nada. Quem diz se pode é o servidor, lendo
+    // a tramitação do SGPe — a tela não tem como saber, e fingir que sabe seria o clique aceito
+    // que não responde (armadilha 15). O modal mostra as datas e só então oferece o botão.
+    linhas.push(acItem('Registrar devolutiva pelo SGPe', 'enviar', `ciSgpePc(${nm})`,
+      d.baixada === true && !semNum && d.ci_situacao !== 'encerrado' && d.ci_situacao !== 'com_analista',
+      'situacao',
+      semNum ? 'Esta parcial não tem número'
+             : (d.ci_situacao === 'encerrado' || d.ci_situacao === 'com_analista'
+                  ? 'O Controle Interno já devolveu esta parcial'
+                  : (d.baixada ? 'quando o processo já foi ao C.I. e voltou, pelo SGPe'
+                                : 'Registre o parecer antes'))))
+
     // O arquivamento: acende e explica pelo bloco `arquivar` da rota — a tela não decide.
     const ar = d.arquivar;
     linhas.push(ar
@@ -15605,6 +15638,10 @@ const AC_EV_LABEL = {
   assumir_tr:'👤 TR assumida', devolucao_tr:'↩ TR devolvida',
   resposta_diligencia:'✉ Entidade respondeu', processo_pc:'✎ Processo da PC',
   processo_mae:'✎ Processo mãe',
+  // ⚠️ RÓTULO PRÓPRIO, e não "🏛 Controle Interno": quem lê a linha do tempo precisa distinguir
+  // o C.I. que DECIDIU do registro feito pela tramitação do SGPe, que prova a passagem e não o
+  // teor. Confundir os dois na tela é o mesmo erro do "de acordo" que ninguém deu.
+  ci_pelo_sgpe:'🏛 Devolutiva pelo SGPe',
   // ⚠️ ESTE FALTAVA NAS DUAS CÓPIAS DO MAPA, e as 32 linhas da transferência do Samoel
   // (28/08/2026) apareciam como o código cru `transferencia_dispensa` na tela do analista.
   // Achado ao desenhar a tela de transferência, em 31/08.
@@ -16491,6 +16528,89 @@ function pCiBloco(r, pa) {
       </div>
     </div>`:''}
   </div>`
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  A DEVOLUTIVA DO C.I. REGISTRADA PELA TRAMITAÇÃO DO SGPe  (28/09/2026)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ A TELA NÃO DECIDE NADA AQUI. Ela pergunta ao servidor (`GET /parcela/ci_sgpe`), mostra o
+// que a tramitação diz — entrou quando, saiu quando, onde está agora — e só oferece o botão se
+// a resposta vier com `pode: true`. A regra mora em `sigpc-api/lib/ci-sgpe.js`.
+
+let _ciTram = null
+
+/** A ponte do menu, como as vizinhas: a TR vem do `_acDados`, e nao do HTML do botao. */
+function ciSgpePc(num) { if(_acDados) ciSgpeAbrir(_acDados.tr, num, _acDados.setorial_id) }
+
+async function ciSgpeAbrir(tr, num, setorial) {
+  _ciTram = { tr, num, setorial: setorial || 'FCEE' }
+  const corpo = document.getElementById('moCiSgpeCorpo')
+  const bt = document.getElementById('moCiSgpeBt')
+  if(!corpo) { toast('Modal não encontrado.','err'); return }
+  document.getElementById('moCiSgpe').classList.add('open')
+  document.getElementById('moCiSgpeTit').textContent = `🏛 Devolutiva pelo SGPe — parcial ${num}`
+  corpo.innerHTML = '<div class="loading" style="padding:14px;"><div class="spin"></div>Lendo a tramitação do SGPe...</div>'
+  bt.disabled = true; bt.style.opacity = '.5'
+  try {
+    const q = new URLSearchParams({ tr, parcial_num: String(num), setorial_id: _ciTram.setorial, usuario_id: U.id })
+    const j = await (await fetch(`${API_URL}/parcela/ci_sgpe?${q}`)).json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível conferir.')
+    const d = j.data
+    _ciTram.pode = !!d.pode
+    const cx = (cor, fundo, borda, txt) => `<div style="background:${fundo};border:1px solid ${borda};
+      border-radius:8px;padding:11px 13px;font-size:12.5px;color:${cor};line-height:1.55;">${txt}</div>`
+    const linha = (r, v) => `<div style="display:flex;gap:8px;font-size:12.5px;padding:3px 0;">
+      <span style="color:var(--ct);flex:0 0 132px;">${r}</span><span style="font-weight:600;">${v}</span></div>`
+
+    corpo.innerHTML = `
+      <div style="background:var(--fundo-alt);border-radius:8px;padding:10px 13px;margin-bottom:11px;">
+        ${linha('Processo', escHtml(d.processo || '—'))}
+        ${linha('Onde está agora', d.setor_atual ? escHtml(d.setor_atual) + (d.setor_nome ? ' — ' + escHtml(d.setor_nome) : '') : 'sem leitura do SGPe')}
+        ${linha('Entrou no C.I. em', d.entrada ? dataBr(d.entrada) : '—')}
+        ${linha('Saiu do C.I. em', d.saida ? dataBr(d.saida) : '—')}
+        ${linha('Tramitações lidas', String(d.tramitacoes || 0))}
+      </div>
+      ${d.pode
+        ? cx('#2E5D2E','#F4F9EE','#C5E1A5',
+            `<b>A tramitação do SGPe prova a ida e a volta ao Controle Interno.</b><br>
+             Registrando, a parcial passa a constar como devolvida pelo C.I., <b>com estas datas</b>, e segue
+             para o arquivamento. As ${d.pcs} PC${d.pcs>1?'s':''} da parcial vão juntas.`)
+        : cx('#7A2E2E','#FFF4F4','#F0C4C4', `<b>Não dá para registrar por aqui.</b><br>${escHtml(d.motivo || '')}`)}
+      ${d.pode ? cx('#854F0B','#FDF8EC','#E8C88A',
+          `<b>O que o sistema NÃO vai afirmar:</b> que o C.I. está de acordo. A tramitação prova que o processo
+           <b>passou</b> pelo Controle Interno, não o que foi decidido — o parecer está no SIGEF. A linha do tempo
+           e a tela do C.I. mostram que este registro veio do SGPe.`) : ''}`
+    bt.disabled = !d.pode
+    bt.style.opacity = d.pode ? '1' : '.5'
+    bt.title = d.pode ? '' : (d.motivo || '')
+  } catch(e) {
+    corpo.innerHTML = `<div style="font-size:12.5px;color:#7A2E2E;">${escHtml(e.message)}</div>`
+  }
+}
+
+async function ciSgpeConfirmar() {
+  if(!_ciTram || !_ciTram.pode) return
+  const bt = document.getElementById('moCiSgpeBt')
+  bt.disabled = true; bt.textContent = 'Registrando...'
+  try {
+    const r = await fetch(`${API_URL}/parcela/ci_sgpe`, { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr:_ciTram.tr, parcial_num:String(_ciTram.num),
+                             setorial_id:_ciTram.setorial, usuario_id:U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível registrar.')
+    toast(`Devolutiva registrada pelo SGPe — ${j.data.pcs} PC${j.data.pcs>1?'s':''}. A parcial já pode ser arquivada.`,'ok')
+    fm('moCiSgpe'); _ciTram = null
+    arqRecarregar()
+  } catch(e) {
+    toast('Erro: '+e.message,'err')
+    // ⚠️ O MODAL FICA ABERTO no erro, com o motivo no toast — fechar esconderia a causa
+    // (armadilha 12: botão que aceita clique e não responde).
+    bt.disabled = false
+  } finally {
+    if(document.getElementById('moCiSgpeBt')) document.getElementById('moCiSgpeBt').textContent = 'Registrar devolutiva'
+  }
 }
 
 // ── ARQUIVAMENTO ──────────────────────────────────────────────────────────────
