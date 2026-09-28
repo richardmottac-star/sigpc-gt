@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arquivar a parcial quando o processo está no Controle Interno — SIGPC-GT</title>
+<style>
+  :root{--v:#006B3C;--t:#14281D;--ct:#5C6661;--cb:#DCE2DE;--f:#F4F7F5;--fundo:#EDF1EE;
+        --vm:#7A2E2E;--vmf:#FFF4F4;--vmb:#F0C4C4;--am:#854F0B;--amb:#E8C88A;--amf:#FDF8EC}
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 16px 60px;background:var(--fundo);color:var(--t);
+       font-family:"Barlow","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.6}
+  .caixa{max-width:900px;margin:0 auto}
+  header{background:var(--v);color:#fff;border-radius:14px;padding:22px 26px;margin-bottom:20px}
+  header .et{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+  header h1{margin:5px 0 6px;font-size:25px;line-height:1.25}
+  header p{margin:0;font-size:14px;opacity:.94}
+  .cartao{background:#fff;border-radius:13px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:20px 24px;margin-bottom:18px}
+  h2{font-size:18px;margin:0 0 10px;color:var(--v)}
+  h3{font-size:15px;margin:0 0 4px}
+  p{margin:0 0 12px}
+  .passo{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+  .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--v);color:#fff;font-weight:800;
+       display:inline-flex;align-items:center;justify-content:center;font-size:14px;margin-top:1px}
+  .passo > div{flex:1 1 auto;min-width:0}
+  figure{margin:10px 0 0}
+  img{width:100%;height:auto;display:block;border:1px solid var(--cb);border-radius:9px;background:#fff}
+  figcaption{font-size:12px;color:var(--ct);margin-top:6px}
+  .box{border-radius:9px;padding:13px 16px;margin:14px 0;font-size:14px;line-height:1.55}
+  .aviso{background:var(--vmf);border:1px solid var(--vmb);color:var(--vm)}
+  .nota{background:var(--amf);border:1px solid var(--amb);color:var(--am)}
+  .ok{background:#F4F9EE;border:1px solid #C5E1A5;color:#2E5D2E}
+  ul{margin:8px 0 12px;padding-left:20px} li{margin:5px 0}
+  .pq{font-size:12.5px;color:var(--ct)}
+  .fim{text-align:center;font-size:12.5px;color:var(--ct);margin-top:22px}
+  b.d{color:var(--vm)}
+</style>
+</head>
+<body><div class="caixa">
+
+<header>
+  <div class="et">SIGPC-GT · Guia rápido</div>
+  <h1>Arquivar a parcial quando o processo está no Controle Interno</h1>
+  <p>O que mudou na tela, e o que fazer quando o botão de arquivar não libera.</p>
+</header>
+
+<div class="cartao">
+  <h2>O que mudou, em uma frase</h2>
+  <p>Enquanto o processo estiver, no SGPe, dentro do <b>Controle Interno</b>, a parcial
+  <b>não arquiva</b>. E quando ele já tiver saído, a própria tela avisa que <b>pode arquivar</b> e
+  diz em que setor ele está.</p>
+
+  <div class="aviso">
+    <b>Por que essa trava existe.</b> Até agora o sistema dizia “pronta para arquivar” e mostrava o
+    botão aceso em parciais cujo processo ainda estava com o C.I. — foram <b>634 das 797</b> parciais
+    assim, medidas em 23/09, uma delas parada no Controle Interno havia 167 dias. Arquivar ali não
+    dava erro nenhum: encerrava a parcial e a tirava da sua lista. O defeito não parecia defeito,
+    parecia tarefa cumprida.
+  </div>
+
+  <div class="ok">
+    <b>Nada do seu trabalho muda.</b> A sua baixa continua valendo e contando: ela contou quando você
+    encaminhou ao C.I. Arquivar é o fecho da parcial, e não a baixa.
+  </div>
+</div>
+
+<div class="cartao">
+  <h2>Passo a passo</h2>
+
+  <div class="passo">
+    <span class="num">1</span>
+    <div>
+      <h3>Abra a parcial e leia a faixa</h3>
+      <p>Quando o processo ainda estiver no C.I., a faixa fica vermelha e diz <b>em que setor</b> ele
+      está, <b>desde quando</b> e <b>há quantos dias</b>. O botão <b>Arquivar parcial</b> aparece
+      cinza, e o motivo fica escrito ao lado — não é preciso passar o mouse para descobrir.</p>
+      <figure>
+        <img src="passo1_travada.png" alt="Faixa vermelha dizendo que o processo está no Controle Interno, com o botão de arquivar cinza e o passo a passo logo abaixo.">
+        <figcaption>A faixa também mostra <b>a hora da última leitura do SGPe</b> — é a leitura que
+        sustenta o que ela está afirmando.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="passo">
+    <span class="num">2</span>
+    <div>
+      <h3>Confira no SGPe</h3>
+      <p>Clique no <b>número do processo</b>, na própria faixa, para abrir o SGPe e ver se o Controle
+      Interno já encaminhou para outro setor.</p>
+    </div>
+  </div>
+
+  <div class="passo">
+    <span class="num">3</span>
+    <div>
+      <h3>Clique em “Consultar o SGPe agora”</h3>
+      <p>O botão verde, com a logo do SGPe, lê a posição do processo <b>na hora</b> e responde ali
+      mesmo: <i>“Agora no SGPe: FCEE/SEPCO — Setor de Prestação de Contas”</i>.</p>
+      <div class="nota">
+        <b>Para que ele serve.</b> O sistema já lê o SGPe sozinho, de hora em hora, mas leva até um
+        dia para passar por todos os processos. Se você acabou de ver o C.I. devolver, não precisa
+        esperar a vez daquele processo: o botão antecipa a leitura só dele.
+        <br><b>Ele não arquiva nada</b> — apenas relê a posição. Quem arquiva continua sendo você.
+      </div>
+    </div>
+  </div>
+
+  <div class="passo">
+    <span class="num">4</span>
+    <div>
+      <h3>Saiu do C.I.? Arquive</h3>
+      <p>Com o processo fora do Controle Interno, a faixa muda de tom e <b>confirma</b>, dizendo para
+      onde ele foi e desde quando. O botão <b>Arquivar parcial</b> libera ali mesmo.</p>
+      <figure>
+        <img src="passo2_liberada.png" alt="Faixa confirmando que o processo já saiu do Controle Interno e está no Setor de Prestação de Contas, com o botão de arquivar liberado.">
+        <figcaption>Você não precisa mais abrir o SGPe só para descobrir que já pode arquivar.</figcaption>
+      </figure>
+    </div>
+  </div>
+</div>
+
+<div class="cartao">
+  <h2>A PC final tem um passo a mais</h2>
+  <p>Na PC final, além de o processo ter saído do C.I. e de <b>todas as parciais estarem arquivadas</b>,
+  o sistema pede a <b>data da baixa do Secretário no SIGEF</b>. O aviso aparece antes do clique, e não
+  depois.</p>
+  <figure>
+    <img src="passo3_final.png" alt="A mesma faixa na PC final, com um quarto passo avisando que o arquivamento vai pedir a data da baixa do Secretário no SIGEF.">
+    <figcaption>O passo 4 só aparece na PC final.</figcaption>
+  </figure>
+  <p class="pq">Lembrando: o registro do parecer no SIGEF continua sendo feito por você, como sempre.
+  Para chegar ao arquivamento, ele já foi feito — o que se fecha aqui é a parcial no sistema.</p>
+</div>
+
+<div class="cartao">
+  <h2>Três perguntas que vão aparecer</h2>
+
+  <h3>O C.I. já me respondeu aqui no sistema, mas a faixa continua travada. E agora?</h3>
+  <p>Não trava mais. Quando o Controle Interno registra a devolutiva no sistema <b>depois</b> da última
+  leitura do SGPe, a parcial libera — o fato novo vale mais que a leitura antiga. Nesse caso a faixa
+  ainda avisa que a leitura está atrasada, para você conferir no SGPe antes de arquivar.</p>
+
+  <h3>E se eu já arquivei e o processo voltar para o C.I.?</h3>
+  <p>Nada acontece. A parcela arquivada continua arquivada: a leitura automática do SGPe nunca reabre
+  o que já foi fechado, e nenhum aviso volta a aparecer.</p>
+
+  <h3>Quando o botão não aparece?</h3>
+  <p>Quando não há leitura do SGPe para aquele processo. O sistema não afirma o que não leu — e, sem
+  leitura, o arquivamento segue as regras de sempre.</p>
+</div>
+
+<div class="fim">SIGPC-GT · Grupo de Trabalho de Prestação de Contas — FCEE · setembro de 2026</div>
+
+</div></body></html>
