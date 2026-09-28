@@ -16594,13 +16594,25 @@ async function ciSgpeConfirmar() {
   const bt = document.getElementById('moCiSgpeBt')
   bt.disabled = true; bt.textContent = 'Registrando...'
   try {
-    const r = await fetch(`${API_URL}/parcela/ci_sgpe`, { method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ tr:_ciTram.tr, parcial_num:String(_ciTram.num),
-                             setorial_id:_ciTram.setorial, usuario_id:U.id }) })
+    // ⚠️ UMA CHAMADA NOS DOIS CASOS — a do lote é outra rota, e não um laço sobre esta.
+    const r = _ciTram.lote
+      ? await fetch(`${API_URL}/parcela/ci_sgpe/lote`, { method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ tr:_ciTram.tr, setorial_id:'FCEE', parciais:_ciTram.parciais, usuario_id:U.id }) })
+      : await fetch(`${API_URL}/parcela/ci_sgpe`, { method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ tr:_ciTram.tr, parcial_num:String(_ciTram.num),
+                                 setorial_id:_ciTram.setorial, usuario_id:U.id }) })
     const j = await r.json()
     if(j.error) throw new Error(j.error.message || 'Não foi possível registrar.')
-    toast(`Devolutiva registrada pelo SGPe — ${j.data.pcs} PC${j.data.pcs>1?'s':''}. A parcial já pode ser arquivada.`,'ok')
+    if(_ciTram.lote) {
+      const f = j.data.feitas.length, rc = j.data.recusadas.length
+      toast(`${f} ${f===1?'parcial registrada':'parciais registradas'} pelo SGPe (${j.data.pcs} PCs)`
+        + `${rc ? ` · ${rc} não ${rc===1?'pôde':'puderam'}` : ''}. Já podem ser arquivadas.`, 'ok')
+      ciLoteLimpar()
+    } else {
+      toast(`Devolutiva registrada pelo SGPe — ${j.data.pcs} PC${j.data.pcs>1?'s':''}. A parcial já pode ser arquivada.`,'ok')
+    }
     fm('moCiSgpe'); _ciTram = null
     arqRecarregar()
   } catch(e) {
@@ -20362,8 +20374,69 @@ function ciLoteBarra() {
     + `<span style="opacity:.9;">${_ciLoteTr} · ${plural(pcs,'PC','PCs')} · ${planMoeda(valor)}</span>`
     + `<span style="margin-left:auto;display:flex;gap:9px;align-items:center;">`
     + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteLimpar();planAplicar()">limpar seleção</button>`
+    + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteSgpe()">🏛 Registrar devolutiva pelo SGPe</button>`
     + `<button class="btn-acao" style="background:#fff;color:#1A4E8A;font-weight:800;" onclick="ciLoteEnviar()">🏛 Encaminhar ${artigo(sel.length)} ${sel.length} ao C.I.</button>`
     + `</span>`
+}
+
+/**
+ * O LOTE DA DEVOLUTIVA PELO SGPe (28/09/2026) — o mesmo caminho da parcela única, em bloco.
+ *
+ * ⚠️ QUEM CONFERE E QUEM GRAVA É O SERVIDOR, em UMA chamada cada. A tela não pergunta parcela
+ * por parcela: eram 40 conferências e 40 escritas em série na TR da Geisa, e é exatamente isso
+ * que a armadilha 16 proíbe — rede caindo no meio deixaria metade feita.
+ *
+ * ⚠️ E A CONFERÊNCIA VEM ANTES DA PERGUNTA. O modal mostra quais das selecionadas têm a
+ * passagem provada, com as datas, e quais não têm e por quê. Só então oferece o botão: das 12
+ * marcadas podem ser 9, e a pessoa precisa ver as 3 que ficam de fora antes de confirmar.
+ */
+async function ciLoteSgpe() {
+  if(!_ciLote.size || !_ciLoteTr) return
+  const tr = _ciLoteTr
+  const nums = [..._ciLote]
+  const corpo = document.getElementById('moCiSgpeCorpo')
+  const bt = document.getElementById('moCiSgpeBt')
+  document.getElementById('moCiSgpe').classList.add('open')
+  document.getElementById('moCiSgpeTit').textContent = `🏛 Devolutiva pelo SGPe — ${nums.length} parciais`
+  corpo.innerHTML = '<div class="loading" style="padding:14px;"><div class="spin"></div>Conferindo a tramitação de cada uma...</div>'
+  bt.disabled = true; bt.style.opacity = '.5'
+  _ciTram = null
+  try {
+    const r = await fetch(`${API_URL}/parcela/ci_sgpe/conferir`, { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, setorial_id:'FCEE', parciais:nums, usuario_id:U.id }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível conferir.')
+    const d = j.data
+    const podem = d.linhas.filter(l => l.pode)
+    const nao = d.linhas.filter(l => !l.pode)
+    _ciTram = { lote:true, tr, parciais: podem.map(l => l.parcial_num), pode: podem.length > 0 }
+
+    const lista = (arr, cor, fundo, borda, titulo, comData) => arr.length ? `
+      <div style="background:${fundo};border:1px solid ${borda};border-radius:8px;padding:10px 12px;margin-bottom:9px;">
+        <b style="font-size:12.5px;color:${cor};">${titulo}</b>
+        <div style="margin-top:6px;max-height:210px;overflow:auto;">
+          ${arr.map(l => `<div style="font-size:12px;color:${cor};padding:2px 0;line-height:1.45;">
+            · <b>parcial ${escHtml(l.parcial_num)}</b>${l.pcs ? ` (${l.pcs} PC${l.pcs>1?'s':''})` : ''}
+            ${comData ? ` — saiu do C.I. em ${dataBr(l.saida)}` : ` — ${escHtml(l.motivo || '')}`}</div>`).join('')}
+        </div>
+      </div>` : ''
+
+    corpo.innerHTML = `
+      <div style="font-size:12.5px;color:var(--ct);margin-bottom:9px;">TR ${escHtml(tr)} · ${nums.length} ${nums.length===1?'parcial selecionada':'parciais selecionadas'}</div>
+      ${lista(podem, '#2E5D2E', '#F4F9EE', '#C5E1A5',
+        `✓ ${podem.length} com a ida e a volta provadas no SGPe`, true)}
+      ${lista(nao, '#7A2E2E', '#FFF4F4', '#F0C4C4',
+        `${nao.length} que NÃO podem ser registradas por aqui`, false)}
+      ${podem.length ? `<div style="background:#FDF8EC;border:1px solid #E8C88A;border-radius:8px;padding:10px 12px;
+        font-size:12.5px;color:#854F0B;line-height:1.55;"><b>O que o sistema NÃO vai afirmar:</b> que o C.I. está de
+        acordo. A tramitação prova que o processo <b>passou</b> pelo Controle Interno, não o que foi decidido.</div>` : ''}`
+    bt.disabled = !podem.length
+    bt.style.opacity = podem.length ? '1' : '.5'
+    bt.textContent = podem.length ? `Registrar ${podem.length}` : 'Nada a registrar'
+  } catch(e) {
+    corpo.innerHTML = `<div style="font-size:12.5px;color:#7A2E2E;">${escHtml(e.message)}</div>`
+  }
 }
 
 /** Uma confirmação, com a lista — não uma por parcela. */
