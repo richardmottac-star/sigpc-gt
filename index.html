@@ -7270,7 +7270,7 @@ async function procEditar(codigo_pc, campo, atual) {
   // explicar depois.
   const alcance = campo === 'processo_mae'
     ? 'Vale para <b>todas as PCs desta TR</b> — o processo mãe é um só por TR.'
-    : 'Vale para as PCs desta TR que hoje têm <b>este mesmo processo</b>.'
+    : 'Vale para as PCs <b>desta parcial</b> que hoje têm este mesmo processo.'
   document.getElementById('procEdInfo').innerHTML =
     `<strong>${campo === 'processo_mae' ? 'Processo mãe, a partir da PC' : 'PC'}:</strong> ${escHtml(codigo_pc)}<br>` +
     `<strong>Hoje:</strong> ${escHtml(atual || '—')}<br>` +
@@ -7283,11 +7283,71 @@ async function procEditar(codigo_pc, campo, atual) {
   // resolver.
   document.getElementById('procEdCaixa').innerHTML =
     campoProcHtml('procEd', { modo: 'cadastro', muda: 'procEdMudou()' })
+      + '<div id="procEdEscopo"></div>'
   campoProcPor('procEd', partes.sigla, partes.numero, partes.ano)
   document.getElementById('procEdManual').style.display = 'none'
   document.getElementById('procEdUrl').value = ''
   procEdMudou()
   setTimeout(() => document.getElementById('procEdSigla').focus(), 60)
+  procEdEscopo(codigo_pc, campo)
+}
+
+/**
+ * O QUE ESTA CORREÇÃO VAI ALCANÇAR — e a escolha, quando houver (27/09/2026).
+ *
+ * ⚠️ ISTO NASCEU DE UM CASO DO VALDERI (G1): na 2022TR000848 as parciais 2, 3 e 4 estavam com
+ * `SCC 3123/2023`, e corrigir uma mudava as três. Da cadeira dele: "quando tento alterar ele
+ * muda nas três PCs". O alcance agora é a PARCELA, e quando o mesmo número está em outras
+ * parciais da TR o modal MOSTRA QUAIS e deixa ele escolher.
+ *
+ * ⚠️ E A ESCOLHA PRECISA EXISTIR NOS DOIS SENTIDOS: um processo do SGPe pode carregar várias
+ * parcelas de verdade (armadilha 14 — 138 pares no acervo, em 96 TRs). Quando o
+ * compartilhamento é legítimo e o número mudou, corrigir parcela por parcela deixaria alguma
+ * para trás — que é o defeito de 22/09 voltando pela outra porta.
+ *
+ * ⚠️ QUEM CONTA AS PCs É O SERVIDOR (armadilha 16). A tela mostra o número que veio.
+ */
+async function procEdEscopo(codigo_pc, campo) {
+  const box = document.getElementById('procEdEscopo')
+  if(!box) return
+  box.innerHTML = ''
+  if(campo !== 'processo_pc') return
+  try {
+    const r = await fetch(`${API_URL}/prestacoes_contas/${encodeURIComponent(codigo_pc)}/processo_escopo?campo=processo_pc`)
+    const j = await r.json()
+    if(j.error || !j.data || !j.data.escolhe) return
+    const d = j.data
+    // ⚠️ Só desenha se o modal ainda for o mesmo: a resposta pode chegar depois de a pessoa
+    // fechar e abrir outro lápis, e aí o bloco falaria de outra PC.
+    if(!_procEd || _procEd.codigo_pc !== codigo_pc) return
+    const lista = d.outras_parciais.map(n => `<b>${escHtml(String(n))}</b>`).join(', ')
+    box.innerHTML = `
+      <div style="background:#FDF8EC;border:1px solid #E8C88A;border-radius:8px;padding:10px 12px;margin-top:10px;
+                  font-size:12.5px;color:#854F0B;line-height:1.5;">
+        <b>Atenção:</b> este mesmo número também está ${d.outras_parciais.length > 1 ? 'nas parciais' : 'na parcial'}
+        ${lista} desta TR. O que deve ser corrigido?
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+            <input type="radio" name="procEdAlc" value="parcela" checked style="margin-top:3px;">
+            <span>Só a <b>parcial ${escHtml(String(d.parcial_num))}</b>
+              <span style="color:var(--ct);">— ${d.pcs_na_parcela} PC${d.pcs_na_parcela > 1 ? 's' : ''}</span></span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+            <input type="radio" name="procEdAlc" value="tr" style="margin-top:3px;">
+            <span>Todas as parciais que estão com este número
+              <span style="color:var(--ct);">— ${d.pcs_na_tr} PCs, parciais ${escHtml(String(d.parcial_num))}, ${escHtml(d.outras_parciais.join(', '))}</span></span>
+          </label>
+        </div>
+        <div style="margin-top:7px;font-size:11.5px;">Um processo do SGPe pode ter mais de uma parcial de verdade —
+          por isso a escolha é sua.</div>
+      </div>`
+  } catch(e) { /* sem a conferência, o modal segue com o padrão: só a parcial */ }
+}
+
+/** O alcance escolhido. Sem escolha na tela, é a parcela — o mesmo padrão do servidor. */
+function procEdAlcance() {
+  const m = document.querySelector('input[name="procEdAlc"]:checked')
+  return m ? m.value : 'parcela'
 }
 
 /**
@@ -7390,7 +7450,7 @@ async function procEdSalvar() {
   bt.disabled = true; bt.textContent = 'Salvando...'
   try {
     const corpo = {
-      campo: _procEd.campo, usuario_id: U.id,
+      campo: _procEd.campo, usuario_id: U.id, alcance: procEdAlcance(),
       sigla:  campoVal('procEd', 'Sigla'),
       numero: campoVal('procEd', 'Num'),
       ano:    campoVal('procEd', 'Ano'),
@@ -7415,16 +7475,22 @@ async function procEdSalvar() {
     const conv = d.convive
       ? ` — este processo também está na parcial ${d.convive.outras_parciais.join(', ')} desta TR.`
       : ''
+    // ⚠️ O QUE FICOU DE FORA TAMBÉM É RESPOSTA. Quem corrigiu a parcial 3 numa TR em que a 2 e
+    // a 4 têm o mesmo número precisa saber que elas continuam como estavam — senão a dúvida
+    // "será que salvou?" volta pelo outro lado.
+    const fora = (d.fora_da_parcela || []).length
+      ? ` A${d.fora_da_parcela.length > 1 ? 's' : ''} parcia${d.fora_da_parcela.length > 1 ? 'is' : 'l'} ${d.fora_da_parcela.join(', ')} continua${d.fora_da_parcela.length > 1 ? 'm' : ''} com o número anterior.`
+      : ''
     if(d.link) {
       // Resolveu sozinho: guarda no cache da tela e fecha. O manual nem chega a aparecer.
       _sgpeCache.set(d.texto, d.link)
-      toast(`Processo corrigido para ${d.texto}${procQuantas(d)} — link gerado.${conv}`,'ok')
+      toast(`Processo corrigido para ${d.texto}${procQuantas(d)} — link gerado.${fora}${conv}`,'ok')
       fm('moProcEd'); _procEd = null
       procRecarregar()
       return
     }
     // Não resolveu: AGORA sim o manual.
-    toast(`Processo salvo como ${d.texto}${procQuantas(d)}, mas sem link.${conv}`,'ok')
+    toast(`Processo salvo como ${d.texto}${procQuantas(d)}, mas sem link.${fora}${conv}`,'ok')
     document.getElementById('procEdManual').style.display = ''
     document.getElementById('procEdManualMot').textContent = d.motivo || 'O SGPe não devolveu este processo.'
     document.getElementById('procEdUrl').focus()
