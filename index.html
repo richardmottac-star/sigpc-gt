@@ -16124,7 +16124,10 @@ function arqDevolveu(a) {
 // arquivamento e so desenha. Perguntar aqui seria a tela decidindo (armadilha 16), e no dia
 // em que a FCEE criasse um segundo setor de controle a tela e a rota discordariam.
 const arqNoCi = (a) => (a && a.ci_no_sgpe) || null
-const arqNoCiDias = (d) => d && d.dias != null ? `há ${d.dias} dia${d.dias === 1 ? '' : 's'}` : 'agora'
+// ⚠️ "HÁ 0 DIAS" NÃO SE DIZ — quem chegou hoje chegou hoje. Foi a prévia de 27/09 que mostrou a
+// frase saindo "desde 24/09/2026, há 0 dias"; a mesma correção está no servidor, em `diasNoSetor`.
+const arqNoCiDias = (d) => !d || d.dias == null ? '' : d.dias <= 0 ? 'desde hoje'
+  : `há ${d.dias} dia${d.dias === 1 ? '' : 's'}`
 
 const arqFrase = (m) => { const t = String(m || '').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : '' }
 const arqArgs = (tr, num, setorial) => `'${escHtml(tr)}','${escHtml(String(num))}','${escHtml(setorial || '')}'`
@@ -16163,6 +16166,7 @@ function arqFaixaCi(r, pa) {
         ${responde ? `<button class="btn-neutro" onclick="pCiFocar('${escHtml(`${r.tr}|${pa.num}`)}')"
           style="padding:8px 15px;font-weight:700;white-space:nowrap;">Responder ao C.I.</button>` : ''}
       </span>
+      ${arqSgpePosHtml(a)}
     </div>`
   }
   if(a.estado === 'arquivada') return `
@@ -16187,7 +16191,8 @@ function arqFaixaCi(r, pa) {
                 font-size:12.5px;color:#7A2E2E;line-height:1.55;">
       <b>Ainda não dá para arquivar: o processo está no Controle Interno.</b><br>
       No SGPe ele está em <b>${escHtml(noCi.setor || 'um setor do C.I.')}${noCi.setor_nome ? ' — ' + escHtml(noCi.setor_nome) : ''}</b>${
-        noCi.desde ? ` desde <b>${escHtml(noCi.desde)}</b>` : ''}${noCi.dias != null ? `, ${escHtml(arqNoCiDias(noCi))}` : ''}.
+        noCi.desde ? ` desde <b>${escHtml(noCi.desde)}</b>` : ''}${
+        noCi.dias > 0 ? `, ${escHtml(arqNoCiDias(noCi))}` : (!noCi.desde ? ', e chegou hoje' : '')}.
       Enquanto o C.I. não devolver o processo com o parecer, esta parcial não se arquiva.
       <div style="margin-top:7px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
         <button class="btn-acao" disabled title="O Controle Interno ainda não devolveu o processo no SGPe."
@@ -16197,11 +16202,111 @@ function arqFaixaCi(r, pa) {
         <span class="proc-sgpe" style="font-size:11.5px;">${procHtml(ref.processo_pc, ref.codigo_pc)}</span>
         ${noCi.lido_em ? `<span style="font-size:11px;color:#8A7070;">leitura do SGPe de ${escHtml(noCi.lido_em)}</span>` : ''}
       </div>
+      ${arqSgpeConsultaHtml(r, pa, noCi, a)}
     </div>`
   return `
     <div style="margin:0 13px 9px;background:#fff;border:0.5px solid var(--borda-suave);border-radius:6px;padding:9px 13px;
                 font-size:12px;color:var(--texto-secundario);line-height:1.5;">
       <b style="color:var(--texto);">Ainda não dá para arquivar.</b> ${escHtml(arqFrase(a.motivo))}</div>`
+}
+
+/**
+ * ONDE O PROCESSO ESTÁ AGORA, na faixa de quem JÁ PODE ARQUIVAR — ordem do Richard, 27/09/2026.
+ *
+ * ⚠️ É A MESMA FAIXA QUE BARRA, DO OUTRO LADO. Quando o processo estava no C.I. ela dizia por que
+ * não dava; agora que saiu, ela diz para onde foi e que pode. O analista que ainda não arquivou
+ * não precisa abrir o SGPe para descobrir que já pode — a tela conta.
+ *
+ * ⚠️ E A TELA NÃO JULGA O SETOR: o `no_ci` vem decidido do servidor (`lib/sgpe-situacao`). O caso
+ * de `no_ci` ainda verdadeiro aqui é o da LEITURA VENCIDA — o C.I. registrou a devolutiva depois
+ * da última leitura —, e aí a frase diz exatamente isso, em vez de esconder a contradição.
+ */
+function arqSgpePosHtml(a) {
+  const p = a && a.sgpe
+  if(!p || !p.setor) return ''
+  const onde = `<b>${escHtml(p.setor)}${p.setor_nome ? ' — ' + escHtml(p.setor_nome) : ''}</b>`
+  const quando = p.desde ? ` desde ${escHtml(p.desde)}` : ''
+  const lido = p.lido_em ? ` <span style="color:#8A7070;">(leitura do SGPe de ${escHtml(p.lido_em)})</span>` : ''
+  return `<div style="flex:1 1 100%;margin-top:7px;padding-top:7px;border-top:1px dashed #E8C88A;font-size:11.5px;
+    color:#5C6661;line-height:1.5;">${p.no_ci
+      ? `⚠️ A última leitura do SGPe ainda mostra o processo em ${onde}${quando}, mas o Controle Interno
+         já registrou a devolutiva aqui. Confira no SGPe antes de arquivar.${lido}`
+      : `✓ No SGPe o processo <b>já saiu do Controle Interno</b>: está em ${onde}${quando}. Pode arquivar.${lido}`}</div>`
+}
+
+/**
+ * O CAMINHO PARA DESTRAVAR, dentro da própria faixa — ordem do Richard, 27/09/2026.
+ *
+ * ⚠️ A LEITURA DO SGPe É AUTOMÁTICA, MAS NÃO É INSTANTÂNEA: o rodízio passa de hora em hora, em
+ * lotes de 600 processos, e a leitura mais velha do acervo tinha 19 horas quando isto foi medido.
+ * Quem acabou de ver o C.I. devolver no SGPe não tem por que esperar o rodízio chegar naquele
+ * processo — este botão antecipa a leitura para UM processo, pela mesma rota que a Gestão usa.
+ *
+ * ⚠️ E O BOTÃO NÃO ARQUIVA NADA. Ele só relê o SGPe e regrava a posição; quem arquiva continua
+ * sendo a pessoa, depois de o setor mudar. Misturar as duas coisas num clique só seria arquivar
+ * por conta de uma leitura que ninguém conferiu.
+ *
+ * ⚠️ O TEXTO DIZ O QUE FAZER, e não só o que está errado. "Não dá para arquivar" sem o caminho é
+ * o mesmo beco do botão cinza mudo (armadilha 19).
+ */
+function arqSgpeConsultaHtml(r, pa, noCi, a) {
+  const ref = pa.pcs[0] || {}
+  const proc = ref.processo_pc || (noCi && noCi.processo) || ''
+  if(!proc) return ''
+  const id = `arqSgpe-${escHtml(`${r.tr}|${pa.num}`)}`
+  const args = `'${escHtml(r.tr)}','${escHtml(String(pa.num))}','${escHtml(ref.setorial_id || '')}','${escHtml(proc)}'`
+  return `
+    <div style="margin-top:9px;border-top:1px dashed #F0C4C4;padding-top:9px;">
+      <div style="font-size:11.5px;color:#7A2E2E;line-height:1.6;">
+        <b>Como liberar o arquivamento:</b><br>
+        1. Confira no SGPe se o Controle Interno já encaminhou o processo para outro setor.<br>
+        2. Clique em <b>Consultar o SGPe agora</b> — o sistema lê a posição do processo na hora.<br>
+        3. Tendo saído do Controle Interno, o botão de arquivar libera aqui mesmo.${a.final ? `<br>
+        4. Por ser a <b>PC final</b>, o arquivamento ainda vai pedir a <b>data da baixa do Secretário no SIGEF</b>.` : ''}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-acao" id="${id}-bt" onclick="arqSgpeConsultar(${args})"
+          style="background:#0B6B3A;color:#fff;font-weight:800;padding:7px 13px;display:inline-flex;
+                 align-items:center;gap:7px;white-space:nowrap;">${sgpeLogoImg(16)} Consultar o SGPe agora</button>
+        <span id="${id}-res" style="font-size:11.5px;color:#7A2E2E;"></span>
+      </div>
+    </div>`
+}
+
+/**
+ * Relê a posição do processo no SGPe e conta o que achou.
+ *
+ * ⚠️ QUEM DECIDE SE LIBERA CONTINUA SENDO O SERVIDOR: aqui só se pede a releitura e se recarrega
+ * a tela. A regra do que é "setor do C.I." não pode ser escrita nesta função — seria a segunda
+ * cópia dela, e a que ficaria para trás seria a que deixa arquivar.
+ */
+async function arqSgpeConsultar(tr, num, setorial, processo) {
+  const id = `arqSgpe-${tr}|${num}`
+  const bt = document.getElementById(`${id}-bt`), res = document.getElementById(`${id}-res`)
+  if(bt) { bt.disabled = true; bt.style.opacity = '.6' }
+  if(res) res.textContent = 'Consultando o portal do SGPe...'
+  try {
+    // O mesmo caminho do "Atualizar agora" da Gestão — uma rota só para esta pergunta.
+    const rr = await fetch(`${API_URL}/sgpe/situacao/atualizar`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ processo, usuario_id: U.id }) })
+    const j = await rr.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    const st = (j.data && j.data.situacao) || null
+    const setor = st ? (st.setor_sigla || '') : ''
+    const nome = st ? (st.setor_nome || '') : ''
+    // ⚠️ A TELA NÃO JULGA O SETOR. Ela mostra o que voltou e manda recarregar; quem diz se
+    // destravou é o estado que o servidor recalcula — e é ele que a faixa vai refletir.
+    if(res) res.innerHTML = setor
+      ? `Agora no SGPe: <b>${escHtml(setor)}${nome ? ' — ' + escHtml(nome) : ''}</b>. Atualizando a tela...`
+      : 'O portal respondeu, mas sem posição. Atualizando a tela...'
+    toast(setor ? `Processo em ${setor}. Atualizando...` : 'Leitura feita. Atualizando...', 'ok')
+    arqRecarregar()
+  } catch(e) {
+    if(res) res.textContent = e.message || 'O portal do SGPe não respondeu. Tente de novo em instantes.'
+    toast(e.message || 'O portal do SGPe não respondeu.', 'err')
+    if(bt) { bt.disabled = false; bt.style.opacity = '1' }
+  }
 }
 
 // A pílula da parcial na linha. Some quando a TR inteira está arquivada — aí o cabeçalho cinza diz.
@@ -16216,7 +16321,7 @@ function arqPilulaParcial(a, arquivadaEm, trArquivada) {
   // e em vermelho, como o resto do bloco.
   const noCi = arqNoCi(a)
   if(noCi) return `<span style="display:inline-block;background:#FFF4F4;border:1px solid #F0C4C4;color:#7A2E2E;
-    font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;white-space:nowrap;">no Controle Interno ${escHtml(arqNoCiDias(noCi))}</span>`
+    font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;white-space:nowrap;">no Controle Interno${arqNoCiDias(noCi) ? ' ' + escHtml(arqNoCiDias(noCi)) : ''}</span>`
   if(a.final) return `<span style="display:inline-block;background:var(--fundo-alt);border:0.5px solid var(--borda-suave);
     color:var(--texto-muted);font-size:11px;border-radius:4px;padding:3px 9px;line-height:1.4;max-width:420px;">${escHtml(arqFrase(a.motivo))}</span>`
   return ''
