@@ -80,5 +80,24 @@ S('4. O QUE O RELATORIO AFIRMA, E O QUE ELE NAO AFIRMA');
   conf(/há \$\{u\.dias\} dias/.test(acesso), 'o quadro 2 mostra ha quantos dias foi o ultimo acesso');
 }
 
+S('5. O SEGUNDO RELATORIO: AS PARCIAIS PARADAS NO PASSO 2');
+{
+  const p2 = entre('async function gerPasso2()', 'let _cgeDados = []');
+  conf(html.includes("id:'passo2'") && html.includes("gerar:'gerPasso2()'"), 'entrou na mesma lista, com uma linha');
+  // ⚠️ A CONTAGEM E POR PARCELA, como a tela fala — medir por PC daria outro numero.
+  conf(p2.includes("x.pcs.every(p => p.baixada)") && p2.includes("x.pcs.every(p => p.parecer_tipo)")
+    && p2.includes("x.pcs.every(p => !p.ci_situacao)"),
+    'a parcela so conta com TODAS baixadas, TODAS com parecer e NENHUMA no C.I.');
+  conf(p2.includes("p.tipo === 'final') return"), 'e a PC final fica de fora, porque tem regra propria');
+  conf(/estado !== 'arquivada'/.test(p2), 'a arquivada tambem nao entra');
+  // ⚠️ NUMERO QUE NAO DIZ O QUE FAZER NAO MUDA NADA: o numero ja estava na tela de cada um
+  // havia meses, e ninguem tinha visto.
+  conf(/Na Minha Planilha, abrir a TR, marcar a caixinha/.test(p2), 'o documento ensina o caminho do lote');
+  conf(/A baixa não é desfeita/.test(p2), 'e desfaz a duvida que trava a acao');
+  conf(/já na fila do C.I./.test(p2), 'com o contexto do que ja esta na mao do Controle Interno');
+  conf(/cadastro de suporte/.test(p2), 'o cadastro do superadmin aparece marcado, e nao escondido');
+  conf(p2.includes("${DOC_CSS}") && p2.includes("${docCabecalho()}"), 'no mesmo timbre do sistema');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exitCode = falhou ? 1 : 0;

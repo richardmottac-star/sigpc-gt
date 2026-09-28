@@ -12317,6 +12317,9 @@ const GER_RELATORIOS = [
   { id:'acesso', rot:'Acesso ao sistema', cor:'#4A3B8C',
     sub:'Quem nunca acessou e quem está sem acessar há mais de 30 dias, com a portaria de saída quando houver.',
     gerar:'gerAcesso()' },
+  { id:'passo2', rot:'Parciais paradas no passo 2', cor:'#C2410C',
+    sub:'Parciais baixadas e com parecer que ainda não foram encaminhadas ao Controle Interno, por analista e por TR.',
+    gerar:'gerPasso2()' },
 ]
 
 function relPainelGerHtml() {
@@ -12429,6 +12432,138 @@ ${parados.length ? tabela(parados,true) : '<p>Nenhum cadastro nesta condição.<
   ${nunca.filter(u=>!u.saiu).length===1?'não tem':'não têm'} portaria de saída registrada e nunca
   ${nunca.filter(u=>!u.saiu).length===1?'acessou':'acessaram'} o sistema.</p>` :
   '<p><b>Conclusão.</b> Não há, nesta data, integrante em exercício sem acesso ao sistema.</p>'}
+</div>
+<div class="rodape">
+  SIGPC-GT — Sistema de Gestão de Prestações de Contas do Grupo de Trabalho · Fundação Catarinense de Educação
+  Especial · documento gerado pelo sistema em ${carimbo}.
+</div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    if(!w) { toast('Permita pop-ups para gerar o documento.','err'); return }
+    w.document.write(doc); w.document.close()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+/**
+ * AS PARCIAIS PARADAS NO PASSO 2 — baixadas, com parecer, e ainda nao encaminhadas ao C.I.
+ *
+ * ⚠️ A CONTAGEM E POR PARCELA, como a tela fala, e nao por PC: a parcela conta quando TODAS as
+ * PCs dela estao baixadas, TODAS tem parecer e NENHUMA foi ao C.I. Medir por PC daria outro
+ * numero, e comparar coisas diferentes e como se inventa progresso.
+ *
+ * ⚠️ E O RELATORIO DIZ O CAMINHO, e nao so o numero. Em 27/09 foram 33 recados pessoais
+ * ensinando o encaminhamento em lote; o numero sozinho ja estava na tela de cada um havia
+ * meses, e ninguem tinha visto. Numero que nao diz o que fazer nao muda nada.
+ */
+async function gerPasso2() {
+  toast('Levantando as parciais paradas...','ok')
+  try {
+    const [pcs, ju] = await Promise.all([
+      fetchTodasPCs(U.setorialFiltro),
+      (await fetch(`${API_URL}/usuarios`)).json(),
+    ])
+    const uPorId = new Map((ju.data || []).map(u => [Number(u.id), u]))
+
+    // Agrupa por parcela (setorial, TR, parcial). A final nao entra: ela nao vai ao C.I. antes
+    // das parciais, e tem regra propria.
+    const par = new Map()
+    pcs.forEach(p => {
+      if(p.tipo === 'final') return
+      const k = `${p.setorial_id}|${p.tr}|${p.parcial_num}`
+      if(!par.has(k)) par.set(k, { tr:p.tr, num:p.parcial_num, id:p.analista_id, pcs:[], ent:p.entidade,
+                                   arq:p.arquivamento || null })
+      par.get(k).pcs.push(p)
+    })
+    const alvo = [...par.values()].filter(x =>
+      (!x.arq || x.arq.estado !== 'arquivada')
+      && x.pcs.every(p => p.baixada) && x.pcs.every(p => p.parecer_tipo)
+      && x.pcs.every(p => !p.ci_situacao) && x.id != null)
+
+    // Por analista, e por TR dentro de cada um.
+    const porAn = new Map()
+    alvo.forEach(x => {
+      if(!porAn.has(x.id)) porAn.set(x.id, { id:x.id, parcelas:0, pcs:0, trs:new Map() })
+      const a = porAn.get(x.id)
+      a.parcelas++; a.pcs += x.pcs.length
+      if(!a.trs.has(x.tr)) a.trs.set(x.tr, { n:0, ent:x.ent })
+      a.trs.get(x.tr).n++
+    })
+    const lista = [...porAn.values()].map(a => {
+      const u = uPorId.get(Number(a.id)) || {}
+      return { ...a, nome:u.nome || ('id ' + a.id), grupo:u.grupo==null?'—':String(u.grupo),
+               suporte:u.perfil === 'superadmin',
+               trs:[...a.trs.entries()].map(([tr,v]) => ({ tr, ...v })).sort((x,y) => y.n - x.n) }
+    }).sort((a,b) => b.parcelas - a.parcelas)
+
+    const totP = lista.reduce((s,a) => s + a.parcelas, 0)
+    const totPC = lista.reduce((s,a) => s + a.pcs, 0)
+    const totTR = new Set(alvo.map(x => x.tr)).size
+    // O contexto: quantas ja estao NA FILA do C.I., esperando a devolutiva deles.
+    const naFila = [...par.values()].filter(x => (!x.arq || x.arq.estado !== 'arquivada')
+      && x.pcs.some(p => p.ci_situacao === 'na_fila')).length
+    const agora = new Date()
+    const carimbo = agora.toLocaleDateString('pt-BR') + ' às '
+      + agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })
+
+    const doc = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Parciais paradas no passo 2 — SIGPC-GT</title>
+<style>${DOC_CSS}</style></head><body>
+${DOC_ACOES}
+<div class="paper">
+${docCabecalho()}
+<h2>Parciais aguardando encaminhamento ao Controle Interno</h2>
+<div class="ficha">
+  <p><b>Objeto:</b> parciais com todas as PCs baixadas e com parecer registrado que ainda não foram encaminhadas ao Controle Interno no sistema.</p>
+  <p><b>Emitido em:</b> ${carimbo}</p>
+  <p><b>Critério:</b> a parcial entra quando <i>todas</i> as PCs dela estão baixadas, <i>todas</i> têm parecer e <i>nenhuma</i> foi ao C.I. A PC final não entra — ela tem regra própria.</p>
+</div>
+<div class="cont">
+  <div><b>${totP}</b>parciais paradas</div>
+  <div><b>${totPC}</b>PCs</div>
+  <div><b>${lista.length}</b>analistas</div>
+  <div><b>${totTR}</b>TRs</div>
+  <div><b>${naFila}</b>já na fila do C.I.</div>
+</div>
+
+<div class="sec">1. Por analista</div>
+<table>
+  <thead><tr><th class="tc" style="width:26px;">#</th><th>Analista</th><th class="tc" style="width:46px;">Grupo</th>
+    <th class="tc" style="width:66px;">Parciais</th><th class="tc" style="width:54px;">PCs</th>
+    <th class="tc" style="width:46px;">TRs</th><th>Maior concentração</th></tr></thead>
+  <tbody>${lista.map((a,i) => `<tr>
+    <td class="tc">${i+1}</td>
+    <td>${escHtml(a.nome)}${a.suporte ? ' <i>(cadastro de suporte)</i>' : ''}</td>
+    <td class="tc">${escHtml(a.grupo)}</td>
+    <td class="tc fw">${a.parcelas}</td><td class="tc">${a.pcs}</td><td class="tc">${a.trs.length}</td>
+    <td>${a.trs[0] ? `${escHtml(a.trs[0].tr)} — ${a.trs[0].n} ${a.trs[0].n===1?'parcial':'parciais'}` : ''}</td>
+  </tr>`).join('')}
+  <tr><td colspan="3" style="text-align:right;"><b>TOTAL</b></td><td class="tc"><b>${totP}</b></td>
+    <td class="tc"><b>${totPC}</b></td><td class="tc"><b>${totTR}</b></td><td></td></tr></tbody>
+</table>
+
+<div class="sec">2. As dez TRs com mais parciais paradas</div>
+<table>
+  <thead><tr><th class="tc" style="width:26px;">#</th><th style="width:110px;">TR</th><th>Entidade</th>
+    <th>Analista</th><th class="tc" style="width:66px;">Parciais</th></tr></thead>
+  <tbody>${lista.flatMap(a => a.trs.map(t => ({ ...t, nome:a.nome })))
+    .sort((x,y) => y.n - x.n).slice(0,10)
+    .map((t,i) => `<tr><td class="tc">${i+1}</td><td class="cod">${escHtml(t.tr)}</td>
+      <td>${escHtml(String(t.ent||'').slice(0,46))}</td><td>${escHtml(t.nome)}</td>
+      <td class="tc fw">${t.n}</td></tr>`).join('')}</tbody>
+</table>
+
+<div class="obs">
+  <p><b>O que fazer.</b> Na Minha Planilha, abrir a TR, marcar a caixinha à esquerda de cada parcial que mostra
+  "falta encaminhar ao Controle Interno" e usar a barra azul do rodapé — <i>Encaminhar as N ao C.I.</i> As parciais
+  seguem juntas, em uma confirmação só.</p>
+  <p><b>A baixa não é desfeita.</b> Ela contou quando a parcial foi encaminhada ao C.I., e o retorno do C.I.
+  também não a cancela. O encaminhamento leva a parcial inteira, e não apenas a PC visível.</p>
+  <p><b>Se o C.I. já analisou por fora do sistema</b> — parecer no SIGEF e processo já tramitado —, o
+  encaminhamento deve ser feito assim mesmo, e o Controle Interno registra a devolutiva: é o registro que falta,
+  não a análise.</p>
+  <p><b>Contexto.</b> Há hoje ${naFila} parciais já na fila do Controle Interno, aguardando a devolutiva deles —
+  essas não dependem do analista.</p>
 </div>
 <div class="rodape">
   SIGPC-GT — Sistema de Gestão de Prestações de Contas do Grupo de Trabalho · Fundação Catarinense de Educação
