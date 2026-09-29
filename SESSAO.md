@@ -1,13 +1,171 @@
-# SIGPC-GT — ESTADO EM 27/09/2026
+# SIGPC-GT — ESTADO EM 28/09/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
-> ⚠️ **O bloco de 11/09 e os anteriores ficaram para trás.** Continuam úteis como registro do que
-> se mediu — **não como estado**. O estado é o bloco de 27/09, logo abaixo.
+> ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
+> **não como estado**. O estado é o bloco de 28/09, logo abaixo; o de 27/09 vem em seguida e ainda
+> vale para a trava do C.I. e para a produtividade retida.
 
 ---
 
-## ▶ 27/09/2026 — O ESTADO DE AGORA. Nenhuma escrita no banco desde 03/09.
+## ▶ 28/09/2026 — A MADRUGADA E O DIA: a devolutiva pelo SGPe, o sino e a aba Gerenciais
+
+Cinco frentes, todas **no ar**. ⚠️ **Houve escrita em produção**: 3 novidades, 4 rodadas de recado
+(55 + 33 + 40 + 3) e 2 itens no repositório — nenhuma tocou em PC, baixada ou parecer.
+
+| commit | repo | o quê |
+|---|---|---|
+| `3970bc2` · `99117a3` | `sigpc-api` | a correção do processo alcança a **parcela** |
+| `bf3a2db` · `dc3a012` | `sigpc-gt` | o modal do lápis pergunta o alcance |
+| `64d4935` | `sigpc-api` | a urgência do sino deixa de ser eterna |
+| `34a1e97` | `sigpc-gt` | abrir o sino marca o que ele mostrou |
+| `e8dc860` · `4101d82` | `sigpc-gt` | a **aba Gerenciais** e os dois relatórios |
+| `5072763` · `df976fa` | `sigpc-api` | a **devolutiva provada pelo SGPe**, e o lote |
+| `18222da` · `358402a` | `sigpc-gt` | o caminho na tela, e o lote |
+| `9dca63e` · `093e5e1` | `sigpc-gt` | o guia das situações e o card |
+
+---
+
+### 1. A CORREÇÃO DO PROCESSO ALCANÇA A PARCELA — e a escolha é do analista
+
+**O caso do Valderi (G1):** na `2022TR000848` as parciais **2, 3 e 4** estavam com `SCC 3123/2023`,
+e corrigir uma mudava as três. *"Quando tento alterar ele muda nas três PCs."*
+
+⚠️ **É O DEFEITO ESPELHADO DO DE 22/09** — lá a correção alcançava de MENOS (1 PC, e a TR seguia
+mostrando o número velho), e o conserto daquele dia a fez alcançar de MAIS. Os dois aparecem para
+quem usa como *"salvei e não mudou o que eu queria"*.
+
+⚠️ **E NÃO BASTA ESTREITAR:** um processo do SGPe **pode** carregar várias parcelas (armadilha 14).
+Medido: **138 pares (TR, processo) com mais de uma parcial**, em 96 TRs, 564 PCs. Por isso
+`alcance: 'tr'` existe — e **o padrão é a parcela, inclusive para quem não mandar nada**.
+
+- `GET .../processo_escopo`: leitura pura, para o modal **perguntar com os números na mão**.
+- A resposta do PATCH diz o que ficou **de fora** (`fora_da_parcela`), pelo valor ANTIGO — sem isso,
+  quem corrige a parcial 3 sai achando que corrigiu a 2 e a 4.
+
+---
+
+### 2. O SINO QUE ENTUPIA
+
+**O Richard viu:** o recado enviado naquela hora nascia na **nona linha** da caixa da Geisa.
+
+⚠️ **A ORDEM ERA "URGENTE E NÃO LIDO PRIMEIRO"** — e, como só o CLIQUE marcava como lido, o urgente
+ficava grudado no topo **para sempre**. Medido em 27/09: **465 avisos urgentes não lidos**, em **49
+das 56 pessoas**, o mais velho de **12/08**. A Sandra Cezária tinha 40; a Geisa, 30 de 30 por ler.
+**Quanto mais se marcava como urgente, menos se via o que era novo.**
+
+- `URGENTE_DIAS = 7`: passado o prazo, o aviso entra na fila pela data. A tarja vermelha fica; o que
+  acaba é a carona no topo.
+- **Abrir o sino marca o que ele mostrou** (`POST /notificacao/marcar_lidas`, por lista de ids **e**
+  com o destinatário no WHERE). ⚠️ **Não some da tela na hora**: o clique é "já tratei disto"; abrir
+  é "estou lendo agora".
+- ⚠️ **A recarga de 60 s ESPERA com o painel aberto** (`sinoTique`) — a carga traz só as não lidas, e
+  sem a pausa ela esvaziaria o painel na frente da pessoa. Era o segundo defeito que a mudança criaria.
+- `DIAS_GUARDA_LIDA` **15 → 60**: "lida" passou a significar "esteve na sua frente", e apagar isso em
+  15 dias faria sumir recado que ninguém leu. ⚠️ **A notificação lida é APAGADA**, não arquivada.
+- ⚠️ **As 465 antigas NÃO foram marcadas como lidas**: com a urgência expirando elas saem do topo
+  sozinhas, e afirmar uma leitura que não houve iniciaria o relógio de exclusão.
+
+---
+
+### 3. A ABA GERENCIAIS — relatórios que existem DENTRO do sistema
+
+*"Um relatório de analista que nunca acessou o sistema… isso deveria já ter em alguma aba."* Tinha
+razão: a tela de Relatórios só sabia fazer o do CGE, e todo levantamento virava arquivo solto.
+
+- **`GER_RELATORIOS` é uma LISTA**: o próximo relatório entra com uma linha. O segundo entrou assim.
+- **Acesso ao sistema** — ⚠️ **os 5 que nunca acessaram são todos DISPENSADOS por portaria**, e os 2
+  parados há +30 dias também. **A coluna da portaria é o que faz o relatório prestar**: sem ela o
+  mesmo número vira lista de gente que ignora o sistema, e cobrança indevida é pior que relatório
+  nenhum. A conclusão **muda conforme o dado**.
+- **Parciais paradas no passo 2** — 397 parciais, 645 PCs, 34 analistas, 179 TRs, e as dez TRs com
+  mais concentração (a Geisa tinha 40 numa TR só).
+- ⚠️ **O timbre é o do sistema** (`docCabecalho` + `DOC_CSS`), o mesmo do CGE e do termo de repasse.
+
+---
+
+### 4. A DEVOLUTIVA DO C.I. PROVADA PELA TRAMITAÇÃO DO SGPe — a frente maior do dia
+
+**O caso da Clara:** parcial 1 da `2020TR000764`, baixada e com parecer, processo `SCC 12315/2020`
+que **entrou no FCEE/CONIN em 01/12/2025 e saiu em 02/12/2025**. O sistema pedia para mandar de novo
+ao C.I., só para eles registrarem o que fizeram dez meses antes. Do Richard: *"eles têm muita
+demanda, e mandar só para fazer esse trâmite é muito ruim"*.
+
+**Medido nos 1.347 processos envolvidos:**
+
+| | passo 2 | na fila do C.I. |
+|---|---|---|
+| passagem **provada** no SGPe | 292 | 270 |
+| ainda no CONIN agora | 54 | 667 |
+| nunca passou pelo C.I. | 47 | 41 |
+
+⚠️ **AS TRÊS CONDIÇÕES SÃO CUMULATIVAS** (`lib/ci-sgpe.js`): entrou no C.I., **saiu**, e **não está
+lá agora**. A terceira é a que protege o C.I. — e um processo que foi, voltou e foi de novo **não
+prova nada**. A passagem que vale é a mais recente COM saída.
+
+⚠️ **A PROVA É A TRAMITAÇÃO, E NÃO A PALAVRA DE NINGUÉM.** Não é declaração do analista: quem
+responde é o que o portal registrou, com data.
+
+⚠️ **E NÃO SE AFIRMA O TEOR.** Não grava `ci_opcao`, não grava técnico, não grava `parecer_ci`. O
+evento tem **nome próprio** — `ci_pelo_sgpe` — para que quem varra o histórico atrás de decisão do
+C.I. **não encontre isto no meio**. Na tela, "🏛 Devolutiva pelo SGPe".
+
+⚠️ **AS DATAS SÃO AS DO SGPe**, e não `NOW()`: o fato aconteceu naquele dia.
+
+**Quem pode:** o analista dono, o coordenador e o superadmin (decisão do Richard). Em parcela de
+dono misto o analista não registra sozinho.
+
+**O lote** (`/conferir` e `/lote`): ⚠️ **no servidor, e não na tela** — 40 conferências e 40 escritas
+em série é o que a armadilha 16 proíbe. Uma transação para o lote inteiro, a prova relida DENTRO
+dela, e **a recusa de uma não derruba as outras**. Provado na TR da Geisa: **das 40 paradas, 39
+liberam** (58 PCs); a que sobra nunca passou pelo C.I.
+
+---
+
+### 5. O QUE FOI COMUNICADO — e por que cada um
+
+| para quem | o quê |
+|---|---|
+| **55 pessoas** | a trava do C.I. e o botão "Consultar o SGPe agora" (novidade 6 · repositório 12) |
+| **55 pessoas** | o guia "O que fazer em cada situação" (novidade 7 · repositório 13, fixado) |
+| **33 analistas** | 1 recado PESSOAL com o número DELE de parciais paradas no passo 2 |
+| **40 analistas** | 1 recado PESSOAL com quantas parciais o SGPe já libera |
+| **3 do C.I.** | a mudança que mexe na fila deles — urgente, e **antes** de a fila cair |
+| **todos** | o card, na novidade 8 e nos grupos |
+
+⚠️ **O NÚMERO PESSOAL É O QUE FAZ A PESSOA ABRIR A TELA.** "Há parciais paradas no sistema" ninguém
+lê como sendo sobre si; "você tem 56, nestas TRs" é a mesma frase que move.
+
+⚠️ **O RICHARD FICOU DE FORA dos recados em massa** — as 51 parciais no nome dele são de suporte,
+uma por TR, e não trabalho de analista esperando encaminhamento.
+
+⚠️ **E O C.I. FOI AVISADO ANTES**: descobrir pela fila encolhendo sozinha seria a pior forma de ficar
+sabendo. O recado diz o que o sistema **não** faz, como eles enxergam cada registro, e que basta
+avisar para desfazer.
+
+**Os guias e o card** moram em `assets/orientacoes/` e `assets/novidades/`, servidos pelo Pages.
+⚠️ **As imagens ficam na MESMA pasta do guia**: com `../novidades/` a figura sumia dependendo de
+onde o arquivo fosse aberto — foi o Richard quem viu. E a checagem que prova carregamento é
+`naturalWidth`, não `complete`, que volta verdadeiro também para imagem quebrada.
+
+---
+
+### O que ficou aberto
+
+- [ ] **NADA DISTO FOI ABERTO NO NAVEGADOR** por uma pessoa: o modal da devolutiva pelo SGPe, o lote,
+      a aba Gerenciais, o modal do lápis com a escolha, e a faixa da trava do C.I.
+- [ ] **Medir o efeito dos recados.** `node medir_passo2.js` compara com `baseline_passo2.json`
+      (27/09: 346 no passo 2, 978 na fila, 168 prontas, 137 arquivadas). ⚠️ A medição por `/gestao`
+      exige o **papel técnico**: no papel analista a rota recusa ver os outros, e a varredura sai
+      incompleta sem dizer que está.
+- [ ] **A produtividade** continua RETIDA até a Nayara responder ao relatório de 27/09.
+- [ ] **O agendamento na nuvem falhou** três vezes (o comando é cortado antes de chegar ao servidor).
+      O medidor está pronto; falta só disparar.
+
+---
+
+## ▶ 27/09/2026 — O DIA ANTERIOR. (Este bloco dizia "nenhuma escrita no banco desde 03/09";
+deixou de valer na noite de 27/09, com a novidade, o recado para 55 e o item do repositório.)
 
 Três frentes: **a trava do C.I. no arquivamento** (23/09, e a segunda leva na noite de 27/09), **a
 produtividade** (regra validada, implantação **retida de propósito** até a coordenação ler o relatório)
