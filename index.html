@@ -10709,15 +10709,44 @@ async function fetchTodasPCs(sid) {
   return j.data || []
 }
 
-// Busca metas vigentes, somadas por analista_id
-async function fetchMetasVigentes() {
-  const metasParams = new URLSearchParams({ vigente: 'true' })
-  if(U.setorialFiltro) metasParams.set('setorial_id', U.setorialFiltro)
-  const r = await fetch(`${API_URL}/metas_analistas?${metasParams}`)
+// A RÉGUA DE PRODUTIVIDADE — a meta de cada integrante, calculada pelo SERVIDOR.
+//
+// ⚠️ ATÉ 30/09/2026 ESTA FUNÇÃO SOMAVA `metas_analistas` E A TELA DECIDIA O RESTO: ela
+// zerava a meta do dispensado por conta própria. A régua do documento de 18/09/2026, que a
+// coordenação confirmou, diz o contrário — a meta dele CONGELA na data de saída (itens B4 e
+// B8) e ele continua somando no grupo. Conta escrita na tela é conta que nenhum teste do
+// servidor alcança, e esta estava contradizendo a regra acordada em silêncio.
+//
+// ⚠️ A META NÃO É MAIS DIGITADA (item 2 do documento): ela sobe 10 por mês sozinha. Por
+// isso não há mais "vigente=true" — o que existe é a data até onde apurar, e o padrão do
+// servidor é o fim do mês corrente.
+//
+// ⚠️ `metas_analistas` CONTINUA NO BANCO, intacta, como registro do que valia antes.
+let _regua = null          // a régua inteira, para o botão "Fonte" — ver reguaFonteHtml
+// A RÉGUA COM RECORTE DE PERÍODO — só o relatório do CGE precisa dela.
+//
+// ⚠️ ELE MOSTRA AS DUAS LEITURAS, e a coordenação pediu assim (itens C1, D1 e E1 da
+// resposta de 17/09/2026): "os relatórios puxam acumulada e por período, com foco sempre nos
+// 3 últimos meses, pois o relatório é trimestral". O servidor devolve as duas na mesma
+// resposta — pedir duas vezes traria metas de instantes diferentes.
+async function fetchReguaPeriodo(de, ate) {
+  const p = new URLSearchParams()
+  if(de) p.set('de', String(de).slice(0,10))
+  if(ate) p.set('ate', String(ate).slice(0,10))
+  const r = await fetch(`${API_URL}/produtividade/regua?${p}`)
   const j = await r.json()
   if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  _regua = j.data || null
+  return (j.data && j.data.metas) || {}
+}
+
+async function fetchMetasVigentes() {
+  const r = await fetch(`${API_URL}/produtividade/regua`)
+  const j = await r.json()
+  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+  _regua = j.data || null
   const mapa = {}
-  ;(j.data||[]).forEach(m => { if(m.analista_id) mapa[m.analista_id] = (mapa[m.analista_id]||0) + (parseInt(m.meta)||0) })
+  Object.values((j.data && j.data.metas) || {}).forEach(m => { mapa[m.analista_id] = m.meta })
   return mapa
 }
 
@@ -10753,6 +10782,10 @@ async function irProd() {
             <option value="3">Grupo 3 — Gustavo</option>
           </select>
         </div>` : ''}
+        <!-- ⚠️ O CAMINHO PARA A EXPLICAÇÃO FICA NA PRÓPRIA TELA DO NÚMERO, e não num manual à
+             parte: quem estranha o próprio percentual está olhando para ele neste instante. -->
+        <button onclick="irProdAjuda()" class="btn-buscar" style="height:30px;font-size:11px;"
+          title="A conta, a régua da meta e por que os números mudaram">❓ Como é calculada</button>
         <div style="display:flex;border:1.5px solid var(--cb);border-radius:6px;overflow:hidden;">
           <button id="prodTabCards" onclick="prodAba('cards')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:var(--v);color:#fff;border:none;cursor:pointer;">🃏 Cards</button>
           <button id="prodTabTabela" onclick="prodAba('tabela')" style="padding:5px 12px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;background:#fff;color:var(--ct);border:none;cursor:pointer;">📊 Tabela</button>
@@ -10775,6 +10808,188 @@ function prodAba(aba) {
   document.getElementById('prodTabTabela').style.background = aba==='tabela' ? 'var(--v)' : '#fff'
   document.getElementById('prodTabTabela').style.color = aba==='tabela' ? '#fff' : 'var(--ct)'
   prodRender(_prodDados)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  COMO A SUA PRODUTIVIDADE É CALCULADA — a tela que o analista lê antes de perguntar
+//
+//  ⚠️ ELA EXISTE PORQUE O NÚMERO DE TODO MUNDO MUDOU NO MESMO DIA. A régua nova compara
+//  cada pessoa com o próprio tempo de grupo, e o efeito visível é o percentual cair — sem
+//  que ninguém tenha produzido menos. Sem esta tela, cada analista descobre isso pelo susto
+//  e a explicação chega por mensagem, uma pessoa de cada vez, sempre diferente.
+//
+//  ⚠️ NÃO HÁ NÚMERO DE ACERVO AQUI, e é decisão do Richard: nada de "quantas PCs saíram da
+//  conta" nem nome de campo. Quem lê quer saber o que fazer e por que mudou — dado interno
+//  no meio disso vira ruído e gera a pergunta que a tela deveria evitar.
+//
+//  ⚠️ O ESTILO MORA NUM BLOCO PRÓPRIO COM PREFIXO `#ajpApp`, nunca no CSS global: as regras
+//  daqui falam de `.col`, `.passo`, `.aviso` — nomes curtos que atropelariam dezenas de
+//  telas se vazassem. É a mesma precaução da aba Gestão.
+// ══════════════════════════════════════════════════════════════════════════════
+function irProdAjuda() {
+  ativarMenu('prod')
+  document.getElementById('BODY').innerHTML = `
+    <style>
+      #ajpApp .cartao{background:#FCFDFC;border-radius:12px;padding:18px 20px;box-shadow:var(--sombra);margin-bottom:14px;}
+      #ajpApp h2{font-size:14px;font-weight:800;color:var(--v);letter-spacing:.3px;}
+      #ajpApp p{line-height:1.55;}
+      #ajpApp .sub{font-size:12px;color:var(--ct);}
+      #ajpApp .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+        border-radius:50%;background:var(--v);color:#fff;font-size:12px;font-weight:800;margin-right:8px;flex:0 0 auto;}
+      #ajpApp .tit{display:flex;align-items:center;margin-bottom:12px;}
+      #ajpApp .formula{background:var(--vbg);border:1.5px solid #B9DEC9;border-radius:12px;padding:16px 18px;text-align:center;margin:4px 0 16px;}
+      #ajpApp .formula .big{font-size:17px;font-weight:800;line-height:1.5;}
+      #ajpApp .formula b{color:var(--vdk);}
+      #ajpApp .fluxo{display:flex;align-items:stretch;flex-wrap:wrap;margin:6px 0 4px;}
+      #ajpApp .passo{flex:1 1 150px;background:#fff;border:1.5px solid var(--cb);border-radius:10px;padding:12px 10px;text-align:center;}
+      #ajpApp .passo.alvo{border-color:var(--v);background:var(--vbg);box-shadow:0 0 0 3px rgba(0,107,60,.08);}
+      #ajpApp .passo .ico{font-size:20px;display:block;margin-bottom:4px;}
+      #ajpApp .passo .nm{font-size:12px;font-weight:800;display:block;}
+      #ajpApp .passo .de{font-size:11px;color:var(--ct);margin-top:2px;display:block;}
+      #ajpApp .seta{display:flex;align-items:center;color:var(--cb);font-size:18px;padding:0 6px;font-weight:800;}
+      #ajpApp .tres{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px;}
+      #ajpApp .col{border-radius:10px;padding:12px 14px;border:1.5px solid;}
+      #ajpApp .col.sim{background:var(--vbg);border-color:#B9DEC9;}
+      #ajpApp .col.nao{background:#FDEEF0;border-color:#F0C9CF;}
+      #ajpApp .col.esp{background:var(--ambg);border-color:#F3DFA8;}
+      #ajpApp .col h3{font-size:12px;font-weight:800;margin-bottom:6px;}
+      #ajpApp .col.sim h3{color:var(--vdk);} #ajpApp .col.nao h3{color:var(--r);} #ajpApp .col.esp h3{color:#8A5A00;}
+      #ajpApp .col ul{list-style:none;}
+      #ajpApp .col li{font-size:12px;padding:3px 0 3px 16px;position:relative;line-height:1.4;}
+      #ajpApp .col li:before{position:absolute;left:0;top:3px;font-weight:800;}
+      #ajpApp .col.sim li:before{content:'✓';color:var(--v);}
+      #ajpApp .col.nao li:before{content:'✕';color:var(--r);}
+      #ajpApp .col.esp li:before{content:'•';color:#B98900;}
+      #ajpApp .aviso{border-left:4px solid var(--az);background:var(--azbg);border-radius:0 10px 10px 0;padding:12px 16px;margin:12px 0;}
+      #ajpApp .aviso.verde{border-left-color:var(--v);background:var(--vbg);}
+      #ajpApp .aviso.ambar{border-left-color:var(--am);background:var(--ambg);}
+      #ajpApp .ad{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px;}
+      #ajpApp .ad .box{border-radius:10px;padding:14px;border:1.5px solid var(--cb);background:#fff;}
+      #ajpApp .ad .box.novo{border-color:var(--v);background:var(--vbg);}
+      #ajpApp .ad .rot{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ct);margin-bottom:6px;}
+      #ajpApp .ad .box.novo .rot{color:var(--vdk);}
+      #ajpApp .tl{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;}
+      #ajpApp .tl .m{flex:1 1 90px;border-radius:8px;padding:10px 8px;text-align:center;border:1.5px solid var(--cb);background:#fff;}
+      #ajpApp .tl .m .q{font-size:17px;font-weight:800;display:block;}
+      #ajpApp .tl .m .l{font-size:10px;color:var(--ct);line-height:1.3;margin-top:2px;display:block;}
+      #ajpApp .tl .m.zero{background:#F2F5F3;border-style:dashed;}
+      #ajpApp .tl .m.zero .q{color:var(--ct);}
+      #ajpApp .tl .m.hoje{border-color:var(--v);background:var(--vbg);}
+      #ajpApp .tl .m.hoje .q{color:var(--vdk);}
+      #ajpApp .motivos{list-style:none;margin-top:8px;}
+      #ajpApp .motivos li{padding:9px 0 9px 28px;position:relative;border-bottom:1px solid #EAF0EC;line-height:1.5;font-size:13px;}
+      #ajpApp .motivos li:last-child{border-bottom:none;}
+      #ajpApp .motivos li:before{content:'⚙';position:absolute;left:0;top:9px;color:var(--v);font-size:14px;}
+      #ajpApp .pill{display:inline-block;background:#fff;border:1.5px solid var(--cb);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;color:var(--ct);}
+    </style>
+    <div id="ajpApp" style="max-width:980px;margin:0 auto;">
+
+      <div class="cartao" style="border-top:4px solid var(--v);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:18px;font-weight:800;">Como a sua produtividade é calculada</div>
+          <div class="sub" style="margin-top:4px;">De onde vem o número que aparece na sua tela — e por que ele mudou.</div>
+        </div>
+        <button onclick="irProd()" class="btn-buscar" style="height:32px;">‹ Voltar à Produtividade</button>
+      </div>
+
+      <div class="cartao">
+        <div class="tit"><span class="num">1</span><h2>A CONTA, EM UMA LINHA</h2></div>
+        <div class="formula"><div class="big">as prestações que você <b>baixou com parecer registrado</b><br>
+          ÷ <b>a sua meta do período</b> = <b>o seu percentual</b></div></div>
+        <div class="fluxo">
+          <div class="passo"><span class="ico">📁</span><span class="nm">Recebe a TR</span><span class="de">assume no estoque</span></div>
+          <div class="seta">›</div>
+          <div class="passo"><span class="ico">🔍</span><span class="nm">Analisa a prestação</span><span class="de">confere e instrui</span></div>
+          <div class="seta">›</div>
+          <div class="passo alvo"><span class="ico">✍️</span><span class="nm">Registra o parecer</span><span class="de">é aqui que conta</span></div>
+          <div class="seta">›</div>
+          <div class="passo"><span class="ico">📈</span><span class="nm">Entra na sua produtividade</span><span class="de">na hora</span></div>
+        </div>
+        <div class="aviso verde" style="margin-top:14px;">
+          <b>A produtividade conta no parecer, não no encaminhamento.</b> Encaminhar ao Controle Interno é um
+          passo do caminho — o trabalho que a conta reconhece é a prestação analisada e baixada com o seu parecer.
+        </div>
+        <div class="tres">
+          <div class="col sim"><h3>✓ CONTA</h3><ul>
+            <li>prestação baixada <b>com parecer registrado</b></li>
+            <li>conta no mês em que o parecer foi dado</li></ul></div>
+          <div class="col nao"><h3>✕ NÃO CONTA</h3><ul>
+            <li>encaminhar ao Controle Interno</li>
+            <li>arquivar a parcial depois da devolutiva</li>
+            <li>retrabalhar uma prestação já contada</li></ul></div>
+          <div class="col esp"><h3>• AINDA NÃO CONTA</h3><ul>
+            <li>prestação em análise, diligência ou reanálise</li>
+            <li>prestação baixada <b>sem o parecer registrado</b></li></ul></div>
+        </div>
+        <div class="aviso" style="margin-bottom:0;">
+          <b>Tem prestação baixada sem parecer?</b> Registre o parecer e ela entra na sua produtividade na hora —
+          não é preciso pedir nada a ninguém.
+        </div>
+      </div>
+
+      <div class="cartao">
+        <div class="tit"><span class="num">2</span><h2>POR QUE O SEU NÚMERO MUDOU</h2></div>
+        <p>O que você produziu continua exatamente o mesmo. O que mudou foi <b>com o que ele é comparado</b>.</p>
+        <div class="ad">
+          <div class="box"><div class="rot">Como era</div>
+            <p style="font-size:13px;">Uma <b>meta fixa, igual para quase todo mundo</b>, pensada para cerca de meio
+            ano — e comparada com <b>todo o trabalho feito desde o começo do grupo</b>. Quem entrou depois recebia a
+            mesma cobrança de quem estava desde o início.</p></div>
+          <div class="box novo"><div class="rot">Como é agora</div>
+            <p style="font-size:13px;">A meta <b>acompanha o calendário</b>: cresce a cada mês que passa e é
+            <b>proporcional aos dias</b> de quem entrou ou saiu no meio do caminho. Cada pessoa é comparada com o
+            <b>seu próprio tempo</b> de grupo.</p></div>
+        </div>
+        <div class="tl">
+          <div class="m"><span class="q">12</span><span class="l">por mês<br>ago a dez/2025</span></div>
+          <div class="m zero"><span class="q">0</span><span class="l">janeiro/2026<br>férias</span></div>
+          <div class="m"><span class="q">10</span><span class="l">por mês<br>de fev/2026 em diante</span></div>
+          <div class="m hoje"><span class="q">+10</span><span class="l">a cada mês novo,<br>automaticamente</span></div>
+        </div>
+        <div class="aviso ambar">
+          <b>Se o seu percentual caiu, não é porque você produziu menos.</b> A meta antiga cobria metade do tempo e
+          estava sendo comparada com o período inteiro. Agora os dois lados da conta falam do mesmo período — e é por
+          isso que o número ficou mais baixo e, ao mesmo tempo, mais verdadeiro.
+        </div>
+        <p class="sub">Esta régua foi definida pela coordenação do GT e vale igual para as três telas: a sua
+        Produtividade, o painel da coordenação e o relatório oficial.</p>
+      </div>
+
+      <div class="cartao">
+        <div class="tit"><span class="num">3</span><h2>POR QUE ISTO DEMOROU A FICAR PRONTO</h2></div>
+        <p>Porque uma régua única, igual para todos, sairia em um dia — e seria injusta com metade do grupo. Foi
+        preciso mapear, uma a uma, as situações que existem de verdade:</p>
+        <ul class="motivos">
+          <li><b>Cada pessoa tem uma linha do tempo diferente.</b> Há quem esteja desde o primeiro dia, quem tenha
+              entrado no meio do ano e quem já tenha saído — e cada entrada e cada saída tem a data da sua portaria.</li>
+          <li><b>Nem todo mês vale o mesmo.</b> Os primeiros meses do grupo tinham uma meta; os seguintes, outra. E
+              janeiro não cobra nada, por causa das férias.</li>
+          <li><b>Quem entrou no meio do mês não deve o mês inteiro.</b> A conta passou a ser por dias, e não por mês
+              fechado.</li>
+          <li><b>Quem saiu do grupo não desaparece.</b> A meta dele para no dia da portaria, e o trabalho que ele fez
+              continua contando para o grupo — tirar isso faria o resultado da equipe cair sem que ninguém tivesse
+              deixado de trabalhar.</li>
+          <li><b>Nem toda data registrada é a data do trabalho.</b> Parte do acervo veio de uma carga de sistema, e
+              essas datas não dizem quando a análise foi feita. Elas entram no total acumulado, mas não distorcem o
+              resultado de um trimestre.</li>
+        </ul>
+        <div class="aviso verde" style="margin-bottom:0;">
+          <b>O tempo foi gasto para que ninguém fosse medido por uma régua que não é a sua.</b> Preferimos entregar
+          depois a entregar um número que cobra de você um período em que você não estava.
+        </div>
+      </div>
+
+      <div class="cartao">
+        <div class="tit"><span class="num">4</span><h2>VOCÊ PODE CONFERIR QUALQUER NÚMERO</h2></div>
+        <p>Em cada painel há o botão <span class="pill">Fonte</span>, que abre ali mesmo de onde o número vem, o que
+        ele conta e <b>o que ele não conta</b>. Se algum resultado te surpreender, comece por ele — e, se ainda assim
+        não fechar, fale com a sua coordenação.</p>
+      </div>
+
+      <div style="text-align:center;padding:4px 0 20px;">
+        <button onclick="irProd()" class="btn-buscar" style="height:34px;">‹ Voltar à Produtividade</button>
+      </div>
+    </div>`
 }
 
 async function prodCarregar() {
@@ -10841,7 +11056,9 @@ async function prodCarregar() {
       // ⚠️ São 45 e não 46: a meta da Caroline (id 30) tem `analista_id` NULO e o `mapa` de
       // `fetchMetasVigentes` a descarta, então ela nunca entrou em soma nenhuma.
       // `metas_analistas` NÃO é alterada — a linha continua lá.
-      const meta = contaMeta(u) ? (metaPorId[analistaId] || 0) : 0
+      // ⚠️ A META JÁ VEM DECIDIDA DA RÉGUA. O dispensado tem meta CONGELADA na data da
+      // portaria (itens B4 e B8) — e não zero, como esta tela fazia até 30/09/2026.
+      const meta = metaPorId[analistaId] || 0
       // ⚠️ O PERCENTUAL SAI DA CONTA CONCILIADA, não de `baixadas`. É a regra de 27/08: a PC
       // pendente de conferência com o SIGEF não entra enquanto o analista não declarar.
       const pct = meta>0 ? Math.round(stats.conta/meta*100) : null
@@ -11395,7 +11612,8 @@ const BOARD_FONTES = [
     denominador:'as PCs com dono — de analista cadastrado na setorial que entra na produtividade (coordenador e C.I. ficam fora).',
     extra:'As PCs sem dono ficam fora da conta da equipe e aparecem no card cinza.' },
   { id:'boardFonteGrupos', itens:[
-      'Total: as PCs com dono, pelo grupo do analista no cadastro.',
+      'PCs recebidas: as PCs com dono, pelo grupo do analista no cadastro. NÃO é meta e não mede produção.',
+      'Meta: a soma das metas do grupo, calculada pela régua de produtividade (18/09/2026) — o mesmo número da tela Produtividade.',
       '✓: as que contam produtividade.',
       '⚠: as que estão em diligência.',
       'Percentual: ✓ ÷ Total.' ],
@@ -11459,7 +11677,12 @@ async function boardCarregar() {
   const fonteAberta = Object.fromEntries(BOARD_FONTES.map(f => [f.id, document.getElementById(f.id + 'Btn')?.dataset.aberto === '1']))
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Carregando dados...</div>'
   try {
-    const data = await fetchTodasPCs(sid)
+    // ⚠️ A META VEM JUNTO, e do mesmo instante: `fetchMetasVigentes` hoje lê a régua do
+    // servidor (`/produtividade/regua`), que devolve a soma por grupo pronta. O Board NÃO
+    // soma meta — ele mostra a que recebeu, e é por isso que o número bate com a tela
+    // Produtividade sem ninguém conferir à mão.
+    const [data] = await Promise.all([fetchTodasPCs(sid), fetchMetasVigentes()])
+    const metaGrupo = (_regua && _regua.meta_por_grupo) || {}
 
     // ⚠️ A REGRA C, A MESMA DA TELA PRODUTIVIDADE (14/09/2026). Até aqui os três blocos contavam
     // `status === 'baixada'`, e o Board mostrava 4.582 concluídas onde a Produtividade mostrava
@@ -11574,14 +11797,25 @@ async function boardCarregar() {
           return `<div style="background:#FCFDFC;border-radius:10px;padding:14px;box-shadow:var(--sombra);">
             <div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--te);">${gr.nome}</div>
             <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
-              <span>Total: <strong>${gr.total}</strong></span>
+              <span>PCs recebidas: <strong>${gr.total}</strong></span>
               <span style="color:var(--v);">✓ ${gr.conta}</span>
               <span style="color:var(--am);">⚠ ${gr.dilig}</span>
             </div>
             <div style="background:#E8EEEB;border-radius:8px;height:10px;overflow:hidden;margin-bottom:4px;">
               <div style="height:10px;border-radius:8px;background:${gcor};width:${gpct}%;"></div>
             </div>
-            <div style="text-align:right;font-size:11px;font-weight:800;color:${gcor};">${gpct}%</div>
+            <div style="text-align:right;font-size:11px;font-weight:800;color:${gcor};">${gpct}% do recebido</div>
+            <!-- A META, EM LINHA PRÓPRIA (documento de 18/09/2026, item 5). Ela e o percentual
+                 acima respondem perguntas diferentes: um diz quanto do acervo recebido já foi
+                 concluído, o outro diz quanto da meta do período foi cumprido. Enquanto o
+                 primeiro se chamava "Total", os dois pareciam a mesma coisa. -->
+            ${metaGrupo[g] ? `<div style="border-top:1px solid #E8EEEB;margin-top:8px;padding-top:6px;
+                 display:flex;justify-content:space-between;font-size:11px;">
+              <span style="color:var(--ct);">Meta do período</span>
+              <span><strong>${gr.conta}</strong> / ${metaGrupo[g]}
+                <strong style="color:${gr.conta*100/metaGrupo[g]>=70?'var(--v)':gr.conta*100/metaGrupo[g]>=40?'var(--am)':'var(--r)'};">
+                  ${Math.round(gr.conta*100/metaGrupo[g])}%</strong></span>
+            </div>` : ''}
           </div>`
         }).join('')}
       </div>
@@ -12598,10 +12832,30 @@ let _cgeParams = {}
 // Usada por cgeGerar() (que monta os quadros) e por cgeCarregarNumeros()
 // (que só precisa dos totais para a tela de textos). Não faz rede: recebe
 // os dados já buscados. Alterar uma regra aqui vale para os dois caminhos.
-function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
+// AS ORIGENS DE BAIXA CUJA DATA É A DA CARGA, E NÃO A DO TRABALHO — item D2 da resposta de
+// 17/09/2026, confirmado com a observação "essas podem ser puxadas no acumulado".
+//
+// ⚠️ A MESMA LISTA MORA EM `sigpc-api/lib/meta.js` (ORIGENS_SEM_DATA_CONFIAVEL). Aqui ela
+// existe porque o relatório é montado NA TELA, com as PCs já carregadas — e não porque a
+// regra foi copiada: o servidor manda a sua na resposta da régua, em `regra.sem_data_confiavel`,
+// e é de lá que sai o texto da nota de rodapé.
+//
+// ⚠️ SÃO 3.560 PCs COM `data_baixa` EM JUNHO DE 2026, todas da recarga de 05/08. Um
+// trimestre que inclua aquele mês leva as 3.560 de uma vez; um que não inclua perde todas. No
+// acumulado, onde a data não decide nada, elas aparecem — que é onde o trabalho delas está.
+const CGE_ORIGENS_SEM_DATA = ['carga_historica', 'recarga_parcial_20260805']
+const cgeDataConfiavel = (p) => !CGE_ORIGENS_SEM_DATA.includes(p && p.origem_baixa)
+
+function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
   const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
   const dtFim = new Date(dtCorte)
-  const noPeriodo = (p) => p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+  // ⚠️ O PERÍODO EXIGE DATA CONFIÁVEL. Até 30/09/2026 a baixa com data de carga entrava no
+  // trimestre e o relatório dizia, em nota, quantas eram — avisar que o número está torto não
+  // é o mesmo que não entortá-lo.
+  const noPeriodo = (p) => p.data_baixa && cgeDataConfiavel(p)
+    && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
+  // O ACUMULADO não olha o começo nem a origem: ele responde "o que foi feito até aqui".
+  const noAcumulado = (p) => p.baixada === true && p.data_baixa && new Date(p.data_baixa) <= dtFim
 
   const analistaIdsComPC = new Set(todosPcs.filter(p=>p.analista_id).map(p=>String(p.analista_id)))
   const usuariosPorId = {}
@@ -12630,7 +12884,7 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
     if(contaQ1 && !ehRegular && !ehIrregular) totSemParecer++
 
     if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-    if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, acum:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
     const m = mapaAn[p.analista_id]
     if(p.status==='analise') m.analise++
     else if(p.status==='diligencia') m.dilig++
@@ -12644,22 +12898,40 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
       if(p.origem_baixa === 'secretario') m.bxSecretario++
       else m.bxTecnico++
     }
+    // ⚠️ O ACUMULADO É CONTADO NA MESMA PASSADA, e não numa varredura à parte: 16 mil linhas
+    // percorridas duas vezes para responder a mesma pergunta em duas janelas de tempo.
+    if(noAcumulado(p)) m.acum++
   })
 
   // Coordenadores não aparecem; analista inativo só aparece se teve baixa no período
   const linhas = Object.keys(usuariosPorId).map(id => {
     const u = usuariosPorId[id]
-    const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, acum:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
     const totalBaixadas = m.bxSecretario + m.bxTecnico
     if(!u.ativo && totalBaixadas === 0) return null
     const grupo = u.grupo ? parseInt(u.grupo) : null
-    const meta = metaPorId[id] || 0
+    // ⚠️ DUAS METAS, E CADA QUADRO USA A SUA. A do trimestre é a que o Quadro 2 compara; a
+    // acumulada aparece no Quadro 1. Usar a acumulada contra a produção de três meses daria um
+    // percentual sem significado — treze meses de meta contra um trimestre de trabalho.
+    const r = regua[id] || {}
+    const metaAcum = r.meta || 0
+    const meta = r.meta_periodo != null ? r.meta_periodo : metaAcum
     const pctMeta = meta>0 ? Math.round(totalBaixadas/meta*100) : null
-    return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, totalBaixadas, pctMeta, ...m }
+    const acumBaixadas = m.acum || 0
+    const pctAcum = metaAcum>0 ? Math.round(acumBaixadas/metaAcum*100) : null
+    return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, metaAcum, totalBaixadas,
+             acumBaixadas, pctMeta, pctAcum, ...m }
   }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
 
-  const cargaHistoricaNoPeriodo = todosPcs.filter(p => p.baixada && noPeriodo(p) && p.origem_baixa==='carga_historica').length
+  // Quantas baixas ficaram FORA do trimestre por terem data de carga — o número que a nota de
+  // rodapé passa a explicar. ⚠️ Ele é contado dentro da janela de datas: baixa de carga com
+  // data fora do período não foi "excluída do trimestre", ela nunca esteve nele.
+  const semDataNoPeriodo = todosPcs.filter(p => p.baixada && !cgeDataConfiavel(p)
+    && p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim).length
+  const cargaHistoricaNoPeriodo = semDataNoPeriodo
   const metaTotal = linhas.reduce((s,d)=>s+d.meta,0)
+  const metaTotalAcum = linhas.reduce((s,d)=>s+d.metaAcum,0)
+  const totAcum = linhas.reduce((s,d)=>s+d.acumBaixadas,0)
   const totBx    = linhas.reduce((s,d)=>s+d.totalBaixadas,0)
   const totBxSec = linhas.reduce((s,d)=>s+d.bxSecretario,0)
   const totBxTec = linhas.reduce((s,d)=>s+d.bxTecnico,0)
@@ -12672,7 +12944,8 @@ function cgeAgregar(todosPcs, metaPorId, usuariosLista, dtInicio, dtCorte) {
 
   return {
     linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-    metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
+    metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo,
+    totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
     estoqueRemanescente, estoqueBase, estoque: estoqueBase, cargaHistoricaNoPeriodo
   }
 }
@@ -12691,24 +12964,30 @@ async function cgeGerar() {
 
   cont.innerHTML = '<div class="loading"><div class="spin"></div>Gerando relatório CGE...</div>'
   try {
-    const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
-      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs(), carregarSubstituicoes()
+    // ⚠️ A RÉGUA VEM COM O RECORTE DO RELATÓRIO, e não a do mês corrente: é ela que traz a
+    // meta do trimestre ao lado da acumulada (itens C1, D1 e E1 da resposta de 17/09/2026).
+    const [todosPcs, regua, usersRes, totalGeralPCs] = await Promise.all([
+      fetchTodasPCs(sid), fetchReguaPeriodo(dtInicio, dtCorte), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs(), carregarSubstituicoes()
     ])
     if(!todosPcs.length) { cont.innerHTML='<p style="color:var(--ct);padding:20px;">Nenhum dado encontrado para esta setorial.</p>'; return }
 
-    const A = cgeAgregar(todosPcs, metaPorId, usersRes.data||[], dtInicio, dtCorte)
+    const A = cgeAgregar(todosPcs, regua, usersRes.data||[], dtInicio, dtCorte)
     _cgeDados = A.linhas
     const {
       totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-      metaTotal, totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
+      metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo,
+      totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
       estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
     } = A
 
     const totPctMeta = metaTotal>0 ? (totBx/metaTotal*100).toFixed(1) : '—'
+    // A leitura acumulada: desde 01/08/2025, que é o começo do GT (item B2 da resposta).
+    const totPctAcum = metaTotalAcum>0 ? (totAcum/metaTotalAcum*100).toFixed(1) : '—'
+    const periodoFimTxt = new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -12781,22 +13060,33 @@ async function cgeGerar() {
         <!-- Quadro 1 -->
         <div style="margin-top:18px;">
           <div style="font-weight:700;font-size:11px;margin-bottom:4px;">1. QUADRO GERAL DE METAS</div>
+          <!-- AS DUAS LEITURAS (itens C1, D1 e E1 da resposta de 17/09/2026): o trimestre, que é
+               o foco do relatório, e o acumulado desde 01/08/2025, que é o começo do GT. -->
           <table><thead><tr>
-            <th>Período</th><th>Meta do Período</th>
+            <th>Leitura</th><th>Período</th><th>Meta</th>
             <th>PCs Baixadas</th>
             <th>Execução (%)</th>
             <th>Estoque base</th>
             <th>Remanescente</th>
           </tr></thead><tbody><tr>
+            <td style="font-weight:700;text-align:left;">Período do relatório</td>
             <td style="font-weight:700;text-align:left;">${periodoTxt}</td>
             <td style="text-align:right;font-weight:700;">${metaTotal||'—'}</td>
             <td style="text-align:right;font-weight:800;">${totBx}</td>
             <td style="text-align:right;font-weight:800;">${totPctMeta}%</td>
             <td style="text-align:right;font-weight:700;">${estoqueBase.toLocaleString('pt-BR')}</td>
             <td style="text-align:right;">${estoqueRemanescente.toLocaleString('pt-BR')}</td>
+          </tr><tr>
+            <td style="font-weight:700;text-align:left;">Acumulado do GT</td>
+            <td style="font-weight:700;text-align:left;">01/08/2025 a ${periodoFimTxt}</td>
+            <td style="text-align:right;font-weight:700;">${metaTotalAcum||'—'}</td>
+            <td style="text-align:right;font-weight:800;">${totAcum}</td>
+            <td style="text-align:right;font-weight:800;">${totPctAcum}%</td>
+            <td style="text-align:right;color:var(--ct);">—</td>
+            <td style="text-align:right;color:var(--ct);">—</td>
           </tr></tbody></table>
           <div style="font-size:9px;font-style:italic;margin-top:4px;">
-            Nota: das ${totBx} PCs baixadas no período, ${cargaHistoricaNoPeriodo} vieram da carga histórica de migração (origem_baixa = carga_historica). Gerado em ${dt} via SIGPC-GT v2.1.
+            ${semDataNoPeriodo ? `Nota: ${semDataNoPeriodo} baixas com data de carga (e não data do trabalho) ficam fora do período e aparecem apenas no acumulado, conforme o item D2 da regra de produtividade. ` : ''}Gerado em ${dt} via SIGPC-GT v2.1.
           </div>
         </div>
 
@@ -23210,11 +23500,11 @@ async function cgeCarregarNumeros(forcar) {
     const meses = Math.max(1, Math.round((new Date(dtCorte) - new Date(dtInicio)) / (1000*60*60*24*30.44)))
 
     // Mesmas buscas do cgeGerar, para a agregação receber exatamente os mesmos dados
-    const [todosPcs, metaPorId, usersRes, totalGeralPCs] = await Promise.all([
-      fetchTodasPCs(sid), fetchMetasVigentes(), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs()
+    const [todosPcs, regua, usersRes, totalGeralPCs] = await Promise.all([
+      fetchTodasPCs(sid), fetchReguaPeriodo(dtInicio, dtCorte), db.from('usuarios').select('*').eq('setorial_id', sid), fetchTotalPCs()
     ])
 
-    const A = cgeAgregar(todosPcs, metaPorId, usersRes.data||[], dtInicio, dtCorte)
+    const A = cgeAgregar(todosPcs, regua, usersRes.data||[], dtInicio, dtCorte)
     const numTec = A.linhas.length
     const metaMes = (meses > 0 && numTec > 0) ? Math.round(A.metaTotal/numTec/meses) : 0
 
@@ -24697,20 +24987,13 @@ function tagPessoa(u, opts) {
   return out.join(' ')
 }
 
-/**
- * Este usuário entra nas contas de META?
- *
- * ⚠️ O DISPENSADO NÃO ENTRA — nem recebe meta, nem soma na do grupo. Medido em 28/08: das 46
- * metas vigentes, **45 chegam a esta tela** (as que têm `analista_id`), somando **5.041**;
- * tirando as 7 dos dispensados (643), ficam **38 somando 4.398**. A 46ª é órfã — a meta da
- * Caroline, sem `analista_id` — e nunca contou. Ele continua nas listas, continua com os
- * números dele e continua com a linha em `metas_analistas`: o que ele não faz é entrar na conta.
- *
- * ⚠️ NÃO CONFUNDIR com `contaProdutividade(u)`, que decide quem APARECE no relatório
- * (coordenador e C.I. não aparecem). Este decide quem tem META. São perguntas diferentes, e
- * o dispensado responde "sim" à primeira e "não" à segunda.
- */
-function contaMeta(u) { return !ehDispensado(u) }
+// ⚠️ A `contaMeta` SAIU EM 30/09/2026. Ela respondia "este usuário tem meta?" devolvendo
+// NÃO para o dispensado — e a régua confirmada pela coordenação responde SIM, com a meta
+// congelada na data da portaria (itens B4 e B8 do documento de 18/09). Quem responde isso
+// agora é o servidor, em `lib/meta.js`, e a tela só soma o que recebe.
+//
+// ⚠️ NÃO CONFUNDIR com `contaProdutividade(u)`, que continua aqui e decide outra coisa:
+// quem APARECE no relatório (coordenador e Controle Interno não aparecem).
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  CONFERÊNCIA COM O SIGEF — as tags, e a declaração do analista (27/08/2026)

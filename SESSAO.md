@@ -1,10 +1,121 @@
-# SIGPC-GT — ESTADO EM 28/09/2026
+# SIGPC-GT — ESTADO EM 05/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de 28/09, logo abaixo; o de 27/09 vem em seguida e ainda
-> vale para a trava do C.I. e para a produtividade retida.
+> **não como estado**. O estado é o bloco de 05/10, logo abaixo.
+
+---
+
+## ▶ 05/10/2026 — A RÉGUA DE PRODUTIVIDADE ENTROU NO SISTEMA
+
+**Pronta e testada, NADA PUBLICADO.** Nenhuma escrita no banco nesta sessão.
+
+> ⚠️ **ANTES DE QUALQUER COISA SOBRE PRODUTIVIDADE, LER `REGRA_PRODUTIVIDADE.md`** — as respostas
+> da coordenação, item por item. **O arquivo nasceu hoje porque a mesma pergunta foi feita três
+> vezes:** o questionário respondido vivia num `.docx` na pasta Downloads, fora do repositório, e
+> cada sessão nova reabria o que já estava decidido. Do Richard: *"pelo amor de deus sempre caímos
+> nisso, e já resolvemos anterior"*. **Se a resposta está lá, não é pergunta — é especificação.**
+
+### O que mudou
+
+| onde | o quê |
+|---|---|
+| `sigpc-api/lib/meta.js` | **a régua, cópia única** — 12/mês ago–dez/2025 · zero em jan/2026 · 10/mês depois · proporcional por dias base 30 · congelada na saída · os 4 informados |
+| `sigpc-api/lib/sigef.js` | a base passou de `baixada OU enviado_ci` para **`baixada AND parecer_tipo IS NOT NULL`**, na conta de hoje e na cumulativa |
+| `GET /produtividade/regua` | a meta por pessoa e por grupo, com `de`/`ate`, **e a origem de cada número** |
+| `sigpc-gt/index.html` | Produtividade, Board e relatório do CGE **lendo a régua** |
+
+### As cinco coisas que não podem ser desfeitas sem querer
+
+⚠️ **A `contaMeta` SAIU DA TELA.** Ela zerava a meta do dispensado — decisão de 28/08 — e isso
+**contradiz o item B8 em silêncio**: a meta dele congela na saída e ele continua somando no grupo.
+Era a armadilha 16 em ação, conta escrita na tela que nenhum teste do servidor alcançava.
+
+⚠️ **O NÚMERO DO ITEM B9 NÃO É ETERNO.** Eduardo 35, Jeisson 17, Carla 12, Fabiana 12 são o
+acumulado **até 30/09/2026**; de outubro em diante sobem 10 por mês como todos (item B4). **Sem
+isso a meta dos quatro congelaria enquanto os outros 45 subiriam**, e o percentual deles cresceria
+sozinho, mês após mês, sem ninguém produzir nada. `FIM_DA_META_INFORMADA` em `lib/meta.js`.
+
+⚠️ **AS BAIXAS COM DATA DE CARGA SÓ ENTRAM NO ACUMULADO** (item D2). São **3.560**, da
+`recarga_parcial_20260805`, todas com `data_baixa` em junho/2026. **A lista é por ORIGEM, nunca por
+data:** cortar "tudo de junho de 2026" levaria junto **24 baixas de trabalho real**. O questionário
+falava de `carga_historica`, que **não existe mais** no acervo — a recarga de 05/08 renomeou a
+origem e manteve a data.
+
+⚠️ **"DE FEVEREIRO EM DIANTE" NÃO TEM FIM.** A primeira versão de `metaDoMes` devolvia zero para
+ano > 2026, e em janeiro de 2027 a meta do GT inteiro pararia de crescer sem erro nenhum na tela.
+
+⚠️ **A TELA NÃO SOMA META.** O servidor manda `meta_por_grupo` pronto; o Board só mostra.
+
+
+### A tela que explica a conta ao analista
+
+**`irProdAjuda()`, botão "❓ Como é calculada" no topo da Produtividade.** Quatro blocos: a conta em
+uma linha, com o fluxo em que o passo do PARECER é o destacado · o que conta, o que não conta e o que
+ainda não conta · **por que o número mudou** (como era × como é agora, e a régua da meta mês a mês) ·
+**por que demorou**, pelas cinco variantes reais · e onde conferir, pelo botão "Fonte".
+
+⚠️ **NENHUM NÚMERO DE ACERVO E NENHUM NOME DE CAMPO ENTRAM NELA** — ordem do Richard. Quem lê quer
+saber o que fazer e por que mudou; dado interno no meio disso vira ruído e gera justamente a pergunta
+que a tela deveria evitar. **Há teste que falha se um número do acervo vazar para lá.**
+
+⚠️ **A frase que evita a pergunta mais comum:** *"a produtividade conta no parecer, não no
+encaminhamento"*. E a que responde a segunda: *"se o seu percentual caiu, não é porque você produziu
+menos — a meta antiga cobria metade do tempo e estava sendo comparada com o período inteiro"*.
+
+⚠️ **O estilo mora num bloco com prefixo `#ajpApp`**, nunca no CSS global: as regras dela falam de
+`.col`, `.passo` e `.aviso`, nomes curtos que atropelariam dezenas de telas se vazassem.
+
+### Os números, medidos em 05/10
+
+| | meta | produção | % |
+|---|---|---|---|
+| **GT** | 6.298 | 4.443 | **71%** |
+| G1 | 2.171 | 1.927 | 89% |
+| G2 | 2.021 | 1.446 | 72% |
+| G3 | 2.106 | 1.070 | 51% |
+
+**A mudança de regra custou 31 PCs** — 7 que contavam só por terem ido ao C.I. sem baixa (todas em
+diligência ou reanálise) e **24 baixadas sem parecer**, 17 delas da importação do SIGEF de 30/08.
+⚠️ **As 24 voltam a contar assim que o analista registrar o parecer** — vale um recado pessoal para
+os 12 analistas, como nas rodadas de setembro. **Quem derruba o percentual é a META**, não a regra.
+
+**Conferências que fecharam:** a régua reproduz **as 14 linhas da tabela do item 3 do documento**,
+uma a uma · a meta somada até 30/09 dá **5.918**, o mesmo número que foi para a coordenação em
+27/09 · o relatório do CGE rodado com os dados reais: trimestre jul–set/2026 **960 baixadas sobre
+meta 1.263 (76%)**, acumulado **4.592 sobre 5.918 (77,6%)**.
+
+**Testes:** `teste_meta.js` **81 · 0** (novo) · `teste_front_regua.js` **25 · 0** (novo) ·
+`teste_sigef.js` **179 · 0** · `teste_dispensa.js` **52 · 0**.
+As falhas que sobram são **anteriores** e foram conferidas contra a cópia de antes das mudanças:
+`sgpe_portal` 2 · `sgpe_situacao` 1 · `front_busca_global` 1 · `front_devolucao` 2 · `front_menu` 2
+(a guarda do `irRel` mede `U.perfil` e o código usa `perfilEfetivo`) · `front_prazo` 1 ·
+`front_vercomo` 2.
+
+⚠️ **DUAS JANELAS DE TESTE QUEBRARAM POR FATIA FIXA (armadilha 30), e as duas acusavam código que
+estava certo:** a do Quadro 2 em `teste_front_menu.js` tinha 900 caracteres e parou de alcançar a
+linha medida quando a `cgeAgregar` ganhou comentários; e no `teste_front_regua.js` a âncora de fim
+`'<!-- Graficos lado a lado -->'` estava **sem acento**, então a janela foi até o fim do arquivo e
+passou a medir a Gestão Grupo.
+
+### O que ficou aberto
+
+- [ ] **PUBLICAR.** `git commit`/`push` são do Richard. ⚠️ **O `sigpc-api` precisa subir ANTES** —
+      o `sigef_conta` novo vem do servidor, e a tela só muda junto com ele.
+- [ ] **NADA ABERTO NO NAVEGADOR:** o Board com "PCs recebidas" e a meta em linha própria, a tela
+      Produtividade com a meta nova, e o Quadro 1 do CGE com as duas leituras.
+- [ ] **Os 10 recados da Zadir** voltarem a não lidos — o Richard entrou com o login dela e o sino
+      marcou a caixa inteira como lida em 30/09 às 14:31:23. O comando está pronto, por lista
+      explícita de ids (535, 620, 1086, 1225, 1227, 1270, 1274, 1278, 1375, 1436), e o dry-run
+      passou. **Falta o "pode".**
+- [ ] **O modal de ciência de repasse diz "sob responsabilidade de —"** quando a origem é o
+      Estoque (`de: null`). Três repasses da Ana Claudia, de 23/09. O conserto é um ramo no texto.
+- [ ] **O cadastro `ZZ TESTE TRAVA`** (id 57, perfil Controle Interno) continua ativo. Nunca entrou
+      na apuração; o Richard decide se apaga ou inativa.
+- [ ] **39 de 48 analistas sem portaria e 46 sem data de ingresso** no cadastro — o termo de
+      repasse exige os dois. A régua **não** depende disso (ela lê as portarias de substituição).
+- [ ] **Medir o efeito dos recados de 28/09:** `node medir_passo2.js` contra `baseline_passo2.json`.
 
 ---
 

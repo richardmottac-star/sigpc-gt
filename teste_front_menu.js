@@ -411,7 +411,10 @@ function _conta(u){ return contaProdutividade(u) }`, ctxP);
   // ⚠️ O Quadro 2 do CGE resolve por outro caminho: lista de INCLUSAO. Se um dia virar
   // lista de exclusao, o C.I. entra no relatorio oficial sem ninguem perceber.
   const iCge = html.indexOf('function cgeAgregar(');
-  const blocoCge = html.slice(iCge, iCge + 900);
+  // ⚠️ A JANELA TERMINA NUM MARCO DO PROPRIO CODIGO, nunca num numero — armadilha 30. Com
+  // 900 caracteres fixos ela parou de alcancar a linha medida no dia em que a funcao ganhou os
+  // comentarios da regua (30/09/2026), e o teste reprovou uma regra que continua escrita.
+  const blocoCge = html.slice(iCge, html.indexOf('// Agrega por analista_id', iCge));
   conf(/if\(u\.perfil === 'analista'\) usuariosPorId\[u\.id\] = u/.test(blocoCge),
        'o Quadro 2 do CGE e lista de INCLUSAO — so analista entra');
 }

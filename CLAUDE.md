@@ -4,8 +4,64 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 03/09/2026 — ver `SESSAO.md`. **DUAS escritas em produção em 02–03/09**
+**Última sessão:** 05/10/2026 — ver `SESSAO.md`. A régua de produtividade entrou no sistema;
+nenhuma escrita no banco nesta sessão. Antes dela, **DUAS escritas em produção em 02–03/09**
 (a primeira invalidação real e a limpeza do lixo de teste); nenhuma outra.
+
+> ## ▶ 05/10/2026 — A RÉGUA DE PRODUTIVIDADE ENTROU NO SISTEMA
+>
+> **A regra está em [`REGRA_PRODUTIVIDADE.md`](REGRA_PRODUTIVIDADE.md), neste repositório, com as
+> respostas da coordenação item por item.** ⚠️ **ANTES DE PERGUNTAR QUALQUER COISA SOBRE
+> PRODUTIVIDADE, LER AQUELE ARQUIVO.** Ele existe porque a mesma pergunta foi feita três vezes:
+> o questionário respondido vivia num `.docx` na pasta Downloads, fora do repositório, e cada
+> sessão nova reabria o que já estava decidido. **Se a resposta está lá, não é pergunta — é
+> especificação.**
+>
+> **O que conta mudou:** `SQL_BASE_PRODUTIVIDADE` era `(baixada OU enviado_ci)` e passou a ser
+> **`baixada = true AND parecer_tipo IS NOT NULL`** (itens A2, A5 e E3). **Encaminhar ao Controle
+> Interno deixou de ser produção em todas as telas.** Custou **31 PCs** no GT inteiro — 7 que
+> contavam só pelo encaminhamento e 24 baixadas sem parecer. ⚠️ **As 24 voltam a contar assim que
+> o analista registrar o parecer.**
+>
+> **A meta deixou de ser digitada.** `sigpc-api/lib/meta.js` é a cópia única: 12/mês de ago a
+> dez/2025, **zero em janeiro/2026**, 10/mês de fevereiro em diante, proporcional por dias sobre
+> base 30, **congelada na data de saída do dispensado** — que continua somando no grupo.
+> `GET /produtividade/regua` entrega tudo pronto, **com a origem de cada número**.
+>
+> ⚠️ **A TELA NÃO CALCULA META.** A `contaMeta` saiu do `index.html`: ela zerava a meta do
+> dispensado por conta própria e contradizia o item B8 **em silêncio**. É a armadilha 16 — conta
+> escrita na tela é conta que nenhum teste do servidor alcança.
+>
+> ⚠️ **`metas_analistas` E `usuarios.meta_mensal` FICAM NO BANCO E NÃO SÃO LIDAS.** São o
+> registro do que valia antes. Duas fontes vivas para o mesmo número é a segunda ficando velha.
+>
+> ⚠️ **O NÚMERO DO ITEM B9 NÃO É ETERNO.** Os quatro informados (Eduardo 35, Jeisson 17, Carla 12,
+> Fabiana 12) são o acumulado **até 30/09/2026**; de outubro em diante sobem 10 por mês como os
+> demais (item B4). Sem isso a meta deles congelaria enquanto os outros 45 subiriam, e o
+> percentual cresceria sozinho, sem ninguém produzir nada.
+>
+> ⚠️ **AS BAIXAS COM DATA DE CARGA SÓ ENTRAM NO ACUMULADO** (item D2). São **3.560**, todas da
+> `recarga_parcial_20260805`, com `data_baixa` em junho/2026 — a data da carga, não a do trabalho.
+> **A lista é por ORIGEM, nunca por data:** cortar "tudo de junho de 2026" levaria junto 24 baixas
+> de trabalho real feitas naquele mês.
+>
+> **O Board:** o rótulo **"Total" virou "PCs recebidas"** e a meta ganhou linha própria, com o
+> mesmo número da tela Produtividade. O "Total" ao lado do concluído era lido como meta — e foi
+> exatamente essa leitura que a coordenação questionou.
+>
+> **O relatório do CGE tem as DUAS leituras** (itens C1, D1 e E1): o trimestre nos quadros e o
+> **acumulado desde 01/08/2025 em linha própria no Quadro 1**.
+>
+> **Medido em 05/10/2026:** GT **71%** (meta 6.298 · produção 4.443) · G1 89% · G2 72% · G3 51%.
+> A régua reproduz as 14 linhas da tabela do documento uma a uma, e a meta até 30/09 dá **5.918** —
+> o mesmo número que foi para a coordenação em 27/09.
+>
+> **Testes:** `teste_meta.js` **81 · 0** (novo) · `teste_front_regua.js` **25 · 0** (novo) ·
+> `teste_sigef.js` 179 · 0 · `teste_dispensa.js` 52 · 0.
+>
+> ⚠️ **NADA DISTO FOI ABERTO NO NAVEGADOR.**
+
+---
 
 > ## ▶ 17/09/2026 — A ABA GESTÃO (menu do analista, logo abaixo do Dashboard)
 >
