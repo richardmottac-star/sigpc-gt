@@ -299,7 +299,10 @@ conf(/function prodCardGrande\(d\)/.test(html), 'o card grande existe');
 // O analista vê UM card só, na largura toda; coordenador e superadmin seguem na grade.
 conf(/if\(perfilEfetivo\(U\) === 'analista' \|\| verComoAtivo\(\)\) \{/.test(html),
      'o analista cai no card grande');
-conf(/cont\.innerHTML = prodCardGrande\(dados\[0\]\)/.test(html), 'e vê so o dele');
+// ⚠️ O `avisoRegua +` NA FRENTE ENTROU EM 05/10/2026 e nao muda o que esta checagem mede: o
+// analista continua vendo UM card, o dele. O aviso e a faixa que aparece quando a regua de meta
+// ainda nao respondeu, e ela precisa estar nos tres caminhos de desenho desta tela.
+conf(/cont\.innerHTML = (avisoRegua \+ )?prodCardGrande\(dados\[0\]\)/.test(html), 'e vê so o dele');
 conf(/function prodAbrirCard\(id\)/.test(html), 'coordenador e superadmin abrem pelo clique');
 conf(/onclick="prodAbrirCard\(\$\{u\.id\}\)"/.test(html), 'o card pequeno leva ao grande');
 conf(/Voltar à lista/.test(html), 'e ha caminho de volta');

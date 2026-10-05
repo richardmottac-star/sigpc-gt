@@ -10723,6 +10723,28 @@ async function fetchTodasPCs(sid) {
 //
 // ⚠️ `metas_analistas` CONTINUA NO BANCO, intacta, como registro do que valia antes.
 let _regua = null          // a régua inteira, para o botão "Fonte" — ver reguaFonteHtml
+let _reguaIndisponivel = false
+let _prodReguaAviso = ''
+
+// ⚠️ A RÉGUA PODE NÃO ESTAR NO AR, E A TELA NÃO PODE QUEBRAR POR ISSO. O servidor e a tela
+// são publicados em lugares diferentes — Railway e GitHub Pages —, e em 05/10/2026 o deploy do
+// servidor ficou preso na fila por mais de dez minutos com a tela nova já publicada. Nesse
+// intervalo a rota responde 404 com HTML, o `r.json()` estoura, e a tela inteira caía no catch
+// do `prodCarregar` mostrando "erro ao carregar" para quem só queria ver o próprio número.
+//
+// ⚠️ E NÃO HÁ QUEDA PARA `metas_analistas`, de propósito: mostrar a meta velha sem avisar é
+// pior que não mostrar meta nenhuma — a pessoa leria um percentual que já não é o do sistema e
+// não teria como perceber. **Meta ausente e dita é melhor que meta errada e calada.**
+
+// O aviso que a tela mostra enquanto a régua não responde. Vazio quando está tudo no ar.
+function reguaAvisoHtml() {
+  if(!_reguaIndisponivel) return ''
+  return `<div style="background:var(--ambg);border-left:4px solid var(--am);border-radius:0 8px 8px 0;
+    padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.5;">
+    <b>A meta está sendo atualizada no servidor.</b> Os números de produção abaixo estão corretos;
+    o que não aparece agora é a meta e, com ela, o percentual. Atualize a página em alguns minutos.
+  </div>`
+}
 // A RÉGUA COM RECORTE DE PERÍODO — só o relatório do CGE precisa dela.
 //
 // ⚠️ ELE MOSTRA AS DUAS LEITURAS, e a coordenação pediu assim (itens C1, D1 e E1 da
@@ -10741,13 +10763,21 @@ async function fetchReguaPeriodo(de, ate) {
 }
 
 async function fetchMetasVigentes() {
-  const r = await fetch(`${API_URL}/produtividade/regua`)
-  const j = await r.json()
-  if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
-  _regua = j.data || null
-  const mapa = {}
-  Object.values((j.data && j.data.metas) || {}).forEach(m => { mapa[m.analista_id] = m.meta })
-  return mapa
+  _reguaIndisponivel = false
+  try {
+    const r = await fetch(`${API_URL}/produtividade/regua`)
+    const j = r.ok ? await r.json() : null
+    if(!j || j.error || !j.data) throw new Error((j && j.error && j.error.message) || `HTTP ${r.status}`)
+    _regua = j.data
+    const mapa = {}
+    Object.values(j.data.metas || {}).forEach(m => { mapa[m.analista_id] = m.meta })
+    return mapa
+  } catch(e) {
+    // Ver o aviso longo junto de `_reguaIndisponivel`: a tela segue, sem meta e dizendo isso.
+    _regua = null
+    _reguaIndisponivel = true
+    return {}
+  }
 }
 
 // Contagem total de prestacoes_contas, filtrada pela setorial do usuário logado (sem filtro de período/status)
@@ -11046,6 +11076,10 @@ async function prodCarregar() {
       // baixadas" mostra. Somar no mesmo `else if` esconderia justamente o passo que falta.
       if(p.status==='baixada' && p.enviado_ci===true) s.noCi++
     })
+
+    // ⚠️ O AVISO É MONTADO ANTES DOS CARTÕES: quem abre a tela precisa saber que falta a meta
+    // antes de olhar para um percentual vazio e achar que perdeu a produção.
+    _prodReguaAviso = reguaAvisoHtml()
 
     _prodDados = Object.entries(mapaStats).map(([analistaId, stats]) => {
       const u = usuariosPorId[analistaId]
@@ -11362,6 +11396,11 @@ function prodRender(dados) {
   const cont = document.getElementById('prodCont')
   if(!cont) return
 
+  // ⚠️ O AVISO DA META AUSENTE ENTRA NOS DOIS CAMINHOS — o card único do analista e a grade do
+  // coordenador. Desenhar só num deles deixaria metade das pessoas vendo percentual vazio sem
+  // explicação, que é exatamente o que ele existe para evitar.
+  const avisoRegua = _prodReguaAviso || ''
+
   // ⚠️ O ANALISTA VÊ UM CARD SÓ, E GRANDE (18/08/2026). Ele nunca teve mais de um card nesta
   // tela — o filtro sempre devolveu só o dele —, mas o desenho era o de grade: um cartão
   // estreito perdido num espaço vazio. Coordenador e superadmin seguem na grade, e o clique
@@ -11377,7 +11416,7 @@ function prodRender(dados) {
         Nenhuma PC atribuída a você ainda.</div>`
       return
     }
-    cont.innerHTML = prodCardGrande(dados[0])
+    cont.innerHTML = avisoRegua + prodCardGrande(dados[0])
     prodAnimar()
     prodArqCarregar()
     return
@@ -11413,7 +11452,7 @@ function prodRender(dados) {
     })
 
   if(_prodAba === 'cards') {
-    cont.innerHTML = `<div style="border-radius:12px;overflow:hidden;margin-bottom:12px;
+    cont.innerHTML = avisoRegua + `<div style="border-radius:12px;overflow:hidden;margin-bottom:12px;
         box-shadow:var(--sombra);">${faixaSetorial}</div>
       <div class="prod-cards">${dados.map(d => {
       const {u,total,baixadas,dilig,analise,reanalise,pct,meta,grupo,coord} = d
@@ -11508,7 +11547,7 @@ function prodRender(dados) {
     const totRean = dados.reduce((a,d)=>a+d.reanalise,0)
     const totPct = totMeta>0?Math.round(totBx/totMeta*100):null
 
-    cont.innerHTML = `
+    cont.innerHTML = avisoRegua + `
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
         <button onclick="prodExportExcel()" style="background:var(--v);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
         <button onclick="prodExportPDF()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF</button>
