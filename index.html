@@ -4773,6 +4773,11 @@ function renderEst(rows) {
     'Zadir Teresinha Machado Ferreira':'Zadir','Sandra Paul':'Sandra Paul',
     'Sandra Rocha':'Sandra Rocha','Ana Claudia':'Ana Claudia',
     'Ana Leticia':'Ana Leticia','Grace Oliveira':'Grace Oliveira',
+    // ⚠️ A ENTRADA DA CLARA ENTROU EM 06/10/2026 e NAO e cosmetica: este mapa decide 'esta TR
+    // e minha' comparando NOME. O cadastro dela passou de 'Cris' para 'Clara Cristina' e as 208
+    // PCs foram junto; sem a linha aqui, o primeiro nome ('Clara') nao casaria com o rotulo do
+    // acervo e o botao 'Ver' sumiria de todas as TRs dela.
+    'Clara Cristina':'Clara Cristina',
   }
   const meuNomePlan = MAPA_PLAN_EST[U.nome.trim()] || U.nome.trim().split(' ')[0]
   const isMeuTR = (t) => t.analista_nome && t.analista_nome.toLowerCase() === meuNomePlan.toLowerCase()
