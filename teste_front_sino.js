@@ -69,5 +69,22 @@ S('3. A GUARDA ACOMPANHA O SERVIDOR');
        'o texto da tela sai da constante, e nao de um numero digitado');
 }
 
+S('A SEPARACAO ENTRE O QUE E NOVO E O QUE JA FOI LIDO (07/10/2026)');
+{
+  const i = html.indexOf('function sinoRender()');
+  const fn = html.slice(i, html.indexOf('// Um clique so faz as duas coisas', i));
+  // ⚠️ AS LIDAS FICAM ABAIXO, com rotulo. Misturadas com as novas, disputariam a atencao;
+  // embaixo, respondem "cade aquilo que eu vi agora ha pouco?" sem atrapalhar o que e novo.
+  conf(/const novas = _notifs\.filter\(n => !n\.lida_em\)/.test(fn), 'as nao lidas saem separadas');
+  conf(/const lidas = _notifs\.filter\(n => n\.lida_em\)/.test(fn), 'e as lidas tambem');
+  conf(/JÁ LIDAS — ficam aqui por 24 horas/.test(fn), 'o divisor diz por quanto tempo elas ficam');
+  conf(/novas\.map\(linhaNotif\)[\s\S]{0,80}lidas\.map\(linhaNotif\)/.test(fn),
+       'e as novas vem ANTES das lidas na marcacao');
+  // ⚠️ UMA FUNCAO SO desenha as duas listas: duas copias divergiriam no dia em que alguem
+  // mexesse numa e esquecesse a outra — o defeito dos dois ramos do cartao da parcial.
+  conf((fn.match(/linhaNotif/g) || []).length === 3, 'e ha UMA funcao de linha, usada pelas duas');
+  conf(!/_notifs\.map\(n => \{/.test(fn), 'o map unico antigo saiu');
+}
+
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exitCode = falhou ? 1 : 0;

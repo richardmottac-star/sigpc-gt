@@ -4666,6 +4666,17 @@ async function buscar() {
     EST_MOSTRAR_SEP = !st
 
     TOT = TRS_EST.length
+    // ⚠️ A PÁGINA NÃO PODE PASSAR DO FIM DA LISTA (07/10/2026). O botão Buscar chama esta
+    // função sem zerar o `PAG` — só o Limpar zerava. Quem estivesse na página 5 e buscasse uma
+    // TR específica via "1 TRs encontradas" no cabeçalho e "Nenhum registro encontrado" na
+    // tabela, com o rodapé dizendo "Pág. 5 de 1". Foi assim que a analista concluiu que a TR
+    // aprovada para ela não existia.
+    //
+    // ⚠️ O CONSERTO É AQUI, E NÃO NO BOTÃO: zerar no Buscar arrumaria o caminho que alguém
+    // viu, e deixaria de pé todos os outros que encolhem a lista — o filtro de status, o de
+    // setorial, o campo de processo. Recuar a página é a regra que vale para qualquer um deles.
+    const ultimaPag = Math.max(0, Math.ceil(TOT / PP) - 1)
+    if (PAG > ultimaPag) PAG = ultimaPag
     const from = PAG*PP
     renderEst(TRS_EST.slice(from, from+PP))
     renderPag()
@@ -9328,7 +9339,12 @@ function sinoRender() {
     return
   }
 
-  p.innerHTML = cab + _notifs.map(n => {
+  // ⚠️ O QUE JÁ FOI LIDO FICA ABAIXO, SEPARADO (07/10/2026). Desde 28/09 abrir o sino marca
+  // como lido o que ele mostrou, e o servidor passou a segurar essas por 24 h em vez de escondê-las
+  // na hora — dois analistas no mesmo dia disseram "não recebi" sobre aviso que tinham aberto
+  // minutos antes. Misturadas com as novas elas disputariam a atenção; embaixo, com rótulo, elas
+  // respondem a pergunta "cadê aquilo que eu vi agora há pouco?" sem atrapalhar o que é novo.
+  const linhaNotif = (n) => {
     const naoLida = !n.lida_em
     return `<div onclick="sinoClicar(${n.id}, ${JSON.stringify(n.link||'').replace(/"/g,'&quot;')})"
       style="display:flex;gap:9px;padding:11px 13px;border-bottom:1px solid var(--bd);cursor:pointer;
@@ -9344,7 +9360,14 @@ function sinoRender() {
       </div>
       ${naoLida ? '<div style="width:7px;height:7px;border-radius:50%;background:var(--v);margin-top:5px;flex:0 0 auto;"></div>' : ''}
     </div>`
-  }).join('') + rodape
+  }
+
+  const novas = _notifs.filter(n => !n.lida_em)
+  const lidas = _notifs.filter(n => n.lida_em)
+  const divisor = lidas.length ? `<div style="padding:7px 13px;background:#F2F5F3;border-bottom:1px solid var(--bd);
+      font-size:10px;font-weight:800;color:var(--ct);letter-spacing:.04em;">
+      JÁ LIDAS — ficam aqui por 24 horas</div>` : ''
+  p.innerHTML = cab + novas.map(linhaNotif).join('') + divisor + lidas.map(linhaNotif).join('') + rodape
 }
 
 // Um clique só faz as duas coisas que a pessoa quer: tira o aviso da frente e leva ao lugar.
@@ -24552,6 +24575,10 @@ function estRender() {
     })
     tbody.innerHTML = html
   }
+
+  // ⚠️ A MESMA PROTEÇÃO DA LISTA DE CIMA: filtro que encolhe o resultado não pode deixar a
+  // página além do fim, senão a tabela vem vazia com o contador cheio.
+  if (_estPag > Math.max(0, totalPaginas - 1)) { _estPag = Math.max(0, totalPaginas - 1); return estRender() }
 
   const inf = document.getElementById('estPagInf')
   const num = document.getElementById('estPagNum')
