@@ -1,15 +1,251 @@
-# SIGPC-GT — ESTADO EM 05/10/2026
+# SIGPC-GT — ESTADO EM 12/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de 05/10, logo abaixo.
+> **não como estado**. O estado é o bloco de 05–12/10, logo abaixo.
+
+---
+
+## ▶ 05–12/10/2026 — A RÉGUA NO AR, E A SEMANA DAS DÚVIDAS DOS ANALISTAS
+
+**Tudo publicado.** ⚠️ **HOUVE ESCRITA EM PRODUÇÃO** — cinco rodadas, todas autorizadas uma por
+uma, com dry-run antes e conferência dentro da mesma transação. O quadro completo está em
+*"As escritas em produção"*, abaixo.
+
+> ⚠️ **ANTES DE QUALQUER COISA SOBRE PRODUTIVIDADE, LER `REGRA_PRODUTIVIDADE.md`** — as respostas
+> da coordenação, item por item. O arquivo nasceu em 05/10 porque a mesma pergunta já havia sido
+> feita três vezes. **Se a resposta está lá, não é pergunta — é especificação.**
+
+| commit | repo | o quê |
+|---|---|---|
+| `6915929` · `8f72a21` | `sigpc-api` | a **régua** do documento de 18/09 entra no sistema |
+| `8399bd6` · `6cb0a1c` | `sigpc-gt` | as três telas leem a régua, e nasce a **tela de ajuda** |
+| `b53e362` · `f9f74bd` | `sigpc-api` · `sigpc-gt` | a analista id 9 passa a ser **"Clara Cristina"** |
+| `0dc147c` · `22f27d2` | `sigpc-api` · `sigpc-gt` | o **sino guarda 24 h** o que marcou como lido · a **paginação do Estoque** |
+| `a603ccb` | `sigpc-api` | o **código de TR abreviado** passa a ser encontrado |
+| `1d6fb9c` · `69a44e4` | `sigpc-api` · `sigpc-gt` | a **busca global** diz quem está com a TR e quem esteve |
+| `d4e2103` | `sigpc-gt` | a barra do lote vira um **painel que se faz ver** |
+
+---
+
+### 1. A RÉGUA ENTROU NO AR (05/10)
+
+O que estava pronto e não publicado no bloco anterior **subiu**. ⚠️ **O `sigpc-api` foi primeiro**,
+porque o `sigef_conta` novo vem do servidor — e o primeiro build ficou **preso na fila do Railway**,
+o que exigiu o commit vazio `8f72a21` para disparar outro. Conferido no ar depois disso.
+
+O resumo da régua está no `CLAUDE.md` deste repositório, no bloco do topo. **O que não pode ser
+desfeito sem querer continua valendo:** a `contaMeta` **saiu da tela** · o número do item B9
+**não é eterno** (`FIM_DA_META_INFORMADA`) · as baixas com data de carga **só entram no acumulado**,
+e a lista é **por origem, nunca por data** · *"de fevereiro em diante"* **não tem fim** · **a tela
+não soma meta**.
+
+⚠️ **UMA REGRESSÃO APARECEU E FOI CORRIGIDA NO MESMO DIA** (`6cb0a1c`): a tela lia a régua e
+**quebrava inteira** enquanto o servidor novo não estava no ar. Nasceram `_reguaIndisponivel` e
+`reguaAvisoHtml()` — a Produtividade passa a avisar que a meta está indisponível em vez de não
+desenhar nada. **Tela que depende de rota nova precisa do ramo em que a rota ainda não existe.**
+
+**Medido em 05/10:** GT **71%** (meta 6.298 · produção 4.443) · G1 89% · G2 72% · G3 51%.
+
+---
+
+### 2. AS CINCO CORREÇÕES QUE NASCERAM DE RECLAMAÇÃO DE ANALISTA
+
+Nenhuma foi ideia minha. **As cinco vieram de pergunta de analista no WhatsApp**, e é por isso que
+estão juntas: a semana foi de atendimento, não de frente nova.
+
+#### a) A busca de TR abreviada — `a603ccb`
+
+A Noici digitou **`2020TR793`** e o sistema disse *"não consta na planilha"*. A TR existe:
+`2020TR000793`. **Quem escreve o código de uma TR não digita os zeros** — e eram "várias
+reclamações", nas palavras do Richard.
+
+⚠️ **A CHAVE ENTRA AO LADO DO `ILIKE`, COM `OR` — não no lugar dele.** O `ILIKE` do texto cru é o
+que faz a busca por **pedaço** funcionar (`TR0007`); a chave normalizada, que tira os zeros à
+esquerda de cada token nos dois lados, é o que acha o abreviado. **Trocar um pelo outro conserta
+metade e quebra a outra.** `condicaoTr` em `sigpc-api/lib/busca.js`, com `CAMPOS_CHAVE` incluindo
+`tr` ao lado dos campos de processo.
+
+⚠️ **É A MESMA `chaveProcesso` DO PROCESSO SGPe**, de propósito: o problema é o mesmo (zero à
+esquerda), e uma segunda normalização seria a segunda cópia ficando velha.
+
+#### b) A paginação do Estoque — `22f27d2`
+
+O print do Richard mostrava **"Pág. 5 de 1"** e a lista vazia. O filtro encolhe a lista e a página
+corrente continua onde estava — **a tela pedia uma página que não existe mais**.
+
+```js
+const ultimaPag = Math.max(0, Math.ceil(TOT / PP) - 1); if (PAG > ultimaPag) PAG = ultimaPag
+```
+
+⚠️ **Zerar a página a cada filtro seria pior:** quem está na página 7 e muda só o grupo perde o
+lugar. O correto é **limitar ao fim**, não voltar ao começo. `teste_front_paginacao.js` (14 · 0).
+
+#### c) O sino guarda 24 h o que marcou como lido — `0dc147c`
+
+A Marlene foi aprovada e **não recebeu** o aviso: abriu o sino, ele marcou tudo como lido, e na
+visita seguinte a caixa estava vazia. **Abrir o sino apagava o recado que a pessoa ainda não tinha
+lido.** A regra virou `HORAS_AINDA_NO_SINO = 24` em `sigpc-api/lib/notificacao.js`, com a condição
+`lida_em IS NULL OR lida_em > NOW() - (INTERVAL '1 hour' * 24)`.
+
+⚠️ **O LIDO NÃO VOLTA A SER NÃO LIDO** — ele só **continua à vista**, abaixo do divisor
+*"JÁ LIDAS — ficam aqui por 24 horas"*. Marcar de novo como não lido mentiria sobre o estado e o
+contador voltaria a subir sozinho. O `sinoRender` ganhou `linhaNotif` e a separação
+`novas` / `lidas`.
+
+#### d) A busca global diz quem está com a TR, e quem esteve — `1d6fb9c` · `69a44e4`
+
+Pedido do Richard, **e só ele vê**: `const souSuper = papel.perfilEfetivo(u[0]) === 'superadmin'`
+no servidor — sem isso a rota já devolve o acervo de qualquer analista (armadilha 18), e o dono
+seria mais um dado vazando.
+
+Três campos novos no card: **quem está com a TR** e em que situação está essa pessoa (em
+atividade · dispensada · **sem cadastro no sistema**) · **quem esteve antes** · e a marca de
+divergência quando o `analista_nome` da PC não corresponde ao `analista_id`.
+
+⚠️ **A DIVERGÊNCIA DE NOME É MEDIDA PELA `nomeCurto`, NÃO POR SEMELHANÇA DE TEXTO.** A primeira
+versão comparava os dois textos e acusava a **Goreti** ("Maria Goreti Korb" → "Goreti"), que está
+certa. **A função que confere tem de ser a mesma que grava** — `nomeCurto` de `lib/assumir.js`.
+
+⚠️ **O HISTÓRICO DEDUPLICA.** Um repasse de 46 PCs gravou **46 linhas iguais** na trilha; sem o
+`historicoDeDonos`, o card listaria a mesma pessoa 46 vezes. `EVENTOS_DONO` é lista explícita —
+`assumir_tr`, `devolucao_tr`, `transferencia` —, nunca "todo evento que menciona analista".
+
+⚠️ **OS CAMPOS NASCEM FECHADOS**, e o silêncio é explicado: **91% das TRs não têm evento de dono**
+(só 139 de 1.560). Campo vazio sem explicação seria lido como "nunca ninguém pegou", e não é isso —
+é que a TR chegou por carga, sem trilha.
+
+#### e) O painel da seleção em lote — `d4e2103`
+
+O print mostrou a barra azul **atrás da barra de tarefas do Windows**. O Richard pediu **modal**;
+eu propus **painel flutuante** e mostrei as duas opções lado a lado antes de mexer — ele escolheu
+o painel.
+
+⚠️ **E NÃO VIROU MODAL DE PROPÓSITO:** modal bloqueia a tela, e aqui a pessoa precisa **continuar
+marcando parciais** depois da primeira. O pedido queria **ser visto**, não interromper.
+`bottom:18px`, sombra `0 10px 34px`, faixa verde no topo, bolha com o número, três contadores
+(parciais · prestações · valor) e **dois botões com pesos diferentes** — verde cheio para o C.I.,
+azul claro para o SGPe. Antes os dois eram contorno branco sobre azul e ninguém sabia qual era qual.
+
+⚠️ **A LINHA QUE DIZ O QUE CADA BOTÃO FAZ é parte do conserto, não enfeite:** quatro analistas
+perguntaram na mesma semana para que servia a devolutiva pelo SGPe. **A explicação tem de estar
+onde se decide.**
+
+⚠️ **AS DUAS AÇÕES CONTINUAM CONFIRMANDO ANTES** (`moConfirm`, com o aviso de que vai a parcela
+inteira). Mudou a forma do painel, não o que ele dispara. `teste_front_lote_ci.js` (24 · 0)
+**executa o painel num DOM de mentira** e mede o que a pessoa vê.
+
+---
+
+### 3. AS ESCRITAS EM PRODUÇÃO
+
+| quando | o quê | tamanho |
+|---|---|---|
+| 06/10 | **"Cris" → "Clara Cristina"** — `usuarios` id 9 e o acervo | 1 cadastro · **208 PCs** |
+| 08/10 | **`2020TR000750`** — a parcial 1 estava **partida em duas** | **6 PCs** reunidas |
+| 09–10/10 | **`2022TR001174`** — Grazielly → Ana Claudia (id 22) | **16 PCs** + coluna `grupo` 3→2 |
+| 10/10 | **3 TRs do estoque para a Tanimeri**, mais a PC órfã | **124 PCs** + 1 PC movida |
+| 07–11/10 | **recados pelo sino** | **15** + 2 coordenadores + **47** |
+
+⚠️ **A `2020TR000750` É O CASO QUE PROVA A ARMADILHA 14.** As 9 NLs da parcial somam
+**R$ 15.873,83** — exatamente o valor do SIGEF — e estão **no mesmo processo** `SCC14075/2021`;
+estavam gravadas como duas parciais diferentes. **Reuni-las revelou que 6 das 9 estão em
+diligência**, o que a divisão escondia.
+
+⚠️ **A TR 1174 FOI PARA A CLAUDIA ERRADA NA PRIMEIRA TENTATIVA** — id 36 (Claudia, G3) em vez da
+id 22 (Ana Claudia, G2). O Richard assumiu a confusão e mandou corrigir; foi corrigida pelo repasse
+**5444**, e a coluna `grupo` foi junto. **"Claudia" não identifica pessoa neste cadastro** — são
+duas, em grupos diferentes. **Só o `analista_id` identifica** (armadilha 1).
+
+⚠️ **O recado dos 15 foi PESSOAL, com o número de cada um** — e é por isso que funcionou. Aviso
+geral não move ninguém. Os coordenadores foram avisados em separado, e o recado para os grupos de
+WhatsApp saiu **sem nomear ninguém**, por decisão do Richard.
+
+---
+
+### 4. O QUE SE MEDIU NO CAMINHO
+
+| número | o que é |
+|---|---|
+| **83%** | das TRs com dono **nunca foram assumidas pelo sistema** — 732 de 879. Chegaram por carga, sem trilha. |
+| **91%** | das TRs **não têm evento de dono** — só 139 de 1.560 têm. É o silêncio que a busca global explica. |
+| **25 de 41** | analistas estão **no limite de 6 TRs ou acima**. A Grazielly tem **51**. |
+| **317** | prestações que **o SGPe já libera** e ninguém registrou, em 21 analistas (15 em atividade). |
+
+⚠️ **O LIMITE DE 6 TRs NÃO BARRA NADA HOJE** — 25 de 41 estão acima dele. Tratar o número como
+regra ativa seria afirmar uma trava que não existe.
+
+---
+
+### 5. AS ORIENTAÇÕES QUE FICARAM VALENDO
+
+Escritas para o Richard encaminhar. **O que delas é regra, e não recado:**
+
+- **"Aprovado não significa que a TR migra direto."** A aprovação libera o acesso; a TR continua no
+  estoque até alguém assumir. Foi a dúvida da Marlene, e o recado dela saiu **sem falar de erro
+  nosso** — só a orientação, por ordem do Richard.
+- **"SEMPRE APERTE CTRL + F5 QUANDO NÃO ENCONTRAR UMA TR."** Pedido do Richard em negrito e fonte
+  maior: parte das "TRs que sumiram" era página velha no navegador.
+- **"A produtividade conta no parecer, não no encaminhamento."** A frase que evita a pergunta mais
+  comum desde que a régua entrou.
+- **"As alterações no nosso sistema não vão para o SGPe — e isso é de propósito."** O sistema
+  **consulta** a tramitação do SGPe periodicamente para saber onde o processo está; ele **não
+  escreve** lá. Foi o aviso enviado aos 47.
+- **"Ausência no relatório do SIGEF não prova ausência de PC"** (armadilha 26) — a resposta à
+  divergência planilha × sistema da Sandra.
+
+---
+
+### 6. O QUE FICOU ABERTO
+
+- [ ] **NADA ABERTO NO NAVEGADOR POR UMA PESSOA:** a tela de ajuda da Produtividade · o Board com
+      **"PCs recebidas"** e a meta em linha própria · o Quadro 1 do CGE com as **duas leituras** ·
+      os três campos novos da **busca global** · o **painel do lote** (este eu conferi no ar às
+      09:35 de 12/10 — painel descolado da borda, linha explicativa e os dois pesos de botão).
+- [ ] **A LISTA DE NLs DAS PARCIAIS 6 E 7 DA `2020TR000750`**, pelo SIGEF — a Sandra ia mandar.
+      Sem ela as divergências **+4.660,98** e **+44.929,32** ficam em aberto. ⚠️ A NL
+      **`2022NL009539`** aparece em **duas parciais com valores diferentes**, e é o fio a puxar.
+- [ ] **Os 10 recados da Zadir** voltarem a não lidos — ids **535, 620, 1086, 1225, 1227, 1270,
+      1274, 1278, 1375, 1436**. O dry-run passou em 05/10; o Richard mandou deixar para outro dia.
+      ⚠️ **O script foi apagado na limpeza de temporários e precisa ser refeito** — por lista
+      explícita de ids, nunca por condição derivada (armadilha 11).
+- [ ] **As 24 PCs baixadas sem parecer** voltam a contar assim que o analista registrar o parecer.
+      Vale o mesmo recado pessoal que funcionou agora.
+- [ ] **O modal de ciência de repasse diz "sob responsabilidade de —"** quando a origem é o
+      Estoque (`de: null`).
+- [ ] **O cadastro `ZZ TESTE TRAVA`** (id 57, Controle Interno) continua ativo. Nunca entrou na
+      apuração; o Richard decide se apaga ou inativa.
+- [ ] **39 de 48 analistas sem portaria e 46 sem data de ingresso** — o termo de repasse exige os
+      dois.
+- [ ] **Medir o efeito dos recados:** `node medir_passo2.js` contra `baseline_passo2.json`
+      (⚠️ exige papel técnico).
+
+### Testes em 12/10
+
+`sigpc-api`: `teste_meta.js` **81 · 0** · `teste_busca.js` **107 · 0** · `teste_busca_global.js`
+**99 · 0** · `teste_notificacao.js` **107 · 0**.
+`sigpc-gt`: `teste_front_regua.js` **41 · 0** · `teste_front_paginacao.js` **14 · 0** (nova) ·
+`teste_front_lote_ci.js` **24 · 0** (nova).
+
+⚠️ **DOIS ERROS MEUS QUE VALE REGISTRAR.** O `teste_front_lote_ci.js` foi **destruído** por um
+script que fez `split(CR+LF)` num arquivo salvo com **LF** — o arquivo virou uma linha só, e tive
+de reescrevê-lo inteiro. **Script de edição exata confere o fim de linha do arquivo antes de
+cortar.** E a janela de teste do painel termina num **marco do próprio código**
+(`html.indexOf('/**', i)`), nunca num número — armadilha 30, que já tinha cobrado duas janelas em
+05/10.
+
+⚠️ **E UM ERRO DE COMUNICAÇÃO, que é regra daqui para a frente:** ao escrever o recado da Nayara eu
+incluí o quadro inteiro do Grupo 1. Do Richard: *"quanto mais informação vc manda mais confuso fica
+e eles me deixam malucos com essas informações"*. **Recado de coordenação tem cinco linhas.** Dado
+de apoio fica aqui, não na mensagem.
 
 ---
 
 ## ▶ 05/10/2026 — A RÉGUA DE PRODUTIVIDADE ENTROU NO SISTEMA
 
-**Pronta e testada, NADA PUBLICADO.** Nenhuma escrita no banco nesta sessão.
+**Pronta e testada.** Nenhuma escrita no banco nesta sessão. ⚠️ **No dia, nada estava publicado;
+foi publicada nas horas seguintes** — ver o bloco de 05–12/10, acima.
 
 > ⚠️ **ANTES DE QUALQUER COISA SOBRE PRODUTIVIDADE, LER `REGRA_PRODUTIVIDADE.md`** — as respostas
 > da coordenação, item por item. **O arquivo nasceu hoje porque a mesma pergunta foi feita três
@@ -101,7 +337,7 @@ passou a medir a Gestão Grupo.
 
 ### O que ficou aberto
 
-- [ ] **PUBLICAR.** `git commit`/`push` são do Richard. ⚠️ **O `sigpc-api` precisa subir ANTES** —
+- [x] **PUBLICADA** em 05/10 (`6915929` no `sigpc-api`, `8399bd6` no `sigpc-gt`). ⚠️ **O `sigpc-api` precisa subir ANTES** —
       o `sigef_conta` novo vem do servidor, e a tela só muda junto com ele.
 - [ ] **NADA ABERTO NO NAVEGADOR:** o Board com "PCs recebidas" e a meta em linha própria, a tela
       Produtividade com a meta nova, e o Quadro 1 do CGE com as duas leituras.
