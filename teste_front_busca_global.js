@@ -14,7 +14,10 @@ secao('1. SÓ SUPERADMIN — e a guarda de verdade é do servidor');
 conf(/id:'bglobal', bloco:'superadmin'/.test(html), 'o item vive no bloco superadmin');
 conf(/id:'bglobal'[\s\S]{0,160}?pode:\(u\)=>u\.perfil === 'superadmin'/.test(html), 'e so o superadmin o ve');
 const ir = html.slice(html.indexOf('function irBuscaGlobal'), html.indexOf('function irBuscaGlobal') + 500);
-conf(/U\.perfil !== 'superadmin'/.test(ir), 'a funcao tambem recusa na origem');
+// ⚠️ A GUARDA PASSOU A LER O PERFIL EFETIVO em 14/08/2026, quando nasceram os dois papeis no
+// mesmo login: no papel analista o superadmin e analista em toda parte, e `U.perfil` continuaria
+// dizendo superadmin. O teste media a forma antiga e reprovava a correta — a guarda nunca saiu.
+conf(/perfilEfetivo\(U\) !== 'superadmin'/.test(ir), 'a funcao recusa na origem, pelo papel ATIVO');
 // ⚠️ Esconder o menu nao e' a guarda: a rota devolve o acervo de QUALQUER analista.
 conf(/A GUARDA É DO SERVIDOR/.test(html), 'e o codigo diz onde a garantia mora');
 
@@ -182,6 +185,26 @@ conf(!/@page \{ size:A4 portrait/.test(doc), 'nem uma copia do CSS');
 conf(/Código da PC/.test(doc), 'com o mesmo rotulo da tela');
 conf(/blocoCi/.test(doc), 'o bloco do C.I. entra no documento');
 conf(/linkSgpe/.test(doc), 'e o link do SGPe');
+
+secao('QUEM ESTA E QUEM ESTEVE, NO CARD (12/10/2026)');
+{
+  conf(/function bgDonoSituacao\(d\)/.test(html), 'a funcao da situacao do dono existe');
+  conf(/function bgEsteveCom\(c\)/.test(html), 'e a de quem esteve com a TR');
+  // ⚠️ O BLOCO SO EXISTE PARA QUEM RECEBE O CAMPO — e so o superadmin recebe, pela rota.
+  conf(/if \(!Array\.isArray\(c\.esteve_com\)\) return ''/.test(html),
+       'sem o campo, o bloco nem e desenhado');
+  // ⚠️ VAZIO NAO E DEFEITO, E A TELA DIZ ISSO: 91% das TRs nao tem evento de dono.
+  conf(/Sem registro de troca de dono/.test(html), 'a lista vazia explica o que o silencio significa');
+  conf(/carga de agosto, que não gerou evento/.test(html), 'e diz por que ela esta vazia');
+  // ⚠️ A TELA NAO COMPARA NOME: quem decide a divergencia e o servidor, pela funcao que grava.
+  const i = html.indexOf('function bgDonoSituacao(d) {');
+  const fn = html.slice(i, html.indexOf('function bgCard(c) {', i));
+  conf(/d\.divergente/.test(fn) && !/nome_cadastro\s*===|toLowerCase\(\)/.test(fn),
+       'a tela so mostra o que o servidor decidiu');
+  conf(/cadastro diz: /.test(fn), 'e mostra qual e o nome do cadastro quando diverge');
+  conf(/\$\{bgEsteveCom\(c\)\}/.test(html), 'o bloco entra no card');
+  conf(/\$\{bgDonoSituacao\(c\.dono\)\}/.test(html), 'e a situacao entra na linha do dono');
+}
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
 process.exit(falhou ? 1 : 0);

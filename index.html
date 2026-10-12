@@ -7755,9 +7755,62 @@ const bgData = (d) => d ? new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDa
 /** O ponto do ciclo do C.I., em português. Espelha lib/ci.js — SITUACOES. */
 const BG_CI = { na_fila: 'Na fila do C.I.', com_analista: 'Devolvida ao analista', encerrado: 'Encerrada no C.I.' }
 
+// O QUE O CADASTRO DIZ SOBRE O DONO — e o que ele NÃO diz.
+//
+// ⚠️ O NOME NO CARD VEM DA PC, e o cadastro é outra coisa. Enquanto os dois concordam, não
+// há nada a mostrar; quando discordam, é justamente o que interessa — o acervo tem PCs cujo
+// `analista_nome` não corresponde ao `analista_id`, e sem o confronto elas não aparecem.
+//
+// ⚠️ TRÊS SITUAÇÕES, TRÊS PROVIDÊNCIAS: fora do GT por portaria (a TR precisa de outro dono),
+// cadastro inativo (a pessoa não entra no sistema) e sem cadastro (o id não existe). Dizer
+// "não encontrado" para as três esconderia qual é o caso.
+function bgDonoSituacao(d) {
+  if (!d) return ''
+  const aviso = (txt, cor, fundo) => `<span style="display:inline-block;font-size:10px;font-weight:800;
+    padding:2px 8px;border-radius:20px;background:${fundo};color:${cor};margin-left:7px;">${escHtml(txt)}</span>`
+  let out = ''
+  if (d.situacao) out += aviso(d.situacao, '#8A2D2D', '#FDECEC')
+  // ⚠️ A DIVERGÊNCIA É MEDIDA NO SERVIDOR, pela mesma função que grava o rótulo — a tela não
+  // compara nome, senão seria a segunda cópia do mapa (o defeito de 16/08).
+  if (d.divergente) out += aviso('cadastro diz: ' + d.nome_cadastro, '#8A6100', '#FDF6E7')
+  return out
+}
+
+// QUEM ESTEVE COM A TR.
+//
+// ⚠️ VAZIO NÃO É DEFEITO, E A TELA PRECISA DIZER ISSO. Só 139 das 1.560 TRs têm algum evento
+// de dono: as outras chegaram pela carga de agosto, que não gerou evento nenhum. Sem a frase,
+// o campo vazio na maioria dos cards é lido como falha do sistema.
+function bgEsteveCom(c) {
+  if (!Array.isArray(c.esteve_com)) return ''   // não é superadmin: o bloco nem existe
+  const linha = (h) => {
+    const quando = h.quando ? bgData(h.quando) : '—'
+    const rotulo = h.evento === 'assumir_tr' ? 'assumiu'
+      : h.evento === 'devolucao_tr' ? 'devolveu ao estoque'
+      : 'repasse'
+    const de = h.de && h.de !== 'livre' ? escHtml(String(h.de).replace(/^\d+ · /, '')) : null
+    const para = h.para && h.para !== 'livre' ? escHtml(String(h.para).replace(/^\d+ · /, '')) : null
+    const seta = de && para ? `${de} <b>→</b> ${para}` : para ? `<b>${para}</b>` : de ? `${de} <b>→</b> estoque` : ''
+    return `<div style="font-size:11.5px;padding:4px 0;border-bottom:1px solid #EFF3F0;">
+      <span style="color:var(--ct);">${quando}</span> &nbsp;·&nbsp; ${escHtml(rotulo)} &nbsp;·&nbsp; ${seta}
+      ${h.pcs > 1 ? `<span style="color:var(--ct);font-size:10px;"> (${h.pcs} PCs)</span>` : ''}
+    </div>`
+  }
+  const corpo = c.esteve_com.length
+    ? c.esteve_com.map(linha).join('')
+    : `<div style="font-size:11.5px;color:var(--ct);padding:4px 0;">Sem registro de troca de dono.
+       A maioria das TRs veio da carga de agosto, que não gerou evento — isto não quer dizer que
+       ninguém mais tenha passado por ela.</div>`
+  return `<div style="padding:11px 17px;background:#FAFCFB;border-top:1px solid var(--cl);">
+    <div style="font-size:10px;font-weight:800;color:var(--ct);letter-spacing:.05em;margin-bottom:5px;">
+      QUEM JÁ ESTEVE COM ESTA TR</div>
+    ${corpo}
+  </div>`
+}
+
 function bgCard(c) {
   const dono = c.analista_nome
-    ? `<b>${escHtml(c.analista_nome)}</b>${c.grupo ? ` · Grupo ${escHtml(String(c.grupo))}` : ''}`
+    ? `<b>${escHtml(c.analista_nome)}</b>${c.grupo ? ` · Grupo ${escHtml(String(c.grupo))}` : ''}${bgDonoSituacao(c.dono)}`
     : `<span style="color:var(--am);font-weight:700;">Sem analista</span> · no estoque${
         c.no_estoque_desde ? ` desde ${bgData(c.no_estoque_desde)}` : ''}`
 
@@ -7804,6 +7857,7 @@ function bgCard(c) {
     </div>
 
     ${bgTabela(c)}
+    ${bgEsteveCom(c)}
     ${bgBlocoCi(c)}
   </div>`
 }
