@@ -15495,15 +15495,20 @@ function regCaixa(r, pa) {
   // não pode acontecer é a pessoa não saber que existe algo escrito ali.
   const aberta = _regAbertas.has(chave) || (abertos.length > 0 && !_regAbertas.has('!' + chave))
 
-  if (!itens.length) {
+  // ⚠️ AQUI MORAVA UM DEFEITO, e ele durou uma publicação: o ramo "sem nenhum item" devolvia a
+  // linha de convite ANTES de olhar se a pessoa tinha clicado em Escrever. O clique marcava a
+  // parcela como aberta, a tela repintava — e caía de novo neste mesmo ramo. **O botão não
+  // fazia nada.** É a armadilha 12 com outra roupa: botão que aceita clique e não responde.
+  // O estado de aberto tem de ser consultado nos TRÊS ramos, e o formulário é um só.
+  if (!itens.length && !aberta) {
     return `<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#FAFBFA;
       border-top:2px solid var(--grafite);flex-wrap:wrap;">
       <span style="width:26px;height:26px;border-radius:7px;background:#B9C2BC;color:#fff;display:flex;
         align-items:center;justify-content:center;font-size:13px;">📋</span>
       <span style="font-size:13px;font-weight:600;color:var(--ct);">Nada registrado nesta parcela ainda.
         <span style="display:block;font-size:11px;">anote o que está analisando, ou crie uma tarefa do que falta</span></span>
-      <button class="btn-acao" style="margin-left:auto;background:#fff;color:#8A6100;border:2px solid #8A6100;font-weight:900;"
-        onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}>＋ Escrever</button>
+      <button class="reg-bt" style="margin-left:auto;background:#8A6100;border-color:#6B4D08;box-shadow:0 2px 0 #4A3600;"
+        onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}>✎ Escrever</button>
     </div>`
   }
 
@@ -15516,7 +15521,7 @@ function regCaixa(r, pa) {
       <span style="font-size:13px;font-weight:700;color:#5C4106;min-width:0;">“${escHtml(String(ultimo.texto).slice(0, 80))}${String(ultimo.texto).length > 80 ? '…' : ''}”
         <span style="display:block;font-size:11px;color:#8A6100;font-weight:600;">último registro · ${
           escHtml(ultimo.analista_nome || '')} · ${planDataTs(ultimo.criado_em)} · ${itens.length} no total</span></span>
-      <button class="btn-acao" style="margin-left:auto;background:#8A6100;color:#fff;font-weight:900;"
+      <button class="reg-bt" style="margin-left:auto;background:#8A6100;border-color:#6B4D08;box-shadow:0 2px 0 #4A3600;"
         onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')">⌄ Abrir registro</button>
     </div>`
   }
@@ -15529,8 +15534,8 @@ function regCaixa(r, pa) {
         align-items:center;justify-content:center;font-size:14px;">📋</span>
       <b style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#5C4106;">Registro / Tarefa</b>
       <span style="font-size:11.5px;color:#8A6100;font-weight:700;">${
-        s.abertas ? `${s.abertas} tarefa${s.abertas > 1 ? 's' : ''} aberta${s.abertas > 1 ? 's' : ''} · ` : ''}${
-        s.registros} registro${s.registros === 1 ? '' : 's'}</span>
+        itens.length ? `${s.abertas ? `${s.abertas} tarefa${s.abertas > 1 ? 's' : ''} aberta${s.abertas > 1 ? 's' : ''} · ` : ''}${
+        s.registros} registro${s.registros === 1 ? '' : 's'}` : 'escreva o primeiro'}</span>
       ${/* ⚠️ O CADEADO NÃO É ENFEITE: é a diferença entre esta caixa e a anotação da TR, que
             todo mundo vê. Sem dizer, a pessoa não sabe o que pode escrever aqui. */''}
       <span title="Só você vê o que escreve aqui. A anotação da TR, no alto do cartão, é a que todos veem."

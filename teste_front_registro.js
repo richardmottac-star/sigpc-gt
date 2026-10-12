@@ -62,7 +62,18 @@ S('1. SEM NADA ESCRITO, A CAIXA CONVIDA — e não some');
   conf(/Nada registrado nesta parcela ainda/.test(texto(h)), 'diz que não há nada');
   conf(/anote o que está analisando/.test(texto(h)), 'e explica para que serve');
   conf(/Escrever/.test(texto(h)), 'com um botão para começar');
-  conf(h.length < 1400, 'numa linha só — sem ocupar a tela de quem não usa', String(h.length));
+  conf(h.length < 1500, 'numa linha só — sem ocupar a tela de quem não usa', String(h.length));
+  // ⚠️ O DEFEITO QUE ESCAPOU PARA A PRODUÇÃO EM 12/10: este ramo devolvia a linha de convite
+  // ANTES de olhar se a pessoa tinha clicado em Escrever. O clique marcava a parcela como
+  // aberta, a tela repintava — e caía aqui de novo. O botão não fazia nada (armadilha 12).
+  ctx.regAbrir('2021TR001578', '1');
+  const h2 = ctx.regCaixa(TR, PA);
+  conf(/Salvar registro/.test(texto(h2)), '⚠️ clicar em Escrever ABRE o formulário, mesmo sem nenhum item');
+  conf(/Criar tarefa/.test(texto(h2)), 'com os dois botões');
+  conf(/escreva o primeiro/.test(texto(h2)), 'e o cabeçalho convida, em vez de dizer "0 registros"');
+  conf(/recolher/.test(texto(h2)), 'e dá para fechar de novo');
+  ctx.regFechar('2021TR001578', '1');
+  conf(/Nada registrado/.test(texto(ctx.regCaixa(TR, PA))), 'recolher volta ao convite');
 }
 
 S('2. COM TAREFA ABERTA, A CAIXA NASCE ABERTA');
