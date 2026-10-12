@@ -141,7 +141,43 @@ S('4. A TAREFA MOSTRA O ESTADO PELA COR E PELO RÓTULO');
   conf(/checkbox[^>]*checked/.test(h), 'e a caixa marcada — clicar de novo reabre');
 }
 
-S('5. A PÍLULA DA TR — e o pulso vem do SERVIDOR');
+S('5. A PARCELA QUE ACABOU NÃO COBRA NADA');
+{
+  // ⚠️ Decisão do Richard em 12/10, vendo a tela: *"PC finalizada e arquivada registrando
+  // tarefa? como assim"*. Medido: 115 das 253 parcelas do acervo dele já tinham acabado e
+  // estavam sendo convidadas; no GT, 3.131 de 8.341.
+  const ARQ = { ...PA, arquivamento: { estado: 'arquivada' } };
+  ctx._regAbertas = new Set();
+  ctx._regItens = [];
+  conf(ctx.regCaixa(TR, ARQ) === '', '⚠️ arquivada e sem nada escrito: a caixa NÃO EXISTE');
+  conf(ctx.regCaixa({ ...TR, arquivada: true }, PA) === '', 'com a TR inteira arquivada, idem');
+
+  ctx._regItens = [item({ id: 30, texto: 'Conferido o comprovante de devolução de saldo.' }),
+    item({ id: 31, tipo: 'tarefa', texto: 'Cobrar extrato', prazo: '2026-10-01' })];
+  const h = ctx.regCaixa(TR, ARQ);
+  const t = texto(h);
+  conf(/histórico/i.test(t), 'arquivada COM histórico: a caixa vira histórico');
+  conf(/não há o que registrar/.test(t), 'e diz por que não há o que fazer');
+  conf(!/Salvar registro/.test(t) && !/Criar tarefa/.test(t), '⚠️ sem formulário — não se cria nada');
+  conf(!/Escrever/.test(t), 'e sem o botão de escrever');
+  // Só leitura de verdade: nem concluir, nem editar, nem cancelar.
+  ctx.regAbrir('2021TR001578', '1');
+  const h2 = ctx.regCaixa(TR, ARQ);
+  conf(/Conferido o comprovante/.test(texto(h2)), 'o que foi escrito continua à vista');
+  conf(!/type="checkbox"/.test(h2), '⚠️ sem caixa de marcar — a tarefa não se conclui ali');
+  conf(!/regEditar\(/.test(h2) && !/regCancelar\(/.test(h2), 'e sem editar nem cancelar');
+  ctx._regAbertas = new Set();
+
+  // ── baixada com o C.I. encerrado: não convida, mas não fecha a porta
+  const ENC = { ...PA, baixada: true, ci_situacao: 'encerrado' };
+  ctx._regItens = [];
+  const h3 = ctx.regCaixa(TR, ENC);
+  conf(!/Nada registrado/.test(texto(h3)), 'encerrada no C.I.: sem o convite grande');
+  conf(/registrar algo nesta parcela/.test(texto(h3)), 'só um link discreto');
+  conf(h3.length < 600, 'numa linha fina', String(h3.length));
+}
+
+S('6. A PÍLULA DA TR — e o pulso vem do SERVIDOR');
 {
   ctx._regPorTr = { 'TR-A': { abertas: 2, vencidas: 1, vence_hoje: 0, registros: 3, total: 5, pulsa: true } };
   const p = ctx.regPilulaTr('TR-A');
@@ -165,7 +201,7 @@ S('5. A PÍLULA DA TR — e o pulso vem do SERVIDOR');
   conf(!/\.filter\(|\.reduce\(/.test(trecho), 'a pílula não recalcula nada — lê `por_tr` (armadilha 16)');
 }
 
-S('6. O CSS DO PULSO, E O RESPEITO A QUEM PEDIU PARA NÃO ANIMAR');
+S('7. O CSS DO PULSO, E O RESPEITO A QUEM PEDIU PARA NÃO ANIMAR');
 {
   conf(/@keyframes regPulsa/.test(html), 'a animação existe');
   conf(/\.reg-pulsa\{animation:regPulsa/.test(html), 'e a classe a usa');
@@ -173,7 +209,7 @@ S('6. O CSS DO PULSO, E O RESPEITO A QUEM PEDIU PARA NÃO ANIMAR');
     '⚠️ quem pediu ao sistema para não animar vê a pílula parada — não deixa de vê-la');
 }
 
-S('7. CANCELAR NÃO APAGA, E A TELA DIZ ISSO ANTES');
+S('8. CANCELAR NÃO APAGA, E A TELA DIZ ISSO ANTES');
 {
   conf(/acao: 'cancelar'/.test(fonte), 'há a ação de cancelar');
   conf(!/method: 'DELETE'/.test(fonte), '⚠️ e nenhum DELETE — registro é trilha');
@@ -184,7 +220,7 @@ S('7. CANCELAR NÃO APAGA, E A TELA DIZ ISSO ANTES');
   conf(/acao: 'editar'/.test(fonte), 'e dá para editar');
 }
 
-S('8. O CADERNO NÃO DERRUBA A PLANILHA');
+S('9. O CADERNO NÃO DERRUBA A PLANILHA');
 {
   conf(/_regItens = \[\]; _regPorTr = \{\};/.test(fonte), 'se a rota falhar, o caderno fica vazio e segue');
   conf(/alvo\(\) : U\.id/.test(fonte) || /alvo\(\)\.id : U\.id/.test(fonte),

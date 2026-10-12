@@ -15491,9 +15491,45 @@ function regCaixa(r, pa) {
   const itens = regDaParcela(r.tr, num)
   const chave = `${r.tr}|${num}`
   const abertos = itens.filter(i => regEstado(i) === 'aberta' || regEstado(i) === 'vencida' || regEstado(i) === 'vence_hoje')
+
+  // ⚠️ NA PARCELA QUE ACABOU, A CAIXA NÃO COBRA NADA — decisão do Richard em 12/10, vendo a
+  // tela: *"PC finalizada e arquivada registrando tarefa? como assim"*. Ele tinha razão, e o
+  // tamanho do erro foi medido: no acervo dele, 115 das 253 parcelas já tinham acabado e
+  // estavam sendo convidadas a receber tarefa; no GT, 3.131 de 8.341.
+  //
+  // ARQUIVADA: não cria nada (nem registro, nem tarefa) — a caixa vira histórico, e só aparece
+  //   se houver algo escrito. A guarda de verdade é do servidor, que recusa a gravação.
+  // BAIXADA e com o C.I. ENCERRADO: o ciclo acabou, mas a parcela ainda pode ser arquivada —
+  //   a caixa não convida, e quem quiser escrever tem um link discreto.
+  const arquivada = !!(r.arquivada || pa.arquivamento?.estado === 'arquivada')
+  const encerrada = !arquivada && pa.baixada && pa.ci_situacao === 'encerrado'
+
   // ⚠️ NASCE ABERTA QUANDO HÁ TAREFA EM ABERTO. Fechada, ela mostra o último registro — o que
   // não pode acontecer é a pessoa não saber que existe algo escrito ali.
-  const aberta = _regAbertas.has(chave) || (abertos.length > 0 && !_regAbertas.has('!' + chave))
+  const aberta = (_regAbertas.has(chave) || (abertos.length > 0 && !_regAbertas.has('!' + chave)))
+    && !arquivada
+
+  // Parcela arquivada e sem nada escrito: a caixa não existe. Era ela que incomodava na tela.
+  if (arquivada && !itens.length) return ''
+
+  // Arquivada COM histórico: só leitura, dizendo por que não há o que fazer ali.
+  if (arquivada) {
+    const mostrar = _regAbertas.has(chave)
+    return `<div style="border-top:2px solid var(--grafite);background:#F7F9F8;">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 15px;flex-wrap:wrap;">
+        <span style="width:26px;height:26px;border-radius:7px;background:#8A938D;color:#fff;display:flex;
+          align-items:center;justify-content:center;font-size:13px;">📋</span>
+        <b style="font-size:12.5px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--ct);">
+          Registro — histórico</b>
+        <span style="font-size:11.5px;color:var(--ct);">${itens.length} ${itens.length === 1 ? 'anotação' : 'anotações'} ·
+          a parcela está arquivada, não há o que registrar</span>
+        <button onclick="${mostrar ? `regFechar('${escHtml(r.tr)}','${escHtml(num)}')` : `regAbrir('${escHtml(r.tr)}','${escHtml(num)}')`}"
+          style="margin-left:auto;background:none;border:none;font-size:12px;font-weight:800;color:var(--ct);
+          cursor:pointer;font-family:inherit;">${mostrar ? '⌃ recolher' : '⌄ ver'}</button>
+      </div>
+      ${mostrar ? `<div style="opacity:.75;">${itens.map(i => regItemHtml(r, pa, i, true)).join('')}</div>` : ''}
+    </div>`
+  }
 
   // ⚠️ AQUI MORAVA UM DEFEITO, e ele durou uma publicação: o ramo "sem nenhum item" devolvia a
   // linha de convite ANTES de olhar se a pessoa tinha clicado em Escrever. O clique marcava a
@@ -15501,6 +15537,16 @@ function regCaixa(r, pa) {
   // fazia nada.** É a armadilha 12 com outra roupa: botão que aceita clique e não responde.
   // O estado de aberto tem de ser consultado nos TRÊS ramos, e o formulário é um só.
   if (!itens.length && !aberta) {
+    // ⚠️ A PARCELA ENCERRADA NO C.I. NÃO É CONVIDADA — ela já deu o que tinha de dar, e o
+    // convite em 104 das 253 parcelas do acervo vira ruído. Fica um link discreto: às vezes
+    // se quer anotar algo depois, e fechar a porta seria o outro exagero.
+    if (encerrada) {
+      return `<div style="padding:7px 15px;background:#FAFBFA;border-top:2px solid var(--grafite);">
+        <button onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}
+          style="background:none;border:none;padding:0;font-size:11.5px;color:var(--ct);cursor:pointer;
+          font-family:inherit;font-weight:700;text-decoration:underline;">📋 registrar algo nesta parcela</button>
+      </div>`
+    }
     return `<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#FAFBFA;
       border-top:2px solid var(--grafite);flex-wrap:wrap;">
       <span style="width:26px;height:26px;border-radius:7px;background:#B9C2BC;color:#fff;display:flex;
@@ -15566,8 +15612,13 @@ function regCaixa(r, pa) {
   </div>`
 }
 
-/** Uma linha do caderno. */
-function regItemHtml(r, pa, i) {
+/**
+ * Uma linha do caderno. Com `soLeitura`, ela perde a caixa de marcar e os dois botões.
+ *
+ * ⚠️ `soLeitura` É A PARCELA ARQUIVADA: ali não se cria, não se conclui e não se cancela — o
+ * trabalho acabou (decisão do Richard). A linha continua à vista porque é histórico.
+ */
+function regItemHtml(r, pa, i, soLeitura) {
   const e = regEstado(i)
   const feito = e === 'concluida'
   const tarefa = String(i.tipo || 'registro') === 'tarefa'
@@ -15581,7 +15632,7 @@ function regItemHtml(r, pa, i) {
   const c = CORES[e] || CORES.registro
   const prazo = i.prazo ? ` · prazo ${planData(String(i.prazo).slice(0, 10))}` : ''
   return `<div style="display:flex;gap:11px;padding:11px 15px;border-bottom:1px solid #F0E6C8;align-items:flex-start;">
-    ${tarefa ? `<input type="checkbox" ${feito ? 'checked' : ''} title="${feito ? 'Reabrir' : 'Marcar como feita'}"
+    ${tarefa && !soLeitura ? `<input type="checkbox" ${feito ? 'checked' : ''} title="${feito ? 'Reabrir' : 'Marcar como feita'}"
       onclick="regMarcar(${i.id}, this.checked)" style="width:17px;height:17px;accent-color:#8A6100;margin-top:3px;
       flex:0 0 auto;cursor:pointer;"${vcOff()}>` : '<span style="width:17px;flex:0 0 auto;"></span>'}
     <div style="min-width:0;flex:1 1 auto;">
@@ -15595,12 +15646,12 @@ function regItemHtml(r, pa, i) {
     </div>
     ${/* ⚠️ EDITAR E CANCELAR, NUNCA APAGAR (decisão do Richard): cancelar some da lista e a
           linha fica no banco. Registro é trilha. */''}
-    <span style="display:flex;gap:7px;flex:0 0 auto;">
+    ${soLeitura ? '' : `<span style="display:flex;gap:7px;flex:0 0 auto;">
       <button title="Editar" onclick="regEditar(${i.id})"${vcOff()}
         style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--ct);">✎</button>
       <button title="Cancelar — some da lista, fica no histórico" onclick="regCancelar(${i.id})"${vcOff()}
         style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--ct);">✕</button>
-    </span>
+    </span>`}
   </div>`
 }
 
