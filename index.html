@@ -20765,6 +20765,17 @@ function ciLoteTodas(tr) {
 }
 
 /** A barra do rodapé. Só existe enquanto houver seleção. */
+// O PAINEL DA SELEÇÃO EM LOTE.
+//
+// ⚠️ ERA UMA BARRA COLADA NA BORDA DA JANELA, e em 12/10/2026 o Richard mostrou o print: ela
+// ficava EMBAIXO DA BARRA DE TAREFAS DO WINDOWS, quase invisível, e os dois botões tinham o
+// mesmo peso. Quem seleciona parcial e não vê o que fazer depois desiste da ação.
+//
+// ⚠️ E NÃO VIROU MODAL, apesar de ter sido esse o pedido. Modal bloqueia a tela, e aqui a
+// pessoa precisa continuar marcando parciais depois da primeira — um modal obrigaria a fechar,
+// marcar, abrir de novo. O que o pedido queria era SER VISTO, e isso o painel resolve sem
+// tirar da pessoa a lista que ela está usando. As duas ações já abrem `moConfirm` ao clicar,
+// com a lista das parciais e o aviso de que vai a parcela inteira — essa parte não mudou.
 function ciLoteBarra() {
   let el = document.getElementById('ciLoteBarra')
   if(!_ciLote.size) { if(el) el.remove(); return }
@@ -20776,18 +20787,51 @@ function ciLoteBarra() {
   const valor = sel.reduce((v,p) => v + (parseFloat(p.valor)||0), 0)
   if(!el) {
     el = document.createElement('div'); el.id = 'ciLoteBarra'
-    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:900;background:#1A4E8A;'
-      + 'color:#fff;padding:11px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;'
-      + 'box-shadow:0 -2px 12px rgba(0,0,0,.22);font-size:13px;'
+    // ⚠️ DESCOLADO DA BORDA (`bottom:18px`) e com sombra forte: é o que o tira de debaixo da
+    // barra de tarefas e o faz parecer o que é — uma coisa que apareceu por cima da tela.
+    el.style.cssText = 'position:fixed;left:18px;right:18px;bottom:18px;z-index:900;background:#fff;'
+      + 'border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.26);border-top:5px solid var(--v);'
+      + 'overflow:hidden;font-size:13px;color:var(--te);'
     document.body.appendChild(el)
   }
-  el.innerHTML = `<b>☑ ${plural(sel.length,'parcial selecionada','parciais selecionadas')}</b>`
-    + `<span style="opacity:.9;">${_ciLoteTr} · ${plural(pcs,'PC','PCs')} · ${planMoeda(valor)}</span>`
-    + `<span style="margin-left:auto;display:flex;gap:9px;align-items:center;">`
-    + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteLimpar();planAplicar()">limpar seleção</button>`
-    + `<button class="btn-acao" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55);" onclick="ciLoteSgpe()">🏛 Registrar devolutiva pelo SGPe</button>`
-    + `<button class="btn-acao" style="background:#fff;color:#1A4E8A;font-weight:800;" onclick="ciLoteEnviar()">🏛 Encaminhar ${artigo(sel.length)} ${sel.length} ao C.I.</button>`
-    + `</span>`
+  const num = (q, rot) => `<div style="text-align:center;padding:0 14px;border-right:1px solid var(--cl);">
+      <div style="font-size:19px;font-weight:900;line-height:1;">${q}</div>
+      <div style="font-size:10px;color:var(--ct);margin-top:2px;">${rot}</div></div>`
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 18px 11px;border-bottom:1px solid var(--cl);">
+      ${/* ⚠️ A BOLHA COM O NÚMERO é o que a pessoa acha com o canto do olho quando a tela rola. */''}
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--v);color:#fff;font-size:16px;
+           font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">${sel.length}</div>
+      <div>
+        <div style="font-size:15px;font-weight:800;">${plural(sel.length,'parcial selecionada','parciais selecionadas')}</div>
+        <div style="font-size:11.5px;color:var(--ct);margin-top:1px;">${escHtml(_ciLoteTr)}${r?.entidade ? ' · ' + escHtml(r.entidade) : ''}</div>
+      </div>
+      <button onclick="ciLoteLimpar();planAplicar()" style="margin-left:auto;background:none;border:none;
+        font-size:13px;color:var(--ct);cursor:pointer;font-weight:700;font-family:Barlow,sans-serif;
+        padding:4px 8px;border-radius:6px;">✕ limpar seleção</button>
+    </div>
+    <div style="display:flex;gap:10px;padding:12px 18px;align-items:center;flex-wrap:wrap;">
+      ${num(sel.length, plural(sel.length,'parcial','parciais'))}
+      ${num(pcs, plural(pcs,'prestação','prestações'))}
+      ${num(planMoeda(valor), 'valor')}
+      <div style="margin-left:auto;display:flex;gap:9px;flex-wrap:wrap;">
+        ${/* ⚠️ OS DOIS BOTÕES TÊM PESOS DIFERENTES: a ação de sempre em verde cheio, a do SGPe
+              em azul claro. Com o mesmo peso, como era, a pessoa não sabia qual era qual. */''}
+        <button onclick="ciLoteSgpe()" style="border-radius:8px;padding:9px 16px;font-size:13px;
+          font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;border:1.5px solid #B9D3EC;
+          background:#EAF1F9;color:#1A4E8A;">🏛 Registrar devolutiva pelo SGPe</button>
+        <button onclick="ciLoteEnviar()" style="border-radius:8px;padding:9px 16px;font-size:13px;
+          font-weight:800;font-family:Barlow,sans-serif;cursor:pointer;border:1.5px solid var(--v);
+          background:var(--v);color:#fff;">🏛 Encaminhar ${artigo(sel.length)} ${sel.length} ao C.I.</button>
+      </div>
+    </div>
+    ${/* ⚠️ A LINHA QUE DIZ O QUE CADA BOTÃO FAZ. Quatro analistas perguntaram na mesma semana
+          para que servia a devolutiva pelo SGPe — a explicação tem de estar onde se decide. */''}
+    <div style="font-size:11px;color:var(--ct);padding:0 18px 12px;line-height:1.45;">
+      <b style="color:var(--te);">Encaminhar ao C.I.</b> manda a parcial para o Controle Interno analisar.
+      &nbsp;·&nbsp; <b style="color:var(--te);">Devolutiva pelo SGPe</b> é para quando o processo já foi ao C.I.
+      e já voltou — o sistema confere no SGPe e libera sem precisar encaminhar de novo.
+    </div>`
 }
 
 /**
