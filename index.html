@@ -19,6 +19,15 @@
   --grafite:#39443E;
   --sombra:0 2px 8px rgba(0,0,0,.08);
 }
+/* O CADERNO DA PARCELA (12/10/2026) — a pílula PULSA só quando há tarefa vencida ou vencendo
+   hoje, e quem decide isso é o servidor. ⚠️ `prefers-reduced-motion` desliga: quem pediu ao
+   sistema para não animar nada tem de continuar vendo a pílula, só parada. */
+@keyframes regPulsa{0%,100%{box-shadow:0 0 0 0 rgba(217,182,90,.85)}70%{box-shadow:0 0 0 7px rgba(217,182,90,0)}}
+.reg-pulsa{animation:regPulsa 1.7s ease-out infinite;}
+@media (prefers-reduced-motion: reduce){.reg-pulsa{animation:none;}}
+.reg-bt{color:#fff;border:2px solid;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:900;
+  font-family:Barlow,sans-serif;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
+.reg-bt:active{transform:translateY(1px);}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Barlow',sans-serif;background:#EDF2EE;color:var(--te);font-size:14px;}
 
@@ -14585,6 +14594,9 @@ async function buscarPlan() {
     window._planDadosCache = trs
     planAplicar()
     planIrAoAlvo()
+    // ⚠️ O CADERNO VEM DEPOIS DE PINTAR, e numa chamada só para todas as TRs: ele não pode
+    // atrasar a planilha, e uma requisição por TR seriam 54. Quando chega, repinta.
+    regCarregar(trs.map(t => t.tr)).then(() => planAplicar())
   } catch(e) {
     cont.innerHTML = `<div style="color:var(--r);padding:16px;">Erro: ${e.message}</div>`
   }
@@ -15389,6 +15401,276 @@ function pDiasNoCi(dt) {
   const d = diaBr(dt); if(!d) return null
   return Math.floor((new Date(hojeBr+'T00:00:00') - new Date(d+'T00:00:00')) / 86400000)
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  REGISTRO / TAREFA DA PARCELA — o caderno do analista  (12/10/2026)
+//
+//  Pedido do Richard: *"uma caixa que se chama REGISTRO / TAREFA, onde o analista descreve o
+//  que está fazendo, deixa anotado solicitações, de fácil visualização e bem visível"*.
+//
+//  ⚠️ NÃO NASCEU TABELA NOVA. É a `anotacoes_tr`, que já tinha 87 anotações de 14 analistas —
+//  e o conteúdo delas já era isto: *"Diligência 03/2026 - Prazo 10 dias"*. O que faltava não
+//  era onde escrever: era VER o que já foi escrito. (A Marlene gravou a mesma anotação em dois
+//  dias seguidos, ids 88 e 89.)
+//
+//  ⚠️ QUEM VÊ É QUEM ESCREVEU — decisão do Richard. O servidor não tem rota que devolva o
+//  caderno de outra pessoa. A anotação da TR (a de sempre, `parcial_num` nulo) continua
+//  pública, no bloco de cima do cartão; são coisas diferentes e moram em lugares diferentes.
+//
+//  ⚠️ A TELA NÃO CONTA (armadilha 16): quantas tarefas há, quais venceram e se a pílula pulsa
+//  vêm prontos de `GET /registros`, em `por_tr`.
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _regItens = [];        // os itens do analista, das TRs em tela
+let _regPorTr = {};        // o resumo pronto do servidor — é ele que desenha a pílula
+let _regAbertas = new Set();   // as parcelas com a caixa aberta nesta visita
+let _regHoje = '';
+
+/** Carrega o caderno das TRs da planilha. Uma chamada para todas — não uma por TR. */
+async function regCarregar(trs) {
+  try {
+    const lista = (trs || []).filter(Boolean);
+    if (!lista.length) { _regItens = []; _regPorTr = {}; return; }
+    const quem = (typeof alvo === 'function' && alvo()) ? alvo().id : U.id;
+    const j = await (await fetch(`${API_URL}/registros?usuario_id=${quem}&trs=${encodeURIComponent(lista.join(','))}`)).json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    _regItens = j.data.itens || [];
+    _regPorTr = j.data.por_tr || {};
+    _regHoje = j.data.hoje || '';
+  } catch (e) {
+    // ⚠️ O CADERNO NÃO PODE DERRUBAR A PLANILHA — a rota pode não estar no ar ainda.
+    _regItens = []; _regPorTr = {};
+  }
+}
+
+/** Os itens de uma parcela, na ordem: tarefa aberta primeiro, depois o resto por data. */
+function regDaParcela(tr, num) {
+  const n = String(num == null ? '' : num)
+  return _regItens.filter(i => i.tr === tr && String(i.parcial_num) === n)
+}
+
+/** O estado de um item — a MESMA regra do servidor, pelos mesmos nomes. */
+function regEstado(i) {
+  if (!i) return 'registro'
+  if (i.cancelada_em) return 'cancelada'
+  if (String(i.tipo || 'registro') !== 'tarefa') return 'registro'
+  if (i.concluida_em) return 'concluida'
+  if (!i.prazo) return 'aberta'
+  const p = String(i.prazo).slice(0, 10)
+  if (_regHoje && p < _regHoje) return 'vencida'
+  if (_regHoje && p === _regHoje) return 'vence_hoje'
+  return 'aberta'
+}
+
+/**
+ * A PÍLULA DA BARRA DA TR.
+ *
+ * ⚠️ ELA PULSA SÓ QUANDO HÁ TAREFA VENCIDA OU VENCENDO HOJE — decisão do Richard. Movimento é
+ * o recurso mais caro de uma tela: gasto numa tarefa para a semana que vem, deixa de significar
+ * urgência em qualquer lugar. Quem decide é o servidor (`por_tr[tr].pulsa`); aqui só se pinta.
+ */
+function regPilulaTr(tr) {
+  const s = _regPorTr[tr]
+  if (!s || (!s.abertas && !s.registros)) return ''
+  if (!s.abertas) {
+    return `<span title="${s.registros} registro${s.registros > 1 ? 's' : ''} seu${s.registros > 1 ? 's' : ''} nesta TR"
+      style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;
+      background:#EEF2F0;color:#4A5E52;border:1px solid #D6DEDA;">📋 ${s.registros}</span>`
+  }
+  const venc = s.vencidas + s.vence_hoje
+  const txt = `📌 ${s.abertas} tarefa${s.abertas > 1 ? 's' : ''}${venc ? ` · ${s.vencidas ? s.vencidas + ' vencida' + (s.vencidas > 1 ? 's' : '') : 'vence hoje'}` : ''}`
+  return `<span title="${venc ? 'Há tarefa vencida ou vencendo hoje' : 'Tarefas suas em aberto nesta TR'}"
+    class="${s.pulsa ? 'reg-pulsa' : ''}"
+    style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;
+    background:#FFE9A8;color:#6B4D08;border:1px solid #D9B65A;">${txt}</span>`
+}
+
+/** A caixa dentro do bloco da parcela. */
+function regCaixa(r, pa) {
+  const num = String(pa.num == null ? '' : pa.num)
+  const itens = regDaParcela(r.tr, num)
+  const chave = `${r.tr}|${num}`
+  const abertos = itens.filter(i => regEstado(i) === 'aberta' || regEstado(i) === 'vencida' || regEstado(i) === 'vence_hoje')
+  // ⚠️ NASCE ABERTA QUANDO HÁ TAREFA EM ABERTO. Fechada, ela mostra o último registro — o que
+  // não pode acontecer é a pessoa não saber que existe algo escrito ali.
+  const aberta = _regAbertas.has(chave) || (abertos.length > 0 && !_regAbertas.has('!' + chave))
+
+  if (!itens.length) {
+    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#FAFBFA;
+      border-top:2px solid var(--grafite);flex-wrap:wrap;">
+      <span style="width:26px;height:26px;border-radius:7px;background:#B9C2BC;color:#fff;display:flex;
+        align-items:center;justify-content:center;font-size:13px;">📋</span>
+      <span style="font-size:13px;font-weight:600;color:var(--ct);">Nada registrado nesta parcela ainda.
+        <span style="display:block;font-size:11px;">anote o que está analisando, ou crie uma tarefa do que falta</span></span>
+      <button class="btn-acao" style="margin-left:auto;background:#fff;color:#8A6100;border:2px solid #8A6100;font-weight:900;"
+        onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}>＋ Escrever</button>
+    </div>`
+  }
+
+  if (!aberta) {
+    const ultimo = itens[0]
+    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#FFF6DC;
+      border-top:2px solid var(--grafite);flex-wrap:wrap;">
+      <span style="width:26px;height:26px;border-radius:7px;background:#8A6100;color:#fff;display:flex;
+        align-items:center;justify-content:center;font-size:13px;">📋</span>
+      <span style="font-size:13px;font-weight:700;color:#5C4106;min-width:0;">“${escHtml(String(ultimo.texto).slice(0, 80))}${String(ultimo.texto).length > 80 ? '…' : ''}”
+        <span style="display:block;font-size:11px;color:#8A6100;font-weight:600;">último registro · ${
+          escHtml(ultimo.analista_nome || '')} · ${planDataTs(ultimo.criado_em)} · ${itens.length} no total</span></span>
+      <button class="btn-acao" style="margin-left:auto;background:#8A6100;color:#fff;font-weight:900;"
+        onclick="regAbrir('${escHtml(r.tr)}','${escHtml(num)}')">⌄ Abrir registro</button>
+    </div>`
+  }
+
+  const s = { abertas: abertos.length, registros: itens.filter(i => regEstado(i) === 'registro').length }
+  return `<div style="border-top:2px solid var(--grafite);background:#FFFDF5;">
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;background:#FFF6DC;
+      border-bottom:1px solid #EADCAE;flex-wrap:wrap;">
+      <span style="width:28px;height:28px;border-radius:8px;background:#8A6100;color:#fff;display:flex;
+        align-items:center;justify-content:center;font-size:14px;">📋</span>
+      <b style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#5C4106;">Registro / Tarefa</b>
+      <span style="font-size:11.5px;color:#8A6100;font-weight:700;">${
+        s.abertas ? `${s.abertas} tarefa${s.abertas > 1 ? 's' : ''} aberta${s.abertas > 1 ? 's' : ''} · ` : ''}${
+        s.registros} registro${s.registros === 1 ? '' : 's'}</span>
+      ${/* ⚠️ O CADEADO NÃO É ENFEITE: é a diferença entre esta caixa e a anotação da TR, que
+            todo mundo vê. Sem dizer, a pessoa não sabe o que pode escrever aqui. */''}
+      <span title="Só você vê o que escreve aqui. A anotação da TR, no alto do cartão, é a que todos veem."
+        style="font-size:10.5px;color:#8A6100;font-weight:700;">🔒 só você vê</span>
+      <button onclick="regFechar('${escHtml(r.tr)}','${escHtml(num)}')"
+        style="margin-left:auto;background:none;border:none;font-size:12px;font-weight:800;color:#8A6100;
+        cursor:pointer;font-family:inherit;">⌃ recolher</button>
+    </div>
+    ${itens.map(i => regItemHtml(r, pa, i)).join('')}
+    <div style="padding:12px 15px;background:#fff;border-top:1px solid #EADCAE;">
+      <textarea id="regTxt-${escHtml(chave)}" rows="2" placeholder="O que você está fazendo nesta parcela? O que ficou pendente?"
+        style="width:100%;border:2px solid var(--cb);border-radius:9px;padding:10px 12px;font-family:Barlow,sans-serif;
+        font-size:13.5px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:9px;margin-top:9px;align-items:center;flex-wrap:wrap;">
+        <button class="reg-bt" style="background:#1A4E8A;border-color:#143C6B;box-shadow:0 2px 0 #0E2B4D;"
+          onclick="regSalvar('${escHtml(r.tr)}','${escHtml(num)}','registro')"${vcOff()}>＋ Salvar registro</button>
+        <button class="reg-bt" style="background:#8A6100;border-color:#6B4D08;box-shadow:0 2px 0 #4A3600;"
+          onclick="regSalvar('${escHtml(r.tr)}','${escHtml(num)}','tarefa')"${vcOff()}>☑ Criar tarefa</button>
+        ${/* ⚠️ O PRAZO É OPCIONAL (decisão do Richard) e só vale para a tarefa — por isso ele
+              fica ao lado do botão dela, e não no alto do formulário. */''}
+        <label style="font-size:11.5px;color:var(--ct);display:flex;align-items:center;gap:6px;">prazo da tarefa
+          <input type="date" id="regPrazo-${escHtml(chave)}" style="width:auto;padding:6px 8px;font-size:12px;
+            border:1.5px solid var(--cb);border-radius:7px;"></label>
+      </div>
+      <div style="font-size:11.5px;color:var(--ct);margin-top:7px;">Registro é o que você fez. Tarefa é o que
+        falta — ela aparece na barra da TR até ser marcada.</div>
+    </div>
+  </div>`
+}
+
+/** Uma linha do caderno. */
+function regItemHtml(r, pa, i) {
+  const e = regEstado(i)
+  const feito = e === 'concluida'
+  const tarefa = String(i.tipo || 'registro') === 'tarefa'
+  const CORES = {
+    registro:   { bg: '#E8F0FB', fg: '#1A4E8A', rot: 'Registro' },
+    aberta:     { bg: '#FFE9A8', fg: '#6B4D08', rot: 'Tarefa' },
+    vence_hoje: { bg: '#FFD98A', fg: '#6B4D08', rot: 'Vence hoje' },
+    vencida:    { bg: '#FBD3D3', fg: '#8A1F1F', rot: 'Vencida' },
+    concluida:  { bg: '#E3F5E9', fg: '#14562F', rot: '✓ feita' },
+  }
+  const c = CORES[e] || CORES.registro
+  const prazo = i.prazo ? ` · prazo ${planData(String(i.prazo).slice(0, 10))}` : ''
+  return `<div style="display:flex;gap:11px;padding:11px 15px;border-bottom:1px solid #F0E6C8;align-items:flex-start;">
+    ${tarefa ? `<input type="checkbox" ${feito ? 'checked' : ''} title="${feito ? 'Reabrir' : 'Marcar como feita'}"
+      onclick="regMarcar(${i.id}, this.checked)" style="width:17px;height:17px;accent-color:#8A6100;margin-top:3px;
+      flex:0 0 auto;cursor:pointer;"${vcOff()}>` : '<span style="width:17px;flex:0 0 auto;"></span>'}
+    <div style="min-width:0;flex:1 1 auto;">
+      <span style="display:inline-block;font-size:10px;font-weight:900;padding:4px 9px;border-radius:6px;
+        text-transform:uppercase;letter-spacing:.04em;background:${c.bg};color:${c.fg};">${c.rot}</span>
+      <div style="font-size:13.5px;line-height:1.45;font-weight:${feito ? '500' : '600'};margin-top:4px;
+        ${feito ? 'text-decoration:line-through;color:#8A938D;' : ''}">${escHtml(i.texto)}</div>
+      <div style="font-size:11px;color:var(--ct);margin-top:3px;">${escHtml(i.analista_nome || '')} · ${
+        planDataTs(i.criado_em)}${prazo}${i.editado_em ? ' · editado' : ''}${
+        feito ? ` · concluída em ${planDataTs(i.concluida_em)}` : ''}</div>
+    </div>
+    ${/* ⚠️ EDITAR E CANCELAR, NUNCA APAGAR (decisão do Richard): cancelar some da lista e a
+          linha fica no banco. Registro é trilha. */''}
+    <span style="display:flex;gap:7px;flex:0 0 auto;">
+      <button title="Editar" onclick="regEditar(${i.id})"${vcOff()}
+        style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--ct);">✎</button>
+      <button title="Cancelar — some da lista, fica no histórico" onclick="regCancelar(${i.id})"${vcOff()}
+        style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--ct);">✕</button>
+    </span>
+  </div>`
+}
+
+// ── abrir, fechar e repintar ─────────────────────────────────────────────────
+// ⚠️ O ESTADO DE ABERTO MORA NA MEMÓRIA DA VISITA, nunca em sessionStorage: é estado de uma
+// visita a uma tela, não preferência da pessoa — a mesma ordem que vale para o botão "Fonte".
+function regAbrir(tr, num)  { _regAbertas.add(`${tr}|${num}`); _regAbertas.delete(`!${tr}|${num}`); planAplicar() }
+function regFechar(tr, num) { _regAbertas.delete(`${tr}|${num}`); _regAbertas.add(`!${tr}|${num}`); planAplicar() }
+
+async function regSalvar(tr, num, tipo) {
+  const campo = document.getElementById(`regTxt-${tr}|${num}`)
+  const texto = (campo?.value || '').trim()
+  if (texto.length < 3) { toast('Escreva pelo menos 3 caracteres.', 'err'); return }
+  const dp = document.getElementById(`regPrazo-${tr}|${num}`)
+  const prazo = (tipo === 'tarefa' && dp && dp.value) ? dp.value : null
+  try {
+    const j = await (await fetch(`${API_URL}/registros`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tr, parcial_num: num, tipo, texto, prazo, analista_id: U.id, analista_nome: U.nome }),
+    })).json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (campo) campo.value = ''
+    if (dp) dp.value = ''
+    _regAbertas.add(`${tr}|${num}`)
+    await regRecarregar()
+    toast(tipo === 'tarefa' ? 'Tarefa criada.' : 'Registro salvo.')
+  } catch (e) { toast('Não foi possível salvar: ' + e.message, 'err') }
+}
+
+async function regPatch(id, corpo, aviso) {
+  try {
+    const j = await (await fetch(`${API_URL}/registros/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...corpo, analista_id: U.id }),
+    })).json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    await regRecarregar()
+    if (aviso) toast(aviso)
+  } catch (e) { toast('Não foi possível: ' + e.message, 'err') }
+}
+
+function regMarcar(id, marcada) {
+  regPatch(id, { acao: marcada ? 'concluir' : 'reabrir' }, marcada ? 'Tarefa concluída.' : 'Tarefa reaberta.')
+}
+
+async function regEditar(id) {
+  const i = _regItens.find(x => Number(x.id) === Number(id))
+  if (!i) return
+  // ⚠️ `moPrompt`, nunca o `prompt()` do navegador: ele foi substituído em todo o arquivo —
+  // abre uma janela do sistema, fora da identidade, e alguns navegadores a bloqueiam.
+  const texto = await moPrompt('Editar o texto', { valor: i.texto, linhas: 3, okTexto: 'Salvar' })
+  if (texto == null || texto.trim() === i.texto) return
+  if (texto.trim().length < 3) { toast('Escreva pelo menos 3 caracteres.', 'err'); return }
+  regPatch(id, { acao: 'editar', texto: texto.trim(), tipo: i.tipo, prazo: i.prazo || null }, 'Alterado.')
+}
+
+async function regCancelar(id) {
+  const i = _regItens.find(x => Number(x.id) === Number(id))
+  if (!i) return
+  const ehTarefa = String(i.tipo) === 'tarefa'
+  const ok = await moConfirm(`Cancelar ${ehTarefa ? 'esta tarefa' : 'este registro'}?`, {
+    titulo: 'Sai da lista, fica no histórico',
+    detalhe: String(i.texto).slice(0, 160) + '\n\nNada é apagado — o item deixa de aparecer na parcela.',
+    okTexto: 'Cancelar o item',
+  })
+  if (ok) regPatch(id, { acao: 'cancelar' }, 'Cancelado.')
+}
+
+/** Recarrega o caderno das TRs que estão na tela e repinta. */
+async function regRecarregar() {
+  const trs = (window._planDadosCache || []).map(t => t.tr)
+  await regCarregar(trs)
+  planAplicar()
+}
+
 
 /**
  * O BLOCO DA PARCELA — moldura própria, faixa com o nome dela.  (12/10/2026)
@@ -16944,6 +17226,8 @@ function renderPlan(rows) {
             ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro lugares,
                   e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
             ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}${pilArq}`)}
+          ${/* O CADERNO DA PARCELA — bem visível, logo abaixo das pílulas. Ver `regCaixa`. */''}
+          ${regCaixa(r, pa)}
           ${pFaltaAgora(r, pa)}
           ${pFaixaPasso(pa)}
           ${pCiBloco(r, pa)}
@@ -16996,6 +17280,7 @@ function renderPlan(rows) {
                 As outras três aparecem no ramo de cima, o das baixadas. */''}
           ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}
           ${arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)}`)}
+        ${regCaixa(r, pa)}
         ${pFaltaAgora(r, pa)}
         ${pFaixaPasso(pa)}
         ${sub}
@@ -17061,6 +17346,9 @@ function renderPlan(rows) {
             ${trNova ? `<span title="Assumida ${planHaQuantoTempo(assumida)} — some sozinha depois de ${DIAS_TR_NOVA} dias"
               style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--az);color:#fff;">✨ NOVA</span>` : ''}
             ${anot ? `<span title="Esta TR tem anotação" style="font-size:12px;">🗒️</span>` : ''}
+            ${/* ⚠️ A PÍLULA DO CADERNO: ela PULSA quando há tarefa vencida ou vencendo hoje,
+                  e quem decide isso é o servidor (`por_tr[tr].pulsa`). Ver `regPilulaTr`. */''}
+            ${regPilulaTr(r.tr)}
             ${/* A CONFERÊNCIA COM O SIGEF na FILA — a TR recolhida também mostra, senão a
                   pendência só apareceria para quem já abriu o cartão. As PCs vêm de todas as
                   parciais da TR; o componente é o mesmo do cartão da parcela. */''}
