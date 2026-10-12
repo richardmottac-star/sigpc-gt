@@ -128,8 +128,13 @@ console.log('\n═══ 5. TRAVAS NO index.html ═══');
        'e mostra "+ N final" quando existe');
   // O rotulo do cartao: "PARCIAL FINAL" era contraditorio.
   conf(!/PARCIAL \$\{escHtml\(pa\.num\)\}/.test(html), 'o cartao nao diz mais "PARCIAL FINAL"');
-  conf((html.match(/pa\.soFinal \? 'PC FINAL'/g) || []).length === 2,
-       'os dois ramos do cartao (aberta e baixada) dizem "PC FINAL"');
+  // ⚠️ DESDE 12/10/2026 O ROTULO MORA NUMA FUNCAO SO — `pFaixaParcela`, chamada pelos dois
+  // ramos. Era a mesma expressao escrita duas vezes; agora e uma, e o que se conta sao as
+  // chamadas. Uma copia a menos e uma divergencia a menos (armadilha 19).
+  conf(/pa\.soFinal \? 'PC Final' : 'Parcial '/.test(html),
+       'o rotulo da final mora numa funcao unica');
+  conf((html.match(/\$\{pFaixaParcela\(r, pa, \{/g) || []).length === 2,
+       'os dois ramos do cartao (aberta e baixada) montam a faixa pela mesma funcao');
   // A regra tem de sair de `tipo`, nunca do texto de parcial_num.
   conf(/const planEhFinal = \(p\) => String\(p\?\.tipo\|\|''\)\.trim\(\)\.toLowerCase\(\) === 'final'/.test(html),
        'planEhFinal decide por `tipo`, com trim e minuscula');

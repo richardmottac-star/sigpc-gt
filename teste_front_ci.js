@@ -338,7 +338,12 @@ console.log('\n═══ O RETORNO DO C.I. CHEGA NA TELA (24/08/2026) ═══'
 
   // ── o ancora existe nos DOIS ramos da parcela
   conf(/function planAncora\(tr, parcial\)/.test(html), 'ha uma funcao unica para o id do ancora');
-  const ancoras = (html.match(/id="\$\{planAncora\(r\.tr, pa\.num\)\}"/g) || []).length;
+  // ⚠️ DESDE 12/10/2026 O ANCORA MORA NUMA FUNCAO SO — `pBlocoAbre`, que abre o bloco da
+  // parcela e e chamada pelos DOIS ramos. Antes eram duas copias do mesmo atributo; o que se
+  // conta agora sao as duas CHAMADAS, e nao duas escritas iguais.
+  conf(/function pBlocoAbre\(r, pa\)/.test(html), 'o id do ancora mora numa funcao unica');
+  conf(/id="\$\{planAncora\(r\.tr, pa\.num\)\}"/.test(html), 'e ela usa o planAncora de sempre');
+  const ancoras = (html.match(/\$\{pBlocoAbre\(r, pa\)\}/g) || []).length;
   // ⚠️ A parcela que volta do C.I. esta SEMPRE baixada — a baixa nao e cancelada em nenhum
   // caminho do ciclo. Ela cai no ramo verde; o ancora so no outro ramo nao serviria de nada.
   conf(ancoras === 2, 'o ancora da parcela esta nos dois ramos, baixada e em aberto', String(ancoras));

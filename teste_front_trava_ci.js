@@ -53,7 +53,10 @@ S('2. A FAIXA DIZ O MOTIVO, E O BOTAO NAO ACEITA CLIQUE');
   conf(/noCi\.setor/.test(faixa) && /noCi\.desde/.test(faixa) && /arqNoCiDias\(noCi\)/.test(faixa),
        'com o setor, desde quando e ha quantos dias');
   // A janela do ramo novo termina no marco do ramo generico que vem logo depois.
-  const botao = faixa.slice(faixa.indexOf('if(noCi) return'), faixa.indexOf('background:#fff;border:0.5px solid var(--borda-suave)'));
+  // ⚠️ O MARCO MUDOU EM 12/10/2026 e o teste reprovou codigo certo: o aviso generico deixou de
+  // ser uma caixa branca (`background:#fff;border:0.5px solid var(--borda-suave)`) e virou ambar
+  // com barra lateral. O marco novo e a FRASE, que e do proprio aviso — armadilha 30.
+  const botao = faixa.slice(faixa.indexOf('if(noCi) return'), faixa.indexOf('Ainda não dá para arquivar —'));
   conf(/<button class="btn-acao" disabled/.test(botao), 'o botao de arquivar nasce DESABILITADO');
   conf(!/onclick=/.test(botao), 'e sem onclick: botao que aceita clique e nao responde e pior que botao cinza');
   // ⚠️ BOTAO CINZA NUNCA E MUDO (armadilha 19): o motivo fica ao LADO, em texto. O `title` so

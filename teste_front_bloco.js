@@ -1,270 +1,144 @@
 // CAMINHO: sigpc-gt/teste_front_bloco.js
 //
-// Testes da SELEÇÃO E AÇÃO EM BLOCO do Painel ADMIN, extraindo as funções do próprio
-// index.html. Sem navegador, sem rede, sem login.
+// O BLOCO DA PARCELA  (12/10/2026)
 //
-// ⚠️ O QUE ESTES TESTES PROTEGEM
+// ⚠️ O QUE ELE GUARDA: que cada parcela continue sendo um bloco FECHADO. O Richard abriu a
+// 2021TR001578 e disse que a tela estava confusa — e o defeito não era o tamanho da letra: a
+// faixa de passo e o bloco do C.I. ficavam soltos entre uma parcela e outra, e o "Passo 3 de 3"
+// da FINAL aparecia logo abaixo da linha dela, parecendo conclusão da Parcial 1.
 //
-// A regra que segura tudo: **a ação só alcança quem está na tela.** A marcação sobrevive à
-// troca de filtro — senão buscar um nome no meio da reunião apagaria o que já foi marcado —
-// mas quem sai do filtro para de ser afetado.
-//
-// Sem isso, "Aprovar 12 selecionados" poderia liberar 30 pessoas, 18 delas invisíveis no
-// momento do clique. Numa reunião de abertura isso é irreparável: a pessoa entra e ninguém
-// percebeu.
-//
-// Protegem também:
-//   · o superadmin não se desativa por engano num "desativar todos";
-//   · o botão conta só quem está REALMENTE aguardando aprovação, não os selecionados;
-//   · falha de rede no meio do lote não some: volta no relatório.
+// ⚠️ E QUE A FAIXA NÃO VOLTE A SER PRETA. A primeira versão usou o grafite das linhas e virou um
+// retângulo quase preto: *"essa cor destoa"*. O sistema é verde; o grafite é contorno.
 //
 // USO: node teste_front_bloco.js
 
 const fs = require('fs');
-const path = require('path');
 const vm = require('vm');
-
-const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-
-const ini = html.indexOf('let _admSel = new Set()');
-const fim = html.indexOf('async function admAprovarBloco(');
-if (ini < 0 || fim < 0) {
-  console.error('FALHA: nao achei o bloco de selecao em massa no index.html.');
-  process.exit(1);
-}
-
-// ── DOM mínimo ──────────────────────────────────────────────────────────────
-// Só o que estas funções tocam. Um DOM de verdade não acrescentaria nada ao que se quer
-// provar aqui, que é quem entra na conta e quem não entra.
-function novoEl(extra) {
-  const el = { style:{}, textContent:'', title:'', disabled:false,
-               checked:false, indeterminate:false, value:'', ...(extra||{}) };
-  el.closest = () => ({ style:{} });
-  return el;
-}
-const els = {};
-const idsFixos = ['admBarraBloco','admBlocoTxt','admBlocoFora','admBtnAprovar',
-                  'admBtnAtivar','admBtnDesativar','admSelTodos'];
-idsFixos.forEach(id => { els[id] = novoEl() });
-
-let caixas = [];   // as .admChk que estariam na tela
-const doc = {
-  getElementById: id => els[id] || null,
-  querySelectorAll: sel => (sel === '.admChk' ? caixas : []),
-  querySelector: () => null,
-};
-
-const ctx = { console, document: doc, toast: () => {} };
-vm.createContext(ctx);
-
-// As funções ficam com as `let` no MESMO escopo léxico — por isso os ajudantes vão
-// concatenados no mesmo script. `let` não vira propriedade do contexto do vm; função vira.
-vm.runInContext(html.slice(ini, fim) + `
-function _setVis(v){ _admVisiveis = v.map(String) }
-function _setSel(v){ _admSel = new Set(v.map(String)) }
-function _getSel(){ return [..._admSel] }
-function _setUsers(v){ _admUsers = v }
-`, ctx);
-
-const { admSelVisiveis, admSelToggle, admSelTodos, admBarraAtualizar,
-        admSelTodosEstado, admEmLotes, _setVis, _setSel, _getSel, _setUsers } = ctx;
-
-// `_admUsers` é declarado antes do trecho extraído; o vm precisa dele para a contagem.
-vm.runInContext('var _admUsers = []', ctx);
-
-const caixa = (id, marcada) => ({ dataset:{ id:String(id) }, checked: !!marcada,
-                                  closest: () => ({ style:{} }) });
+const html = fs.readFileSync('./index.html', 'utf8');
 
 let ok = 0, falhou = 0;
 const conf = (passou, rotulo, detalhe) => {
   passou ? ok++ : falhou++;
-  console.log(`  ${passou ? 'OK  ' : 'FALHA'}  ${rotulo}${passou || !detalhe ? '' : `   [${detalhe}]`}`);
+  console.log(`  ${passou ? 'OK  ' : 'FALHA'}  ${rotulo}${passou || detalhe == null ? '' : `   [${detalhe}]`}`);
 };
+const S = (t) => console.log(`\n═══ ${t} ═══`);
 
-(async () => {
+// ⚠️ A janela termina num MARCO DO PRÓPRIO CÓDIGO (armadilha 30).
+const i = html.indexOf('function pBlocoCor(pa) {');
+// ⚠️ O FIM É A FUNÇÃO SEGUINTE, e não uma frase do comentário dela: cortar no meio de um
+// `/** ... */` deixa o comentário aberto e o `vm` recusa o trecho inteiro. Aconteceu aqui.
+const fonte = i < 0 ? '' : html.slice(i, html.indexOf('function pFaltaAgora(r, pa) {', i));
 
-console.log('\n═══ 1. A ACAO SO ALCANCA QUEM ESTA NA TELA ═══');
+const ctx = {
+  console,
+  escHtml: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+  planMoedaAgr: () => 'R$ 140.000,00',
+  planAncora: (tr, n) => `pc-${tr}-${n}`,
+  procHtml: (p) => `<a href="#" class="link-sgpe">${p}</a>`,
+  procVazio: (p) => !p,
+  procInvalido: () => false,
+  procInvalidoTag: () => '',
+  sgpeIconeConsulta: () => '<span class="icone-sgpe"></span>',
+};
+vm.createContext(ctx);
+new vm.Script(fonte.replace(/^const /gm, 'var ').replace(/^let /gm, 'var ')).runInContext(ctx);
+
+const PARCELA = {
+  num: '1', soFinal: false, qtd: 1, data_baixa: '2026-06-30',
+  pcs: [{ codigo_pc: '2021PC002060', processo_pc: 'SCC 00011955/2022' }],
+  ci_situacao: 'na_fila', arquivamento: null,
+};
+const TR = { tr: '2021TR001578', arquivada: false };
+
+S('1. O BLOCO É FECHADO — e tem o âncora da parcela');
 {
-  _setSel([1,2,3,4,5]);
-  _setVis([1,2,9]);
-  const alvo = admSelVisiveis();
-  conf(alvo.length === 2, 'de 5 marcados, so os 2 visiveis entram', `veio ${alvo.length}`);
-  conf(alvo.includes('1') && alvo.includes('2'), 'e sao exatamente os que o filtro deixou');
-  conf(!alvo.includes('3') && !alvo.includes('4') && !alvo.includes('5'),
-       'OS MARCADOS FORA DO FILTRO FICAM DE FORA');
-  conf(!alvo.includes('9'), 'e visivel sem marcacao tambem nao entra');
+  conf(fonte.length > 0, 'o trecho do bloco foi encontrado');
+  const abre = ctx.pBlocoAbre(TR, PARCELA);
+  conf(/border:2px solid/.test(abre), 'a parcela ganha moldura própria de 2px');
+  conf(/border-radius:11px/.test(abre) && /margin:13px/.test(abre), 'com cantos e respiro — ela é uma coisa só');
+  conf(/id="pc-2021TR001578-1"/.test(abre), 'e carrega o âncora, pelo planAncora de sempre');
+  // ⚠️ AS DUAS CHAMADAS: o bloco abre nos dois ramos do cartão (armadilha 19).
+  conf((html.match(/\$\{pBlocoAbre\(r, pa\)\}/g) || []).length === 2, 'o bloco abre nos DOIS ramos',
+    (html.match(/\$\{pBlocoAbre\(r, pa\)\}/g) || []).length);
+  conf((html.match(/\$\{pFaixaParcela\(r, pa, \{/g) || []).length === 2, 'e a faixa é montada pela mesma função nos dois');
+  conf((html.match(/\$\{pSubParcela\(r, pa, /g) || []).length === 2, 'a sub-linha também');
 }
 
-console.log('\n═══ 2. A MARCACAO SOBREVIVE A TROCA DE FILTRO ═══');
+S('2. A FAIXA É VERDE INSTITUCIONAL — nunca preta');
 {
-  // Buscar um nome no meio da reunião não pode apagar o que já foi marcado.
-  _setSel([1,2,3]);
-  _setVis([1]);
-  conf(admSelVisiveis().length === 1, 'com o filtro estreito, so 1 e afetado');
-  _setVis([1,2,3]);
-  conf(admSelVisiveis().length === 3, 'ao alargar o filtro, os 3 voltam a valer');
-  conf(_getSel().length === 3, 'nada foi perdido no caminho');
+  const c = ctx.pBlocoCor(PARCELA);
+  conf(c.faixa === '#004D2B', 'em dia, a faixa é o verde escuro do sistema', c.faixa);
+  conf(!/#232C27|#000|black/.test(JSON.stringify(c)), '⚠️ e o preto não voltou');
+  const faixa = ctx.pFaixaParcela(TR, PARCELA, { marca: '✓ ', quando: 'baixada em 30/06/2026', acoes: '<button>Ações</button>' });
+  conf(/background:#004D2B/.test(faixa), 'a faixa sai pintada de verde escuro');
+  conf(/font-size:15px;font-weight:900;text-transform:uppercase/.test(faixa),
+    'o nome da parcela é 15px, peso 900 e caixa alta');
+  conf(/PARCIAL 1|Parcial 1/.test(faixa.replace(/<[^>]+>/g, '')), 'e diz qual parcela é');
+  conf(/1 PC · R\$ 140\.000,00/.test(faixa.replace(/<[^>]+>/g, ' ')), 'com o tamanho dela ao lado');
+  conf(/baixada em 30\/06\/2026/.test(faixa), 'e quando foi baixada');
+  conf(/<button>Ações<\/button>/.test(faixa), 'as ações continuam na faixa');
 }
 
-console.log('\n═══ 3. A BARRA CONTA CERTO, E DIZ QUEM FICOU DE FORA ═══');
+S('3. QUANDO O C.I. DEVOLVEU, A FAIXA MUDA DE COR');
 {
-  _setUsers([
-    { id:1, nome:'A', aguardando_aprovacao:true },
-    { id:2, nome:'B', aguardando_aprovacao:true },
-    { id:3, nome:'C', aguardando_aprovacao:false },
-    { id:8, nome:'H', aguardando_aprovacao:true },
-  ]);
-  _setSel([1,2,3,8]);
-  _setVis([1,2,3]);
-  caixas = [caixa(1,true), caixa(2,true), caixa(3,true)];
-  admBarraAtualizar();
-
-  conf(els.admBarraBloco.style.display === 'flex', 'a barra aparece');
-  conf(els.admBlocoTxt.textContent === '3 selecionados', 'conta os 3 visiveis', els.admBlocoTxt.textContent);
-  conf(/1 marcado fora do filtro/.test(els.admBlocoFora.textContent),
-       'AVISA o que ficou fora do filtro', els.admBlocoFora.textContent);
-  // O 3 está selecionado e visível, mas não aguarda aprovação — o botão não pode contá-lo.
-  conf(els.admBtnAprovar.textContent === '✓ Aprovar 2 selecionados',
-       'o botao conta so quem AGUARDA aprovacao, nao os selecionados', els.admBtnAprovar.textContent);
-  conf(els.admBtnAtivar.textContent === '✅ Ativar 3', 'ativar conta todos os visiveis marcados');
-  conf(els.admBtnDesativar.textContent === '🚫 Desativar 3', 'desativar idem');
+  // ⚠️ É o único estado em que a parcela espera uma ação — e a cor diz isso antes do texto.
+  const devolvida = { ...PARCELA, ci_situacao: 'com_analista' };
+  const c = ctx.pBlocoCor(devolvida);
+  conf(c.faixa === '#7A5600', 'devolvida pelo C.I. → faixa âmbar escura', c.faixa);
+  conf(c.borda === '#8A6100', 'e a moldura acompanha');
+  // `na_fila` é o contrário: está com eles, e não há o que cobrar aqui.
+  conf(ctx.pBlocoCor({ ci_situacao: 'na_fila' }).faixa === '#004D2B',
+    '⚠️ "na fila" NÃO é devolução — continua verde');
+  conf(ctx.pBlocoCor({ ci_situacao: 'encerrado' }).faixa === '#004D2B', 'encerrada também');
+  conf(ctx.pBlocoCor(null).faixa === '#004D2B', 'e sem C.I. nenhum, verde');
 }
 
-console.log('\n═══ 4. SEM NINGUEM AGUARDANDO, O BOTAO DE APROVAR NAO CLICA ═══');
+S('4. OS LINKS DO SGPe PERMANECEM — e saem do procHtml');
 {
-  _setUsers([{ id:1, nome:'A', aguardando_aprovacao:false }]);
-  _setSel([1]); _setVis([1]);
-  caixas = [caixa(1,true)];
-  admBarraAtualizar();
-  conf(els.admBtnAprovar.disabled === true, 'fica desabilitado');
-  conf(els.admBtnAprovar.textContent === '✓ Aprovar selecionados', 'e sem numero mentiroso');
-  conf(/Nenhum dos selecionados/.test(els.admBtnAprovar.title), 'com o motivo no title');
+  const sub = ctx.pSubParcela(TR, PARCELA, '<span class="pil">Parecer Regular</span>');
+  conf(/link-sgpe/.test(sub), '⚠️ o link do processo continua lá');
+  conf(/SCC 00011955\/2022/.test(sub), 'com o número do processo');
+  conf(/icone-sgpe/.test(sub), 'e o ícone de consulta ao lado');
+  conf(/Parecer Regular/.test(sub), 'as pílulas vêm junto');
+  // ⚠️ UM procHtml POR PROCESSO DISTINTO: a parcela pode ter várias PCs no mesmo processo.
+  const duas = { ...PARCELA, pcs: [
+    { codigo_pc: 'A', processo_pc: 'SCC 1/2022' }, { codigo_pc: 'B', processo_pc: 'SCC 1/2022' },
+    { codigo_pc: 'C', processo_pc: 'SCC 2/2022' }] };
+  const s2 = ctx.pSubParcela(TR, duas, '');
+  conf((s2.match(/link-sgpe/g) || []).length === 2, 'processo repetido aparece uma vez só',
+    (s2.match(/link-sgpe/g) || []).length);
+  // ⚠️ PC SEM PROCESSO CONTINUA DESENHANDO O `procHtml`, e isso é de propósito: é ele que
+  // mostra o caso "sem processo" com o lápis para corrigir (armadilha 17). Filtrar aqui
+  // esconderia justamente a PC que precisa de conserto.
+  conf(/proc-sgpe/.test(ctx.pSubParcela(TR, { ...PARCELA, pcs: [{ codigo_pc: 'A', processo_pc: '' }] }, '')),
+    'PC sem processo ainda chama o procHtml — é o caminho do conserto');
+  // Sem pílula e sem PC nenhuma, a sub-linha não existe — faixa vazia é ruído.
+  conf(ctx.pSubParcela(TR, { ...PARCELA, pcs: [] }, '') === '', 'sem nada para dizer, a sub-linha some');
 }
 
-console.log('\n═══ 5. SINGULAR E PLURAL ═══');
+S('5. A PARCELA ARQUIVADA RECUA, SEM SUMIR');
 {
-  _setUsers([{ id:1, nome:'A', aguardando_aprovacao:true }]);
-  _setSel([1]); _setVis([1]);
-  caixas = [caixa(1,true)];
-  admBarraAtualizar();
-  conf(els.admBlocoTxt.textContent === '1 selecionado', 'um so nao vira "1 selecionados"');
-  conf(els.admBtnAprovar.textContent === '✓ Aprovar 1 selecionado', 'no botao tambem');
+  const arq = { ...PARCELA, arquivamento: { estado: 'arquivada' } };
+  conf(/opacity:\.62/.test(ctx.pBlocoAbre(TR, arq)), 'arquivada: o bloco inteiro esmaece');
+  conf(!/opacity/.test(ctx.pBlocoAbre(TR, PARCELA)), 'e a normal não');
+  // ⚠️ Com a TR inteira arquivada não há o que distinguir — todas estão.
+  conf(!/opacity/.test(ctx.pBlocoAbre({ ...TR, arquivada: true }, arq)),
+    'com a TR toda arquivada, nenhuma parcela esmaece');
 }
 
-console.log('\n═══ 6. A BARRA SOME QUANDO NAO HA NADA ═══');
+S('6. A TR E OS AVISOS GANHARAM PESO');
 {
-  _setSel([]); _setVis([1,2]);
-  caixas = [caixa(1,false), caixa(2,false)];
-  admBarraAtualizar();
-  conf(els.admBarraBloco.style.display === 'none', 'escondida — barra com "0" vira paisagem');
+  conf(/font-size:21px;font-weight:900[\s\S]{0,220}escHtml\(r\.tr\|\|'—'\)/.test(html),
+    'o código da TR está em 21px e peso 900');
+  conf(/A sua baixa está mantida[\s\S]{0,40}ela contou/.test(html), 'o aviso da baixa continua');
+  const iOk = html.indexOf('✓ A sua baixa está mantida');
+  conf(/border-left:6px solid var\(--v\)/.test(html.slice(Math.max(0, iOk - 420), iOk)),
+    '⚠️ e ganhou barra lateral VERDE — é o aviso que tranquiliza');
+  const iAt = html.indexOf('Ainda não dá para arquivar —');
+  conf(/border-left:6px solid #8A6100/.test(html.slice(Math.max(0, iAt - 420), iAt)),
+    '⚠️ o que COBRA ganhou barra âmbar — as duas cores se separam de relance');
+  conf(/font-size:13\.5px/.test(html.slice(Math.max(0, iOk - 420), iOk)), 'e os dois subiram para 13,5px');
 }
 
-console.log('\n═══ 7. A CAIXA DO CABECALHO TEM OS TRES ESTADOS ═══');
-{
-  caixas = [caixa(1,true), caixa(2,true)];
-  admSelTodosEstado();
-  conf(els.admSelTodos.checked === true && els.admSelTodos.indeterminate === false, 'todas marcadas → marcada');
-
-  caixas = [caixa(1,true), caixa(2,false)];
-  admSelTodosEstado();
-  conf(els.admSelTodos.indeterminate === true, 'algumas → indeterminada');
-
-  caixas = [caixa(1,false), caixa(2,false)];
-  admSelTodosEstado();
-  conf(els.admSelTodos.checked === false && els.admSelTodos.indeterminate === false, 'nenhuma → vazia');
-
-  caixas = [];
-  admSelTodosEstado();
-  conf(els.admSelTodos.checked === false, 'tabela vazia nao deixa a caixa marcada');
-}
-
-console.log('\n═══ 8. MARCAR TODOS PEGA SO OS VISIVEIS ═══');
-{
-  _setSel([]);
-  _setUsers([{ id:1, aguardando_aprovacao:true },{ id:2, aguardando_aprovacao:true }]);
-  _setVis([1,2]);
-  caixas = [caixa(1,false), caixa(2,false)];
-  admSelTodos(true);
-  conf(_getSel().length === 2, 'marcou os 2 da tela');
-  // O 7 nem tem caixa: está fora do filtro, e "marcar todos" não pode alcançá-lo.
-  conf(!_getSel().includes('7'), 'nao alcancou quem esta fora do filtro');
-
-  admSelTodos(false);
-  conf(_getSel().length === 0, 'desmarcar limpa os visiveis');
-}
-
-console.log('\n═══ 9. MARCAR TODOS NAO APAGA MARCACAO DE FORA DO FILTRO ═══');
-{
-  _setSel([5,6]);            // marcados, hoje fora da tela
-  _setVis([1,2]);
-  caixas = [caixa(1,false), caixa(2,false)];
-  admSelTodos(true);
-  const sel = _getSel();
-  conf(sel.includes('5') && sel.includes('6'), 'os de fora continuam marcados');
-  conf(sel.includes('1') && sel.includes('2'), 'e os visiveis entraram');
-  admSelTodos(false);
-  const sel2 = _getSel();
-  conf(sel2.includes('5') && sel2.includes('6'), 'desmarcar os visiveis nao mexe nos de fora');
-  conf(!sel2.includes('1'), 'e limpa os visiveis');
-}
-
-console.log('\n═══ 10. UM CLIQUE MARCA E DESMARCA ═══');
-{
-  _setSel([]); _setVis([4]);
-  admSelToggle(4, true);
-  conf(_getSel().includes('4'), 'marcou');
-  admSelToggle(4, false);
-  conf(!_getSel().includes('4'), 'desmarcou');
-  // O id chega como string do HTML e como número do teste: os dois têm de casar.
-  _setSel([]); admSelToggle('7', true); _setVis([7]);
-  conf(admSelVisiveis().includes('7'), 'id em texto e id em numero sao a mesma pessoa');
-}
-
-console.log('\n═══ 11. OS LOTES: 47 PEDIDOS NAO SAEM DE UMA VEZ ═══');
-{
-  const ids = Array.from({ length: 47 }, (_, i) => String(i + 1));
-  let simultaneos = 0, pico = 0;
-  const r = await admEmLotes(ids, async () => {
-    simultaneos++; pico = Math.max(pico, simultaneos);
-    await new Promise(res => setTimeout(res, 1));
-    simultaneos--;
-  });
-  conf(r.ok.length === 47, 'os 47 foram processados');
-  conf(pico <= 5, 'nunca passa de 5 ao mesmo tempo', `pico ${pico}`);
-}
-
-console.log('\n═══ 12. FALHA NO MEIO DO LOTE NAO SOME ═══');
-{
-  const ids = ['1','2','3','4','5','6','7'];
-  const r = await admEmLotes(ids, async id => {
-    if (id === '3' || id === '6') throw new Error('rede caiu');
-    return true;
-  });
-  conf(r.ok.length === 5, '5 passaram');
-  conf(r.falhou.length === 2, '2 falharam e VOLTAM no relatorio', `veio ${r.falhou.length}`);
-  conf(r.falhou[0].erro === 'rede caiu', 'com a mensagem original, para dar para agir');
-  // O que falhou não pode ser dado como feito: o lote continua, mas o placar é honesto.
-  conf(r.ok.length + r.falhou.length === 7, 'ninguem se perde entre os dois lados');
-}
-
-console.log('\n═══ 13. TRAVAS NO index.html ═══');
-{
-  const src = html;
-  // O superadmin não se desativa: sem isto, um "desativar todos" com o próprio nome na
-  // lista tira o superadmin do ar e não há quem religue pela tela.
-  conf(/const alvoIds = ids\.filter\(id => id !== String\(U\.id\)\)/.test(src),
-       'admAtivarBloco TIRA a propria conta do alvo');
-  conf(/admAprovarBloco[\s\S]{0,900}?await moConfirm/.test(src),
-       'aprovar em bloco passa pelo modal de confirmacao');
-  conf(/admAtivarBloco[\s\S]{0,900}?await moConfirm/.test(src),
-       'ativar/desativar em bloco tambem');
-  // A confirmação precisa dizer o NÚMERO, não "os selecionados".
-  conf(/Liberar o acesso de \$\{alvo\.length\} pessoa/.test(src),
-       'a confirmacao diz quantas pessoas serao liberadas');
-  conf(/option value="pend"/.test(src), 'o filtro "aguardando aprovacao" existe');
-  conf(/white-space:pre-line/.test(src), 'o detalhe do modal respeita quebra de linha');
-}
-
-console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══\n`);
-process.exit(falhou ? 1 : 0);
-})();
+console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
+process.exitCode = falhou ? 1 : 0;

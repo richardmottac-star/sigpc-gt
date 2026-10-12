@@ -15391,6 +15391,81 @@ function pDiasNoCi(dt) {
 }
 
 /**
+ * O BLOCO DA PARCELA — moldura própria, faixa com o nome dela.  (12/10/2026)
+ *
+ * ⚠️ POR QUE: o Richard abriu a 2021TR001578 e disse que a tela estava confusa. O defeito não
+ * era o tamanho da letra: a faixa de passo e o bloco do C.I. ficavam SOLTOS entre uma parcela e
+ * outra, e no print o "Passo 3 de 3 · registrado em 30/06" da FINAL aparecia logo abaixo da
+ * linha dela — parecendo conclusão da Parcial 1. **Não se via de quem era cada coisa.**
+ *
+ * Agora cada parcela é um bloco fechado: faixa com o nome, sub-linha com as pílulas e o
+ * processo, e dentro dele tudo o que é dela — o que falta, o passo, o C.I. e as PCs.
+ *
+ * ⚠️ A FAIXA É VERDE ESCURO INSTITUCIONAL (`#004D2B`), E NÃO GRAFITE. A primeira versão usou o
+ * tom das linhas e virou um retângulo quase preto: *"essa cor destoa"*. O grafite continua onde
+ * funciona — contorno e divisórias. **Quando o C.I. devolveu, a faixa fica âmbar**: é o único
+ * estado em que a parcela espera uma ação, e a cor diz isso antes de qualquer texto.
+ *
+ * ⚠️ OS LINKS DO SGPe NÃO MUDAM. Eles saem do `procHtml`, o ponto único das 11 telas (armadilha
+ * 17) — aqui ele apenas passou da linha para a sub-linha do bloco, com o mesmo lápis e o mesmo
+ * ícone de consulta ao lado.
+ */
+function pBlocoCor(pa) {
+  // ⚠️ "Com o C.I." é `com_analista` — devolvido PARA O ANALISTA. `na_fila` é o contrário:
+  // está com eles, e não há o que cobrar aqui.
+  const pendente = pa && pa.ci_situacao === 'com_analista'
+  return pendente
+    ? { faixa: '#7A5600', borda: '#8A6100', sub: '#FFF8E6', bt: '#5C4106' }
+    : { faixa: '#004D2B', borda: 'var(--grafite)', sub: '#F6F9F7', bt: '#004D2B' }
+}
+
+/** A faixa escura do bloco: o nome da parcela, o tamanho dela e as ações. */
+function pFaixaParcela(r, pa, extra) {
+  const c = pBlocoCor(pa)
+  const ex = extra || {}
+  return `<div style="background:${c.faixa};color:#fff;padding:11px 15px;display:flex;align-items:center;
+    gap:12px;flex-wrap:wrap;">
+    ${ex.caixa || ''}
+    ${/* ⚠️ O NOME DA PARCELA EM 15px E CAIXA ALTA. Era uma etiqueta de 11px no meio da linha —
+          do tamanho das pílulas de situação, que não são o assunto. */''}
+    <span style="font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;">
+      ${ex.marca || ''}${pa.soFinal ? 'PC Final' : 'Parcial ' + escHtml(pa.num)}</span>
+    <span style="font-size:14px;font-weight:700;color:rgba(255,255,255,.88);">
+      ${pa.qtd} PC${pa.qtd > 1 ? 's' : ''} · ${planMoedaAgr(pa)}</span>
+    ${ex.meio || ''}
+    <span style="margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
+      ${ex.quando ? `<span style="font-size:12.5px;font-weight:600;color:rgba(255,255,255,.85);">${ex.quando}</span>` : ''}
+      ${ex.acoes || ''}
+    </span>
+  </div>`
+}
+
+/**
+ * A sub-linha clara: as pílulas de estado e o processo do SGPe.
+ *
+ * ⚠️ ELAS SAÍRAM DE CIMA DA FAIXA de propósito. Pílula clara sobre fundo escuro ou perde a cor
+ * ou vira mancha — e são até seis numa parcela (parecer, C.I., SIGEF, arquivamento, situação).
+ */
+function pSubParcela(r, pa, pilulas) {
+  const c = pBlocoCor(pa)
+  const procs = [...new Map(pa.pcs.map(p => [procVazio(p.processo_pc) ? '' : String(p.processo_pc).trim(), p])).values()]
+    .map(p => `<span class="proc-sgpe" style="white-space:nowrap;">${procHtml(p.processo_pc, p.codigo_pc)}${
+      sgpeIconeConsulta(p.processo_pc)}${procInvalido(p.processo_pc) ? procInvalidoTag(p.processo_pc, p.codigo_pc, 'processo_pc') : ''}</span>`).join('')
+  const dentro = `${pilulas || ''}${procs}`
+  if (!dentro.trim()) return ''
+  return `<div style="display:flex;align-items:center;gap:9px;padding:10px 15px;background:${c.sub};
+    border-top:2px solid ${c.borda};flex-wrap:wrap;font-size:13px;color:var(--ct);">${dentro}</div>`
+}
+
+/** Abre o bloco da parcela — moldura própria, para que nada dela fique solto na página. */
+function pBlocoAbre(r, pa) {
+  const c = pBlocoCor(pa)
+  const esmaece = !r.arquivada && pa.arquivamento?.estado === 'arquivada'
+  return `<div id="${planAncora(r.tr, pa.num)}" style="margin:13px;border:2px solid ${c.borda};
+    border-radius:11px;overflow:hidden;${esmaece ? 'opacity:.62;' : ''}">`
+}
+
+/**
  * A TARJA "FALTA AGORA" — o que esta parcela espera de VOCÊ.  (12/10/2026)
  *
  * ⚠️ POR QUE: o Richard voltou a analisar processos e o cartão não respondia à única pergunta
@@ -16838,53 +16913,37 @@ function renderPlan(rows) {
       // ── parcial ja baixada: verde, so leitura
       if(pa.baixada) {
         // Parcial arquivada com a TR aberta: o conteúdo esmaece num span, e a pílula fica fora dele.
-        const esmaece = !r.arquivada && pa.arquivamento?.estado === 'arquivada'
         const pilArq = arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)
-        return `<div id="${planAncora(r.tr, pa.num)}" style="border-bottom:1px solid var(--cl);">
-          <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:${esmaece ? '#F2F4F3' : '#F2FAF5'};flex-wrap:wrap;">
-            ${/* ⚠️ A CAIXA SÓ EXISTE NO PASSO 2. No passo 1 não há o que encaminhar (o servidor
-                  recusa com 'CI exige parecer prévio') e no passo 3 já foi. Caixa desabilitada
-                  nos outros dois seria a armadilha 15 — aqui ela simplesmente não existe. */''}
-            ${ciLotePode(pa) ? `<input type="checkbox" title="Selecionar para encaminhar ao C.I. em lote"
-              ${(_ciLoteTr === r.tr && _ciLote.has(String(pa.num))) ? 'checked' : ''}
-              onclick="event.stopPropagation();ciLoteToggle('${escHtml(r.tr)}','${escHtml(String(pa.num))}',this.checked)"
-              style="width:auto;cursor:pointer;margin:0;">` : ''}
-            ${esmaece ? '<span style="opacity:.55;display:flex;align-items:center;gap:11px;flex-wrap:wrap;min-width:0;">' : ''}
-            <span style="background:var(--vc);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">✓ ${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
-            <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)}
-              ${/* O processo da PC: este ramo não tem tabela de PCs, e é aqui que se lê a
-                    devolutiva do C.I. Um procHtml por processo distinto da parcela. */''}
-              ${[...new Map(pa.pcs.map(p => [procVazio(p.processo_pc) ? '' : String(p.processo_pc).trim(), p])).values()]
-                .map(p => `<span class="proc-sgpe" style="white-space:nowrap;margin-left:4px;">${procHtml(p.processo_pc, p.codigo_pc)}${sgpeIconeConsulta(p.processo_pc)}${procInvalido(p.processo_pc) ? procInvalidoTag(p.processo_pc, p.codigo_pc, 'processo_pc') : ''}</span>`).join('')}
-              ${planBadgeParecer(pa.parecer_tipo)}
-              ${pa.enviado_ci?'<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;">🏛 No Controle Interno</span>':''}
-              ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro
-                    lugares, e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
-              ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
-            ${esmaece ? `<span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span></span>` : ''}
-            ${pilArq}
-            <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-              ${r.arquivada && pa.soFinal ? arqSecretario(pa.pcs) : ''}
-              ${esmaece ? '' : `<span style="font-size:12px;color:var(--ct);">baixada em ${planDataTs(pa.data_baixa)}</span>`}
-              ${/* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
-                    Estornar e Encaminhar ao C.I. —, e as quatro frentes novas levariam a linha
-                    a sete. Quem decide o que está ativo é o SERVIDOR, em GET /parcela/acoes;
-                    o que a pessoa não pode fazer vira "Solicitar correção", nunca item cinza
-                    sem explicação (armadilha 15). */''}
-              ${pBotaoAcoes(pa, r.tr)}
-              ${/* ⚠️ SÓ SUPERADMIN (18/08/2026). O coordenador saiu daqui: o "Corrigir
-                    situação" do menu "Ações ▾" desfaz a mesma baixa, com motivo obrigatório,
-                    destino escolhido e linha em `parcela_historico` — o estorno não deixa
-                    trilha nenhuma. E o coordenador continua decidindo os pedidos da fila de
-                    Correções, que executam pelo caminho com rastro. */''}
-              ${perfilEfetivo(U)==='superadmin'?`<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`:''}
-              ${/* ⚠️ O BOTÃO DO C.I. SAIU DA LINHA em 18/08/2026 — a decisão mudou. Ele está
-                    no menu, no grupo "Fluxo da análise", EM DESTAQUE: negrito e ícone azul.
-                    Continua obrigatório; o que mudou é onde ele mora. Foi escondê-lo SEM
-                    substituto que deixou 2.181 parciais sem caminho em 13/08 — aqui há
-                    substituto, e ele é o primeiro grupo do menu. */''}
-            </span>
-          </div>
+        return `${pBlocoAbre(r, pa)}
+          ${pFaixaParcela(r, pa, {
+            marca: '✓ ',
+            quando: `baixada em ${planDataTs(pa.data_baixa)}`,
+            ...{
+              /* ⚠️ A CAIXA SÓ EXISTE NO PASSO 2. No passo 1 não há o que encaminhar (o servidor
+                 recusa com 'CI exige parecer prévio') e no passo 3 já foi. Caixa desabilitada
+                 nos outros dois seria a armadilha 15 — aqui ela simplesmente não existe. */
+              caixa: ciLotePode(pa) ? `<input type="checkbox" title="Selecionar para encaminhar ao C.I. em lote"
+                ${(_ciLoteTr === r.tr && _ciLote.has(String(pa.num))) ? 'checked' : ''}
+                onclick="event.stopPropagation();ciLoteToggle('${escHtml(r.tr)}','${escHtml(String(pa.num))}',this.checked)"
+                style="width:auto;cursor:pointer;margin:0;">` : '',
+              /* ⚠️ OS BOTÕES SOLTOS VIRARAM UM SÓ (18/08/2026). Eram três aqui — Ver parecer,
+                 Estornar e Encaminhar ao C.I. Quem decide o que está ativo é o SERVIDOR, em
+                 GET /parcela/acoes; o que a pessoa não pode fazer vira "Solicitar correção",
+                 nunca item cinza sem explicação (armadilha 15).
+                 ⚠️ O ESTORNO É SÓ SUPERADMIN: o "Corrigir situação" do menu desfaz a mesma
+                 baixa com motivo obrigatório e linha em `parcela_historico`; o estorno não
+                 deixa trilha nenhuma. */
+              acoes: `${r.arquivada && pa.soFinal ? arqSecretario(pa.pcs) : ''}${pBotaoAcoes(pa, r.tr)}${
+                perfilEfetivo(U) === 'superadmin'
+                  ? `<button class="btn-acao" style="background:#8A6100;color:#fff;" onclick="pEstornar(${chave})"${vcOff()}>↩ Estornar</button>`
+                  : ''}`,
+            },
+          })}
+          ${pSubParcela(r, pa, `${planBadgeParecer(pa.parecer_tipo)}
+            ${pa.enviado_ci ? '<span style="display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;background:#EAF1F9;color:#1A4E8A;border:1px solid #CBDCF0;">🏛 No Controle Interno</span>' : ''}
+            ${/* A CONFERÊNCIA COM O SIGEF. Aqui é o cartão da parcela — um dos quatro lugares,
+                  e o componente é o mesmo nos quatro (ver `sigefBadges`). */''}
+            ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}${pilArq}`)}
           ${pFaltaAgora(r, pa)}
           ${pFaixaPasso(pa)}
           ${pCiBloco(r, pa)}
@@ -16922,27 +16981,21 @@ function renderPlan(rows) {
                  onclick="pRespondeu(${chave})" title="Registrar que a entidade respondeu — a parcial continua em Diligência">✉ Entidade respondeu</button>` : '')}
         </div>` : ''
 
-      return `<div id="${planAncora(r.tr, pa.num)}" style="border-bottom:1px solid var(--cl);">
-        <div style="display:flex;align-items:center;gap:11px;padding:11px 16px;background:#FAFCFB;flex-wrap:wrap;">
-          <span style="background:var(--v);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;white-space:nowrap;">${pa.soFinal ? 'PC FINAL' : 'PARCIAL '+escHtml(pa.num)}</span>
-          <span style="font-size:12px;color:var(--ct);"><b style="color:var(--te);">${pa.qtd} PC${pa.qtd>1?'s':''}</b> · ${planMoedaAgr(pa)} ${planBadgeSitOuNova(pa)}
-            ${pa.parecer_tipo?planBadgeParecer(pa.parecer_tipo):''}
-            ${/* A âmbar mora AQUI: "baixada no SIGEF, aberta aqui" só existe em parcial
-                  aberta. As outras três aparecem no ramo de cima, o das baixadas. */''}
-            ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}</span>
-          ${arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)}
-          <span style="margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-            ${/* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
-                  "Registrar parecer" e "Encaminhar ao C.I." saíram da linha e viraram os
-                  três primeiros itens do grupo "Fluxo da análise" do menu. A linha ganhou o
-                  espaço de volta, e o menu passou a ser o lugar ÚNICO onde se pergunta
-                  "o que dá para fazer aqui?".
-                  O aviso de "sem nº de parcial" continua fora do menu: ele explica por que
-                  metade dos itens vai aparecer cinza, e serve antes de a pessoa clicar. */''}
-            ${semNum ? `<span style="font-size:11px;color:var(--r);">sem nº de parcial — não é possível registrar</span>` : ''}
-            ${pBotaoAcoes(pa, r.tr)}
-          </span>
-        </div>
+      return `${pBlocoAbre(r, pa)}
+        ${pFaixaParcela(r, pa, {
+          /* ⚠️ O aviso de "sem nº de parcial" fica FORA do menu: ele explica por que metade
+             dos itens vai aparecer cinza, e serve antes de a pessoa clicar. */
+          meio: semNum ? `<span style="font-size:12.5px;font-weight:700;color:#FFD9D9;">sem nº de parcial — não é possível registrar</span>` : '',
+          /* ⚠️ UM BOTÃO SÓ, desde 18/08/2026 — decisão do Richard. "Salvar situação",
+             "Registrar parecer" e "Encaminhar ao C.I." viraram itens do menu. */
+          acoes: pBotaoAcoes(pa, r.tr),
+        })}
+        ${pSubParcela(r, pa, `${planBadgeSitOuNova(pa)}
+          ${pa.parecer_tipo ? planBadgeParecer(pa.parecer_tipo) : ''}
+          ${/* A âmbar mora AQUI: "baixada no SIGEF, aberta aqui" só existe em parcial aberta.
+                As outras três aparecem no ramo de cima, o das baixadas. */''}
+          ${sigefBadges(pa.pcs)}${pilulasExtras(pa.pcs)}
+          ${arqPilulaParcial(pa.arquivamento, pa.pcs[0]?.arquivada_em, r.arquivada)}`)}
         ${pFaltaAgora(r, pa)}
         ${pFaixaPasso(pa)}
         ${sub}
@@ -16993,7 +17046,9 @@ function renderPlan(rows) {
 
         <div style="min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <b style="font-size:15px;${arqTr?'color:#78827C;text-decoration:line-through;':''}">${escHtml(r.tr||'—')}</b>
+            ${/* ⚠️ A TR EM 21px (12/10/2026): ela é o assunto do cartão e estava do tamanho das
+                  pílulas ao lado. Pedido do Richard — "precisa ser destacado a TR e a parcial". */''}
+            <b style="font-size:21px;font-weight:900;letter-spacing:-.01em;${arqTr?'color:#78827C;text-decoration:line-through;':''}">${escHtml(r.tr||'—')}</b>
             ${arqTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#DCE2DE;color:#5C6661;">📁 Arquivada</span>`
               : baixadaTr ? `<span style="display:inline-block;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--v);color:#fff;">✓ concluída</span>` : etiquetas}
             ${/* ⚠️ A ETIQUETA VIROU O GATILHO DA SELEÇÃO EM LOTE (16/08/2026). Ela já existia e
@@ -17014,7 +17069,7 @@ function renderPlan(rows) {
                   importa, e o cabeçalho da TR já tem seis coisas disputando a linha. */''}
             ${procInvalidoPilula(procInvalidasQtd(r.parciais.flatMap(pa => pa.pcs)))}
           </div>
-          <div style="font-size:11.5px;color:${corSuave};margin-top:2px;">
+          <div style="font-size:13px;font-weight:600;color:${corSuave};margin-top:4px;">
             ${escHtml(r.entidade||'—')}${assumida ? ` · assumida em ${planData(assumida)}${trNova ? ` (${planHaQuantoTempo(assumida)})` : ''}` : ''}${planInicioAnalise(r)}
           </div>
           ${/* O processo mãe, pelo procHtml. Fundo branco porque o cabeçalho é verde escuro; o
@@ -17291,9 +17346,13 @@ function pCiBloco(r, pa) {
       <div style="font-size:12.5px;color:var(--texto);line-height:1.5;white-space:pre-line;">${escHtml(complCi)}</div>
     </div>` : ''}
 
-    <div style="margin:9px 13px;background:#F1F8E9;border:1px solid #C5E1A5;border-radius:7px;padding:8px 12px;
-                font-size:12px;color:#2E7D32;font-weight:700;">
-      ✓ A sua baixa está mantida. Ela contou quando você encaminhou ao C.I.
+    ${/* ⚠️ BARRA LATERAL DE 6px, VERDE (12/10/2026): este aviso TRANQUILIZA, e era uma caixa
+          cinza-esverdeada igual às outras três que a cercam. O Richard pediu "observações e
+          avisos mais destacados" — a barra é o que separa, de relance, o que acalma do que
+          cobra (âmbar, logo abaixo). */''}
+    <div style="margin:11px 13px;background:#E3F5E9;border-left:6px solid var(--v);border-radius:9px;
+                padding:11px 14px;font-size:13.5px;color:#14562F;font-weight:700;line-height:1.4;">
+      ✓ A sua baixa está mantida — ela contou quando você encaminhou ao C.I.
     </div>
     ${arqFaixaCi(r, pa)}
 
@@ -17522,10 +17581,13 @@ function arqFaixaCi(r, pa) {
       </div>
       ${arqSgpeConsultaHtml(r, pa, noCi, a)}
     </div>`
+  // ⚠️ ÂMBAR COM BARRA LATERAL: este aviso COBRA — diz o que falta para arquivar. Em branco
+  // sobre branco ele era a terceira caixa parecida da pilha, e o Richard lia três avisos sem
+  // distinguir qual exigia dele alguma coisa.
   return `
-    <div style="margin:0 13px 9px;background:#fff;border:0.5px solid var(--borda-suave);border-radius:6px;padding:9px 13px;
-                font-size:12px;color:var(--texto-secundario);line-height:1.5;">
-      <b style="color:var(--texto);">Ainda não dá para arquivar.</b> ${escHtml(arqFrase(a.motivo))}</div>`
+    <div style="margin:0 13px 11px;background:#FFF1C9;border-left:6px solid #8A6100;border-radius:9px;
+                padding:11px 14px;font-size:13.5px;color:#5C4106;line-height:1.4;font-weight:700;">
+      Ainda não dá para arquivar — ${escHtml(arqFrase(a.motivo))}</div>`
 }
 
 /**
