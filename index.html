@@ -13,6 +13,10 @@
   --r:#C8102E;--az:#1565C0;--azbg:#E3F2FD;
   --am:#F57F17;--ambg:#FFF8E1;
   --br:#fff;--cl:#F2F5F3;--cb:#D0DDD5;--ct:#4A5E52;--te:#1A2E22;
+  /* O GRAFITE É O CONTORNO, NÃO UM CINZA A MAIS (Richard, 12/10/2026): a fila do dia pediu
+     moldura e divisórias que se vejam de longe. `--cb` é borda de campo e some no fundo claro;
+     este tom é escuro o bastante para desenhar a caixa sem virar preto. */
+  --grafite:#39443E;
   --sombra:0 2px 8px rgba(0,0,0,.08);
 }
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -15580,11 +15584,18 @@ let _filaDados = null;
 
 // As cores de cada grupo, pela natureza — as mesmas famílias do menu "Ações".
 const FILA_CORES = {
-  azul:   { n:'#1A4E8A', fundo:'#fff',    bt:'background:#1A4E8A;color:#fff;' },
-  ambar:  { n:'#8A6100', fundo:'#FFF8E6', bt:'background:#8A6100;color:#fff;' },
-  verde:  { n:'#3B6D11', fundo:'#fff',    bt:'background:var(--v);color:#fff;' },
-  neutro: { n:'var(--ct)', fundo:'#fff',  bt:'background:var(--cl);color:var(--ct);' },
+  azul:   { n:'#1A4E8A', fundo:'#fff',    bt:'background:#1A4E8A;color:#fff;border-color:#1A4E8A;' },
+  ambar:  { n:'#8A6100', fundo:'#FFF8E6', bt:'background:#8A6100;color:#fff;border-color:#8A6100;' },
+  verde:  { n:'#3B6D11', fundo:'#fff',    bt:'background:var(--v);color:#fff;border-color:var(--v);' },
+  // ⚠️ O NEUTRO É BRANCO COM CONTORNO, e não cinza chapado: ele é o único grupo que não pede
+  // ação do analista (a diligência espera a entidade). Cinza chapado parecia botão desligado.
+  neutro: { n:'var(--grafite)', fundo:'#fff', bt:'background:#fff;color:var(--grafite);border-color:var(--grafite);' },
 };
+
+// O relevo dos botões da fila — 2px embaixo, que some quando a pessoa aperta.
+const FILA_BT = `border:2px solid transparent;border-radius:9px;padding:11px 10px;font-size:13.5px;
+  font-weight:900;font-family:Barlow,sans-serif;cursor:pointer;text-transform:uppercase;
+  letter-spacing:.05em;box-shadow:0 2px 0 rgba(0,0,0,.18);`;
 
 async function filaCarregar() {
   const cx = document.getElementById('filaHoje');
@@ -15616,30 +15627,38 @@ function filaRender() {
   const d = _filaDados;
 
   if (!d.total) {
-    cx.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:13px 16px;">
-      <div style="font-size:14px;font-weight:800;color:var(--v);">Nada esperando por você agora</div>
+    cx.innerHTML = `<div style="background:#fff;border:2px solid var(--grafite);border-radius:12px;box-shadow:var(--sombra);padding:14px 17px;">
+      <div style="font-size:14px;font-weight:900;color:var(--v);text-transform:uppercase;letter-spacing:.03em;">Nada esperando por você agora</div>
       <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">Nenhuma parcela do seu acervo está
       com o C.I. devolvido, liberada pelo SGPe ou com a FINAL pendente. A planilha segue abaixo.</div>
     </div>`;
     return;
   }
 
-  const col = (g) => {
+  // ⚠️ O CONTORNO É GRAFITE E A LETRA É GRANDE — decisão do Richard em 12/10, vendo o painel no
+  // ar: *"as caixas deviam ter um contorno melhor e a escrita maior em caixa alta, assim como os
+  // botões; mais robusto; as linhas um tom grafite"*. O que muda é só a forma: os grupos, a
+  // ordem e os números continuam vindo prontos do servidor.
+  const col = (g, i, lista) => {
     const c = FILA_CORES[g.cor] || FILA_CORES.neutro;
     const vazio = !g.qtd;
-    return `<div style="padding:13px 15px;border-right:1px solid var(--cl);background:${vazio ? '#fff' : c.fundo};">
-      <div style="font-size:26px;font-weight:900;line-height:1;color:${vazio ? 'var(--cb)' : c.n};">${g.qtd}</div>
-      <div style="font-size:12.5px;font-weight:800;margin-top:3px;color:${vazio ? 'var(--ct)' : 'var(--te)'};">${escHtml(g.rotulo)}</div>
-      <div style="font-size:10.5px;color:var(--ct);margin-top:2px;">${escHtml(g.detalhe)}</div>
-      ${vazio ? '<div style="height:9px;"></div>'
-        : `<button class="btn-acao" style="${c.bt}margin-top:9px;width:100%;font-weight:800;"
+    const ultima = i === lista.length - 1;
+    return `<div style="padding:15px 16px 14px;${ultima ? '' : 'border-right:2px solid var(--grafite);'}background:${vazio ? '#fff' : c.fundo};">
+      <div style="font-size:34px;font-weight:900;line-height:.95;letter-spacing:-.02em;color:${vazio ? 'var(--cb)' : c.n};">${g.qtd}</div>
+      ${/* ⚠️ CAIXA ALTA COM ENTRELETRA: em 14px e peso 900, sem o `letter-spacing` o rótulo vira
+            um bloco maciço e fica mais difícil de ler do que era em minúscula. */''}
+      <div style="font-size:14px;font-weight:900;margin-top:5px;line-height:1.2;text-transform:uppercase;
+        letter-spacing:.03em;color:${vazio ? 'var(--ct)' : 'var(--te)'};">${escHtml(g.rotulo)}</div>
+      <div style="font-size:11.5px;color:var(--ct);margin-top:4px;line-height:1.3;">${escHtml(g.detalhe)}</div>
+      ${vazio ? '<div style="height:12px;"></div>'
+        : `<button style="${FILA_BT}${c.bt}margin-top:12px;width:100%;"
              onclick="filaAbrir('${escHtml(g.chave)}')">Ver ${g.qtd === 1 ? 'a parcela' : 'as ' + g.qtd}</button>`}
     </div>`;
   };
 
   cx.innerHTML = `
-    <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;">
-      <div style="background:var(--header-grad);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;">
+    <div style="background:#fff;border:2px solid var(--grafite);border-radius:12px;box-shadow:var(--sombra);overflow:hidden;">
+      <div style="background:var(--header-grad);color:#fff;padding:12px 17px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;">
         <div style="min-width:0;">
           <div style="font-size:15px;font-weight:900;">Para você hoje</div>
           <div style="font-size:11.5px;color:rgba(255,255,255,.88);margin-top:2px;">
@@ -15654,11 +15673,11 @@ function filaRender() {
           style="margin-left:auto;background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.55);
                  font-weight:700;box-shadow:none;">Fonte</button>
       </div>
-      <div id="filaFonteBloco" style="display:none;padding:11px 16px;background:#F7F9F8;border-bottom:1px solid var(--cl);
+      <div id="filaFonteBloco" style="display:none;padding:11px 17px;background:#F7F9F8;border-bottom:2px solid var(--grafite);
         font-size:11px;color:var(--ct);line-height:1.6;"></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);">${d.grupos.map(col).join('')}</div>
-      <div id="filaLista" style="display:none;border-top:1px solid var(--cl);"></div>
-      <div style="padding:8px 16px;background:#FAFBFA;border-top:1px solid var(--cl);font-size:11px;color:var(--ct);">
+      <div id="filaLista" style="display:none;border-top:2px solid var(--grafite);"></div>
+      <div style="padding:9px 17px;background:#F7F9F8;border-top:2px solid var(--grafite);font-size:11.5px;color:var(--ct);">
         Abaixo, a sua planilha de sempre — as mesmas TRs, os mesmos filtros.
       </div>
     </div>`;
@@ -15699,21 +15718,26 @@ function filaAbrir(chave) {
     const quando = i.ci_entrada
       ? `o C.I. recebeu em ${planData(i.ci_entrada)} e devolveu em ${planData(i.ci_saida)}`
       : (i.dt_limite_pc ? `prazo em ${planData(i.dt_limite_pc)}` : '');
-    return `<div style="display:flex;align-items:center;gap:11px;padding:9px 16px;border-bottom:1px solid var(--cl);flex-wrap:wrap;">
-      <span style="font-size:12.5px;font-weight:800;white-space:nowrap;">${escHtml(i.tr)}</span>
-      <span style="font-size:11px;font-weight:800;color:#fff;background:var(--v);border-radius:5px;padding:2px 8px;white-space:nowrap;">
-        ${i.so_final ? 'FINAL' : 'parcial ' + escHtml(i.parcial_num)}</span>
+    return `<div style="display:flex;align-items:center;gap:11px;padding:10px 17px;border-bottom:1px solid #DDE4E0;flex-wrap:wrap;">
+      <span style="font-size:13px;font-weight:900;white-space:nowrap;">${escHtml(i.tr)}</span>
+      <span style="font-size:11px;font-weight:900;letter-spacing:.03em;color:#fff;background:var(--v);border-radius:5px;padding:3px 9px;white-space:nowrap;">
+        ${i.so_final ? 'FINAL' : 'PARCIAL ' + escHtml(i.parcial_num)}</span>
       <span style="font-size:11.5px;color:var(--ct);min-width:0;">${escHtml(String(i.entidade || '').slice(0, 44))}</span>
       <span style="font-size:11px;color:var(--ct);">${i.pcs} PC${i.pcs === 1 ? '' : 's'}${quando ? ' · ' + escHtml(quando) : ''}${
         i.arquivada ? ' · arquivada' : ''}</span>
-      <button class="btn-acao" style="margin-left:auto;background:var(--cl);color:var(--te);font-weight:800;"
+      ${/* O "Abrir" tem o mesmo contorno grafite e o mesmo relevo dos botões de cima — é o
+            mesmo gesto, e botão de lista em cinza claro passava despercebido. */''}
+      <button style="margin-left:auto;border:2px solid var(--grafite);background:#fff;color:var(--te);
+        border-radius:8px;padding:7px 15px;font-size:12.5px;font-weight:900;font-family:Barlow,sans-serif;
+        cursor:pointer;text-transform:uppercase;letter-spacing:.04em;box-shadow:0 2px 0 var(--grafite);"
         onclick="filaIr('${escHtml(i.tr)}','${escHtml(String(i.parcial_num))}')">Abrir ▸</button>
     </div>`;
   };
 
-  cx.innerHTML = `<div style="padding:9px 16px;background:#F7F9F8;font-size:11.5px;font-weight:800;color:var(--te);">
+  cx.innerHTML = `<div style="padding:10px 17px;background:#EDF1EF;font-size:12px;font-weight:900;color:var(--te);
+      text-transform:uppercase;letter-spacing:.04em;">
       ${escHtml(g.rotulo)} — ${g.qtd} parcela${g.qtd === 1 ? '' : 's'}, ${g.pcs} PC${g.pcs === 1 ? '' : 's'}
-      <span style="float:right;font-weight:400;color:var(--ct);">da mais antiga para a mais nova</span>
+      <span style="float:right;font-weight:600;color:var(--ct);text-transform:none;letter-spacing:0;font-size:11.5px;">da mais antiga para a mais nova</span>
     </div>${g.itens.map(linha).join('')}`;
 }
 

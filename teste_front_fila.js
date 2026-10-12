@@ -252,6 +252,24 @@ S('5. A FILA "PARA VOCÊ HOJE" — a tela SÓ MOSTRA');
   conf(!/\.reduce\(/.test(fonte), 'a tela não soma nada (armadilha 16)');
   conf(!/\.filter\(/.test(fonte.split('function filaAbrir')[0] || ''), 'e não recalcula grupo nenhum');
 
+  // ── A FORMA, pedida pelo Richard em 12/10 vendo o painel no ar ─────────────
+  // ⚠️ "as caixas deviam ter um contorno melhor e a escrita maior em caixa alta, assim como os
+  // botões; mais robusto; as linhas um tom grafite". O que se guarda aqui é isso, e não um
+  // gosto: painel sem contorno se dissolveu no fundo claro da planilha.
+  conf(/border:2px solid var\(--grafite\)/.test(h), 'o painel tem moldura de 2px em grafite');
+  conf(/border-right:2px solid var\(--grafite\)/.test(h), 'e as colunas se separam pelo mesmo grafite');
+  conf((h.match(/border-right:2px solid var\(--grafite\)/g) || []).length === 3,
+    '⚠️ três divisórias para quatro colunas — a última não tem',
+    (h.match(/border-right:2px solid var\(--grafite\)/g) || []).length);
+  conf(/font-size:34px;font-weight:900/.test(h), 'o número é 34px');
+  conf(/font-size:14px;font-weight:900[\s\S]{0,60}text-transform:uppercase/.test(h),
+    'o rótulo é 14px, peso 900 e CAIXA ALTA');
+  conf(/letter-spacing:\.03em/.test(h), 'com entreletra — em caixa alta e 900 ela é o que mantém legível');
+  conf(/text-transform:uppercase[\s\S]{0,40}letter-spacing:\.05em/.test(h), 'o botão também é caixa alta');
+  conf(/box-shadow:0 2px 0 rgba\(0,0,0,\.18\)/.test(h), 'e tem relevo de 2px — ele afunda quando apertado');
+  conf(/border-top:2px solid var\(--grafite\)/.test(h), 'o rodapé fecha com a mesma linha grafite');
+  conf(/--grafite:#39443E/.test(html), 'e o grafite é uma variável do :root, não um literal espalhado');
+
   // Fila vazia: diz que não há nada, em vez de quatro zeros.
   ctx._filaDados = { total: 0, trs: 10, grupos: [], fonte: {} };
   ctx.filaRender();
@@ -302,7 +320,8 @@ S('7. ABRIR UM GRUPO LISTA AS PARCELAS, E "ABRIR" LEVA À TR');
   conf(lista.style.display === 'block', 'o grupo abre a lista');
   const t = lista.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   conf(/2021TR001578/.test(t), 'com a TR');
-  conf(/parcial 1/.test(t), 'e a parcela');
+  // ⚠️ EM CAIXA ALTA desde 12/10 — pedido do Richard depois de ver o painel no ar.
+  conf(/PARCIAL 1/.test(t), 'e a parcela, em caixa alta');
   conf(/o C\.I\. recebeu em 13\/11\/2025 e devolveu em 14\/11\/2025/.test(t),
     '⚠️ e as DUAS datas da passagem pelo C.I. — é o que sustenta a afirmação', t.slice(0, 90));
 
