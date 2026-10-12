@@ -147,6 +147,8 @@ inteira). Mudou a forma do painel, não o que ele dispara. `teste_front_lote_ci.
 | 09–10/10 | **`2022TR001174`** — Grazielly → Ana Claudia (id 22) | **16 PCs** + coluna `grupo` 3→2 |
 | 10/10 | **3 TRs do estoque para a Tanimeri**, mais a PC órfã | **124 PCs** + 1 PC movida |
 | 07–11/10 | **recados pelo sino** | **15** + 2 coordenadores + **47** |
+| **12/10** | **as 5 prestações FINAIS gravadas com número de parcial** (armadilha 15) | **5 PCs**, 1 por TR |
+| **12/10** | **recado ao Controle Interno** pelo sino (ids 62, 63, 64) | **3 avisos** |
 
 ⚠️ **A `2020TR000750` É O CASO QUE PROVA A ARMADILHA 14.** As 9 NLs da parcial somam
 **R$ 15.873,83** — exatamente o valor do SIGEF — e estão **no mesmo processo** `SCC14075/2021`;
@@ -157,6 +159,18 @@ diligência**, o que a divisão escondia.
 id 22 (Ana Claudia, G2). O Richard assumiu a confusão e mandou corrigir; foi corrigida pelo repasse
 **5444**, e a coluna `grupo` foi junto. **"Claudia" não identifica pessoa neste cadastro** — são
 duas, em grupos diferentes. **Só o `analista_id` identifica** (armadilha 1).
+
+⚠️ **AS 5 FINAIS COM NÚMERO DE PARCIAL SAÍRAM DO ACERVO** (armadilha 15). A `2021TR002133` era
+minha e **bloqueava a devolutiva pelo SGPe da própria final** — a regra lia "a parcela 1" e
+encontrava uma PC sem baixa, que era a parcial real em diligência. As outras 4 (Grazielly,
+Janaína, Rafael, Elisandra) desenhavam um cartão só.
+**Medido depois de gravar, com a rodada parada: zero finais com número, e zero grupos
+`(tr, parcial_num)` com parcial e final juntas em todo o acervo.**
+
+⚠️ **E ISSO MUDA A FILA DO C.I.** — a `2022TR000621` passou de um item para **dois**, e a
+`2021TR001689` trocou o rótulo de "parcial 1" para **FINAL**. Não é trabalho novo: é o mesmo
+processo com o nome certo. Os três técnicos foram avisados pelo sino no mesmo dia (ids 2034–2036),
+com `ref_id` próprio para que reenviar não duplique.
 
 ⚠️ **O recado dos 15 foi PESSOAL, com o número de cada um** — e é por isso que funcionou. Aviso
 geral não move ninguém. Os coordenadores foram avisados em separado, e o recado para os grupos de
@@ -203,6 +217,9 @@ Escritas para o Richard encaminhar. **O que delas é regra, e não recado:**
       **"PCs recebidas"** e a meta em linha própria · o Quadro 1 do CGE com as **duas leituras** ·
       os três campos novos da **busca global** · o **painel do lote** (este eu conferi no ar às
       09:35 de 12/10 — painel descolado da borda, linha explicativa e os dois pesos de botão).
+- [ ] **O RECADO DO C.I. NO WHATSAPP, em 13/10** — o do sino foi enviado (ids 2034–2036), mas os
+      três têm **42, 58 e 58 avisos não lidos**: lá ele se perde. ⚠️ **O texto formal já foi
+      aprovado** e está no histórico desta sessão; é só repassar.
 - [ ] **A LISTA DE NLs DAS PARCIAIS 6 E 7 DA `2020TR000750`**, pelo SIGEF — a Sandra ia mandar.
       Sem ela as divergências **+4.660,98** e **+44.929,32** ficam em aberto. ⚠️ A NL
       **`2022NL009539`** aparece em **duas parciais com valores diferentes**, e é o fio a puxar.
