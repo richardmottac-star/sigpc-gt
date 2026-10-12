@@ -324,7 +324,7 @@ cartão mostrar a data do analista **anterior**. Detalhe no `CLAUDE.md` do `sigp
 | 3 | Gustavo Hallack Porto (id 56) | 17 |
 
 **Controle Interno** — 3 técnicos, perfil `controle_interno`, sem grupo, `meta_mensal = 0`:
-ids **62 Marcia Terezinha Miranda · 63 Atemilson Bispo dos Santos · 64 Sirene Wolf dos Santos**.
+ids **62 Marcia Terezinha Miranda · 63 Atemilson Bispo dos Santos · 64 Sirlene Wolf dos Santos**.
 
 ⚠️ **Coordenadores E técnicos do C.I. não entram em relatório de produtividade.** Não é meta
 zero — é não aparecer. A regra é `contaProdutividade(u)` no `index.html`, usada pela
