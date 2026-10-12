@@ -14101,6 +14101,10 @@ async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
         <strong>${escHtml(U.nome)}</strong>
       </div>
     </div>
+    <!-- A FILA DO DIA: o que espera uma ação sua, agrupado POR AÇÃO e não por TR.
+         Fica ACIMA dos números porque ela responde "o que eu faço agora"; eles respondem
+         "como está o acervo". -->
+    <div id="filaHoje" style="margin-bottom:12px;"></div>
     <!-- Números: as cinco situações, logo abaixo do título -->
     <div id="planResumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;"></div>
     <!-- Alertas de prazo: DEPOIS dos números -->
@@ -14175,6 +14179,7 @@ async function irPlanilha(trAlvo, parcialAlvo, chipAlvo) {
   window._planPag = 0
   window._planTot = 0
   carregarAlertasPrazo()
+  filaCarregar()
   buscarPlan()
 }
 
@@ -15381,6 +15386,101 @@ function pDiasNoCi(dt) {
   return Math.floor((new Date(hojeBr+'T00:00:00') - new Date(d+'T00:00:00')) / 86400000)
 }
 
+/**
+ * A TARJA "FALTA AGORA" — o que esta parcela espera de VOCÊ.  (12/10/2026)
+ *
+ * ⚠️ POR QUE: o Richard voltou a analisar processos e o cartão não respondia à única pergunta
+ * que importa na hora. A situação aparecia três vezes (cabeçalho da TR, linha da parcial e
+ * bloco), a faixa de passo falava do SISTEMA — "registrado em 30/06/2026 · data de registro no
+ * sistema, não a do envio" — e a ação ficava por último, abaixo de três caixas parecidas.
+ *
+ * ⚠️ ELA NÃO INVENTA ESTADO: lê o mesmo `pa` que a faixa de passo lê, e o passo vem de
+ * `pPasso`. A ordem é a mesma da fila do dia (`lib/fila.js` no servidor) — C.I. devolveu ·
+ * encaminhar · parecer —, e isso é de propósito: duas ordens diferentes para a mesma pergunta
+ * fariam a fila mandar a pessoa a uma parcela que o cartão diz estar esperando outra coisa.
+ *
+ * ⚠️ DILIGÊNCIA GANHA TARJA CINZA, SEM BOTÃO. Ela é o caso em que a bola NÃO está com o
+ * analista, e dizer isso é metade do que ele quer saber ao abrir a TR. Amarelo ali seria
+ * cobrança por trabalho que não é dele.
+ *
+ * ⚠️ É CHAMADA NOS DOIS RAMOS do cartão — o verde e o aberto. A armadilha 19 nasceu de uma
+ * regra escrita num ramo só: o botão do C.I. ficou inalcançável por 2.181 parciais, e nenhum
+ * dos 15 testes pegou. Há teste que conta as duas chamadas.
+ */
+function pFaltaAgora(r, pa) {
+  if (!pa) return ''
+  const num = String(pa.num ?? '')
+  const chave = `'${escHtml(r.tr)}','${escHtml(num)}'`
+  const sts = [...new Set((pa.pcs || []).map(p => p.status).filter(Boolean))]
+  const emDilig = sts.includes('diligencia')
+  const emRean  = sts.includes('reanalise')
+
+  const tarja = (cor, titulo, detalhe, botao) => `
+    <div style="display:flex;align-items:center;gap:11px;padding:10px 16px;background:${cor.bg};
+      border-top:2px solid ${cor.borda};border-bottom:1px solid ${cor.borda};flex-wrap:wrap;">
+      <span style="width:28px;height:28px;border-radius:8px;background:${cor.ic};color:#fff;flex:0 0 auto;
+        display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;">${cor.sinal}</span>
+      <span style="min-width:0;">
+        <span style="display:block;font-size:13px;font-weight:800;color:${cor.titulo};">${titulo}</span>
+        ${detalhe ? `<span style="display:block;font-size:11px;color:${cor.detalhe};margin-top:1px;">${detalhe}</span>` : ''}
+      </span>
+      ${botao ? `<span style="margin-left:auto;">${botao}</span>` : ''}
+    </div>`
+
+  const AMARELO = { bg:'#FFF8E6', borda:'#E8CE8A', ic:'#8A6100', sinal:'!', titulo:'#6B4D08', detalhe:'#8A6100' }
+  const CINZA   = { bg:'#F4F6F5', borda:'#DDE4E0', ic:'#8A938D', sinal:'⏳', titulo:'#4A5E52', detalhe:'var(--ct)' }
+
+  // ── 1. O C.I. devolveu: está na mão dele, e nada anda até responder ────────
+  if (pa.ci_situacao === 'com_analista') {
+    return tarja(AMARELO, 'Falta agora: responder ao Controle Interno',
+      'a sua baixa está mantida — responder devolve a parcial para a fila deles',
+      `<button class="btn-acao" style="background:#1A4E8A;color:#fff;font-weight:800;"
+         onclick="pIrResponderCi(${chave})"${vcOff()}>✍ Responder ao C.I.</button>`)
+  }
+
+  // ── 2. Baixada com parecer e sem C.I.: o encaminhamento é obrigatório ──────
+  if (pPasso(pa) === 2) {
+    return tarja(AMARELO, 'Falta agora: encaminhar ao Controle Interno',
+      'o parecer está registrado e a baixa contou — falta o encaminhamento, que é obrigatório',
+      `<button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;"
+         onclick="pEnviarCI('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}>🏛 Encaminhar ao C.I.</button>`)
+  }
+
+  // ── 3. Em diligência: a bola está com a entidade ──────────────────────────
+  // ⚠️ SEM BOTÃO E EM CINZA. Esta tarja existe para RESPONDER "por que isto está parado?", e
+  // não para cobrar: a diligência espera a entidade, não o analista.
+  if (emDilig && pPasso(pa) === 1) {
+    return tarja(CINZA, 'Aguarda a entidade — diligência em curso',
+      'não depende de você agora · quando a documentação voltar, registre a reanálise', '')
+  }
+
+  // ── 4. Sem parecer: é o primeiro passo ────────────────────────────────────
+  if (pPasso(pa) === 1) {
+    return tarja(AMARELO, `Falta agora: registrar o parecer${emRean ? ' da reanálise' : ''}`,
+      'é o parecer que baixa a prestação — depois dele, o encaminhamento ao C.I.',
+      `<button class="btn-acao" style="background:var(--v);color:#fff;font-weight:800;"
+         onclick="pAbrirPar('${escHtml(r.tr)}','${escHtml(num)}')"${vcOff()}>✎ Registrar parecer</button>`)
+  }
+
+  // Passo 3 com o C.I. ainda com a parcela: nada falta a ele — a faixa azul já diz onde está.
+  return ''
+}
+
+/**
+ * Leva a pessoa até o campo de resposta do C.I. e põe o cursor nele.
+ *
+ * ⚠️ O BOTÃO DA TARJA NÃO ABRE MODAL NENHUM: o campo de resposta já existe no cartão, logo
+ * abaixo, e abrir uma segunda janela para escrever a mesma coisa seria dois caminhos para o
+ * mesmo ato — foi assim que a anotação ganhou um caminho escondido que o "ver como" não
+ * travava (armadilha 13).
+ */
+function pIrResponderCi(tr, num) {
+  const campo = document.getElementById(`pciTxt-${tr}|${num}`)
+  if (!campo) { toast('O bloco do Controle Interno ainda está carregando.', 'err'); return }
+  campo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  setTimeout(() => campo.focus(), 320)
+}
+
 /** A faixa que diz em que passo a parcial está, e o que falta. */
 function pFaixaPasso(pa) {
   const passo = pPasso(pa)
@@ -15453,6 +15553,181 @@ function pFaixaPasso(pa) {
 // ⚠️ E ele continua OBRIGATÓRIO (decisão do Richard, 13/08/2026). Foi escondê-lo SEM
 // substituto que deixou 2.181 parciais baixadas sem caminho para o C.I.; aqui há
 // substituto, e ele é o primeiro grupo do menu.
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  A FILA "PARA VOCÊ HOJE"  (12/10/2026)
+//
+//  Decisão do Richard, depois de voltar a analisar processos: *"eu agora voltei a analisar
+//  processos e acho bem confuso"*. Hoje o analista CAÇA o trabalho — abre a planilha, expande
+//  TR por TR, lê o cartão, descobre o que falta, fecha, abre a próxima. São 120 TRs no acervo
+//  dele, 51 no da Grazielly. A maior parte do tempo é procurar.
+//
+//  ⚠️ A TELA NÃO CONTA NADA (armadilha 16). Os quatro grupos, as contagens e as listas vêm
+//  prontos de `GET /minha_fila` — `sigpc-api/lib/fila.js`. Em especial o grupo "o SGPe já
+//  liberou": o veredito é de `lib/ci-sgpe.js`, o MESMO que o botão obedece, e é por isso que a
+//  fila nunca oferece um clique que a tela depois recusa.
+//
+//  ⚠️ ELA NÃO SUBSTITUI A PLANILHA — fica em cima dela. A lista de sempre continua logo
+//  abaixo, inteira, com os mesmos filtros: tirar o acervo da vista para pôr uma fila seria
+//  mudar a rotina de 48 pessoas de uma vez.
+//
+//  ⚠️ E NÃO RECARREGA A CADA FILTRO. `filaCarregar` roda uma vez por visita à tela; `buscarPlan`
+//  roda a cada digitação na busca, e pendurar a fila nele faria 253 parcelas e a tramitação do
+//  SGPe serem lidas a cada tecla.
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _filaDados = null;
+
+// As cores de cada grupo, pela natureza — as mesmas famílias do menu "Ações".
+const FILA_CORES = {
+  azul:   { n:'#1A4E8A', fundo:'#fff',    bt:'background:#1A4E8A;color:#fff;' },
+  ambar:  { n:'#8A6100', fundo:'#FFF8E6', bt:'background:#8A6100;color:#fff;' },
+  verde:  { n:'#3B6D11', fundo:'#fff',    bt:'background:var(--v);color:#fff;' },
+  neutro: { n:'var(--ct)', fundo:'#fff',  bt:'background:var(--cl);color:var(--ct);' },
+};
+
+async function filaCarregar() {
+  const cx = document.getElementById('filaHoje');
+  if (!cx) return;
+  cx.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:13px 16px;
+    font-size:12px;color:var(--ct);"><span class="spin" style="width:12px;height:12px;display:inline-block;"></span>
+    montando a sua fila…</div>`;
+  try {
+    // ⚠️ `alvo().id` E NÃO `U.id`: no "ver como", quem dá suporte precisa ver a fila DO
+    // ANALISTA. É o mesmo alvo que o `fetch` carimba nas escritas (armadilha 22).
+    const quem = (typeof alvo === 'function' && alvo()) ? alvo().id : U.id;
+    const j = await (await fetch(`${API_URL}/minha_fila?usuario_id=${U.id}&analista_id=${quem}`)).json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    _filaDados = j.data;
+    filaRender();
+  } catch (e) {
+    // ⚠️ A FILA NÃO PODE DERRUBAR A PLANILHA. Enquanto o servidor novo não estiver no ar, a
+    // rota não existe — e a tela tem de continuar servindo. É a lição de 05/10, quando a
+    // Produtividade quebrou inteira esperando a régua.
+    cx.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:11px 16px;
+      font-size:11.5px;color:var(--ct);">A fila do dia não está disponível agora. A sua planilha
+      continua abaixo, completa.</div>`;
+  }
+}
+
+function filaRender() {
+  const cx = document.getElementById('filaHoje');
+  if (!cx || !_filaDados) return;
+  const d = _filaDados;
+
+  if (!d.total) {
+    cx.innerHTML = `<div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);padding:13px 16px;">
+      <div style="font-size:14px;font-weight:800;color:var(--v);">Nada esperando por você agora</div>
+      <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">Nenhuma parcela do seu acervo está
+      com o C.I. devolvido, liberada pelo SGPe ou com a FINAL pendente. A planilha segue abaixo.</div>
+    </div>`;
+    return;
+  }
+
+  const col = (g) => {
+    const c = FILA_CORES[g.cor] || FILA_CORES.neutro;
+    const vazio = !g.qtd;
+    return `<div style="padding:13px 15px;border-right:1px solid var(--cl);background:${vazio ? '#fff' : c.fundo};">
+      <div style="font-size:26px;font-weight:900;line-height:1;color:${vazio ? 'var(--cb)' : c.n};">${g.qtd}</div>
+      <div style="font-size:12.5px;font-weight:800;margin-top:3px;color:${vazio ? 'var(--ct)' : 'var(--te)'};">${escHtml(g.rotulo)}</div>
+      <div style="font-size:10.5px;color:var(--ct);margin-top:2px;">${escHtml(g.detalhe)}</div>
+      ${vazio ? '<div style="height:9px;"></div>'
+        : `<button class="btn-acao" style="${c.bt}margin-top:9px;width:100%;font-weight:800;"
+             onclick="filaAbrir('${escHtml(g.chave)}')">Ver ${g.qtd === 1 ? 'a parcela' : 'as ' + g.qtd}</button>`}
+    </div>`;
+  };
+
+  cx.innerHTML = `
+    <div style="background:#fff;border-radius:11px;box-shadow:var(--sombra);overflow:hidden;">
+      <div style="background:var(--header-grad);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;">
+        <div style="min-width:0;">
+          <div style="font-size:15px;font-weight:900;">Para você hoje</div>
+          <div style="font-size:11.5px;color:rgba(255,255,255,.88);margin-top:2px;">
+            ${d.total} parcela${d.total === 1 ? '' : 's'} ${d.total === 1 ? 'espera' : 'esperam'} uma ação sua ·
+            ${d.trs} TR${d.trs === 1 ? '' : 's'} no acervo</div>
+        </div>
+        ${/* ⚠️ "FONTE" EM TODO PAINEL, desde 02/09 — e aqui ela importa mais que em outros: o
+              grupo do SGPe afirma que o C.I. já devolveu, e quem lê precisa poder conferir de
+              onde isso saiu. O estado mora no PRÓPRIO BOTÃO (`data-aberto`), nunca em
+              sessionStorage. */''}
+        <button id="filaFonteBt" data-aberto="0" onclick="filaFonte()" class="btn-acao"
+          style="margin-left:auto;background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.55);
+                 font-weight:700;box-shadow:none;">Fonte</button>
+      </div>
+      <div id="filaFonteBloco" style="display:none;padding:11px 16px;background:#F7F9F8;border-bottom:1px solid var(--cl);
+        font-size:11px;color:var(--ct);line-height:1.6;"></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);">${d.grupos.map(col).join('')}</div>
+      <div id="filaLista" style="display:none;border-top:1px solid var(--cl);"></div>
+      <div style="padding:8px 16px;background:#FAFBFA;border-top:1px solid var(--cl);font-size:11px;color:var(--ct);">
+        Abaixo, a sua planilha de sempre — as mesmas TRs, os mesmos filtros.
+      </div>
+    </div>`;
+}
+
+/** O bloco "Fonte": de onde vem cada número. Colado nos dados, nunca solto no HTML. */
+function filaFonte() {
+  const bt = document.getElementById('filaFonteBt');
+  const bl = document.getElementById('filaFonteBloco');
+  if (!bt || !bl || !_filaDados) return;
+  const abrindo = bt.dataset.aberto !== '1';
+  bt.dataset.aberto = abrindo ? '1' : '0';
+  bl.style.display = abrindo ? 'block' : 'none';
+  if (!abrindo) return;
+  const f = _filaDados.fonte || {};
+  bl.innerHTML = `
+    <div><b>de onde vem</b> · <code>GET /minha_fila</code>, que lê o seu acervo e a tramitação do SGPe</div>
+    <div><b>a unidade</b> · ${escHtml(f.unidade || '—')}</div>
+    <div><b>a tabela</b> · ${escHtml(f.tabela || '—')}</div>
+    <div><b>o filtro</b> · ${escHtml(f.grupos || '—')}</div>
+    <div><b>o SGPe</b> · ${escHtml(f.sgpe || '—')}</div>
+    <div><b>o que NÃO entra</b> · ${escHtml(f.fora || '—')}</div>`;
+}
+
+/** Abre a lista de um grupo — e fecha se já era o que estava aberto. */
+function filaAbrir(chave) {
+  const cx = document.getElementById('filaLista');
+  if (!cx || !_filaDados) return;
+  const g = (_filaDados.grupos || []).find(x => x.chave === chave);
+  if (!g) return;
+  if (cx.dataset.grupo === chave && cx.style.display !== 'none') {
+    cx.style.display = 'none'; cx.dataset.grupo = ''; return;
+  }
+  cx.dataset.grupo = chave;
+  cx.style.display = 'block';
+
+  const linha = (i) => {
+    const quando = i.ci_entrada
+      ? `o C.I. recebeu em ${planData(i.ci_entrada)} e devolveu em ${planData(i.ci_saida)}`
+      : (i.dt_limite_pc ? `prazo em ${planData(i.dt_limite_pc)}` : '');
+    return `<div style="display:flex;align-items:center;gap:11px;padding:9px 16px;border-bottom:1px solid var(--cl);flex-wrap:wrap;">
+      <span style="font-size:12.5px;font-weight:800;white-space:nowrap;">${escHtml(i.tr)}</span>
+      <span style="font-size:11px;font-weight:800;color:#fff;background:var(--v);border-radius:5px;padding:2px 8px;white-space:nowrap;">
+        ${i.so_final ? 'FINAL' : 'parcial ' + escHtml(i.parcial_num)}</span>
+      <span style="font-size:11.5px;color:var(--ct);min-width:0;">${escHtml(String(i.entidade || '').slice(0, 44))}</span>
+      <span style="font-size:11px;color:var(--ct);">${i.pcs} PC${i.pcs === 1 ? '' : 's'}${quando ? ' · ' + escHtml(quando) : ''}${
+        i.arquivada ? ' · arquivada' : ''}</span>
+      <button class="btn-acao" style="margin-left:auto;background:var(--cl);color:var(--te);font-weight:800;"
+        onclick="filaIr('${escHtml(i.tr)}','${escHtml(String(i.parcial_num))}')">Abrir ▸</button>
+    </div>`;
+  };
+
+  cx.innerHTML = `<div style="padding:9px 16px;background:#F7F9F8;font-size:11.5px;font-weight:800;color:var(--te);">
+      ${escHtml(g.rotulo)} — ${g.qtd} parcela${g.qtd === 1 ? '' : 's'}, ${g.pcs} PC${g.pcs === 1 ? '' : 's'}
+      <span style="float:right;font-weight:400;color:var(--ct);">da mais antiga para a mais nova</span>
+    </div>${g.itens.map(linha).join('')}`;
+}
+
+/**
+ * Leva à parcela, na planilha que já está na tela.
+ *
+ * ⚠️ NÃO CHAMA `irPlanilha` DE NOVO: a tela já é esta, e recarregá-la jogaria fora o filtro e a
+ * página em que a pessoa está. `_planAlvo` + `planIrAoAlvo` é o caminho que o resto do sistema
+ * usa para chegar numa TR — inclusive o sino.
+ */
+function filaIr(tr, num) {
+  _planAlvo = { tr, parcial: num };
+  planIrAoAlvo();
+}
 
 // ══════════════════════════════════════
 //  O BOTÃO "AÇÕES" — as quatro frentes de 18/08/2026
@@ -15750,7 +16025,7 @@ function acGrupo(titulo) {
 function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
   const c = ativo ? (AC_CORES[cor] || AC_CORES.situacao) : AC_CORES.inativo;
   const corTexto = ativo ? 'var(--te)' : '#9A9A94';
-  return `<button role="menuitem" data-ac-item ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
+  return `<button role="menuitem" data-ac-item data-ativo="${ativo ? 1 : 0}" ${ativo ? `onclick="acFechar();${acao}"` : 'disabled'}
     title="${escHtml(motivo || rotulo)}"
     style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;
            border:0;padding:9px 14px;font-size:13.5px;font-family:inherit;
@@ -15763,6 +16038,80 @@ function acItem(rotulo, icone, acao, ativo, cor, motivo, destaque) {
       <span style="display:block;font-size:13.5px;font-weight:${destaque && ativo ? '800' : '600'};line-height:1.35;">${escHtml(rotulo)}</span>
       ${motivo ? `<span style="display:block;font-size:11px;color:var(--ct, #8A968F);line-height:1.35;margin-top:2px;white-space:normal;">${escHtml(motivo)}</span>` : ''}
     </span></button>`;
+}
+
+/**
+ * O MENU ENCOLHE: "Agora" em cima, o resto atrás de "Mais ações".  (12/10/2026)
+ *
+ * ⚠️ POR QUE: são 14 itens, e a maior parte está desligada com duas linhas de explicação cada.
+ * O Richard voltou a analisar processos e mandou o print — a lista ficava ATRÁS DA BARRA DE
+ * TAREFAS do Windows. `acReposicionar` já vira o menu para cima quando não cabe embaixo; com
+ * essa altura ele não cabe de nenhum dos dois lados. **Não era o lugar: era o tamanho.**
+ *
+ * ⚠️ NADA SOME. Os itens desligados continuam na lista, com o mesmo rótulo e o mesmo motivo,
+ * a um clique em "Mais ações (N)" — esconder sem substituto foi o que deixou 2.181 parciais
+ * sem caminho para o C.I. em 13/08. O que muda é que eles param de disputar a primeira tela
+ * com o item que a pessoa pode usar.
+ *
+ * ⚠️ E A TELA CONTINUA NÃO DECIDINDO NADA (armadilha 16): quem diz o que está ativo é o
+ * servidor, em `GET /parcela/acoes`. Aqui só se lê o `data-ativo` que `acItem` já escreveu.
+ */
+function acCompactar(linhas) {
+  const html = (linhas || []).join('');
+  // Separa por item, preservando o grupo em que cada um estava.
+  const partes = [];
+  let grupo = null;
+  for (const bloco of (linhas || [])) {
+    if (/^<div/.test(bloco)) { grupo = bloco; continue; }
+    partes.push({ grupo, html: bloco, ativo: /data-ativo="1"/.test(bloco) });
+  }
+  const ativos = partes.filter(p => p.ativo);
+  const resto  = partes.filter(p => !p.ativo);
+
+  // Sem nada ativo e sem nada inativo não há menu — devolve o que veio, para não sumir com a
+  // mensagem de erro ou com um menu vazio que a pessoa não entenderia.
+  if (!partes.length) return html;
+
+  _acSecao = 0;
+  const topo = ativos.length
+    ? acGrupo('Agora') + ativos.map(p => p.html).join('')
+    : acGrupo('Agora') + `<div style="padding:9px 14px 12px;font-size:11.5px;color:var(--ct);">
+        Nada a fazer nesta parcial agora. O que existe está em <b>Mais ações</b>, com o motivo de
+        cada um.</div>`;
+
+  if (!resto.length) return topo;
+
+  // ⚠️ OS GRUPOS VOLTAM NO BLOCO ESCONDIDO, e só os que ainda têm item: cabeçalho de grupo
+  // vazio é a pessoa procurando o que não está ali.
+  let dentro = '', ultimo = null;
+  for (const p of resto) {
+    if (p.grupo && p.grupo !== ultimo) { dentro += p.grupo; ultimo = p.grupo; }
+    dentro += p.html;
+  }
+
+  return topo + `
+    <button type="button" data-ac-mais onclick="acMais(this)"
+      style="width:100%;border:0;border-top:1px solid var(--cl);background:var(--surface-2, #FAFCFA);
+             padding:10px;font-size:11.5px;font-weight:800;color:var(--ct);cursor:pointer;
+             font-family:inherit;text-align:center;">⌄ Mais ações (${resto.length})</button>
+    <div data-ac-resto style="display:none;">${dentro}</div>`;
+}
+
+/** Abre e fecha o "Mais ações" — e o menu se reposiciona, porque acabou de mudar de altura. */
+function acMais(bt) {
+  const caixa = bt.parentElement && bt.parentElement.querySelector('[data-ac-resto]');
+  if (!caixa) return;
+  const abrindo = caixa.style.display === 'none';
+  caixa.style.display = abrindo ? 'block' : 'none';
+  const n = caixa.querySelectorAll('[data-ac-item]').length;
+  bt.innerHTML = abrindo ? '⌃ Menos ações' : `⌄ Mais ações (${n})`;
+  // ⚠️ COM O RESTO ABERTO O MENU VOLTA A SER ALTO — e aí a altura é travada em 62% da janela,
+  // com rolagem dentro. É o que impede o retorno exato do defeito que isto conserta.
+  if (_acAberto) {
+    _acAberto.style.maxHeight = abrindo ? Math.round(window.innerHeight * 0.62) + 'px' : '';
+    _acAberto.style.overflowY = abrindo ? 'auto' : '';
+  }
+  acReposicionar();
 }
 
 /**
@@ -15956,7 +16305,7 @@ async function acAbrir(ev, codigoPc, tr, parcialNum, nPcs) {
     // O histórico abre SEMPRE — com ou sem parecer. Ver `pHistoricoPc`.
     linhas.push(acItem('Histórico da parcial', 'historico', `pHistoricoPc(${nm})`, true, 'situacao'));
 
-    cx.innerHTML = linhas.join('');
+    cx.innerHTML = acCompactar(linhas);
     acZebra(cx);
     acReposicionar();
   } catch (e) {
@@ -16512,6 +16861,7 @@ function renderPlan(rows) {
                     substituto, e ele é o primeiro grupo do menu. */''}
             </span>
           </div>
+          ${pFaltaAgora(r, pa)}
           ${pFaixaPasso(pa)}
           ${pCiBloco(r, pa)}
         </div>`
@@ -16569,6 +16919,7 @@ function renderPlan(rows) {
             ${pBotaoAcoes(pa, r.tr)}
           </span>
         </div>
+        ${pFaltaAgora(r, pa)}
         ${pFaixaPasso(pa)}
         ${sub}
         ${pCiBloco(r, pa)}
