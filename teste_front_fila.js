@@ -331,9 +331,23 @@ S('7. ABRIR UM GRUPO LISTA AS PARCELAS, E "ABRIR" LEVA À TR');
   ctx.filaAbrir('falta_final');
   conf(lista.style.display === 'none', 'clicar no mesmo grupo fecha');
 
+  // ⚠️ COM A PLANILHA JÁ CARREGADA, o "Abrir" vai na hora.
+  ctx.window._planDadosCache = [{ tr: '2021TR001578' }];
   ctx.filaIr('2021TR001578', '1');
   conf(ctx._planAlvo && ctx._planAlvo.tr === '2021TR001578', '"Abrir" aponta o alvo da planilha');
   conf(ctx._foi === true, 'e usa o caminho de sempre (planIrAoAlvo), sem recarregar a tela');
+
+  // ⚠️ E COM A PLANILHA AINDA CARREGANDO, ELE NÃO NAVEGA — guarda o alvo e avisa.
+  // Foi isto que derrubou a Miriam em 13/10: a fila fica pronta em ~0,5 s e o acervo em ~1 s
+  // (medido na tela), e clicar na janela entre os dois dizia "a TR não está na sua planilha" —
+  // sobre uma TR que estava lá. Quem consome o alvo é o `buscarPlan` ao terminar.
+  ctx._foi = false; ctx._planAlvo = null;
+  ctx.window._planDadosCache = [];
+  let aviso = null; ctx.toast = (m) => { aviso = m; };
+  ctx.filaIr('2021TR001578', '1');
+  conf(ctx._planAlvo && ctx._planAlvo.tr === '2021TR001578', 'planilha carregando: o alvo FICA guardado');
+  conf(ctx._foi === false, '⚠️ e NÃO navega — era isso que produzia o erro falso');
+  conf(/ainda está carregando/.test(aviso || ''), 'e a pessoa é avisada do que está acontecendo', aviso);
 }
 
 S('8. A FILA NÃO PODE DERRUBAR A PLANILHA');

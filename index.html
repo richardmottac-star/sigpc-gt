@@ -14653,6 +14653,10 @@ function planIrAoAlvo() {
   // A TR pode estar recolhida, e pode estar em outra página: sem as duas coisas resolvidas o
   // âncora não existe no DOM e a rolagem não acha nada.
   const lista = window._planDadosCache || []
+  // ⚠️ CACHE VAZIO NÃO É "A TR NÃO É SUA" — é a planilha ainda carregando. Acusar ausência aqui
+  // foi o que fez a Miriam ver um erro sobre uma TR que estava no acervo dela. O alvo volta para
+  // `_planAlvo`, e o `buscarPlan` o consome quando terminar.
+  if(!lista.length) { _planAlvo = alvo; return }
   const item = lista.find(t => t.tr === alvo.tr)
   if(!item) { toast(`A TR ${alvo.tr} não está na sua planilha.`,'err'); return }
   if(!item.expandida) { item.expandida = true; planSalvarPref(item.tr, { expandida: true }) }
@@ -16163,7 +16167,16 @@ function filaAbrir(chave) {
  */
 function filaIr(tr, num) {
   _planAlvo = { tr, parcial: num };
-  planIrAoAlvo();
+  // ⚠️ A FILA FICA PRONTA ANTES DA PLANILHA, e isso derrubou a Miriam em 13/10/2026: ela clicou
+  // em "Abrir" e recebeu *"a TR não está na sua planilha"* — mensagem FALSA, porque a TR estava
+  // lá; o que não tinha chegado era o acervo. Medido na tela: a fila aparece em ~0,5 s e o
+  // `_planDadosCache` só existe em ~1 s — e em rede lenta a janela é bem maior.
+  //
+  // O alvo fica guardado em `_planAlvo`, e quem o consome é o PRÓPRIO `buscarPlan` quando
+  // termina (ele chama `planIrAoAlvo` na última linha). Chamar agora, com o cache vazio, é que
+  // produzia o erro.
+  if ((window._planDadosCache || []).length) planIrAoAlvo();
+  else toast('Abrindo… a sua planilha ainda está carregando.');
 }
 
 // ══════════════════════════════════════
