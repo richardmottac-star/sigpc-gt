@@ -15724,11 +15724,20 @@ async function regCancelar(id) {
   if (ok) regPatch(id, { acao: 'cancelar' }, 'Cancelado.')
 }
 
-/** Recarrega o caderno das TRs que estão na tela e repinta. */
+/**
+ * Recarrega o caderno das TRs que estão na tela e repinta — NAS DUAS TELAS.
+ *
+ * ⚠️ O MESMO CADERNO É VISTO DE DOIS LUGARES (Minha Planilha e a ficha da aba Gestão), e marcar
+ * uma tarefa num deles tem de repintar o outro. Quem está em cada momento é decidido pelo DOM:
+ * se o elemento existe, aquela tela está montada. Guardar "em que tela estou" numa variável
+ * seria um terceiro estado para manter em dia — e o DOM já sabe.
+ */
 async function regRecarregar() {
-  const trs = (window._planDadosCache || []).map(t => t.tr)
-  await regCarregar(trs)
-  planAplicar()
+  const daPlanilha = (window._planDadosCache || []).map(t => t.tr)
+  const daGestao = (typeof _gesF !== 'undefined' && _gesF && _gesF.tr) ? [_gesF.tr] : []
+  await regCarregar([...new Set([...daPlanilha, ...daGestao])])
+  if (document.getElementById('gesCaderno')) gesCadernoPintar()
+  if (document.getElementById('planConteudo')) planAplicar()
 }
 
 
@@ -26742,6 +26751,7 @@ function gesPintar() {
     gesSgpeCarregar(false)
     gesHistCarregar(t.tr)
     gesAnotCarregar(t.tr)
+    gesCadernoCarregar(t.tr)
   } else {
     el.innerHTML = gesListaHtml()
     gesTabela()
@@ -27032,8 +27042,12 @@ function gesFichaHtml(t) {
 
     <div class="ges-grid2">
       <div class="ges-card ges-bloco" style="margin-top:0;"><h4>Linha do tempo</h4><div id="gesHist"><div class="loading" style="padding:12px;">Carregando...</div></div></div>
-      <div class="ges-card ges-bloco" style="margin-top:0;"><h4>Anotações</h4><div id="gesAnot"><div class="loading" style="padding:12px;">Carregando...</div></div></div>
-    </div>`
+      <div class="ges-card ges-bloco" style="margin-top:0;"><h4>Anotações <span style="font-size:10px;font-weight:600;color:var(--ct);text-transform:none;letter-spacing:0;">— todos que abrem a TR veem</span></h4><div id="gesAnot"><div class="loading" style="padding:12px;">Carregando...</div></div></div>
+    </div>
+
+    ${/* O CADERNO: o mesmo da Minha Planilha, visto pela TR inteira. Ver `gesCadernoHtml`. */''}
+    <div class="ges-card ges-bloco"><h4>Registro / Tarefa <span style="font-size:10px;font-weight:600;color:var(--ct);text-transform:none;letter-spacing:0;">— o seu caderno, sincronizado com a Minha Planilha</span></h4>
+      <div id="gesCaderno"><div class="loading" style="padding:12px;">Carregando...</div></div></div>`
 }
 
 // ── SGPe da ficha ──
@@ -27123,6 +27137,129 @@ async function gesHistCarregar(tr) {
   } catch (e) {
     if (document.getElementById('gesHist')) box.innerHTML = `<div style="color:#A32D2D;font-size:12.5px;">Erro ao carregar: ${escHtml(e.message)}</div>`
   }
+}
+
+// ── REGISTRO / TAREFA NA FICHA DA TR  (13/10/2026) ───────────────────────────
+//
+// Pedido do Richard: a mesma caixa da Minha Planilha dentro da aba Gestão, e **sincronizada** —
+// o que se escreve num lugar aparece no outro. Ela é, literalmente, o mesmo caderno: a mesma
+// tabela, a mesma rota, as mesmas funções de marcar, editar e cancelar. O que muda é a vista.
+//
+// ⚠️ NA PLANILHA A VISTA É A PARCELA; AQUI É A TR INTEIRA. Por isso os itens vêm agrupados por
+// parcela, e quem escreve ESCOLHE a parcela num seletor — a ficha da TR não tem uma parcela
+// corrente, e gravar sem dizer qual é criaria um caderno paralelo, sem lugar na planilha.
+//
+// ⚠️ E ELA NÃO SUBSTITUI A ANOTAÇÃO DA TR, que fica ao lado: a anotação é PÚBLICA, todos que
+// abrem a TR a veem; o caderno é privado de quem escreveu. São coisas diferentes, e o cadeado
+// está nos dois lugares para que ninguém confunda — decisão do Richard, 13/10.
+
+async function gesCadernoCarregar(tr) {
+  const box = document.getElementById('gesCaderno')
+  if (!box) return
+  await regCarregar([tr])
+  gesCadernoPintar(tr)
+}
+
+function gesCadernoPintar(tr) {
+  const box = document.getElementById('gesCaderno')
+  if (!box) return
+  const alvoTr = tr || _gesF.tr
+  if (!alvoTr) return
+  const t = (_ges && _ges.trs) ? _ges.trs.find(x => x.tr === alvoTr) : null
+  box.innerHTML = gesCadernoHtml(alvoTr, t)
+}
+
+/** As parcelas desta TR, para o seletor — pela lista de PCs que a ficha já recebeu. */
+function gesParcelasDaTr(t) {
+  const vistas = new Map()
+  for (const p of ((t && t.pcs) || [])) {
+    const num = p.final ? 'FINAL' : String(p.parcial_num ?? '')
+    if (!num) continue
+    if (!vistas.has(num)) vistas.set(num, p.final ? 'PC final' : `Parcial ${num}`)
+  }
+  return [...vistas.entries()]
+}
+
+function gesCadernoHtml(tr, t) {
+  const itens = (_regItens || []).filter(i => i.tr === tr)
+  const parcelas = gesParcelasDaTr(t)
+  const abertos = itens.filter(i => ['aberta', 'vencida', 'vence_hoje'].includes(regEstado(i)))
+
+  // ⚠️ O AGRUPAMENTO SEGUE A ORDEM DA FICHA — parciais em ordem, a final por último —, e não a
+  // ordem em que os itens foram escritos: na TR com 20 parcelas, a ordem da escrita é ruído.
+  const porParcela = new Map()
+  for (const [num] of parcelas) porParcela.set(num, [])
+  for (const i of itens) {
+    const k = String(i.parcial_num)
+    if (!porParcela.has(k)) porParcela.set(k, [])
+    porParcela.get(k).push(i)
+  }
+
+  const grupos = [...porParcela.entries()].filter(([, lista]) => lista.length).map(([num, lista]) => {
+    const rot = (parcelas.find(([n]) => n === num) || [])[1] || (num === 'FINAL' ? 'PC final' : `Parcial ${num}`)
+    const r = { tr }, pa = { num }
+    return `<div style="border-top:1px solid #EADCAE;">
+      <div style="padding:7px 13px;background:#FFF6DC;font-size:11px;font-weight:900;color:#5C4106;
+        text-transform:uppercase;letter-spacing:.05em;">${escHtml(rot)}</div>
+      ${lista.map(i => regItemHtml(r, pa, i)).join('')}
+    </div>`
+  }).join('')
+
+  const vazio = !itens.length
+
+  return `<div style="border:1.5px solid #EADCAE;border-radius:9px;overflow:hidden;background:#FFFDF5;">
+    <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;background:#FFF6DC;flex-wrap:wrap;">
+      <span style="width:26px;height:26px;border-radius:7px;background:#8A6100;color:#fff;display:flex;
+        align-items:center;justify-content:center;font-size:13px;">📋</span>
+      <b style="font-size:12.5px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#5C4106;">Registro / Tarefa</b>
+      <span style="font-size:11px;color:#8A6100;font-weight:700;">${
+        vazio ? 'nada escrito nesta TR' : `${abertos.length ? `${abertos.length} tarefa${abertos.length > 1 ? 's' : ''} aberta${abertos.length > 1 ? 's' : ''} · ` : ''}${itens.length} ${itens.length === 1 ? 'item' : 'itens'}`}</span>
+      <span title="Só você vê o que escreve aqui. A anotação ao lado é a que todos veem."
+        style="margin-left:auto;font-size:10px;color:#8A6100;font-weight:700;">🔒 só você vê</span>
+    </div>
+    ${grupos || `<div style="padding:11px 13px;font-size:11.5px;color:var(--ct);">
+      O que você escrever aqui aparece na parcela correspondente da sua Minha Planilha — e vice-versa.</div>`}
+    <div style="padding:11px 13px;background:#fff;border-top:1px solid #EADCAE;">
+      <textarea id="gesCadTxt" rows="2" placeholder="O que você fez nesta TR? O que ficou pendente?"
+        style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;
+        font-family:Barlow,sans-serif;font-size:12.5px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+        ${/* ⚠️ A PARCELA É ESCOLHIDA, e sem ela não se grava: é o que mantém os dois lugares
+              mostrando a mesma coisa. Sem parcelas na TR, o formulário nem aparece. */''}
+        <label style="font-size:11px;color:var(--ct);display:flex;align-items:center;gap:5px;">em
+          <select id="gesCadParc" style="width:auto;padding:5px 7px;font-size:11.5px;border:1px solid var(--cb);border-radius:6px;">
+            ${parcelas.map(([num, rot]) => `<option value="${escHtml(num)}">${escHtml(rot)}</option>`).join('')}
+          </select></label>
+        <button class="ges-btn v" onclick="gesCadSalvar('${escHtml(tr)}','registro')">＋ Registro</button>
+        <button class="ges-btn" style="background:#8A6100;color:#fff;border-color:#8A6100;"
+          onclick="gesCadSalvar('${escHtml(tr)}','tarefa')">☑ Tarefa</button>
+        <label style="font-size:11px;color:var(--ct);display:flex;align-items:center;gap:5px;">prazo
+          <input type="date" id="gesCadPrazo" style="width:auto;padding:5px 7px;font-size:11.5px;
+            border:1px solid var(--cb);border-radius:6px;"></label>
+      </div>
+    </div>
+  </div>`
+}
+
+async function gesCadSalvar(tr, tipo) {
+  const campo = document.getElementById('gesCadTxt')
+  const texto = (campo?.value || '').trim()
+  if (texto.length < 3) { toast('Escreva pelo menos 3 caracteres.', 'err'); return }
+  const num = document.getElementById('gesCadParc')?.value
+  if (!num) { toast('Esta TR não tem parcela para registrar.', 'err'); return }
+  const dp = document.getElementById('gesCadPrazo')
+  const prazo = (tipo === 'tarefa' && dp && dp.value) ? dp.value : null
+  try {
+    const j = await (await fetch(`${API_URL}/registros`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tr, parcial_num: num, tipo, texto, prazo, analista_id: U.id, analista_nome: U.nome }),
+    })).json()
+    if (j.error) throw new Error(j.error.message || j.error)
+    if (campo) campo.value = ''
+    if (dp) dp.value = ''
+    await gesCadernoCarregar(tr)
+    toast(tipo === 'tarefa' ? 'Tarefa criada.' : 'Registro salvo.')
+  } catch (e) { toast('Não foi possível salvar: ' + e.message, 'err') }
 }
 
 // ── anotações — a MESMA `anotacoes_tr` da Minha Planilha: uma linha por gravação, a primeira

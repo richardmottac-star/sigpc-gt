@@ -28,6 +28,8 @@ const S = (t) => console.log(`\n═══ ${t} ═══`);
 // comentário `/** */` — cortar no meio dele deixa o bloco aberto e o `vm` recusa tudo.
 const i = html.indexOf('let _regItens = [];');
 const fonte = i < 0 ? '' : html.slice(i, html.indexOf('function pBlocoCor(pa) {', i));
+// Recorta de marco a marco — a mesma regra: o fim e sempre um marco do proprio codigo.
+const fatia = (de, ate) => { const a = html.indexOf(de); if (a < 0) return ''; const b = html.indexOf(ate, a + de.length); return b < 0 ? '' : html.slice(a, b); };
 
 const ctx = {
   console,
@@ -228,6 +230,61 @@ S('9. O CADERNO NÃO DERRUBA A PLANILHA');
   conf(/regCarregar\(trs\.map/.test(html), 'ele é carregado DEPOIS de a planilha pintar');
   conf((html.match(/\$\{regCaixa\(r, pa\)\}/g) || []).length === 2, 'e a caixa aparece nos DOIS ramos',
     (html.match(/\$\{regCaixa\(r, pa\)\}/g) || []).length);
+}
+
+S('10. O MESMO CADERNO NA FICHA DA ABA GESTÃO');
+{
+  // ⚠️ Pedido do Richard em 13/10: a mesma caixa na aba Gestão, SINCRONIZADA — o que se escreve
+  // num lugar aparece no outro. É o mesmo caderno, a mesma tabela e as mesmas funções; o que
+  // muda é a vista: na planilha é a parcela, na ficha é a TR inteira.
+  const fonteGes = fatia('async function gesCadernoCarregar(tr)', '// ── anotações — a MESMA');
+  conf(fonteGes.length > 0, 'o trecho do caderno da Gestão existe');
+  // ⚠️ RODA NO MESMO CONTEXTO do caderno da planilha — e é isso que o teste prova junto: as
+  // funções da Gestão usam `regEstado` e `regItemHtml`, as mesmas da Minha Planilha. Se um dia
+  // alguém duplicar essas funções para a Gestão, este teste continua passando e a divergência
+  // nasce calada — por isso há uma checagem explícita de que não há segunda cópia, no fim.
+  const ctx2 = ctx;
+  ctx2._gesF = { tr: '2021TR001578' };
+  new vm.Script(fonteGes.replace(/^let /gm, 'var ').replace(/^const /gm, 'var ')).runInContext(ctx2);
+
+  ctx2._regHoje = '2026-10-13';
+  ctx2._regItens = [
+    item({ id: 40, tr: '2021TR001578', parcial_num: '1', texto: 'Notas conferidas.' }),
+    item({ id: 41, tr: '2021TR001578', parcial_num: 'FINAL', tipo: 'tarefa', texto: 'Cobrar extrato', prazo: '2026-10-01' }),
+    item({ id: 42, tr: '2021TR000895', parcial_num: '1', texto: 'De outra TR — não pode aparecer' }),
+  ];
+  const t = { tr: '2021TR001578', pcs: [
+    { parcial_num: '1', final: false }, { parcial_num: 'FINAL', final: true }] };
+  const h = ctx2.gesCadernoHtml('2021TR001578', t);
+  const tx = texto(h);
+
+  conf(/Registro \/ Tarefa/i.test(tx), 'a caixa tem o mesmo nome da Minha Planilha');
+  conf(/só você vê/.test(tx), 'e o mesmo cadeado — a anotação ao lado é que é pública');
+  conf(/Notas conferidas/.test(tx) && /Cobrar extrato/.test(tx), 'mostra os itens das DUAS parcelas da TR');
+  conf(!/De outra TR/.test(tx), '⚠️ e nada de outra TR entra aqui');
+  conf(/Parcial 1/.test(tx) && /PC final/.test(tx), 'agrupados por parcela, com o rótulo de cada uma');
+  conf(/1 tarefa aberta · 2 itens/.test(tx), 'o cabeçalho conta tarefas e itens da TR');
+  // ⚠️ O SELETOR DE PARCELA é o que mantém os dois lugares mostrando a mesma coisa.
+  conf(/<select id="gesCadParc"/.test(h), 'há um seletor de parcela');
+  conf((h.match(/<option value="/g) || []).length === 2, 'com as duas parcelas da TR',
+    (h.match(/<option value="/g) || []).length);
+  conf(/gesCadSalvar\('2021TR001578','registro'\)/.test(h) && /gesCadSalvar\('2021TR001578','tarefa'\)/.test(h),
+    'e os dois botões, registro e tarefa');
+  conf(/type="date" id="gesCadPrazo"/.test(h), 'com o prazo opcional da tarefa');
+
+  // Sem nada escrito, ela explica a sincronia em vez de ficar vazia.
+  ctx2._regItens = [];
+  conf(/aparece na parcela correspondente da sua Minha Planilha/.test(texto(ctx2.gesCadernoHtml('2021TR001578', t))),
+    'sem itens, a caixa explica que os dois lugares são o mesmo caderno');
+
+  // ⚠️ E A REPINTURA ALCANÇA AS DUAS TELAS — era isso que faltaria para a sincronia valer
+  // depois de marcar uma tarefa.
+  const rec = fatia('async function regRecarregar()', 'function pBlocoCor(pa) {');
+  conf(/gesCadernoPintar\(\)/.test(rec) && /planAplicar\(\)/.test(rec),
+    'regRecarregar repinta a Gestão E a planilha');
+  conf(/_gesF\.tr/.test(rec), 'e recarrega também a TR que está aberta na ficha');
+  conf(/\$\{gesCadernoCarregar\(t\.tr\)|gesCadernoCarregar\(t\.tr\)/.test(html),
+    'a ficha carrega o caderno junto com o resto');
 }
 
 console.log(`\n═══ RESULTADO: ${ok} passaram · ${falhou} falharam ═══`);
