@@ -1,12 +1,164 @@
-# SIGPC-GT — ESTADO EM 12/10/2026 (noite)
+# SIGPC-GT — ESTADO EM 13/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **12/10 à tarde**, logo abaixo — e o de 05–12/10
-> logo depois dele, que conta a semana.
+> **não como estado**. O estado é o bloco de **13/10**, logo abaixo; o de **12/10 à tarde** vem
+> em seguida, e o de 05–12/10 depois dele, contando a semana.
 
 ---
+
+## ▶ 13/10/2026 — O CADERNO FOI PARA A ABA GESTÃO, E DUAS COISAS QUE VAZAVAM FORAM FECHADAS
+
+**Tudo publicado e conferido no ar.** ⚠️ **HOUVE ESCRITA EM PRODUÇÃO** — duas novidades, um item
+no repositório e **55 avisos no sino**. Detalhe em *"O que foi gravado"*, no fim deste bloco.
+
+| commit | repo | o quê |
+|---|---|---|
+| `b13cf50` | gt | o **"Abrir" da fila espera a planilha** em vez de acusar TR que não é sua |
+| `56c66ad` | gt | o **mesmo caderno na ficha da TR**, sincronizado com a Minha Planilha |
+| `703c209` | api | o caderno privado **não sai pela rota pública da TR** |
+| `f493dac` · `0033599` | api · gt | a **parcela arquivada sai do seletor** do caderno |
+
+---
+
+### 1. O CASO MIRIAM — a fila acusava "esta TR não é sua", e era mentira
+
+A Miriam clicou em **Abrir** na fila "Para você hoje" e recebeu *"a TR não está na sua planilha"*.
+A TR **era** dela.
+
+⚠️ **ERA CORRIDA, NÃO PERMISSÃO.** A fila chega antes da planilha: `GET /minha_fila` responde em
+**~500 ms** e a consulta das 54 TRs em **~1 s** (medido). Entre uma coisa e outra o botão já está
+clicável, e o `planIrAoAlvo` procurava a TR numa lista **vazia** — não achava, e dizia a única
+frase que não podia dizer: que a TR não é dela.
+
+O conserto tem duas metades, e as duas importam:
+
+- **`filaIr` não chama mais o alvo direto**: guarda `_planAlvo` e só navega se a planilha já
+  carregou; senão avisa *"Abrindo… a sua planilha ainda está carregando."* e o `buscarPlan`, ao
+  terminar, chama `planIrAoAlvo` sozinho.
+- **`planIrAoAlvo` com lista vazia DEVOLVE O ALVO** (`if (!lista.length) { _planAlvo = alvo; return }`)
+  em vez de consumi-lo. Consumir era o que transformava a corrida em erro definitivo: na segunda
+  tentativa não havia mais alvo nenhum.
+
+⚠️ **A LIÇÃO QUE FICA: mensagem de erro que afirma permissão tem de ser a ÚLTIMA hipótese.**
+"Não achei" e "não é seu" são coisas diferentes, e a tela dizia a segunda quando a verdade era a
+primeira — a pessoa acreditou, e com razão.
+
+### 2. O CADERNO NA ABA GESTÃO — o mesmo, não um segundo
+
+Pedido do Richard: *"quero que a mesma funcionalidade apareça dentro da aba gestão… o que escreve
+aqui aparece lá em minhas planilhas e o que escreve em minhas planilhas aparece no gestão"*. E,
+perguntado se as duas caixas conviveriam: **"A, mantém as duas"** — a **Anotações** (pública)
+continua, e o caderno entra ao lado.
+
+É literalmente o mesmo caderno: mesma tabela (`anotacoes_tr` com `parcial_num`), mesmas rotas
+(`GET/POST/PATCH /registros`), mesmo desenho do item (`regItemHtml`) e mesma regra de estado
+(`regEstado`). **O que muda é a vista** — na planilha, a parcela; na ficha, a TR inteira agrupada
+por parcela.
+
+⚠️ **QUEM ESCREVE NA FICHA ESCOLHE A PARCELA**, no seletor `em [Parcial N ▾]`. A ficha não tem
+parcela corrente, e gravar sem dizer qual criaria um caderno paralelo, sem lugar na planilha.
+
+⚠️ **A REPINTURA ALCANÇA AS DUAS TELAS.** `regRecarregar` recarrega as TRs da planilha **e** a TR
+aberta na ficha, e repinta quem estiver montado — decidido pelo DOM (`getElementById`), nunca por
+uma variável "em que tela estou", que seria um terceiro estado para manter em dia.
+
+### 3. O CADERNO PRIVADO SAÍA PELA ROTA PÚBLICA DA TR — fechado antes de qualquer divulgação
+
+`GET /anotacoes_tr?tr=X` fazia `SELECT *` **sem filtrar `parcial_num`**. Como o caderno mora na
+mesma tabela, a anotação privada de um analista sairia pela rota que qualquer um usa para ler as
+anotações públicas da TR.
+
+⚠️ **NÃO VAZOU** — medido antes de consertar: **zero** registros de caderno gravados até ali. Mas
+o card com a novidade estava pronto para ir aos 48, e o primeiro item escrito já sairia.
+
+O conserto são duas linhas em espelho, e as duas precisam existir:
+- `GET /anotacoes_tr` ganhou `parcial_num IS NULL` — a rota pública só enxerga a anotação da TR;
+- o `DELETE` ganhou `AND parcial_num IS NULL` junto com o `analista_id` — sem isso, a rota pública
+  apagaria item de caderno pelo id.
+
+⚠️ **E A ROTA DO CADERNO FAZ O INVERSO**: só o autor, e só o que **tem** parcela. As duas se
+complementam, e há teste que falha se uma delas perder a condição.
+
+### 4. A PARCELA ARQUIVADA SAIU DO SELETOR — e a regra foi para o servidor
+
+Achado ao conferir o card antes de postar no WhatsApp: na ficha da Gestão o seletor listava
+**parcela já arquivada**, e o `POST /registros` recusava com **409**. Botão aceso que não grava é
+a **armadilha 12** — e na Minha Planilha isso já estava certo desde 12/10.
+
+⚠️ **A CAUSA ERA A TELA AGRUPAR AS PCs POR CONTA PRÓPRIA.** `gesParcelasDaTr` montava as parcelas a
+partir de `t.pcs`, e o arquivamento não entrava na conta. Agora `GET /gestao` manda
+`parcelas: [{num, rotulo, arquivada, n_pcs}]` **pronta**, na ordem da ficha.
+
+⚠️ **A REGRA É A MESMA DE `lib/registro.js`, E PELO MESMO CAMPO, DE PROPÓSITO:** a parcela só
+acabou quando **todas** as PCs dela foram arquivadas — lá é `bool_and(COALESCE(arquivada,false))`,
+aqui é nenhuma PC fora de `arquivada`, e `etapaDaPc` lê a mesma coluna. Duas perguntas diferentes
+para *"esta parcela acabou?"* é a segunda ficando velha.
+
+Na ficha, agora: a arquivada **sai do seletor**; os itens dela ficam **à vista, em só leitura**
+(sem marcar, editar nem cancelar), com o rótulo *"arquivada, histórico"*; e com **todas** as
+parcelas arquivadas o formulário não aparece, e a caixa diz por quê.
+
+⚠️ **O "só leitura" vem do PRÓPRIO ITEM** (`parcela_arquivada`, que o servidor manda), a mesma
+resposta que a Minha Planilha usa — e não de uma segunda conta na tela.
+
+### 5. AS FIGURAS DO GUIA SÃO A TELA, NÃO UM DESENHO
+
+O Richard viu o guia e perguntou: *"no card vc mostrou a tela e aqui não? por que? importante ter
+a tela para eles verem"*. Tinha razão — as figuras eram os cards desenhados para o WhatsApp.
+
+As três figuras do guia agora saem de um gerador que **carrega o `index.html`, executa as funções
+reais** (`regCaixa`, `regPilulaTr`, `gesCadernoHtml`) com dados de exemplo e aplica o CSS do
+próprio arquivo. O que aparece na figura é o HTML que o sistema produz.
+
+⚠️ **PRINT TIRADO À MÃO ENVELHECE CALADO.** Figura gerada pelo código muda quando a tela muda; a
+que foi desenhada continua mostrando a tela do mês passado e ninguém percebe.
+
+O gerador está no scratchpad desta sessão (`gerar_previa_registro.js`) — **não foi versionado**.
+Se for virar rotina, o lugar dele é o repositório.
+
+---
+
+### O QUE FOI GRAVADO (13/10)
+
+| onde | o quê |
+|---|---|
+| `novidade` | **id 9** — "Registro / Tarefa: anote na própria parcela…" (`tela_nova`, todos) |
+| `novidade` | **id 10** — "O seu caderno agora também na aba Gestão…" (`melhoria`, todos) |
+| `repositorio` | **id 14** — "GUIA — REGISTRO / TAREFA: O CADERNO DO ANALISTA", categoria **Orientações** |
+| `notificacao` | **55 recados** no sino, `alvo: todos`, não urgentes |
+
+⚠️ **AS DUAS NOVIDADES E O ITEM DO REPOSITÓRIO APONTAM PARA O PAGES** — o guia e as três telas em
+`assets/orientacoes/`. Por isso a ordem foi: **push primeiro, escrita depois**, com o 200 dos
+quatro arquivos conferido antes de gravar. Publicar antes deixaria a novidade no ar com o link
+quebrado — e o link quebrado é o que a pessoa clica primeiro.
+
+⚠️ **O SINO VAI PARA TODOS OS CADASTROS** (`SELECT id FROM usuarios`, sem filtro de ativo) menos o
+autor: **55**. É como a rota sempre funcionou; fica registrado porque o número não é "quem
+trabalha", é "quem está cadastrado".
+
+### O QUE NÃO FOI ABERTO NO NAVEGADOR
+
+- [ ] **A aba Novidades com as duas novas**, e a figura da tela dentro do cartão.
+- [ ] **A ficha de uma TR com parcela arquivada**, na Gestão — o seletor sem ela, e os itens dela
+      sem o lápis e sem o X.
+- [ ] **O caderno na ficha**, escrevendo de um lado e conferindo do outro.
+- [ ] **O "Abrir" da fila** clicado no primeiro segundo, antes de a planilha carregar (o caso
+      Miriam) — tem de avisar que está abrindo, e abrir sozinho quando a lista chegar.
+
+### O QUE CONTINUA ABERTO
+
+- **7 processos ainda em duas TRs** que o portal não resolve: `ADR 10853/2017` (41 PCs),
+  `FCEE 968/2020`, `FCEE 963/2020`, `FCEE 276/2022`, `FCEE 384/2022` (estes dois são cadastro de
+  proponente), `SCC 12247/2024`, `SCC 12367/2024`.
+- **24 PCs limpas** esperando os analistas informarem o processo certo pelo lápis.
+- **Avisar a Graciane** — o texto está pronto desde 12/10 e ela não recebeu aviso no sino.
+- **Os 10 recados da Zadir** voltarem a não lidos (ids 535, 620, 1086, 1225, 1227, 1270, 1274,
+  1278, 1375, 1436).
+
+---
+
 
 ## ▶ 12/10/2026, à tarde — A TELA DO ANALISTA FOI REFEITA, E OS PROCESSOS TROCADOS APARECERAM
 
