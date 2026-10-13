@@ -1,9 +1,182 @@
-# SIGPC-GT — ESTADO EM 12/10/2026
+# SIGPC-GT — ESTADO EM 12/10/2026 (noite)
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de 05–12/10, logo abaixo.
+> **não como estado**. O estado é o bloco de **12/10 à tarde**, logo abaixo — e o de 05–12/10
+> logo depois dele, que conta a semana.
+
+---
+
+## ▶ 12/10/2026, à tarde — A TELA DO ANALISTA FOI REFEITA, E OS PROCESSOS TROCADOS APARECERAM
+
+**Tudo publicado.** ⚠️ **HOUVE ESCRITA EM PRODUÇÃO** — a correção de um processo, a limpeza de
+24, e 11 avisos no sino. Detalhe em *"O que foi gravado"*, abaixo.
+
+| commit | repo | o quê |
+|---|---|---|
+| `119b430` · `03b9b10` | api · gt | a **fila "Para você hoje"** na Minha Planilha |
+| `7d75a5d` | gt | o contorno grafite e a caixa alta da fila |
+| `6e58ac9` | gt | **cada parcela num bloco fechado**, com faixa verde |
+| `e46c271` · `b1a0940` | api · gt | a caixa **Registro / Tarefa** |
+| `ab2b09c` · `aca03b7` · `3ec5908` | gt · api · gt | os três consertos do mesmo dia |
+
+---
+
+### 1. A FILA "PARA VOCÊ HOJE" — `lib/fila.js` e `GET /minha_fila`
+
+Nasceu de uma frase: *"eu agora voltei a analisar processos e acho bem confuso"*. O problema não
+era a tela — era que **o analista CAÇA o trabalho**: abre a planilha, expande TR por TR, lê o
+cartão, fecha, abre a próxima. São 120 TRs no acervo do Richard, 51 no da Grazielly.
+
+A fila agrupa **POR AÇÃO, não por TR**: o C.I. devolveu · o SGPe já liberou · falta só a FINAL ·
+em diligência. Medido no acervo do Richard: **5 · 3 · 10 · 14**.
+
+⚠️ **UM ITEM CAI NUM GRUPO SÓ, e a ordem é a prioridade.** A final em reanálise que encerra a TR
+precisa aparecer como trabalho dele, e não como "espera a entidade".
+
+⚠️ **O VEREDITO DO SGPe NÃO FOI REESCRITO EM SQL** — vem de `lib/ci-sgpe.js`, o mesmo que o botão
+obedece. É por isso que a fila nunca oferece um clique que a tela depois recusa.
+
+⚠️ **A TRAMITAÇÃO DAS CANDIDATAS VEM EM DUAS CONSULTAS**, por `unnest`, e não em duas por parcela:
+com 40 candidatas seriam 80 consultas de uma vez, e o pool tem 10 conexões.
+
+### 2. O CARTÃO DA PARCELA — bloco fechado, faixa verde
+
+O Richard abriu a `2021TR001578` e disse que estava confuso. **O defeito não era o tamanho da
+letra:** a faixa de passo e o bloco do C.I. ficavam SOLTOS entre uma parcela e outra — no print, o
+"Passo 3 de 3 · registrado em 30/06" da FINAL aparecia logo abaixo da linha dela e parecia
+conclusão da Parcial 1.
+
+Agora cada parcela é um bloco com moldura: faixa com o nome, sub-linha com pílulas e processo, e
+dentro tudo o que é dela. ⚠️ **A FAIXA É VERDE ESCURO INSTITUCIONAL (`#004D2B`)** — a primeira
+versão usou o grafite das linhas e virou um retângulo quase preto: *"essa cor destoa"*. Quando o
+C.I. devolveu, ela fica **âmbar**.
+
+⚠️ **OS LINKS DO SGPe NÃO MUDARAM** — saem do `procHtml`, o ponto único das 11 telas (armadilha
+17); só passaram da linha para a sub-linha. E **PC sem processo continua chamando o `procHtml`**,
+porque é ele que mostra o caso "sem processo" com o lápis — filtrar esconderia quem precisa de
+conserto.
+
+⚠️ **O rótulo da parcela e o âncora passaram a morar numa função só** (`pFaixaParcela`,
+`pBlocoAbre`), chamada pelos dois ramos. Eram duas cópias da mesma expressão.
+
+### 3. O MENU "AÇÕES" — de 14 itens para 5
+
+O print mostrava a lista **atrás da barra de tarefas do Windows**. O `acReposicionar` já virava o
+menu para cima; com 14 itens — 8 desligados, com duas linhas de explicação cada — ele não cabia de
+nenhum lado. ⚠️ **NÃO ERA O LUGAR: ERA O TAMANHO.** Os disponíveis sobem para "Agora"; o resto vai
+para **"Mais ações (N)"**, com o mesmo motivo. Ao abrir, a altura trava em **62% da janela**.
+
+### 4. A CAIXA "REGISTRO / TAREFA" — o caderno do analista
+
+⚠️ **NÃO NASCEU TABELA NOVA.** A `anotacoes_tr` já tinha **87 anotações de 14 analistas**, e o
+conteúdo delas já era isto: *"Diligência 03/2026 - Prazo 10 dias"*. **O que faltava não era onde
+escrever — era VER o que já foi escrito:** a Marlene gravou a mesma anotação em dois dias seguidos
+(ids 88 e 89). A tabela ganhou 8 colunas por `ADD COLUMN IF NOT EXISTS`; **nenhuma linha existente
+mudou** (conferido: 87 continuam com `parcial_num` nulo = anotação da TR).
+
+**As quatro decisões do Richard**, implementadas:
+1. **Quem vê é quem escreveu** — `analista_id` no `WHERE` de todas as consultas, inclusive na
+   leitura. Não há rota que devolva o caderno de outra pessoa.
+2. **Prazo opcional, e só em tarefa** — registro com prazo é recusado pelo servidor.
+3. **A pílula da barra da TR PULSA** só quando há tarefa vencida ou vencendo hoje — e quem decide
+   é o servidor, em `resumoPorTr`. Tarefa para a semana que vem aparece sem pulsar.
+4. **Editar e cancelar, nunca apagar** — cancelar marca `cancelada_em` e some da lista.
+
+⚠️ **NA PARCELA QUE ACABOU A CAIXA NÃO COBRA NADA** — decisão do mesmo dia, vendo a tela: *"PC
+finalizada e arquivada registrando tarefa? como assim"*. Medido: **115 das 253 parcelas do acervo
+dele já tinham acabado** e estavam sendo convidadas; no GT, **3.131 de 8.341**. Arquivada sem nada
+escrito: a caixa não existe. Com histórico: só leitura. E **a tarefa aberta de parcela arquivada
+some da pílula** — a guarda é do servidor, que recusa a gravação com 409.
+
+⚠️ **UM DEFEITO MEU ESCAPOU PARA A PRODUÇÃO E DUROU UMA PUBLICAÇÃO:** o ramo "sem nenhum item"
+devolvia o convite ANTES de olhar se a pessoa tinha clicado em Escrever — o botão não fazia nada
+(armadilha 12 com outra roupa). O teste só media a parcela que já tinha item.
+
+---
+
+### 5. OS PROCESSOS TROCADOS — o caso que a Graciane achou
+
+A analista viu na tela dela um documento que não era seu. **Era erro de dado, não de tela:** a
+parcial 1 da `2021TR001008` (APAE de Florianópolis) estava com `SCC921/2022`, que é o processo da
+**PC FINAL da `2021TR000895`** (APAE de Armazém, Grazielly).
+
+⚠️ **A PROVA VEIO DO PORTAL DO SGPe, NAS DUAS PONTAS** — e o script recusaria a gravação se
+qualquer uma não confirmasse:
+· `FCEE 921/2022` → *"PRESTAÇÃO DE CONTAS **APAE FLORIANÓPOLIS**"*
+· `SCC 921/2022` → *"Prestação de Contas Final do Termo de Fomento **2021TR000895** da Apae de
+  Armazém"*
+
+⚠️ **A CORREÇÃO FOI PELA ROTA DO LÁPIS** (`PATCH /prestacoes_contas/:codigo_pc/processo`), não por
+`UPDATE` à mão: é ela que grava `parcela_historico` e mantém o rastro igual ao de qualquer
+analista. Linha **5873**.
+
+**E o padrão foi varrido no acervo inteiro: 25 processos gravados em MAIS DE UMA TR.**
+
+⚠️ **A PRIMEIRA VARREDURA ERROU, E O ERRO FOI MEU:** usei uma normalização escrita à mão que **não
+tirava os zeros à esquerda** — `SCC921/2022` e `SCC 00000921/2022` passaram como processos
+diferentes, e **o caso da Graciane não apareceu**. Refeito com a `chaveProcesso` de `lib/busca.js`,
+a cópia única: de 18 saltou para 25. **Normalização paralela é a segunda cópia ficando velha.**
+
+⚠️ **O DETALHAMENTO DO SGPe CITA A TR EM QUATRO FORMATOS** — `2021TR001594`, `2022TR1459` (sem
+zeros), `TR000310` (sem ano) e `TR 269/2023`. A primeira versão só reconhecia o primeiro e jogava
+nove casos resolvíveis para a decisão manual.
+
+### 6. O QUE FOI GRAVADO
+
+| o quê | tamanho |
+|---|---|
+| `2021PC001289` — processo corrigido para `FCEE 921/2022` | 1 PC |
+| **24 PCs** com processo de outra TR — número **limpo**, valor antigo na trilha | 24 PCs · 18 TRs · histórico 5935–5958 |
+| aviso no sino aos analistas das 24 | **8** (ids 2066–2073) |
+| recado ao Controle Interno (a separação da final) | 3 (ids 2034–2036) |
+| as 8 colunas novas de `anotacoes_tr` | ALTER no boot |
+
+⚠️ **LIMPAR, E NÃO SUBSTITUIR, FOI DECISÃO CONSCIENTE:** o SGPe diz de quem o processo é — isso
+prova qual PC está errada —, mas **não diz qual seria o certo da outra**, e a consulta do portal é
+por sigla/número/ano, não por TR. Gravar número adivinhado seria trocar um erro por outro, em PC
+que na maioria está baixada.
+
+⚠️ **E UMA GUARDA ERRADA QUASE DEIXOU 7 ANALISTAS SEM AVISO:** o envio pedia `ativo AND aprovado`,
+e no dry-run **7 dos 8 foram barrados, inclusive o superadmin**. Medido: **`aprovado = false` em 48
+dos 56 cadastros** — a coluna só é preenchida por quem passou pelo Primeiro Acesso (19/07/2026 em
+diante). **Quem não entra no sistema é quem tem `aguardando_aprovacao = true`.** O recado ao C.I.,
+mais cedo, só passou porque os três técnicos são cadastros novos.
+
+### 7. O QUE FICOU ABERTO
+
+- [ ] **7 PROCESSOS AINDA EM DUAS TRs**, que o portal não resolve — e precisam de olho humano:
+      `ADR 10853/2017` (2 TRs, **41 PCs**) · `FCEE 968/2020` e `FCEE 963/2020` (as duas entre
+      `2019TR000168` e `2019TR000565`) · **`FCEE 276/2022` e `FCEE 384/2022`, que são *cadastro de
+      proponente*, não prestação** — provavelmente nem deveriam estar no campo · `SCC 12247/2024`
+      (AMA Videira) · `SCC 12367/2024`.
+- [ ] **As 24 PCs limpas esperam o analista informar o processo certo** pelo lápis. Os 8 foram
+      avisados; vale conferir daqui a alguns dias quantas foram preenchidas.
+- [ ] **Avisar a Graciane** — ela **não recebeu aviso no sino** (a dela foi corrigida, não limpa).
+      O texto para o WhatsApp está no histórico desta sessão.
+- [ ] **NADA DISTO FOI ABERTO NO NAVEGADOR POR UMA PESSOA**, salvo o que o Richard viu em print: a
+      fila, a tarja, o menu com "Mais ações", o bloco da parcela e a caixa Registro / Tarefa.
+      ⚠️ **O POST de `/registros` nunca foi exercitado** — ninguém salvou um registro ainda.
+- [ ] **Os 10 recados da Zadir** continuam pendentes (ids 535, 620, 1086, 1225, 1227, 1270, 1274,
+      1278, 1375, 1436).
+
+### Testes em 12/10
+
+`sigpc-api`: `teste_fila.js` **38 · 0** (novo) · `teste_registro.js` **66 · 0** (novo) ·
+`teste_meta.js` 81 · 0 · `teste_busca.js` 107 · 0 · `teste_busca_global.js` 99 · 0 ·
+`teste_notificacao.js` 107 · 0 · `teste_sigef.js` 179 · 0 · `teste_ci.js` 149 · 0.
+`sigpc-gt`: `teste_front_fila.js` **76 · 0** (novo) · `teste_front_bloco.js` **35 · 0** (novo) ·
+`teste_front_registro.js` **69 · 0** (novo) · `teste_front_lote_ci.js` 24 · 0 ·
+`teste_front_regua.js` 41 · 0 · `teste_front_paginacao.js` 14 · 0 · `teste_front_gestao.js` 46 · 0.
+
+**As falhas que sobram são anteriores** e foram conferidas contra o `HEAD`: `front_devolucao` 2 ·
+`front_menu` 2 · `front_prazo` 1 · `front_vercomo` 2 · `front_busca` (erro de `perfilEfetivo`, já
+quebrava antes) · no servidor, `sgpe_portal` 2 e `sgpe_situacao` 1.
+
+⚠️ **TRÊS TESTES REPROVARAM CÓDIGO CERTO e foram corrigidos** — dois contavam as duas cópias
+antigas do rótulo da parcela, e o da trava do C.I. tinha como marco de janela a caixa branca que
+deixou de existir. **Armadilha 30 de novo, e desta vez o marco era um estilo CSS.**
 
 ---
 

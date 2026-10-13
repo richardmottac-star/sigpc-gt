@@ -4,8 +4,11 @@ Sistema de Gestão de Prestações de Contas do Grupo de Trabalho da FCEE
 (Fundação Catarinense de Educação Especial, Governo de Santa Catarina).
 
 **Responsável:** Richard Motta Coelho — superadmin e analista do Grupo 3.
-**Última sessão:** 05–12/10/2026 — ver `SESSAO.md`, que abre com o estado. A régua de
-produtividade **entrou no ar** e cinco correções nasceram de reclamação de analista.
+**Última sessão:** 12/10/2026 — ver `SESSAO.md`, que abre com o estado. À tarde a **tela do
+analista foi refeita** (a fila do dia, o bloco da parcela, o menu que cabe e a caixa Registro /
+Tarefa) e apareceram os **processos do SGPe trocados entre TRs** — 25 no acervo, 24 PCs limpas.
+De manhã, a régua de produtividade **entrou no ar** e cinco correções nasceram de reclamação de
+analista.
 ⚠️ **HOUVE ESCRITA EM PRODUÇÃO nesta semana** — o nome da Clara Cristina (1 cadastro + 208 PCs),
 a parcial partida da `2020TR000750` (6 PCs), a `2022TR001174` para a Ana Claudia (16 PCs + grupo),
 3 TRs do estoque para a Tanimeri (124 PCs) e os recados pelo sino (15 + 2 + 47). **Nenhuma tocou
