@@ -253,8 +253,11 @@ S('10. O MESMO CADERNO NA FICHA DA ABA GESTÃO');
     item({ id: 41, tr: '2021TR001578', parcial_num: 'FINAL', tipo: 'tarefa', texto: 'Cobrar extrato', prazo: '2026-10-01' }),
     item({ id: 42, tr: '2021TR000895', parcial_num: '1', texto: 'De outra TR — não pode aparecer' }),
   ];
-  const t = { tr: '2021TR001578', pcs: [
-    { parcial_num: '1', final: false }, { parcial_num: 'FINAL', final: true }] };
+  // ⚠️ O `t` VEM COMO O SERVIDOR MANDA: `parcelas` pronta, com o arquivamento de cada uma. A
+  // ficha agrupava as PCs por conta própria até 13/10, e era isso que deixava a parcela
+  // arquivada entrar no seletor.
+  const parc = (num, rotulo, arquivada = false) => ({ num, rotulo, arquivada, n_pcs: 1 });
+  const t = { tr: '2021TR001578', parcelas: [parc('1', 'Parcial 1'), parc('FINAL', 'PC final')] };
   const h = ctx2.gesCadernoHtml('2021TR001578', t);
   const tx = texto(h);
 
@@ -271,6 +274,40 @@ S('10. O MESMO CADERNO NA FICHA DA ABA GESTÃO');
   conf(/gesCadSalvar\('2021TR001578','registro'\)/.test(h) && /gesCadSalvar\('2021TR001578','tarefa'\)/.test(h),
     'e os dois botões, registro e tarefa');
   conf(/type="date" id="gesCadPrazo"/.test(h), 'com o prazo opcional da tarefa');
+
+  // ⚠️ A PARCELA ARQUIVADA NÃO ENTRA NO SELETOR (13/10). Ela entrava, e o `POST /registros`
+  // recusava com 409: botão aceso que não grava é a armadilha 12. Na Minha Planilha isso já
+  // valia — era a ficha da Gestão que estava fora da regra.
+  const tArq = { tr: '2021TR001578', parcelas: [parc('1', 'Parcial 1', true), parc('FINAL', 'PC final')] };
+  ctx2._regItens = [
+    item({ id: 40, tr: '2021TR001578', parcial_num: '1', texto: 'Notas conferidas.', parcela_arquivada: true }),
+    item({ id: 41, tr: '2021TR001578', parcial_num: 'FINAL', tipo: 'tarefa', texto: 'Cobrar extrato' }),
+  ];
+  const hArq = ctx2.gesCadernoHtml('2021TR001578', tArq);
+  conf((hArq.match(/<option value="/g) || []).length === 1, 'arquivada fora do seletor: sobra uma opção',
+    (hArq.match(/<option value="/g) || []).length);
+  conf(/<option value="FINAL"/.test(hArq) && !/<option value="1"/.test(hArq),
+    '⚠️ e a que sobra é a que ainda aceita registro');
+  conf(/arquivada, histórico/.test(texto(hArq)), 'o grupo dela diz que é histórico');
+  conf(/Notas conferidas/.test(texto(hArq)), '⚠️ mas o item CONTINUA à vista — nada é escondido');
+  // ⚠️ SÓ LEITURA NA ARQUIVADA: sem caixa de marcar, sem editar e sem cancelar — e o `regMarcar`
+  // que sobra na tela é o da tarefa da FINAL, que não acabou.
+  conf(hArq.indexOf('regMarcar(40') < 0 && hArq.indexOf('regEditar(40)') < 0 && hArq.indexOf('regCancelar(40)') < 0,
+    'o item da parcela arquivada não tem marcar, editar nem cancelar');
+  conf(hArq.indexOf('regMarcar(41') >= 0, 'e o da parcela viva continua com a caixa de marcar');
+
+  // Todas arquivadas: o formulário não aparece, e a caixa diz por quê.
+  const hTudo = ctx2.gesCadernoHtml('2021TR001578',
+    { tr: '2021TR001578', parcelas: [parc('1', 'Parcial 1', true), parc('FINAL', 'PC final', true)] });
+  conf(!/<select id="gesCadParc"/.test(hTudo), '⚠️ TR toda arquivada: sem seletor');
+  conf(!/gesCadSalvar/.test(hTudo), 'e sem botão de gravar');
+  conf(/Todas as parcelas desta TR estão arquivadas/.test(texto(hTudo)), 'a caixa diz por quê');
+
+  // Volta ao cenário de cima para as checagens seguintes.
+  ctx2._regItens = [
+    item({ id: 40, tr: '2021TR001578', parcial_num: '1', texto: 'Notas conferidas.' }),
+    item({ id: 41, tr: '2021TR001578', parcial_num: 'FINAL', tipo: 'tarefa', texto: 'Cobrar extrato', prazo: '2026-10-01' }),
+  ];
 
   // Sem nada escrito, ela explica a sincronia em vez de ficar vazia.
   ctx2._regItens = [];

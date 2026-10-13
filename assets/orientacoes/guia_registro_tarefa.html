@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Registro / Tarefa — o caderno do analista — SIGPC-GT</title>
+<style>
+  :root{--v:#006B3C;--t:#14281D;--ct:#5C6661;--cb:#DCE2DE;--f:#F4F7F5;--fundo:#EDF1EE;
+        --vm:#7A2E2E;--vmf:#FFF4F4;--vmb:#F0C4C4;--am:#854F0B;--amb:#E8C88A;--amf:#FDF8EC;
+        --az:#1A4E8A;--azf:#EAF1F9;--azb:#C7D9EC}
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 16px 60px;background:var(--fundo);color:var(--t);
+       font-family:"Barlow","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.6}
+  .caixa{max-width:960px;margin:0 auto}
+  header{background:var(--v);color:#fff;border-radius:14px;padding:22px 26px;margin-bottom:18px}
+  header .et{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+  header h1{margin:5px 0 6px;font-size:25px;line-height:1.25}
+  header p{margin:0;font-size:14px;opacity:.94}
+  .cartao{background:#fff;border-radius:13px;box-shadow:0 1px 3px rgba(0,0,0,.09);padding:20px 24px;margin-bottom:18px}
+  h2{font-size:18px;margin:0 0 4px;color:var(--v)}
+  .sit{font-size:13px;color:var(--ct);font-style:italic;margin:0 0 12px;padding-left:12px;border-left:3px solid var(--cb)}
+  h3{font-size:15px;margin:16px 0 4px}
+  p{margin:0 0 12px}
+  .passo{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
+  .num{flex:0 0 28px;height:28px;border-radius:50%;background:#C62828;color:#fff;font-weight:800;
+       display:inline-flex;align-items:center;justify-content:center;font-size:14px;margin-top:1px}
+  .passo > div{flex:1 1 auto;min-width:0}
+  figure{margin:12px 0 4px}
+  img{width:100%;height:auto;display:block;border:1px solid var(--cb);border-radius:9px;background:#fff}
+  figcaption{font-size:12px;color:var(--ct);margin-top:6px}
+  .box{border-radius:9px;padding:12px 15px;margin:12px 0;font-size:14px;line-height:1.55}
+  .aviso{background:var(--vmf);border:1px solid var(--vmb);color:var(--vm);border-radius:9px;padding:12px 15px;margin:12px 0}
+  .nota{background:var(--amf);border:1px solid var(--amb);color:var(--am);border-radius:9px;padding:12px 15px;margin:12px 0}
+  .ok{background:#F4F9EE;border:1px solid #C5E1A5;color:#2E5D2E;border-radius:9px;padding:12px 15px;margin:12px 0}
+  .info{background:var(--azf);border:1px solid var(--azb);color:var(--az);border-radius:9px;padding:12px 15px;margin:12px 0}
+  ul{margin:8px 0 12px;padding-left:20px} li{margin:5px 0}
+  .fim{text-align:center;font-size:12.5px;color:var(--ct);margin-top:22px}
+  .ind{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+  .ind a{background:var(--f);border:1px solid var(--cb);border-radius:20px;padding:6px 13px;font-size:13px;
+         color:var(--t);text-decoration:none;font-weight:600}
+  code{background:var(--f);border:1px solid var(--cb);border-radius:4px;padding:1px 6px;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:14px}
+  th,td{border:1px solid var(--cb);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--f);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ct)}
+  .pil{display:inline-block;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:6px;
+       text-transform:uppercase;letter-spacing:.04em}
+  .p-reg{background:#E8F0FB;color:#1A4E8A} .p-tar{background:#FFE9A8;color:#6B4D08}
+  .p-hoje{background:#FFD98A;color:#6B4D08} .p-venc{background:#FBD3D3;color:#8A1F1F}
+  .p-feita{background:#E3F5E9;color:#14562F}
+</style>
+</head>
+<body><div class="caixa">
+
+<header>
+  <div class="et">SIGPC-GT · Orientação prática</div>
+  <h1>Registro / Tarefa — o seu caderno de trabalho</h1>
+  <p>O que você fez e o que falta, anotado dentro da própria análise — e visível só para você.</p>
+</header>
+
+<div class="cartao">
+  <b>Para que serve.</b> A análise de uma parcial raramente acaba num dia só. Você confere notas,
+  descobre que falta um documento, volta dias depois e já não lembra onde parou. O caderno existe
+  para isso: fica <b>dentro da parcela</b> e guarda duas coisas diferentes.
+  <table>
+    <tr><th style="width:130px">O que é</th><th>Para que serve</th></tr>
+    <tr><td><span class="pil p-reg">Registro</span></td>
+        <td><b>O que você já fez.</b> Fica na parcela como histórico do seu trabalho. Não cobra nada.</td></tr>
+    <tr><td><span class="pil p-tar">Tarefa</span></td>
+        <td><b>O que falta fazer.</b> Pode ter <b>prazo</b> (opcional) e aparece na barra da TR
+        até você marcar como feita.</td></tr>
+  </table>
+  <div class="ok"><b>É só seu.</b> Ninguém mais vê o que você escreve aqui — nem a coordenação,
+  nem quem abre a mesma TR. Para o recado que a equipe deve ler existe a caixa <b>Anotações</b>,
+  que é outra coisa e não mudou.</div>
+  <div class="ind">
+    <a href="#s1">1 · Onde fica, na Minha Planilha</a>
+    <a href="#s2">2 · A pílula na barra da TR</a>
+    <a href="#s3">3 · Editar, marcar como feita, cancelar</a>
+    <a href="#s4">4 · Na aba Gestão, a TR toda de uma vez</a>
+    <a href="#s5">5 · Parcela arquivada</a>
+  </div>
+</div>
+
+<div class="cartao" id="s1">
+  <h2>1 · Onde fica, na Minha Planilha</h2>
+  <p class="sit">"Abri a parcial e não vi caixa nenhuma."</p>
+  <div class="passo"><span class="num">1</span><div>Na <b>Minha Planilha</b>, abra a TR e depois a
+    parcial que você está analisando.</div></div>
+  <div class="passo"><span class="num">2</span><div>Dentro do bloco daquela parcela, abaixo das PCs,
+    está a caixa <b>REGISTRO / TAREFA</b>, em cor de palha, com o cadeado <b>só você vê</b>.</div></div>
+  <div class="passo"><span class="num">3</span><div>Se a parcela ainda não tem nada escrito, a caixa
+    aparece recolhida, com o botão <b>Escrever</b>. Clique nele.</div></div>
+  <div class="passo"><span class="num">4</span><div>Escreva e clique em <b>Salvar registro</b>
+    (o que você fez) ou em <b>Criar tarefa</b> (o que falta). Para a tarefa, o campo
+    <b>prazo da tarefa</b> ao lado é opcional.</div></div>
+  <figure>
+    <img src="tela_parcela.png" alt="A caixa Registro / Tarefa na parcela, na Minha Planilha">
+    <figcaption>A tela: a pílula da TR no alto, um registro, uma tarefa vencida, uma no prazo e uma já feita.</figcaption>
+  </figure>
+  <div class="nota"><b>Mínimo de 3 caracteres.</b> O sistema recusa texto mais curto que isso —
+  anotação de uma letra não ajuda ninguém a lembrar de nada.</div>
+</div>
+
+<div class="cartao" id="s2">
+  <h2>2 · A pílula na barra da TR</h2>
+  <p class="sit">"Como eu lembro que deixei uma tarefa aberta?"</p>
+  <p>Enquanto houver <b>tarefa aberta</b> em qualquer parcela da TR, a barra da TR mostra uma
+  <b>pílula</b> com a contagem. Ela é o lembrete: você vê que há coisa pendente ali sem abrir a TR.</p>
+  <table>
+    <tr><th style="width:150px">Como aparece</th><th>O que significa</th></tr>
+    <tr><td><span class="pil p-tar">Tarefa</span></td><td>Aberta, sem prazo ou com prazo folgado.</td></tr>
+    <tr><td><span class="pil p-hoje">Vence hoje</span></td><td>O prazo que você mesmo pôs é hoje.</td></tr>
+    <tr><td><span class="pil p-venc">Vencida</span></td><td>O prazo passou. A pílula <b>pulsa em âmbar</b>.</td></tr>
+    <tr><td><span class="pil p-feita">feita</span></td><td>Concluída. O texto fica riscado e sai da pílula.</td></tr>
+  </table>
+  <div class="info"><b>O prazo é seu, não é prazo oficial.</b> Ele não tem relação com o prazo de
+  análise da PC nem com a diligência — serve só para você se cobrar.</div>
+</div>
+
+<div class="cartao" id="s3">
+  <h2>3 · Editar, marcar como feita, cancelar</h2>
+  <p class="sit">"Escrevi errado. Dá para apagar?"</p>
+  <ul>
+    <li><b>Marcar como feita</b> — a caixinha à esquerda da tarefa. O texto fica riscado e a
+    pílula da TR desconta. Desmarcando, ela reabre.</li>
+    <li><b>Editar</b> — muda o texto. O item passa a mostrar <code>editado</code> ao lado da data.</li>
+    <li><b>Cancelar</b> — o item <b>sai da lista</b> e continua gravado.</li>
+  </ul>
+  <div class="aviso"><b>Nada é apagado, de propósito.</b> Registro é trilha do seu trabalho: o
+  cancelado deixa de aparecer na parcela, mas a linha fica no banco. É por isso que o botão diz
+  "sai da lista, fica no histórico" e não "excluir".</div>
+</div>
+
+<div class="cartao" id="s4">
+  <h2>4 · Na aba Gestão, a TR toda de uma vez</h2>
+  <p class="sit">"Preciso ver tudo o que anotei nesta TR, não parcela por parcela."</p>
+  <div class="passo"><span class="num">1</span><div>Abra a aba <b>Gestão</b> e clique na TR para
+    abrir a <b>ficha</b> dela.</div></div>
+  <div class="passo"><span class="num">2</span><div>Abaixo da <b>Linha do tempo</b> e das
+    <b>Anotações</b> está a mesma caixa <b>REGISTRO / TAREFA</b> — agora com <b>tudo o que você
+    anotou na TR</b>, agrupado por parcela.</div></div>
+  <div class="passo"><span class="num">3</span><div>Para escrever, use o seletor
+    <b>em [Parcial 1]</b> ao lado dos botões: é ele que diz em qual parcela o item entra.</div></div>
+  <figure>
+    <img src="tela_gestao.png" alt="O caderno na ficha da TR, na aba Gestão">
+    <figcaption>A tela: os mesmos itens da parcial 1 e o registro da PC final, agrupados — e o seletor em [Parcial 1].</figcaption>
+  </figure>
+  <div class="ok"><b>É o mesmo caderno, não um segundo.</b> O que você escreve num lugar aparece
+  no outro. Marcou a tarefa como feita na Gestão? Na Minha Planilha ela já está riscada.</div>
+</div>
+
+<div class="cartao" id="s5">
+  <h2>5 · Parcela arquivada</h2>
+  <p class="sit">"A parcial já foi arquivada e a caixa pede tarefa. Por quê?"</p>
+  <p>Não pede mais. Na parcela <b>arquivada</b> o trabalho acabou, e o caderno se comporta assim:</p>
+  <ul>
+    <li><b>Não cria nada</b> — nem registro, nem tarefa. O formulário não aparece.</li>
+    <li><b>Não conclui, não edita e não cancela</b> — o que está escrito fica como está.</li>
+    <li><b>Mas não esconde</b> — se havia anotação ali, a caixa aparece como
+    <b>Registro — histórico</b>, com o botão <b>ver</b>.</li>
+    <li>A tarefa que ficou aberta numa parcela arquivada <b>sai da pílula</b> da TR: ela não é
+    mais pendência.</li>
+  </ul>
+  <figure>
+    <img src="tela_arquivada.png" alt="A caixa na parcela arquivada, só histórico">
+    <figcaption>Na parcela arquivada: sem formulário, sem caixa de marcar e sem os botões — mas nada escondido.</figcaption>
+  </figure>
+  <div class="info">Na ficha da <b>Gestão</b> vale o mesmo: a parcela arquivada não entra no
+  seletor, e quando <b>todas</b> as parcelas da TR estão arquivadas o formulário não aparece.</div>
+</div>
+
+<div class="fim">SIGPC-GT · Grupo de Trabalho · FCEE — outubro de 2026</div>
+
+</div></body>
+</html>
