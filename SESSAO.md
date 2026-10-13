@@ -118,6 +118,82 @@ que foi desenhada continua mostrando a tela do mês passado e ninguém percebe.
 O gerador está no scratchpad desta sessão (`gerar_previa_registro.js`) — **não foi versionado**.
 Se for virar rotina, o lugar dele é o repositório.
 
+### 6. O CASO JULIANA — a TR com DOIS donos, e o analista só enxerga a PC dele
+
+**⚠️ MEDIDO, NADA GRAVADO. Espera decisão do Richard** — ele vai conferir no trabalho.
+
+A Juliana de Souza (id **45**, grupo 3) mandou um PDF com três inconsistências. **As três têm a
+mesma causa, e ela está certa nas três.**
+
+A planilha recorta por `analista_id`. Nessas TRs a **PC final é dela** e as **parciais são de
+outra pessoa** — então a TR aparece "✓ concluída" e **sem as parciais**, porque as parciais não
+são dela.
+
+| TR | parciais | final | o que ela relatou |
+|---|---|---|---|
+| `2022TR001687` | **Tanimeri** (35, **grupo 2**) — baixou em 25/08, `origem=sistema` | Juliana | *"retirar, já analisada por outro técnico"* |
+| `2022TR002065` | **Marlene** (46) — baixou em 07/10, `origem=sistema` | Juliana | *"não carregou as parciais"* |
+| `2022TR002108` | **Marlene** (46) — baixou em 07/10, `origem=sistema` | Juliana | *"não carregou as parciais"* |
+
+⚠️ **AS TRÊS FINAIS DELA VIERAM DA CARGA** — `origem_baixa = 'recarga_parcial_20260805'`,
+`data_baixa = 30/06`. **Ela não analisou nenhuma.** As parciais, ao contrário, são trabalho real e
+recente, com `registrado_por` preenchido.
+
+**O padrão no acervo inteiro:** **20 TRs com dono misto** (45 PCs), das quais **17** no formato
+"final de um, parciais de outro" — e **exatamente 3 são dela**. Ela listou as três.
+
+#### O quarto caso é o INVERSO — `2023TR000039` (APAE de Canelinha)
+
+As duas PCs são da **Graciane** (41), com baixa de carga e **arquivadas em 04/10**. Por isso não
+está na planilha da Juliana. **Mas o print do SIGEF mostra JULIANA DE SOUZA** (CPF
+029.073.159-35) nas diligências de 27/11/2025 e 13/02/2026 e no *"Regular com Ressalvas"* de
+28/04/2026. **O trabalho no SIGEF é dela; o registro aqui está com a Graciane.**
+
+⚠️ O processo do print parece `SCC 00065511/2024`; **no banco é `SCC 00006511/2024`**, e essa é a
+única grafia que existe — a imagem está em resolução baixa. **Confirmar com ela** antes de supor
+que há um segundo erro.
+
+#### POR QUE NÃO FOI CORRIGIDO NA HORA
+
+⚠️ **A ROTA OFICIAL DE TRANSFERÊNCIA RECUSA PC BAIXADA** — `SQL_MOVER` tem `AND NOT baixada`, de
+propósito, para não mover produtividade. **Todas estas estão baixadas.** Qualquer correção aqui é
+`UPDATE` à mão em produtividade alheia, e isso é decisão do Richard (regra 2 do time de agentes).
+
+| analista | base hoje (baixada + parecer) | efeito da correção |
+|---|---|---|
+| Juliana (45) | 132, sendo **111 de carga** | **−3** se as finais acompanharem a TR |
+| Tanimeri (35) | 62 | +1 |
+| Marlene (46) | 45 | +2 |
+| Graciane (41) | 46 | **−2** se a `2023TR000039` for para a Juliana |
+
+⚠️ **AS 3 FINAIS SÃO DE CARGA → SÓ MEXEM NO ACUMULADO, não no trimestre** (item D2 da régua). Já a
+`2023TR000039-PFINAL` tem `origem_baixa = 'secretario'` — **essa conta no trimestre**, e é a mais
+sensível das quatro.
+
+#### A RECOMENDAÇÃO QUE FOI PARA ELE
+
+1. **As 3 TRs: a final acompanha a TR** — vai para Tanimeri (1687) e Marlene (2065 e 2108). A
+   Juliana não analisou nenhuma, e é o que ela mesma está pedindo.
+2. **`2023TR000039`: falar com as duas antes.** Há o print do SIGEF, **não há prova no sistema**, e
+   esta move produção do trimestre.
+
+⚠️ **Quando autorizar:** script com **lista explícita de `codigo_pc`** (regra 11), trilha em
+`parcela_historico` e **conferência depois de gravar, dentro da mesma transação**.
+
+#### ⚠️ E UM ACHADO MAIOR, QUE APARECEU NO CAMINHO
+
+**82 PCs em 46 TRs têm `status = 'livre'` COM `analista_id` preenchido.** Pela definição única
+(`PC_LIVRE_SQL` = `analista_id IS NULL AND status = 'livre'`) elas **não** aparecem no Estoque para
+ninguém assumir — mas o status diz que estão livres. É um limbo: têm dono e se dizem sem dono.
+
+As maiores: **Andressa 11 · Aline 11 · Tatiana 8 · Simone 8 · Grace 7 · Elisandra 7**. A
+`2022PC003986` (parcial 2 da `2022TR002065`, da queixa da Juliana) é uma delas.
+
+**Precisa decidir qual lado está certo** — o dono (e o status vira `analise`) ou o status (e o
+dono é limpo). **Não foi tocado.**
+
+
+
 ---
 
 ### O QUE FOI GRAVADO (13/10)
@@ -149,11 +225,17 @@ trabalha", é "quem está cadastrado".
 
 ### O QUE CONTINUA ABERTO
 
+- **O CASO JULIANA — 4 TRs com dono trocado** (seção 6 acima). ⚠️ **Espera decisão:** mexe na
+  produtividade de 4 analistas, e a rota de transferência recusa PC baixada. O Richard vai
+  conferir no trabalho.
+- **82 PCs com `status` dizendo `livre` E `analista_id` preenchido**, em 46 TRs — achado novo, maior que a
+  queixa que o revelou. Nada tocado.
 - **7 processos ainda em duas TRs** que o portal não resolve: `ADR 10853/2017` (41 PCs),
   `FCEE 968/2020`, `FCEE 963/2020`, `FCEE 276/2022`, `FCEE 384/2022` (estes dois são cadastro de
   proponente), `SCC 12247/2024`, `SCC 12367/2024`.
 - **24 PCs limpas** esperando os analistas informarem o processo certo pelo lápis.
-- **Avisar a Graciane** — o texto está pronto desde 12/10 e ela não recebeu aviso no sino.
+- ~~**Avisar a Graciane**~~ — ✅ **FEITO em 13/10**: recado id **2157** no sino dela, contando a
+  correção do processo da parcial 1 da `2021TR001008` e por que ela não tinha sido avisada antes.
 - **Os 10 recados da Zadir** voltarem a não lidos (ids 535, 620, 1086, 1225, 1227, 1270, 1274,
   1278, 1375, 1436).
 
