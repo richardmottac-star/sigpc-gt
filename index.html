@@ -13755,6 +13755,17 @@ ${semDados ? quadroVazio(4) : `<table>
   return html
 }
 
+/**
+ * O PDF DO RELATÓRIO — espera a página FICAR PRONTA, e não um cronômetro.  (19/10/2026)
+ *
+ * ⚠️ ERA `setTimeout(() => w.print(), 800)`, no escuro. A logo do Estado vai embutida em base64 e
+ * é grande: se ela não terminou de desenhar, o `print()` disparava numa página incompleta — ou nem
+ * disparava, e sobrava a janela aberta sem o diálogo de impressão. Foi o que o Richard viu.
+ *
+ * Agora: espera o `load` da janela nova, depois `document.fonts.ready` e o `decode()` de cada
+ * imagem. Só então imprime. O `Promise.race` com 8 s é a rede ruim: melhor imprimir o que está
+ * pronto do que deixar a pessoa olhando uma janela parada.
+ */
 async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const html = await cgeMontarDocumento()
@@ -13762,7 +13773,22 @@ async function cgeExportPDF() {
   if(!w) { toast('Permita pop-ups para gerar o PDF.','err'); return }
   w.document.write(html)
   w.document.close()
-  setTimeout(()=>w.print(),800)
+  const pronto = new Promise(resolve => {
+    const acabou = async () => {
+      try {
+        if (w.document.fonts && w.document.fonts.ready) await w.document.fonts.ready
+        // ⚠️ `decode()` E NÃO `complete`: `complete` fica true assim que o byte chegou, antes de a
+        // imagem estar desenhável. É a diferença entre imprimir com a logo e imprimir sem ela.
+        await Promise.all([...w.document.images].map(img =>
+          img.decode ? img.decode().catch(() => {}) : Promise.resolve()))
+      } catch(e) { /* janela fechada no meio: o race resolve */ }
+      resolve()
+    }
+    if (w.document.readyState === 'complete') acabou()
+    else w.addEventListener('load', acabou, { once: true })
+  })
+  await Promise.race([pronto, new Promise(r => setTimeout(r, 8000))])
+  try { w.focus(); w.print() } catch(e) { toast('Abra a janela e use Ctrl+P.','err') }
 }
 
 async function relCarregarAnalistas() {
