@@ -10,8 +10,8 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 ## ▶ 20/10/2026 — O RELATÓRIO DO 4º TRIMESTRE FOI REFEITO, E O ACERVO DO RICHARD FOI LIMPO
 
-**Os dois documentos estão prontos em `relatorio_cge_4tri/`** — o relatório retificado (8 páginas) e o
-comparativo para anexar (7 páginas). ⚠️ **HOUVE MUITA ESCRITA EM PRODUÇÃO.** Detalhe em *"O que foi
+**Os dois documentos estão prontos em `relatorio_cge_4tri/`** — o relatório retificado (**9 páginas**) e o
+comparativo para anexar (**8 páginas**). ⚠️ **HOUVE MUITA ESCRITA EM PRODUÇÃO.** Detalhe em *"O que foi
 gravado"*, no fim.
 
 > ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI — O RELATÓRIO SAI DE DENTRO DO SISTEMA
