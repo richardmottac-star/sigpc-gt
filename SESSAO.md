@@ -1,12 +1,180 @@
-# SIGPC-GT — ESTADO EM 19/10/2026
+# SIGPC-GT — ESTADO EM 20/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **19/10**, logo abaixo — a divergência com a CGE e a
-> data que a causou. Os de 13/10 e 12/10 vêm em seguida.
+> **não como estado**. O estado é o bloco de **20/10**, logo abaixo: o relatório do 4º trimestre
+> refeito e o acervo do Richard limpo. O de **19/10** vem em seguida, com a causa da divergência.
 
 ---
+
+## ▶ 20/10/2026 — O RELATÓRIO DO 4º TRIMESTRE FOI REFEITO, E O ACERVO DO RICHARD FOI LIMPO
+
+**Os dois documentos estão prontos em `relatorio_cge_4tri/`** — o relatório retificado (8 páginas) e o
+comparativo para anexar (7 páginas). ⚠️ **HOUVE MUITA ESCRITA EM PRODUÇÃO.** Detalhe em *"O que foi
+gravado"*, no fim.
+
+> ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI
+>
+> **O 5º RELATÓRIO SAI DIRETO DO SISTEMA.** Nada de documento montado por script fora dele. Para isso,
+> duas coisas, nesta ordem:
+>
+> 1. **TUDO O QUE ESTE RELATÓRIO TEM PRECISA ESTAR NO SISTEMA.** Hoje o relatório do CGE na tela não
+>    tem a seção do desenvolvedor, não separa Bx. Secretário no acumulado, não traz o comparativo por
+>    servidor e não tem o confronto com o Anexo Único. Tudo isso foi montado em
+>    `scratchpad/gerar_relatorios.js`, **que não é o sistema** — e script de scratchpad some.
+> 2. **ARRUMAR A TELA DE GERAÇÃO DE RELATÓRIOS** (decisão do Richard, 20/10: *"vamos também arrumar a
+>    tela de geração de relatórios"*). O parecer de 19/10 sobre ela continua valendo e está logo
+>    abaixo, no bloco daquele dia: três abas com lógicas diferentes, oito parâmetros de exceção **sem
+>    uma linha explicando o que fazem**, e número sem botão "Fonte".
+
+---
+
+### 1. A AUDITORIA FECHOU — e os dois erros eram meus
+
+O Richard pediu *"auditoria minuciosa"* antes de gerar o relatório, com a frase que define o dia:
+**"eu não quero passar vergonha, isso é muito sério"**. A auditoria achou dois erros, e os dois eram
+meus:
+
+⚠️ **ERRO 1 — misturei dois fatos do anexo.** A **aba 1** registra a **baixa da prestação parcial**
+(chave `UGPC`) e a **aba 2** o **parecer da prestação final do termo** (chave `UGTR`). São dois
+eventos, em dias diferentes, que a CGE conta **separadamente** — é por isso que o Quadro 01 soma
+1.378 + 128. Eu importei usando *"a data mais recente quando a PC aparece nas duas abas"*, e isso
+jogou 33 parciais para o dia do parecer final.
+
+⚠️ **ERRO 2 — usei só um anexo.** Com isso **49 parciais que já tinham a data certa** (fevereiro, do
+anexo do 3º trimestre) foram empurradas para junho/julho. **Era a causa dos −143 do 3º trimestre.**
+
+✅ **A REGRA QUE FICOU:** a data da parcial vem **sempre da aba 1**, de qualquer anexo, e a **mais
+antiga** quando aparece nos dois — a baixa aconteceu uma vez. A aba 2 **nunca** data parcial: ela
+data a PC `-PFINAL` da TR.
+
+⚠️ **E O LAYOUT MUDA ENTRE OS ANEXOS:** no do 4º trimestre a PC está na coluna **F** e o GTPC na **L**;
+no do 3º, na **E** e na **J**, e há uma terceira aba. **Ler por posição fixa leria a coluna errada em
+silêncio** — cada aba é mapeada pelo cabeçalho.
+
+**A validação mais forte:** a soma das duas abas dos dois anexos dá **3.041 parciais + 266 finais**,
+exatamente o acumulado que a CGE declara no Quadro 05 (**3.307**).
+
+### 2. O RESULTADO — o 4º trimestre bate
+
+| Quadro 01 — 4º trimestre | nosso | CGE | |
+|---|---:|---:|---|
+| **parcial regular** | **1.378** | 1.378 | **exato** |
+| parcial irregular | 0 | 0 | ✓ |
+| final regular | 118 | 128 | −10 |
+| secretário | 11 | 0 | +11 |
+| **TOTAL** | **1.507** | **1.506** | **+1** |
+
+**As 1.430 prestações distintas do Anexo Único:** todas existem, todas baixadas, todas com parecer,
+todas no trimestre, **todas com data coincidente**. Nenhuma faltando.
+
+⚠️ **O 1º E O 2º TRIMESTRES CONTINUAM SEM CONFERÊNCIA** (+60 e +19): **não há anexo** para eles. Se a
+CGE fornecer, fecham do mesmo jeito.
+
+### 3. O ACERVO DO RICHARD FOI LIMPO — pedido dele
+
+O Quadro 4 mostrava **382 processos em curso** no nome dele. Medido: **52 TRs que ele nunca assumiu**
+(`dt_assumida` vazia) respondiam por **339** deles — Termos que caíram no seu nome por não terem dono.
+
+- **93 baixas do Secretário** foram desvinculadas (`analista_id = NULL`). Elas continuam **baixadas** e
+  continuam somando no total do Grupo: o trabalho foi do Titular da Pasta.
+- **341 PCs em aberto** das 52 TRs voltaram ao Estoque (`livre`, sem dono).
+- **Acervo dele: de 508 PCs / 121 TRs / 382 em curso → 74 PCs / 36 TRs / 43 em curso.**
+
+⚠️ **`baixada` NÃO FOI TOCADA em nenhuma** (armadilha 29): zerar seria estorno com outro nome,
+inventando um evento que não houve.
+
+⚠️ **PC BAIXADA NÃO VOLTA AO ESTOQUE** — a regra do `POST /tr/devolver` desde 13/08. A baixa é produção
+registrada, e devolver a PC levaria a produção junto. Só voltou o que estava em aberto.
+
+### 4. AS BAIXAS DO SECRETÁRIO — o achado que o Richard viu primeiro
+
+Foi dele a leitura, confirmada depois pela medição: *"então aquelas TR que não tinha ninguém e já
+estavam analisadas é do secretário baixa"*. Medido: das 140 baixas com `origem_baixa = 'secretario'`,
+**93 estavam com ele**, em **47 TRs**, com datas do SIGEF de 08/05 a 12/11/2025 — e **47 dessas TRs
+nunca foram assumidas por ninguém**. A carga trouxe, inclusive, a situação de origem escrita:
+*"Regular com Ressalvas - **Secretário**"* (44), *"Em Análise - **Secretário**"* (18), *"Regular -
+**Secretário**"* (8).
+
+✅ **O QUADRO 2 PASSOU A SEPARAR `Bx. Secretário` DE `Bx. Técnico` TAMBÉM NO ACUMULADO**, para os 48 —
+é como a CGE classifica no Quadro 02 dela. **Somada, a baixa do Titular aparece como produção do
+técnico, que é o que ela não é.**
+
+⚠️ **E O RODAPÉ DO QUADRO 2 SOMA AS PRÓPRIAS LINHAS**, não o Quadro 1. Com as 93 sem dono, o Quadro 1
+dá **3.639** e o Quadro 2 **3.580** — e **há nota declarando os 59 de diferença**. Antes o rodapé
+mostrava o número do Quadro 1, ou seja, a tabela não fechava com ela mesma.
+
+### 5. OS DOIS DOCUMENTOS
+
+**`relatorio_cge_4tri/1 - Relatorio 4o trimestre FCEE - RETIFICADO.pdf`** — 8 páginas. Mesmo formato
+do original, com nota de retificação, Quadro 1 (todas as linhas somando), Quadro 2 com os 48
+servidores em trimestre e acumulado, Quadro 4, as 20 férias e a **seção 1.6** sobre a atuação do
+servidor que desenvolveu o sistema.
+
+**`relatorio_cge_4tri/2 - Comparativo CGE x SIGPC-GT - ANEXO.pdf`** — 7 páginas. A conferência do
+Anexo Único, o Quadro Geral, o **confronto dos 48 servidores**, a evolução por trimestre, o acumulado,
+a origem da divergência, a mesma seção do desenvolvedor e o atendimento ao Quadro 06. Assinado por
+**Richard Motta Coelho — Desenvolvedor do Sistema SIGPC-GT**.
+
+⚠️ **O CASAMENTO DOS NOMES É POR CRITÉRIO DECLARADO.** A CGE anonimiza por iniciais (`S.C.R.R.`) e
+metade do nosso cadastro só tem o primeiro nome. São quatro passadas, da mais forte para a mais
+fraca — **iniciais completas (23, a única que é prova)**, grupo+letra+meta (10), grupo+letra+produção
+(8), grupo+letra (3) —, e **a última coluna da tabela mostra qual delas foi usada em cada linha**.
+Quem não casou (4) aparece como *"não localizado no cadastro atual"*: **forçar um par atribuiria a
+produção de uma pessoa a outra**.
+
+⚠️ **48 SERVIDORES É NÚMERO MEDIDO, não a contagem de linhas do Quadro 2** — o Richard perguntou, e eu
+tinha errado: são **41 analistas + 3 coordenadores + 4 do C.I. em exercício**, todos com acesso
+registrado, 46 deles nos últimos 30 dias.
+
+### 6. A TELA, O TEXTO E O PAPEL — o que ficou decidido
+
+- **Fonte Arial 12** no corpo; **tabelas em 9pt**, porque o Quadro 2 tem 11 colunas e em 12 não cabe
+  em A4 retrato.
+- **Texto justificado com hifenização** (`hyphens:auto` + `lang="pt-BR"`). ⚠️ Sem o hífen, justificado
+  em linha de 18 cm abre rios de espaço. **Não alcança tabela, título nem assinatura.**
+- **Assinaturas em grade 2×2**, com `break-inside:avoid`. ⚠️ A assinatura é digital, então **não se
+  reserva espaço para a caneta** — em duas colunas as quatro cabem na página da conclusão.
+- ⚠️ **A ASSINATURA ÚNICA TEM CLASSE PRÓPRIA (`.ass.solo`).** A grade dá a cada nome 84% de MEIA
+  página; sozinha, a mesma regra virava uma linha de ponta a ponta colada na data.
+- **A justificativa do item 1.6 não menciona a separação das baixas de Secretário** — decisão do
+  Richard: elas aparecem na coluna certa, e pronto.
+- ⚠️ **NÃO SE ESCREVE "adequação às mudanças do SIGEF e do SGPe"** — correção dele: não há mudanças a
+  que se adequar; o trabalho foi **construir o mecanismo de consulta ao SGPe**, que não oferece
+  interface de integração.
+
+---
+
+### O QUE FOI GRAVADO (20/10)
+
+| o quê | quanto |
+|---|---|
+| baixas do Secretário **desvinculadas** do Richard | **93** |
+| PCs **devolvidas ao Estoque** (52 TRs que ele nunca assumiu) | **341** |
+| `data_baixa_sigef` corrigida pelos dois anexos | **214** (84 parciais + 130 finais) |
+| as 14 PCs da `2024TR000710` atribuídas a ele, e depois limpas junto | — |
+
+⚠️ **TUDO COM DRY-RUN ANTES E CONFERÊNCIA DEPOIS, na MESMA transação**, com `ROLLBACK` previsto se o
+gravado não batesse com o previsto. Bateu em todas.
+
+### ⚠️ O QUE NÃO FOI ABERTO NO NAVEGADOR
+
+- [ ] **A tela Produtividade e o Dashboard** depois da limpeza — o número do Richard caiu para 16.
+- [ ] **O Estoque de TRs** com as 52 TRs que voltaram: elas aparecem para qualquer analista assumir.
+- [ ] **A tela Relatórios › CGE** gerando o período e o acumulado.
+- [ ] **A tela Férias e Afastamentos** com os 20 registros.
+
+### O QUE FICA ABERTO
+
+- **O 5º relatório direto do sistema** — ver o quadro no topo deste bloco.
+- **A tela de Relatórios** — o parecer de 19/10 continua valendo.
+- **Os anexos do 1º e 2º trimestres**, se a CGE fornecer.
+- **As 52 parciais** do bloco de 19/10 e **o caso Juliana** e as **82 PCs `livre` com dono** do bloco
+  de 13/10 — todos ainda esperando decisão.
+
+---
+
 
 ## ▶ 19/10/2026 — A DIVERGÊNCIA COM A CGE, E A DATA QUE A CAUSOU
 
