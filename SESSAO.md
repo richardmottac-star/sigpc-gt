@@ -14,19 +14,39 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 comparativo para anexar (7 páginas). ⚠️ **HOUVE MUITA ESCRITA EM PRODUÇÃO.** Detalhe em *"O que foi
 gravado"*, no fim.
 
-> ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI
+> ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI — O RELATÓRIO SAI DE DENTRO DO SISTEMA
 >
-> **O 5º RELATÓRIO SAI DIRETO DO SISTEMA.** Nada de documento montado por script fora dele. Para isso,
-> duas coisas, nesta ordem:
+> **Decisão do Richard, 20/10:** *"vamos colocar isso para dentro do sistema que no próximo relatório
+> é só colocar as datas de corte do último trimestre e realizar o relatório direto pelo sistema"*.
+> **Fica para outra hora** — ele mesmo disse —, mas é a frente seguinte, e o estado dela é este:
 >
-> 1. **TUDO O QUE ESTE RELATÓRIO TEM PRECISA ESTAR NO SISTEMA.** Hoje o relatório do CGE na tela não
->    tem a seção do desenvolvedor, não separa Bx. Secretário no acumulado, não traz o comparativo por
->    servidor e não tem o confronto com o Anexo Único. Tudo isso foi montado em
->    `scratchpad/gerar_relatorios.js`, **que não é o sistema** — e script de scratchpad some.
-> 2. **ARRUMAR A TELA DE GERAÇÃO DE RELATÓRIOS** (decisão do Richard, 20/10: *"vamos também arrumar a
->    tela de geração de relatórios"*). O parecer de 19/10 sobre ela continua valendo e está logo
->    abaixo, no bloco daquele dia: três abas com lógicas diferentes, oito parâmetros de exceção **sem
->    uma linha explicando o que fazem**, e número sem botão "Fonte".
+> ⚠️ **O RELATÓRIO DE HOJE NÃO SAIU DO SISTEMA.** Saiu de `scratchpad/gerar_relatorios.js`, alimentado
+> por `scratchpad/extrair_relatorio.js`, e **scratchpad some**. O que a tela Relatórios › CGE gera
+> hoje **não tem**: a separação `Bx. Secretário` / `Bx. Técnico` no acumulado, a seção 1.6 do
+> desenvolvedor, o comparativo por servidor, o confronto com o Anexo Único, a nota do Quadro 1 ×
+> Quadro 2, nem o acerto de papel (Arial 12, justificado, grade de assinaturas, rodapé).
+>
+> **O QUE PRECISA IR PARA DENTRO, em ordem:**
+>
+> 1. **O QUADRO 2 COM AS DUAS COLUNAS no acumulado.** A conta está em `extrair_relatorio.js`
+>    (`acum_sec` por analista) e é a mesma régua do `sqlContaAte` — move-se para o `cgeAgregar`.
+> 2. **A SEÇÃO 1.6**, com os números vindos do servidor: 45 em exercício, 42 analistas, 3
+>    coordenadores, e a contagem de rotas/libs/testes.
+> 3. **O COMPARATIVO COM O ANEXO ÚNICO.** ⚠️ Ele depende de **ler o `.xlsx` da CGE**, que hoje é feito
+>    em Node no scratchpad. Na tela isso vira **upload do anexo** e conferência no servidor — é a
+>    parte mais nova, e a que mais vale: é ela que prova prestação por prestação.
+> 4. **O PAPEL** — Arial 12, tabelas em 9pt, justificado com hifenização, assinaturas 2×2, rodapé
+>    `SIGPC-GT · Relatório Sistema`, nove páginas com folga. Tudo decidido e testado hoje; é só
+>    transportar o CSS.
+> 5. **ARRUMAR A TELA DE RELATÓRIOS** — o parecer de 19/10 continua valendo: três abas com lógicas
+>    diferentes, oito parâmetros de exceção **sem uma linha explicando o que fazem**, e número sem
+>    botão "Fonte".
+>
+> ⚠️ **O ALVO É: escolher a setorial, pôr as duas datas de corte e clicar em gerar.** Mais nada.
+>
+> ⚠️ **E OS SCRIPTS DO SCRATCHPAD SÃO A REFERÊNCIA, não o destino.** Quem for fazer isso lê
+> `gerar_relatorios.js` e `extrair_relatorio.js` para saber o que o documento precisa ter — e depois
+> os joga fora.
 
 ---
 
@@ -143,6 +163,73 @@ registrado, 46 deles nos últimos 30 dias.
 - ⚠️ **NÃO SE ESCREVE "adequação às mudanças do SIGEF e do SGPe"** — correção dele: não há mudanças a
   que se adequar; o trabalho foi **construir o mecanismo de consulta ao SGPe**, que não oferece
   interface de integração.
+
+### 7. OS AJUSTES DA NOITE — a Nayara validou e vieram as correções
+
+**Os dois documentos foram lidos pela coordenação.** O que mudou depois disso:
+
+⚠️ **SÃO 42 ANALISTAS E 3 COORDENADORES. O CONTROLE INTERNO NÃO INTEGRA O GT-PC** — correção do
+Richard, e fecha com os *"45 membros"* que a CGE declara. Medido no banco: **41 com perfil
+`analista` em exercício** (15 + 13 + 13) **+ o superadmin, que também analisa** = 42. Eu tinha
+escrito 48 somando os 4 técnicos da Unidade de Controle Interno, que usam o sistema mas **não são do
+Grupo**.
+
+⚠️ **"NÃO ALTERAR NADA DE NÚMEROS — A NAYARA JÁ VALIDOU."** Ordem dele, e por isso a correção ficou
+**só no texto da composição da equipe**: nenhum valor apurado foi tocado. Conferido um a um no
+documento gerado depois da mudança — 1.507 · 3.639 · 1.378 · 12.873 · 119,13% · 70,80%.
+
+**No cabeçalho ficou `45 em exercício (42 analistas e 3 coordenadores)`**, e a **nota do Quadro 2
+explica as 48 linhas**: os 42 em exercício mais os desligados no período, cuja produção integra o
+acumulado. Os dois números convivem porque respondem a perguntas diferentes, e a nota diz qual é
+qual.
+
+#### O cabeçalho e o papel
+
+- ⚠️ **A COLUNA INVISÍVEL DO CABEÇALHO SAIU.** Ela existia só para equilibrar a logo e **roubava 168
+  px de largura**, empurrando o texto para o meio da página — era ela que quebrava
+  "FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL" em duas linhas. Sem ela o nome cabe numa linha, com
+  `nowrap` e 11,5pt, e o espaço entre logo e texto subiu de 16 para 26 px.
+- **Texto justificado com hifenização** (`hyphens:auto` + `lang="pt-BR"`), que **não alcança tabela,
+  título nem assinatura**.
+- **Assinaturas em grade 2×2.** ⚠️ **A assinatura é digital: não se reserva espaço para a caneta.**
+- ⚠️ **A ASSINATURA ÚNICA TEM CLASSE PRÓPRIA (`.ass.solo`)** — a grade dá a cada nome 84% de MEIA
+  página; sozinha, a mesma regra virava uma linha de ponta a ponta colada na data.
+- **O rodapé é só `SIGPC-GT · Relatório Sistema`.**
+
+⚠️ **NOVE PÁGINAS COM FOLGA, E NÃO OITO APERTADAS** — decisão dele, depois de ver as duas. Cheguei a
+espremer a entrelinha para 1,38 e devolvi para **1,50**: *"deixe em nove páginas e mais espaçado para
+não ficar muito amontoado"*. **O documento vai à Controladoria e é lido inteiro; economizar papel
+atrapalha quem lê.** Relatório **9 páginas**, comparativo **8**.
+
+#### A justificativa do item 1.6
+
+Reescrita três vezes até ficar no ponto. O que ficou decidido:
+
+- ⚠️ **NÃO MENCIONA a separação das baixas de Secretário** — elas aparecem na coluna certa e pronto.
+- ⚠️ **NÃO DATA o início da atuação** (*"o servidor responde pela concepção…"*, sem "desde a
+  instituição do Grupo"): correção dele, não foi desde o começo.
+- ⚠️ **NÃO FALA EM "adequação às mudanças do SIGEF e do SGPe"** — não há mudanças a que se adequar; o
+  trabalho foi **construir o mecanismo de consulta ao SGPe**, que não oferece interface de integração.
+- **Sem caixas de destaque**, tudo em texto corrido, com o acúmulo de função integrado ao parágrafo.
+- **Encurtada de 8 parágrafos para 5**, a pedido dele.
+- ✅ **E GANHOU A FRASE DA DEDICAÇÃO CONTINUADA** (opção A de duas que ele leu):
+  *"E a demanda não é transitória: enquanto o sistema estiver em operação, haverá regra a atualizar,
+  dado a conciliar e integrante a atender — de modo que a continuidade dos resultados aqui
+  apresentados pressupõe a permanência dessa dedicação."*
+  ⚠️ **É DELIBERADAMENTE INDIRETA.** A opção B, mais explícita, amarrava a dedicação à recomendação
+  da CGE; ele preferiu a que **deixa a conclusão por conta de quem lê**.
+
+### 8. O TEXTO PARA O WHATSAPP DOS COORDENADORES
+
+Escrito e enviado a ele em duas versões (longa e curta; ficou a curta). Abre pelos dois documentos,
+explica em duas frases o que estava errado e o que foi corrigido, dá os quatro números
+(1.507 · 119,13% · 3.639 · 70,80%), destaca que **as parciais regulares deram 1.378, o número exato
+da CGE**, e avisa que **a produtividade de 10 analistas mudou, nove para cima, com cada um já
+avisado pelo sino**.
+
+---
+
+
 
 ---
 
