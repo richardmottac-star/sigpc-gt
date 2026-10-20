@@ -12977,19 +12977,59 @@ let _cgeParams = {}
 // ⚠️ SÃO 3.560 PCs COM `data_baixa` EM JUNHO DE 2026, todas da recarga de 05/08. Um
 // trimestre que inclua aquele mês leva as 3.560 de uma vez; um que não inclua perde todas. No
 // acumulado, onde a data não decide nada, elas aparecem — que é onde o trabalho delas está.
+// A DATA EFETIVA DA BAIXA — em que dia ela conta.  (19/10/2026)
+//
+// ⚠️ ELA VEM PRONTA DO SERVIDOR, em `data_efetiva` (armadilha 16: a tela não conta). A regra mora
+// em `sigpc-api/lib/sigef.js` (`sqlDataEfetiva`), e a rota `/prestacoes_contas` já a entrega
+// recortada pelo `::date` do Postgres.
+//
+// ⚠️ E NÃO PODE SER CALCULADA AQUI, o que foi medido e não presumido: a API manda data e hora em
+// UTC, e `slice(0,10)` sobre ela devolve o dia de GREENWICH. Uma baixa de **31/07 às 22h30** em
+// -03 viaja como `2026-08-01T01:30:00Z` — e o recorte pegaria **01/08**, jogando a PC para o
+// trimestre seguinte, bem no corte que a CGE confere. O `::date` do banco corta pelo dia local.
+//
+// ⚠️ POR QUE ELA SUBSTITUIU A `data_baixa`: a Informação CGE nº 275/2026 recusou o 4º trimestre
+// (mai–jul/2026). A FCEE informou 2.250 baixas; a CGE apurou 1.506 no SIGEF. O relatório tinha
+// contado as 3.517 PCs da `recarga_parcial_20260805` como trabalho do trimestre — todas com
+// `data_baixa = 30/06/2026`, que é o dia em que o arquivo entrou. O conserto de 30/09 tirou a
+// carga inteira e o trimestre caiu para 47. **Um número inventava trabalho; o outro apagava.**
+//
+// A ordem que o servidor aplica, e o motivo de cada degrau:
+//   1. `data_baixa_sigef` — o dia em que o SIGEF registrou a baixa, a mesma fonte que a CGE usa
+//      para conferir. Medido em 19/10: 1.376 parciais regulares no 4º trimestre contra as 1.378
+//      da CGE, erro de 2 em 1.378;
+//   2. a `data_baixa`, só quando a baixa foi feita AQUI DENTRO — nessas a data do sistema é a
+//      data do trabalho, e são elas que sustentam o trimestre corrente;
+//   3. nenhuma — carga sem data do SIGEF não tem data de trabalho em lugar algum. São 557 PCs:
+//      entram no acumulado e em período nenhum.
 const CGE_ORIGENS_SEM_DATA = ['carga_historica', 'recarga_parcial_20260805']
 const cgeDataConfiavel = (p) => !CGE_ORIGENS_SEM_DATA.includes(p && p.origem_baixa)
+const cgeDataEfetiva = (p) => (p && p.data_efetiva) ? String(p.data_efetiva).slice(0, 10) : null
 
 function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
-  const dtIni = new Date(String(dtInicio).slice(0,10)+'T00:00:00')
-  const dtFim = new Date(dtCorte)
-  // ⚠️ O PERÍODO EXIGE DATA CONFIÁVEL. Até 30/09/2026 a baixa com data de carga entrava no
-  // trimestre e o relatório dizia, em nota, quantas eram — avisar que o número está torto não
-  // é o mesmo que não entortá-lo.
-  const noPeriodo = (p) => p.data_baixa && cgeDataConfiavel(p)
-    && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim
-  // O ACUMULADO não olha o começo nem a origem: ele responde "o que foi feito até aqui".
-  const noAcumulado = (p) => p.baixada === true && p.data_baixa && new Date(p.data_baixa) <= dtFim
+  const dtIni = String(dtInicio).slice(0,10)
+  const dtFim = String(dtCorte).slice(0,10)
+  // ⚠️ O PERÍODO CONTA PELA DATA EFETIVA DA BAIXA, e não pela `data_baixa` (19/10/2026).
+  //
+  // A Informação CGE nº 275/2026 recusou o 4º trimestre: a FCEE informou 2.250 baixas e a CGE
+  // apurou 1.506 no SIGEF. O relatório tinha contado as 3.517 PCs da recarga de 05/08 como
+  // trabalho do trimestre — todas com `data_baixa = 30/06/2026`, que é o dia da CARGA. O
+  // conserto de 30/09 tirou a carga inteira e o trimestre caiu para 47: os dois números estavam
+  // errados, em direções opostas.
+  //
+  // ⚠️ A DATA EFETIVA É `cgeDataEfetiva`, espelho de `lib/sigef.js`: a do SIGEF quando existe, a
+  // do sistema quando a baixa foi feita aqui, e NENHUMA quando é carga sem data do SIGEF.
+  // Medido em 19/10: o 4º trimestre passa a dar 1.376 parciais regulares contra as 1.378 da CGE.
+  const noPeriodo = (p) => { const d = cgeDataEfetiva(p); return !!d && d >= dtIni && d <= dtFim }
+  // ⚠️ O ACUMULADO ACEITA QUEM NÃO TEM DATA EFETIVA, e cai na `data_baixa` para elas: são as 557
+  // PCs de carga sem data no SIGEF. No acumulado a data não decide nada — ele responde "o que foi
+  // feito até aqui" —, e é ali que o trabalho delas aparece. Em período nenhum, porque data de
+  // trabalho elas não têm.
+  const noAcumulado = (p) => {
+    if (p.baixada !== true) return false
+    const d = cgeDataEfetiva(p) || (p.data_baixa ? String(p.data_baixa).slice(0,10) : null)
+    return !!d && d <= dtFim
+  }
 
   const analistaIdsComPC = new Set(todosPcs.filter(p=>p.analista_id).map(p=>String(p.analista_id)))
   const usuariosPorId = {}
@@ -13057,11 +13097,18 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
              acumBaixadas, pctMeta, pctAcum, ...m }
   }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
 
-  // Quantas baixas ficaram FORA do trimestre por terem data de carga — o número que a nota de
-  // rodapé passa a explicar. ⚠️ Ele é contado dentro da janela de datas: baixa de carga com
-  // data fora do período não foi "excluída do trimestre", ela nunca esteve nele.
-  const semDataNoPeriodo = todosPcs.filter(p => p.baixada && !cgeDataConfiavel(p)
-    && p.data_baixa && new Date(p.data_baixa) >= dtIni && new Date(p.data_baixa) <= dtFim).length
+  // ⚠️ AS DUAS CONTAGENS QUE A NOTA DE RODAPÉ EXPLICA, e elas mudaram de sentido em 19/10/2026.
+  //
+  // Antes a nota dizia quantas baixas de carga tinham sido EXCLUÍDAS do trimestre — e era esse
+  // número (3.517) que a CGE encontrou de diferença. Agora a carga COM data do SIGEF entra no
+  // período pelo dia certo, e o que resta explicar é outra coisa:
+  //   · `recuperadasPeloSigef` — as que entraram no período PELA data do SIGEF, e não pela do
+  //     sistema. É o que separa este relatório do anterior, e o que a CGE consegue conferir;
+  //   · `semDataNoPeriodo`     — as que continuam sem data de trabalho em lugar nenhum, e por
+  //     isso aparecem só no acumulado.
+  const recuperadasPeloSigef = todosPcs.filter(p => p.baixada && !cgeDataConfiavel(p)
+    && p.data_baixa_sigef && noPeriodo(p)).length
+  const semDataNoPeriodo = todosPcs.filter(p => p.baixada && cgeDataEfetiva(p) === null).length
   const cargaHistoricaNoPeriodo = semDataNoPeriodo
   const metaTotal = linhas.reduce((s,d)=>s+d.meta,0)
   const metaTotalAcum = linhas.reduce((s,d)=>s+d.metaAcum,0)
@@ -13078,7 +13125,7 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
 
   return {
     linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-    metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo,
+    metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef,
     totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
     estoqueRemanescente, estoqueBase, estoque: estoqueBase, cargaHistoricaNoPeriodo
   }
@@ -13109,7 +13156,7 @@ async function cgeGerar() {
     _cgeDados = A.linhas
     const {
       totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-      metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo,
+      metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef,
       totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
       estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
     } = A
@@ -13121,7 +13168,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -13220,7 +13267,7 @@ async function cgeGerar() {
             <td style="text-align:right;color:var(--ct);">—</td>
           </tr></tbody></table>
           <div style="font-size:9px;font-style:italic;margin-top:4px;">
-            ${semDataNoPeriodo ? `Nota: ${semDataNoPeriodo} baixas com data de carga (e não data do trabalho) ficam fora do período e aparecem apenas no acumulado, conforme o item D2 da regra de produtividade. ` : ''}Gerado em ${dt} via SIGPC-GT v2.1.
+            ${recuperadasPeloSigef ? `Nota 1: ${recuperadasPeloSigef} baixas entram no período pela DATA DE REGISTRO NO SIGEF, e não pela data em que o arquivo foi carregado no sistema — é a mesma data que a CGE usa para conferir. ` : ''}${semDataNoPeriodo ? `Nota 2: ${semDataNoPeriodo} baixas não têm data de trabalho em nenhuma das duas fontes e aparecem apenas no acumulado, conforme o item D2 da regra de produtividade. ` : ''}Gerado em ${dt} via SIGPC-GT v2.1.
           </div>
         </div>
 
