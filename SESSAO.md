@@ -1,12 +1,169 @@
-# SIGPC-GT — ESTADO EM 13/10/2026
+# SIGPC-GT — ESTADO EM 19/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **13/10**, logo abaixo; o de **12/10 à tarde** vem
-> em seguida, e o de 05–12/10 depois dele, contando a semana.
+> **não como estado**. O estado é o bloco de **19/10**, logo abaixo — a divergência com a CGE e a
+> data que a causou. Os de 13/10 e 12/10 vêm em seguida.
 
 ---
+
+## ▶ 19/10/2026 — A DIVERGÊNCIA COM A CGE, E A DATA QUE A CAUSOU
+
+**A Informação CGE nº 275/2026 recusou o relatório do 4º trimestre.** A FCEE informou **2.250**
+baixas; a CGE apurou **1.506** no SIGEF. Depois do trabalho deste dia, o nosso número é **1.507**,
+e as parciais regulares batem **exato: 1.378 contra 1.378**.
+
+⚠️ **HOUVE MUITA ESCRITA EM PRODUÇÃO.** Detalhe em *"O que foi gravado"*, no fim.
+
+| commit | repo | o quê |
+|---|---|---|
+| `e651c25` · `8ad7a4b` | api · gt | a **data efetiva da baixa** — a do SIGEF, não a da carga |
+| `fcf55fe` | api | o **dia da carga** recusa a data, seja qual for a origem |
+| `1104f9c` | api | **uma régua só** — a produtividade conta pela mesma data do relatório |
+
+---
+
+### 1. A CAUSA: três datas para o mesmo fato
+
+O relatório contava pela `data_baixa`. As **3.517 PCs da `recarga_parcial_20260805`** têm todas
+`data_baixa = 30/06/2026` — **o dia em que o arquivo entrou**, não o dia da análise. Jogadas num
+trimestre com 1.260 de meta, produziram os **180,43%** que a CGE recusou.
+
+⚠️ **E O CONSERTO DE 30/09 ERROU PARA O OUTRO LADO:** tirar a carga inteira do período deixou o
+trimestre com **47 baixas** (3,7%). **Um número inventava trabalho; o outro apagava trabalho que
+houve.**
+
+✅ **A DATA CERTA JÁ ESTAVA NO BANCO: `data_baixa_sigef`.** É a mesma fonte que a CGE usa para
+conferir. A regra entrou como **cópia única** em `sigpc-api/lib/sigef.js`:
+
+1. `data_baixa_sigef` quando existe;
+2. senão a `data_baixa`, **só quando a baixa foi feita aqui dentro**;
+3. senão **nenhuma** — carga sem data do SIGEF não tem data de trabalho em lugar algum.
+
+⚠️ **A TELA NÃO CALCULA ESSA DATA.** `GET /prestacoes_contas` manda `data_efetiva` pronta,
+cortada pelo `::date` do Postgres. **A API manda hora em UTC**, e um `slice(0,10)` jogaria a baixa
+de **31/07 às 22h30 para 01/08** — outro trimestre, bem no corte que a CGE confere.
+
+### 2. O DIA DA CARGA — a porta lateral que a auditoria achou
+
+A lista de origens não bastava: **39 baixas com `origem_baixa = 'secretario'`** tinham
+`data_baixa = 30/06/2026` e **nenhuma data do SIGEF**. Como "secretario" não estava na lista, a
+data da carga passava — e a CGE põe **zero** na coluna Secretário daquele trimestre.
+
+⚠️ **MEDIDO ANTES DE FECHAR A PORTA**, para não levar baixa de verdade junto: as baixadas que caem
+exatamente em 30/06/2026 são 3.517 da recarga (já fora pela origem), 42 do secretário (39 sem data)
+e 2 da importação do SIGEF — **estas COM data, e por isso intocadas**. **Baixa feita no sistema em
+30/06/2026: nenhuma.** O dia é da carga e de mais nada.
+
+### 3. A AUDITORIA CONTRA OS DOIS ANEXOS — e os DOIS ERROS MEUS
+
+O Richard mandou o **Anexo Único do 4º trimestre** (CGE 275/2026) e depois o do **3º trimestre**
+(CGE 162/2026): a lista PC a PC que a CGE extraiu do SIGEF. Conferência de 1.430 + 1.329 prestações.
+
+⚠️ **ERRO 1 — misturei dois fatos.** Importei as datas usando *"a mais recente quando a PC aparece
+nas duas abas"*. **Errado.** A **aba 1** registra a **baixa da prestação parcial** (chave `UGPC`) e
+a **aba 2** o **parecer da prestação final do termo** (chave `UGTR`). São dois fatos, em dias
+diferentes, que a CGE conta **separadamente** — é por isso que o Quadro 01 soma 1.378 + 128.
+
+⚠️ **ERRO 2 — usei só um anexo.** Com isso **49 parciais que já tinham a data certa** (fevereiro, do
+anexo do 3º trimestre) foram empurradas para junho/julho. **Era a causa dos −143 do 3º trimestre.**
+
+✅ **A REGRA QUE FICOU:** a data da parcial vem **sempre da aba 1**, de qualquer anexo, e a **mais
+antiga** quando aparece nos dois — a baixa aconteceu uma vez. A aba 2 **nunca** data parcial: ela
+data a PC `-PFINAL` da TR.
+
+⚠️ **E O LAYOUT MUDA ENTRE OS ANEXOS:** no do 4º trimestre a PC está na coluna **F** e o GTPC na
+**L**; no do 3º, na **E** e na **J**, e há uma terceira aba. **Ler por posição fixa leria a coluna
+errada em silêncio** — cada aba é mapeada pelo cabeçalho.
+
+**A validação mais forte:** somando a aba 1 e a aba 2 dos dois anexos, dá **3.041 parciais + 266
+finais** — exatamente o acumulado que a CGE declara no Quadro 05 (**3.307**).
+
+### 4. O RESULTADO DA AUDITORIA
+
+| Quadro 01 — 4º trimestre | nosso | CGE | |
+|---|---:|---:|---|
+| **parcial regular** | **1.378** | 1.378 | **exato** |
+| parcial irregular | 0 | 0 | ✓ |
+| final regular | 129 | 128 | +1 |
+| final irregular | 0 | 0 | ✓ |
+| **TOTAL** | **1.507** | **1.506** | **+1** |
+
+| | antes | depois | CGE |
+|---|---:|---:|---:|
+| 3º trimestre | 1.229 | **1.354** | 1.372 (−18) |
+| estoque em 31/07 | 13.056 | **12.873** | 12.903 (−30) |
+
+**As 1.430 PCs do anexo do 4º trimestre:** todas existem, todas baixadas, todas com parecer, todas
+no trimestre. **Nenhuma faltando.**
+
+⚠️ **O QUE AINDA DIFERE, E TEM MOTIVO ESCRITO:**
+· **+11 "secretário"** — a CGE conta **outra coisa** nessa coluna: PCs baixadas pelo Titular que já
+  estavam *"Em análise Secretário"* no levantamento de 03/06/2025. As nossas 11 têm data do SIGEF.
+· **1º e 2º trimestres (+60 e +19)** — **sem anexo para conferir**. Vem de datas do SIGEF anteriores
+  a agosto/2025 que o GT herdou.
+
+### 5. UMA RÉGUA SÓ — a produtividade passou a contar igual ao relatório
+
+⚠️ **HAVIA DUAS RÉGUAS, e isso era o próximo problema:** o relatório do CGE passou a contar pela
+data do SIGEF e a produtividade continuava em `data_baixa <= corte`. Medido: **301 PCs** de
+diferença e **24 analistas** com número distinto. O analista via um total em *"Sua Produtividade"* e
+o documento que vai à CGE mostrava outro.
+
+`sqlBaseAte` virou **`COALESCE(data efetiva, data_baixa) <= corte`**.
+
+⚠️ **O `COALESCE` É DECISÃO DO RICHARD E NÃO PODE FALTAR:** a PC de carga sem data no SIGEF
+**continua contando no acumulado**, pela `data_baixa`. *"No acumulado fica a mesma coisa, não perde
+essas PCs."* O trabalho existiu; o que não existe é prova do dia. **Sem ele, 301 PCs sumiriam do
+total de 24 pessoas** — e some trabalho feito, não só uma data.
+
+⚠️ **E NÃO RESSUSCITA O DEFEITO DO 4º TRIMESTRE:** aquele era um **período** com começo e fim, e
+período continua exigindo data efetiva (`cgeAgregar`). Aqui a pergunta é *"o que estava feito até
+esta data"*, e para ela a data da carga é um limite superior honesto.
+
+**Efeito medido:** o GT vai de **4.739 para 4.756** (+17). **Dez** analistas mudam, **nove para
+cima**; só a Graciane cai 1. Uma cópia só, alcançando régua, Dashboard, Board e Gestão Grupo.
+
+---
+
+### O QUE FOI GRAVADO (19/10)
+
+| o quê | quanto |
+|---|---|
+| PCs **baixadas** que o SIGEF já tinha baixado | **5** — 3 livres + as 2 em diligência, com o parecer e a data do próprio SIGEF |
+| `data_baixa_sigef` **corrigida** | 86 + 128 + 33 + 214 = **461 gravações**, com a regra final valendo |
+| **férias** do 4º trimestre | **15** novos registros (5 já estavam; total 20) |
+| **recados no sino** | **13** — Graciane (2157), Fabiana e Ana Letícia (as 2 em diligência), e os **10** da régua |
+
+⚠️ **TODA GRAVAÇÃO PASSOU POR DRY-RUN e teve CONFERÊNCIA DEPOIS, na MESMA transação**, com
+`ROLLBACK` previsto se o gravado não batesse com o previsto. Bateu em todas.
+
+⚠️ **AS 38 PCs "Demais" DO ANEXO FICARAM DE FORA, de propósito:** são do grupo permanente, não do
+GT, e a própria CGE as separa no Quadro 05. Baixá-las aqui inventaria produção do GT.
+
+⚠️ **A `2024PC000752` FOI BAIXADA SEM DONO** — conta no total do GT e na produtividade de ninguém.
+Se for para atribuir a alguém, é decisão do Richard.
+
+### O QUE FICA ABERTO
+
+- **O modelo do relatório** — o Richard vai mandar o documento a corrigir, para substituir os dados
+  pelos atualizados.
+- **As 52 parciais** que o anexo do 4º trimestre cita **só na aba 2**: a data delas aqui é a do
+  parecer final. O anexo não traz a baixa da parcial delas, e **não há backup da data anterior**.
+- **Os anexos do 1º e 2º trimestres**, se a CGE puder fornecer — fecham os +60 e +19.
+- **O caso Juliana** (4 TRs com dono trocado) e as **82 PCs `livre` com dono** — do bloco de 13/10,
+  ainda esperando decisão.
+
+### ⚠️ O QUE NÃO FOI ABERTO NO NAVEGADOR
+
+- [ ] **A tela Produtividade e o Dashboard** com a régua nova — os números de 10 analistas mudaram.
+- [ ] **O relatório CGE** gerado com 01/05/2026 → 31/07/2026 e com 01/08/2025 → 31/07/2026.
+- [ ] **A tela Férias e Afastamentos** com os 20 registros.
+- [ ] **A nota de rodapé nova** do Quadro 1, que diz quantas baixas entraram pela data do SIGEF.
+
+---
+
 
 ## ▶ 13/10/2026 — O CADERNO FOI PARA A ABA GESTÃO, E DUAS COISAS QUE VAZAVAM FORAM FECHADAS
 
