@@ -12674,6 +12674,7 @@ function relMudaAba(aba) {
   document.getElementById('relPainelCGE').style.display = aba==='cge' ? '' : 'none'
   const pGer = document.getElementById('relPainelGer')
   if(pGer) pGer.style.display = aba==='ger' ? '' : 'none'
+  if(pGer && aba==='ger') gerCarregarIntegrantes()
   const bG = document.getElementById('relAbaGeral')
   const bC = document.getElementById('relAbaCGE')
   const bX = document.getElementById('relAbaGer')
@@ -12702,6 +12703,10 @@ const GER_RELATORIOS = [
   { id:'passo2', rot:'Parciais paradas no passo 2', cor:'#C2410C',
     sub:'Parciais baixadas e com parecer que ainda não foram encaminhadas ao Controle Interno, por analista e por TR.',
     gerar:'gerPasso2()' },
+  { id:'trs_analista', rot:'TRs do analista — lista completa', cor:'#006B3C',
+    sub:'Todas as TRs de um integrante, da mais antiga no setor para a mais recente, com entidade, processo mãe, valor, baixas, etapa e o tempo no setor lido do SGPe.',
+    campo:`<select id="gerTrAnalista" style="min-width:210px;padding:7px 9px;border:1.5px solid var(--cb);border-radius:6px;font-family:Barlow,sans-serif;font-size:12px;background:#fff;"><option value="">Escolha o integrante…</option></select>`,
+    gerar:'gerTrsAnalista()' },
 ]
 
 function relPainelGerHtml() {
@@ -12717,6 +12722,7 @@ function relPainelGerHtml() {
           <div style="font-size:14px;font-weight:800;color:${r.cor};">${escHtml(r.rot)}</div>
           <div style="font-size:12px;color:var(--ct);margin-top:2px;">${escHtml(r.sub)}</div>
         </div>
+        ${r.campo || ''}
         <button class="btn-acao" onclick="${r.gerar}"
           style="background:${r.cor};color:#fff;font-weight:800;padding:8px 16px;white-space:nowrap;">Gerar documento</button>
       </div>`).join('')}
@@ -12814,6 +12820,193 @@ ${parados.length ? tabela(parados,true) : '<p>Nenhum cadastro nesta condição.<
   ${nunca.filter(u=>!u.saiu).length===1?'não tem':'não têm'} portaria de saída registrada e nunca
   ${nunca.filter(u=>!u.saiu).length===1?'acessou':'acessaram'} o sistema.</p>` :
   '<p><b>Conclusão.</b> Não há, nesta data, integrante em exercício sem acesso ao sistema.</p>'}
+</div>
+<div class="rodape">
+  SIGPC-GT — Sistema de Gestão de Prestações de Contas do Grupo de Trabalho · Fundação Catarinense de Educação
+  Especial · documento gerado pelo sistema em ${carimbo}.
+</div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    if(!w) { toast('Permita pop-ups para gerar o documento.','err'); return }
+    w.document.write(doc); w.document.close()
+  } catch(e) { toast('Erro: '+e.message,'err') }
+}
+
+/**
+ * AS TRs DO ANALISTA — a lista completa, no papel timbrado do sistema.  (23/10/2026)
+ *
+ * ⚠️ NASCEU DE UM PDF FEITO FORA DO SISTEMA. Em 20/10 o Richard recebeu a lista das TRs de um
+ * analista montada por script, e pediu que o próprio sistema passasse a gerá-la: "preciso que o
+ * sistema gere relatório em pdf assim como este modelo, com a logo padrão e cabeçalho padrão".
+ * Documento montado fora do sistema não pode ser conferido por quem o recebe.
+ *
+ * ⚠️ TUDO VEM DE `/gestao`, numa chamada só — a MESMA fonte da tela de Gestão da TR. Remontar a
+ * contagem aqui, a partir das PCs, daria um segundo jeito de contar a mesma coisa: no dia em que
+ * uma regra mudasse de lado, a tela e o papel passariam a divergir sem erro nenhum.
+ *
+ * ⚠️ A ORDEM É O TEMPO NO SETOR, do mais antigo para o mais recente, e é o ponto do relatório: a
+ * TR parada há 1.477 dias precisa aparecer na primeira linha, não enterrada em ordem alfabética.
+ *
+ * ⚠️ E O SETOR É LEITURA DO SGPe, com a data em que foi lido impressa na ficha. Quando a posição
+ * não foi lida, a célula diz "não consultado" — e não fica vazia, que o leitor confundiria com
+ * processo sem setor.
+ */
+async function gerCarregarIntegrantes() {
+  const sel = document.getElementById('gerTrAnalista')
+  if(!sel || sel.dataset.pronto) return
+  try {
+    const r = await fetch(`${API_URL}/usuarios`)
+    const j = await r.json()
+    const PERFIS = { analista:'Analista', coordenador:'Coordenador', superadmin:'Administrador' }
+    const us = (j.data || [])
+      .filter(u => u.ativo && PERFIS[u.perfil])
+      .filter(u => !U.setorialFiltro || u.setorial_id === U.setorialFiltro)
+      .sort((a,b) => String(a.nome).localeCompare(String(b.nome),'pt-BR'))
+    us.forEach(u => {
+      const o = document.createElement('option')
+      o.value = u.id
+      o.textContent = `${u.nome} — ${PERFIS[u.perfil]}${u.grupo==null?'':' · Grupo '+u.grupo}`
+      o.dataset.nome = u.nome
+      sel.appendChild(o)
+    })
+    sel.dataset.pronto = '1'
+  } catch(e) { toast('Não foi possível carregar os integrantes: '+e.message,'err') }
+}
+
+async function gerTrsAnalista() {
+  const sel = document.getElementById('gerTrAnalista')
+  const alvo = sel && sel.value
+  if(!alvo) { toast('Escolha o integrante antes de gerar.','err'); return }
+  const nomeAlvo = sel.selectedOptions[0].dataset.nome || sel.selectedOptions[0].textContent
+  toast('Levantando as TRs de '+nomeAlvo+'...','ok')
+  try {
+    const r = await fetch(`${API_URL}/gestao?usuario_id=${U.id}&analista_id=${alvo}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || 'Não foi possível ler o acervo.')
+    const trs = (j.data && j.data.trs) || []
+    if(!trs.length) { toast(nomeAlvo+' não tem TR no acervo.','err'); return }
+
+    // ⚠️ Sem posição do SGPe vai para o FIM, e não para o começo: ordenando por maior primeiro,
+    // o -1 jogaria a TR não consultada para o topo, no lugar da mais parada de todas.
+    const diasDe = (t) => (t.sgpe_atual && t.sgpe_atual.dias_no_setor != null)
+      ? Number(t.sgpe_atual.dias_no_setor) : -1
+    const lista = trs.slice().sort((a,b) => diasDe(b) - diasDe(a))
+
+    const ETAPA = { analise:'Em análise', baixada:'Baixada', devolvida:'Devolvida pelo C.I.',
+                    encerrada:'Encerrada', arquivada:'Arquivada' }
+    const etapaDe = (t) => t.diligencia ? 'Diligência' : (ETAPA[t.etapa] || t.etapa || '—')
+
+    // ⚠️ SO O PREFIXO VIRA SIGLA, E NADA MAIS. "ASSOCIACAO DE PAIS E AMIGOS DOS EXCEPCIONAIS DE
+    // BLUMENAU" ocupava sete linhas da celula e empurrava a tabela para quatro paginas; vira
+    // "APAE DE BLUMENAU", que e a sigla oficial da propria expressao. O municipio fica — e e ele
+    // que distingue uma APAE da outra. Abreviar alem disso juntaria entidades diferentes numa
+    // linha so, e a nota do documento declara a substituicao.
+    const curta = (s) => String(s || '—')
+      .replace(/^APAE\s*-\s*ASSOC\w*\s+(DE|DOS)\s+PAIS\s+E\s+AMIGOS\s+DOS\s+EXCEPCIONAIS/i, 'APAE')
+      .replace(/^ASSOC\w*\s+(DE|DOS)\s+PAIS\s+E\s+AMIGOS\s+DOS\s+EXCEPCIONAIS/i, 'APAE')
+      // A razão social de parte delas já termina pela própria sigla, e o encurtamento acima
+      // produzia "APAE APAE" ou "APAE -APAE -LAGUNA". Colapsa a repetição, e só ela.
+      .replace(/^APAE[\s-]+APAE\b/i, 'APAE')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    // ⚠️ `n_com_baixa` E NAO `n_baixadas`: a segunda conta PC fora da etapa analise — devolvida
+    // pelo C.I., encerrada e arquivada entram nela. Imprimir aquilo sob o titulo "Baixadas"
+    // declararia baixa que nao houve, no papel, assinado. A diferenca e pequena e por isso
+    // mesmo passaria: no acervo do Richard era 30 contra 29, em 23/10/2026.
+    //
+    // ⚠️ E QUANDO O CAMPO NAO VEM, A COLUNA DIZ QUE NAO VEIO. Se a API ainda nao tiver sido
+    // publicada com `n_com_baixa`, `||0` encheria a coluna de zero — um numero errado que
+    // ninguem questiona. Melhor a celula vazia com o aviso embaixo.
+    const temBaixa = lista.some(t => t.n_com_baixa != null)
+    const nPcs  = lista.reduce((s,t) => s + (t.n_pcs||0), 0)
+    const nBx   = lista.reduce((s,t) => s + (t.n_com_baixa||0), 0)
+    const nDil  = lista.filter(t => t.diligencia).length
+    const nCI   = lista.reduce((s,t) => s + (t.n_no_ci||0), 0)
+    const valor = lista.reduce((s,t) => s + (parseFloat(t.valor_total)||0), 0)
+    const lido  = lista.map(t => t.sgpe_atual && t.sgpe_atual.checado_em).filter(Boolean).sort().pop()
+    const semSgpe = lista.filter(t => diasDe(t) < 0).length
+
+    const agora = new Date()
+    const carimbo = agora.toLocaleDateString('pt-BR') + ' às '
+      + agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })
+
+    const linhas = lista.map((t,i) => {
+      const sg = t.sgpe_atual || null
+      const dias = diasDe(t)
+      return `<tr>
+        <td class="tc">${i+1}</td>
+        <td class="cod">${escHtml(t.tr||'—')}</td>
+        <td title="${escHtml(t.entidade||'')}">${escHtml(curta(t.entidade))}</td>
+        <td class="cod">${escHtml(normalizarProcesso(t.processo_mae) || '—')}</td>
+        <td style="text-align:right;white-space:nowrap;">${planMoeda(t.valor_total)}</td>
+        <td class="tc">${temBaixa ? `${t.n_com_baixa||0} de ${t.n_pcs||0}` : '—'}</td>
+        <td class="${t.diligencia?'atraso':''}">${escHtml(etapaDe(t))}</td>
+        <td class="cod">${sg && sg.setor_sigla ? escHtml(sg.setor_sigla) : '<i>não consultado</i>'}</td>
+        <td class="tc">${dias < 0 ? '—' : dias.toLocaleString('pt-BR')
+          + (sg.desde ? `<br><span style="font-size:8px;">desde ${dataBr(sg.desde)}</span>` : '')}</td>
+      </tr>`
+    }).join('')
+
+    const doc = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>TRs do analista ${escHtml(nomeAlvo)} — SIGPC-GT</title>
+<style>${DOC_CSS}</style></head><body>
+${DOC_ACOES}
+<div class="paper">
+${docCabecalho()}
+<h2>Lista completa — TRs do analista ${escHtml(nomeAlvo)}</h2>
+<div class="ficha">
+  <p><b>Objeto:</b> todos os Termos de Referência que constam do acervo do integrante nesta data.</p>
+  <p><b>Emitido em:</b> ${carimbo}, por ${escHtml(U.nome||'—')}.</p>
+  <p><b>Ordem:</b> tempo no setor, do mais antigo para o mais recente.</p>
+  <p><b>Fonte:</b> acervo do SIGPC-GT${lido ? ', com a posição do SGPe lida em ' + new Date(lido).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}.</p>
+</div>
+<div class="cont">
+  <div><b>${lista.length}</b>TRs</div>
+  <div><b>${nPcs.toLocaleString('pt-BR')}</b>prestações</div>
+  <div><b>${nBx.toLocaleString('pt-BR')}</b>baixadas</div>
+  <div><b>${nDil}</b>em diligência</div>
+  <div><b>${nCI}</b>no Controle Interno</div>
+</div>
+<table>
+  <thead><tr>
+    <th class="tc" style="width:22px;">#</th>
+    <th style="width:84px;">TR</th>
+    <th style="width:170px;">Entidade</th>
+    <th style="width:100px;">Processo mãe</th>
+    <th style="width:82px;text-align:right;">Valor</th>
+    <th class="tc" style="width:52px;">Baixadas</th>
+    <th style="width:76px;">Etapa</th>
+    <th style="width:96px;">Setor</th>
+    <th class="tc" style="width:60px;">Dias no setor</th>
+  </tr></thead>
+  <tbody>${linhas}
+  <tr style="background:#E8E8E8;">
+    <td colspan="4"><b>${lista.length} TR${lista.length===1?'':'s'}</b></td>
+    <td style="text-align:right;white-space:nowrap;"><b>${planMoeda(valor)}</b></td>
+    <td class="tc"><b>${temBaixa ? nBx+' de '+nPcs : '—'}</b></td>
+    <td colspan="3"><b>${nDil} em diligência${nCI ? ' · '+nCI+' no C.I.' : ''}</b></td>
+  </tr></tbody>
+</table>
+<div class="obs">
+  <p><b>Como ler a coluna Baixadas.</b> O primeiro número é quantas prestações do Termo tiveram a
+  baixa registrada; o segundo, quantas o Termo tem ao todo. Uma TR com <i>0 de 2</i> não significa
+  trabalho não iniciado — significa que nenhuma das duas prestações teve a baixa registrada até
+  esta data. Prestação devolvida pelo Controle Interno, encerrada ou arquivada sem baixa não
+  entra nesta coluna.</p>
+  <p><b>Sobre o nome das entidades.</b> Onde a razão social começa por <i>Associação de Pais e
+  Amigos dos Excepcionais</i>, a expressão é impressa pela sigla <b>APAE</b>; o restante do nome,
+  inclusive o município, é reproduzido como consta do cadastro. O nome completo está no acervo do
+  sistema.</p>
+  ${!temBaixa ? `<p><b>Atenção.</b> A coluna Baixadas está sem dado nesta emissão porque o serviço
+  ainda não fornece a contagem de baixa por Termo. As demais colunas não dependem dela.</p>` : ''}
+  <p><b>Como ler a coluna Dias no setor.</b> É o tempo que o processo mãe está no setor em que o
+  SGPe o mostra hoje, contado da data de recebimento ali. Não é o tempo de análise: um processo
+  pode estar parado no setor sem que a prestação dependa de ato do analista.</p>
+  ${semSgpe ? `<p><b>Atenção.</b> ${semSgpe} ${semSgpe===1?'Termo está':'Termos estão'} sem posição do
+  SGPe lida pelo sistema e ${semSgpe===1?'aparece':'aparecem'} ao fim da lista, com a célula
+  marcada como <i>não consultado</i>.</p>` : ''}
 </div>
 <div class="rodape">
   SIGPC-GT — Sistema de Gestão de Prestações de Contas do Grupo de Trabalho · Fundação Catarinense de Educação

@@ -1,12 +1,166 @@
-# SIGPC-GT — ESTADO EM 20/10/2026
+# SIGPC-GT — ESTADO EM 23/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **20/10**, logo abaixo: o relatório do 4º trimestre
-> refeito e o acervo do Richard limpo. O de **19/10** vem em seguida, com a causa da divergência.
+> **não como estado**. O estado é o bloco de **23/10**, logo abaixo: as cinco TRs no acervo do
+> Richard e o relatório de TRs saindo de dentro do sistema, **à espera de publicação**. O de
+> **20/10** vem em seguida, com o relatório do 4º trimestre refeito, e o de **19/10** com a causa
+> da divergência com a CGE.
 
 ---
+
+## ▶ 23/10/2026 — AS CINCO TRs ENTRARAM, E O RELATÓRIO DE TRs SAIU DE DENTRO DO SISTEMA
+
+**Duas coisas:** 143 PCs foram para o acervo do Richard, e a lista de TRs por analista — que até
+ontem era PDF montado por script — passou a ser um relatório do sistema. ⚠️ **NADA FOI PUBLICADO:**
+as duas alterações estão no disco, em dois repositórios, esperando o `git push` dele.
+
+> ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI
+>
+> 1. ⚠️ **PUBLICAR, NESTA ORDEM: a API primeiro, o front depois.** `sigpc-api/lib/gestao.js`
+>    (+9 linhas, branch `feature/baixa-por-parcial`) e `sigpc-gt/index.html` (+193 linhas). Se o
+>    front subir sozinho, o relatório funciona e **a coluna Baixadas sai vazia**, com a nota
+>    explicando — de propósito, para não sair zero.
+> 2. **O 5º RELATÓRIO DO CGE DIRETO DO SISTEMA** continua de pé, com o quadro do bloco de 20/10
+>    valendo inteiro: a separação `Bx. Secretário` no acumulado, a seção 1.6, o comparativo por
+>    servidor, o confronto com o Anexo Único e a tela de Relatórios. ⚠️ **O relatório de hoje não
+>    o substitui** — ele é outra coisa: lista de acervo, não apuração de produtividade.
+> 3. **Olhar na tela** o card novo e o PDF saindo pelo navegador de verdade: hoje a prova foi em
+>    sandbox, não no browser.
+
+---
+
+### 1. AS CINCO TRs — 143 PCs para a planilha do Richard
+
+Ele pediu TRs fora da Grande Florianópolis, com muitas PCs, livres no estoque. Antes de atribuir,
+**cruzei as PCs delas contra os dois Anexos Únicos da CGE** — o do 3º trimestre (2.108 linhas) e o do
+4º (1.544) —, que é o que ele perguntou: *"mas essas nos relatórios da CGE estão livres?"*.
+
+⚠️ **ZERO LINHAS NOS DOIS ANEXOS**, e nenhuma baixada no sistema. O SIGEF não registrou baixa de
+nenhuma dessas prestações nos trimestres auditados, então **pegá-las não mexe em nada do que já foi
+informado à Controladoria**.
+
+| TR | PCs | valor | entidade |
+|---|---:|---:|---|
+| `2020TR000820` | 47 | R$ 5.189.690,55 | APAE (SCC6112/2020) |
+| `2022TR000841` | 33 | R$ 6.336.902,16 | APAE de Ituporanga |
+| `2017TR000096` | 21 | R$ 1.129.644,24 | APAE de Blumenau |
+| `2017TR000078` | 21 | R$ 1.080.955,52 | APAE (ADR17) |
+| `2017TR000097` | 21 | R$ 878.683,25 | APAE de Gaspar |
+| **total** | **143** | **R$ 14.615.875,72** | |
+
+⚠️ **A GRAVAÇÃO FOI PELA ROTA DO SISTEMA (`POST /tr/assumir`), E NÃO POR UPDATE** — uma transação por
+TR, `FOR UPDATE` nas PCs livres, trilha em `parcela_historico` como `assumir_tr` (`livre → Richard`,
+`analista_id = 4`), nome curto certo, e `baixada` / `data_baixa` / `parecer_tipo` / `enviado_ci`
+intocados. Conferido depois: **143 de 143**, todas `status = 'analise'`, trilha nas cinco às 13:41.
+
+⚠️ **QUEM EXECUTOU FOI O RICHARD, NO POWERSHELL DELE.** O modo automático barrou a escrita em produção
+(*"Modify Shared Resources"*) e eu parei: entreguei o comando, ele rodou. **A primeira versão que
+mandei era bash e ele colou no PowerShell** — erro meu de ambiente; a segunda foi
+`Invoke-RestMethod` com `Tls12`, e funcionou.
+
+**Acervo dele: 219 PCs · 42 TRs · 190 em curso.** Eu havia projetado 186, pela régua do relatório (que
+exclui PC invalidada); a contagem crua eram 47 em aberto, não 43.
+
+### 2. A `2022TR000841` — a ressalva que fica registrada
+
+Ela tem **7 PCs com situação de origem "Em Diligência"** vindas da carga, com `num_diligencia = 0`:
+a diligência **não foi aberta no sistema**, veio escrita assim do SIGEF. **Não é análise dele nem
+devolução do C.I.** — é estado herdado, e ele aceitou assim.
+
+### 3. O RELATÓRIO DE TRs DO ANALISTA — agora é do sistema
+
+**Relatórios › Gestão › "TRs do analista — lista completa"**, com seletor de integrante ao lado do
+botão. Admin e coordenador geram, de qualquer integrante. Sai no papel timbrado, com imprimir/PDF e
+baixar .doc, como os outros gerenciais.
+
+⚠️ **TUDO VEM DE `/gestao`, NUMA CHAMADA SÓ — a mesma fonte da tela de Gestão da TR.** Remontar a
+contagem no front, a partir das PCs, criaria um segundo jeito de contar a mesma coisa: no dia em que
+uma regra mudasse de lado, a tela e o papel divergiriam sem erro nenhum.
+
+#### ⚠️ `n_baixadas` DA `/gestao` NÃO CONTA BAIXA — e por pouco isso ia para o papel
+
+Ela conta **PC fora da etapa "análise"**, o que inclui devolvida pelo C.I., encerrada e arquivada. No
+acervo do Richard dava **30** onde a baixa real é **29**. Um erro desse tamanho num documento
+assinado não é questionado por ninguém.
+
+⚠️ **E `data_baixa` NÃO SERVE DE SUBSTITUTO:** medido no acervo inteiro, **71 das 16.480 PCs têm data
+de baixa sem estar baixadas** — o estorno limpa `baixada` e preserva a data do evento. 5.223 com
+`baixada`, 5.294 com data, e **nenhuma baixada sem data**.
+
+✅ **O CONSERTO FOI NA ORIGEM:** `lib/gestao.js` passou a expor **`baixada` por PC** e
+**`n_com_baixa` por TR**, contados pelo campo `baixada`. ⚠️ **`n_baixadas` NÃO FOI TOCADA** — a tela de
+Gestão depende dela, e mudar o que ela conta mudaria a tela sem aviso. As duas convivem, cada uma
+com o comentário dizendo o que é. **`node teste_gestao.js`: 86 checagens, 0 falharam.**
+
+⚠️ **E QUANDO O CAMPO NÃO VIER, A COLUNA DIZ QUE NÃO VEIO.** Enquanto a API não for publicada, a
+coluna Baixadas sai `—` com nota explicando. Com `||0` ela sairia zerada — número errado que ninguém
+questiona.
+
+#### As decisões de papel, tomadas depois de ver a impressão
+
+- ⚠️ **O NOME DA ENTIDADE ENCURTA SÓ NO PREFIXO.** "ASSOCIACAO DE PAIS E AMIGOS DOS EXCEPCIONAIS DE
+  BLUMENAU" ocupava **sete linhas por célula** e esticava o documento para quatro páginas; vira
+  "APAE DE BLUMENAU", que é a sigla da própria expressão. ⚠️ **O MUNICÍPIO FICA** — é ele que
+  distingue uma APAE da outra, e abreviar além disso juntaria entidades diferentes numa linha só.
+  **O documento declara a substituição em nota.** Há razão social que já repete a sigla no fim
+  ("…EXCEPCIONAIS APAE"), e a repetição é colapsada.
+- ⚠️ **O TOTAL SAIU DO `<tfoot>`.** Em `table-footer-group` o navegador o **repete em toda página**, e
+  o leitor lê o total geral como se fosse o daquela página. Virou a última linha do corpo.
+- **A ordem é o tempo no setor**, do mais antigo para o mais recente — é o ponto do relatório. ⚠️ **TR
+  sem posição do SGPe vai para o FIM**: ordenando por maior primeiro, o `-1` a jogaria para o topo,
+  no lugar da mais parada de todas.
+- **O setor é leitura do SGPe**, com a data da leitura impressa na ficha; sem leitura, a célula diz
+  *"não consultado"* — e não fica vazia, que o leitor confundiria com processo sem setor.
+
+#### ⚠️ COMO A FUNÇÃO FOI PROVADA — e o harness que ficou
+
+`scratchpad/provar_rel_trs.js` **roda o `gerTrsAnalista` do próprio `index.html`**, num `vm` com DOM
+mínimo, interceptando `window.open` para capturar o documento, e imprime em PDF pelo Edge headless.
+⚠️ **REMONTAR O DOCUMENTO NO SCRIPT PROVARIA O SCRIPT, NÃO O SISTEMA.** Saiu com as 42 TRs, logo,
+timbre e os totais batendo com o banco: 29 baixadas, 219 prestações, R$ 21.794.155,41.
+
+Três coisas que o harness ensinou, e que a próxima vez aproveita:
+
+- ⚠️ **`const` E `let` DE TOPO NÃO VIRAM PROPRIEDADE DO GLOBAL NO `vm`** — só `function` e `var`. Por
+  isso `DOC_CSS`, `planMoeda`, `dataBr` e `LOGO_SC` apareciam como indefinidos: o harness acrescenta
+  **uma linha** ao fim do bloco expondo-os.
+- ⚠️ **`U` É `let`, ENTÃO `ctx.U = {...}` NÃO ALCANÇA A VARIÁVEL QUE A FUNÇÃO LÊ.** A mesma linha
+  exporta `entrarComoU(v)`, que atribui dentro do escopo.
+- ⚠️ **`getElementById` NÃO PODE DEVOLVER `null`** no sandbox: o código de arranque da tela quebra em
+  `innerHTML` de null e o script para antes das constantes.
+
+⚠️ **E O PRÓPRIO HARNESS ME ENGANOU UMA VEZ:** a primeira impressão disse **38 baixadas** porque ele
+contava as PCs da TR inteira, não as do analista. A `/gestao` recorta por escopo; o harness não
+recortava. Corrigido, deu 29 — o número do banco.
+
+### O QUE FOI GRAVADO (23/10)
+
+| o quê | quanto |
+|---|---|
+| PCs atribuídas ao Richard pela rota `/tr/assumir` | **143**, em 5 TRs |
+| trilha em `parcela_historico` (`assumir_tr`) | **5 linhas**, 13:41 |
+
+⚠️ **Executado pelo Richard, não por mim** — ver o item 1.
+
+### ⚠️ O QUE NÃO FOI ABERTO NO NAVEGADOR
+
+- [ ] **O card novo em Relatórios › Gestão**, e o documento saindo pelo `window.open` de verdade.
+- [ ] **A Minha Planilha dele** com as 143 PCs novas.
+- [ ] **O Estoque**, agora com 5 TRs a menos.
+
+### O QUE FICA ABERTO
+
+- **Publicar os dois repositórios** — ver o quadro no topo.
+- **O 5º relatório do CGE pelo sistema** e **a tela de Relatórios** — bloco de 20/10, inteiros.
+- **A trilha retroativa das 341 PCs devolvidas em 20/10** — oferecida, não autorizada. Elas só são
+  identificáveis por `atualizado_em`, o que é frágil.
+- **Os anexos do 1º e 2º trimestres**, se a CGE fornecer.
+- **O caso Juliana**, as **82 PCs `livre` com dono** e as **52 parciais** — todos esperando decisão.
+
+---
+
 
 ## ▶ 20/10/2026 — O RELATÓRIO DO 4º TRIMESTRE FOI REFEITO, E O ACERVO DO RICHARD FOI LIMPO
 
