@@ -1,20 +1,138 @@
-# SIGPC-GT — ESTADO EM 23/10/2026
+# SIGPC-GT — ESTADO EM 26/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **23/10**, logo abaixo: as cinco TRs no acervo do
-> Richard e o relatório de TRs saindo de dentro do sistema, **à espera de publicação**. O de
-> **20/10** vem em seguida, com o relatório do 4º trimestre refeito, e o de **19/10** com a causa
-> da divergência com a CGE.
+> **não como estado**. O estado é o bloco de **26/10**, logo abaixo: o Estoque passou a avisar
+> quais TRs já têm baixa no SIGEF. O de **23/10** vem em seguida (as cinco TRs e o relatório de
+> TRs do analista, **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre
+> refeito, e o de **19/10** com a causa da divergência com a CGE.
 
 ---
+
+## ▶ 26/10/2026 — O ESTOQUE PASSOU A AVISAR O QUE O SERVIDOR JÁ SABIA
+
+**Começou com uma reclamação no grupo do WhatsApp** e terminou num achado de produto: havia
+**255 prestações em 120 TRs** no Estoque com a baixa **já registrada no SIGEF**, e o analista só
+descobria **depois de assumir**. ✅ **Publicado e conferido na tela.**
+
+---
+
+### 1. O QUE TRAVOU — e o botão estava certo
+
+A Graciane assumiu duas TRs em 25/10, achou as prestações já baixadas e pediu devolução das duas.
+Os pedidos ficaram presos: o coordenador via o **Aprovar aceso** e ele nunca funcionava.
+
+⚠️ **A CAUSA NÃO ERA DEFEITO DA REGRA.** Nos dois pedidos o campo *"quem já analisava esta TR"*
+foi preenchido com **ela mesma** (`indicado_id = 41`). O motivo *"já estava em análise por outro
+analista"* manda a TR **direto para o indicado** — indicar a si mesma é transferir a TR de alguém
+para essa mesma pessoa, o que não é nada. `impedimentoIndicado` recusa, e está certo.
+
+⚠️ **E A LISTA NASCE EM BRANCO** — não foi a tela que escolheu por ela. Nas justificativas ela
+aponta outras pessoas: *"Richard"* numa, *"Marcio Valvassori"* na outra. **Marcio Valvassori não
+existe no cadastro**, então nem com a escolha certa o pedido passaria.
+
+⚠️ **O DEFEITO REAL ERA O MOMENTO DA CONFERÊNCIA:** o pedido impossível **era aceito**, entrava na
+fila, e só travava quando alguém clicava em Aprovar. **É a armadilha 12 pelo avesso** — não um
+botão aceso que não grava, mas um pedido aceito que a aprovação sempre recusa.
+
+✅ **O destravamento é `✕ Recusar`** — a recusa não passa pela regra do indicado. Só o Aprovar trava.
+
+### 2. O PENTE FINO — 274, e não 1.828
+
+⚠️ **O NÚMERO BRUTO MENTE.** "PC não baixada com `data_baixa_sigef`" dá **1.828** — e **1.378 delas
+são `VA`**, que **não é baixa** (armadilha 28). Levar esse número adiante seria repetir, por dentro,
+o erro que a CGE apontou por fora.
+
+✅ **O número que se sustenta é o da tag do próprio sistema**, `ABERTA_COM_BAIXA_SIGEF` —
+*"Baixada no SIGEF, aberta aqui"*:
+
+| | |
+|---|---|
+| PCs com a tag | **274** |
+| **livres no estoque** | **255, em 120 TRs** |
+| com dono | 19, em 8 TRs |
+| já declaradas pelo analista | **0** |
+
+⚠️ **E A CAUSA DE NINGUÉM VER:** o `GET /prestacoes_contas/resumo_tr` **devolve `sigef_tags` por TR
+desde 31/08**, e a palavra `sigef_tags` **não aparece uma única vez no `index.html`**. O servidor
+avisava havia dois meses; a tela nunca leu o campo.
+
+### 3. OS DOIS CONSERTOS
+
+✅ **O ESTOQUE MOSTRA, E COM O NÚMERO.** Etiqueta âmbar embaixo do número da TR: **⚠ 6 já baixadas
+no SIGEF**. ⚠️ **O NÚMERO NÃO É ENFEITE** — uma TR de 30 PCs com 6 já baixadas não é o mesmo
+trabalho que uma com 1, e o selo sem contagem não ajuda a decidir. Veio de `sigef_ambar`, novo no
+`resumo_tr`, contado pela **mesma expressão de `lib/sigef.js`**: a tela não classifica nada por
+conta própria.
+
+⚠️ **USA A CLASSE `.est-reserva`, E NÃO ESTILO INLINE.** Com `table-layout:fixed`, um inline com
+`nowrap` transbordou por cima da coluna vizinha em 16/08 — e estilo inline vence classe, que foi
+exatamente o que causou aquele defeito.
+
+✅ **O PEDIDO IMPOSSÍVEL NÃO SAI MAIS**, em duas camadas: o próprio nome **sai da lista** em
+`devIndicadoPintar()`, e `validarPedido` **recusa no envio**, não só na aprovação.
+**`teste_devolucao_pedido.js`: 91 passaram, 0 falharam.**
+
+⚠️ **E EU QUEBREI O `server.js` NO CAMINHO:** usei **crase dentro de template literal** num
+comentário — a armadilha 10 —, e o comentário da linha de cima avisa exatamente isso
+(*"sem crase nos nomes: crase dentro de template literal fecha a string"*). `node --check` pegou.
+
+### 4. AS DUAS TRs DA GRACIANE — decisão do Richard: baixadas, e ficam com ela
+
+| | `2021TR001587` | `2021TR002349` |
+|---|---|---|
+| PC | `2021PC002034` | `2021PC002568` |
+| parecer | Parecer Regular | Parecer Regular com Ressalvas |
+| **data efetiva** | **18/07/2025** | **02/09/2025** |
+| tag âmbar | **sumiu** | **sumiu** |
+
+⚠️ **O PARECER VEIO DA SITUAÇÃO DE ORIGEM DO SIGEF**, não de escolha minha: *Baixa Regular* →
+Parecer Regular; *Baixa Regular Ressalva* → Parecer Regular com Ressalvas.
+
+⚠️ **EM CADA TR A PARCIAL 1 TEM UMA PC SÓ** — justamente a âmbar. Conferido antes: baixar a parcial
+não alcançou a P002 nem as finais, que **continuam em análise com ela**.
+
+⚠️ **A BAIXA É DE HOJE, A DATA EFETIVA É DE 2025.** `data_baixa = 26/10/2026`, mas `data_efetiva`
+vem do SIGEF — **julho e setembro de 2025**. **Não infla o trimestre corrente dela**, e foi dito ao
+Richard antes de gravar.
+
+✅ **A TAG TER SUMIDO É A PROVA** de que a divergência acabou no dado, e não só na tela.
+
+### 5. A DECISÃO QUE O RICHARD TOMOU — opção (a)
+
+Das três que foram postas (deixar com aviso · tirar do estoque · baixar em lote), ele escolheu
+**(a): as 255 ficam no estoque, com o aviso visível.** ⚠️ **A (c) — baixar em lote pelo registro do
+SIGEF — foi recusada**, e é a mais perigosa: gravaria parecer que ninguém leu.
+
+### O QUE FOI GRAVADO (26/10)
+
+| o quê | quanto |
+|---|---|
+| parciais baixadas (parecer confirmado) | **2** |
+| pedidos de devolução encerrados, com motivo no sino | **2** |
+
+⚠️ **Executado pelo Richard**, com o comando na tela antes — e conferido depois pela API.
+
+### ⚠️ O QUE FICA ABERTO
+
+- **As 17 PCs com dono** na mesma situação (Grace 7, Ana Letícia 5, Richard 4, Andressa 1). ⚠️ **O
+  aviso delas NÃO é no Estoque** — elas já têm dono e não aparecem lá. Seria na Minha Planilha, que
+  ainda não mostra.
+- **A fila de pedidos** tem dois da Sandra Cezária (`2020TR001160` e `2020TR001603`), motivo *falta
+  de documentação*, destino estoque — **esses não travam**.
+- **O 5º relatório do CGE pelo sistema** e **a tela de Relatórios** — bloco de 20/10, inteiros.
+- **A trilha retroativa das 341 PCs** devolvidas em 20/10 — oferecida, não autorizada.
+- **O caso Juliana**, as **82 PCs `livre` com dono** e as **52 parciais** — esperando decisão.
+
+---
+
 
 ## ▶ 23/10/2026 — AS CINCO TRs ENTRARAM, E O RELATÓRIO DE TRs SAIU DE DENTRO DO SISTEMA
 
 **Duas coisas:** 143 PCs foram para o acervo do Richard, e a lista de TRs por analista — que até
-ontem era PDF montado por script — passou a ser um relatório do sistema. ⚠️ **NADA FOI PUBLICADO:**
-as duas alterações estão no disco, em dois repositórios, esperando o `git push` dele.
+ontem era PDF montado por script — passou a ser um relatório do sistema. ✅ **PUBLICADO EM 23/10**, depois de escrito este bloco: a API em `e2c895d` e o
+front em `1b37070`.
 
 > ## ▶ A PRÓXIMA SESSÃO COMEÇA AQUI
 >
