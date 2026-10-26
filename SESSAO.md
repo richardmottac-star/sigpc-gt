@@ -105,18 +105,63 @@ Das três que foram postas (deixar com aviso · tirar do estoque · baixar em lo
 **(a): as 255 ficam no estoque, com o aviso visível.** ⚠️ **A (c) — baixar em lote pelo registro do
 SIGEF — foi recusada**, e é a mais perigosa: gravaria parecer que ninguém leu.
 
+### 6. O RECADO NO SINO FOI CANCELADO, E AS 17 COM DONO VIRARAM 14
+
+⚠️ **O RECADO ÀS TRÊS ANALISTAS NÃO FOI ENVIADO** — o Richard cancelou no meio, e nada saiu.
+
+Ele pediu então as TRs delas para si, *"pra mim que eu vou dar baixa e ganhar produtividade"*.
+⚠️ **A PREMISSA NÃO SE SUSTENTAVA, E FOI DITO ANTES DE MOVER QUALQUER COISA:** a produtividade
+sai da **data efetiva**, que é a `data_baixa_sigef` — essas PCs cairiam em **agosto/2025 e
+abril/2026**, e **não** no trimestre corrente. Confirmar esses pareceres dá trabalho e não move
+o número do período. Foi medido nas duas da Graciane no mesmo dia: baixadas em 26/10, efetivas
+em julho e setembro de 2025.
+
+⚠️ **E AS TRs NÃO VINHAM SOZINHAS:** a `2021TR000618` tem 23 PCs, **17 já baixadas pela Ana
+Letícia**; a `2020TR000651` tem 32, **24 já baixadas pela Grace**. Pegar o Termo levaria o acervo
+delas junto.
+
+✅ **ELE ESCOLHEU A OPÇÃO 1 — só as que já eram dele.** Três parciais baixadas, nenhuma TR
+trocou de mão, ninguém cedeu nada:
+
+| PC | parecer | data efetiva |
+|---|---|---|
+| `2021PC002102` (`2021TR001658` p1) | Parecer Regular com Ressalvas | 04/09/2025 |
+| `2021PC002336` (`2021TR002099` p1) | Parecer Regular com Ressalvas | 12/04/2026 |
+| `2024PC000994` (`2024TR000710` p2) | Parecer Regular | 11/11/2025 |
+
+⚠️ **CADA PARCELA TINHA UMA PC SÓ** — conferido antes, porque `/parcela/parecer` baixa a parcela
+inteira. Nenhuma arrastou PC sem baixa no SIGEF junto.
+
+#### ⚠️ A PC FINAL DO SECRETÁRIO FICOU DE FORA — decisão: opção 3, deixar como está
+
+A `2021TR001658-PFINAL` tem `situacao_origem = "Regular com Ressalvas - Secretário"`. **É baixa do
+Titular da Pasta, não do técnico** — separá-las foi decisão dele próprio em 20/10. Baixá-la pelo
+caminho comum gravaria `origem_baixa = "sistema"` e ela contaria como produção dele.
+
+⚠️ **E O CAMINHO CERTO ESTAVA A DUAS ETAPAS DE DISTÂNCIA.** A final só arquiva depois de todas as
+parciais arquivadas, e a parcial 1 **nunca foi ao Controle Interno** (`enviado_ci = false`) — ela
+só arquiva depois da devolutiva. Medido, não suposto.
+
+⚠️ **E ARQUIVAR NÃO BAIXA:** a final continuaria `baixada = false`, sem produtividade. O
+arquivamento registra que a TR encerrou e que o Secretário baixou no SIGEF naquela data — ele não
+credita produção ao técnico, de propósito.
+
+Das três saídas postas (levar ao C.I. e seguir o fluxo · baixar como as outras · deixar como
+está), **ele escolheu deixar como está**. A etiqueta âmbar continua nela, avisando quem olhar.
+
 ### O QUE FOI GRAVADO (26/10)
 
 | o quê | quanto |
 |---|---|
-| parciais baixadas (parecer confirmado) | **2** |
+| parciais baixadas (parecer confirmado) | **5** — 2 da Graciane, 3 do Richard |
 | pedidos de devolução encerrados, com motivo no sino | **2** |
+| recados no sino | **nenhum** — cancelado antes de enviar |
 
 ⚠️ **Executado pelo Richard**, com o comando na tela antes — e conferido depois pela API.
 
 ### ⚠️ O QUE FICA ABERTO
 
-- **As 17 PCs com dono** na mesma situação (Grace 7, Ana Letícia 5, Richard 4, Andressa 1). ⚠️ **O
+- **As 14 PCs com dono** na mesma situação (Grace 7, Ana Letícia 5, Richard 1, Andressa 1). ⚠️ **O
   aviso delas NÃO é no Estoque** — elas já têm dono e não aparecem lá. Seria na Minha Planilha, que
   ainda não mostra.
 - **A fila de pedidos** tem dois da Sandra Cezária (`2020TR001160` e `2020TR001603`), motivo *falta
