@@ -4859,6 +4859,24 @@ function renderEst(rows) {
          </div>`
       : ''
 
+    // ⚠️ O ESTOQUE PASSA A DIZER O QUE O SERVIDOR JA MANDAVA (26/10/2026).
+    //
+    // O resumo_tr devolve as tags do SIGEF por TR desde 31/08 — e a tela nunca leu o campo.
+    // Resultado: 255 PCs em 120 TRs estao no Estoque com a baixa JA REGISTRADA NO SIGEF, e o
+    // analista so descobria depois de assumir. Em 25/10 a Graciane assumiu duas assim e pediu
+    // devolucao das duas no dia seguinte.
+    //
+    // ⚠️ E O NUMERO IMPORTA, nao so o selo: uma TR de 30 PCs com 6 ja baixadas no SIGEF nao e
+    // o mesmo trabalho que uma com 1. Vem de sigef_ambar, contado no servidor pela MESMA
+    // expressao de lib/sigef.js — a tela nao classifica nada por conta propria.
+    //
+    // ⚠️ USA A CLASSE est-reserva, e nao estilo inline: com table-layout:fixed um inline com
+    // nowrap transbordou por cima da coluna vizinha em 16/08. A classe ja resolve isso.
+    const nAmbar = parseInt(t.sigef_ambar) || 0
+    const tagAmbar = nAmbar ? `<div class="est-reserva" style="margin-top:3px;font-size:9.5px;color:#8A6100;background:#FDF6E7;border:1px solid #EFDCA6;border-radius:5px;padding:2px 6px;"
+           title="O SIGEF registra ${nAmbar} prestação${nAmbar>1?'ões':''} desta TR como baixada${nAmbar>1?'s':''}, mas ela${nAmbar>1?'s':''} continua${nAmbar>1?'m':''} aberta${nAmbar>1?'s':''} aqui. Quem assumir precisa confirmar o parecer no sistema.">
+           ⚠ ${nAmbar} já baixada${nAmbar>1?'s':''} no SIGEF</div>` : ''
+
     const infoSt = EST_STATUS_INFO[t.statusDerivado] || {label:t.statusDerivado||'—',cls:''}
 
     // ⚠️ A FAIXA E A BARRA VÃO NA LINHA, e não na célula: é a linha inteira que se quer
@@ -4866,7 +4884,7 @@ function renderEst(rows) {
     // gramática da faixa de vinculação — cor no canto, fundo bege no corpo.
     const disp = EST_DEVOLVIDAS.has(t.tr)
     html += `<tr class="${i%2===0?'zebra-a':'zebra-b'}${disp ? ' est-linha-disp' : ''}">
-      <td class="est-tr"><strong style="font-size:11px;">${t.tr||'—'}</strong>${tagReserva}</td>
+      <td class="est-tr"><strong style="font-size:11px;">${t.tr||'—'}</strong>${tagReserva}${tagAmbar}</td>
       <!-- Sem lapis aqui, de proposito: a linha do Estoque e agregada por TR e nao tem uma PC de
            referencia para o servidor corrigir. Quem corrige o processo mae usa o detalhe da TR. -->
       <td class="proc-sgpe est-mae" style="font-size:11px;">${procHtml(t.processo_mae)}</td>
@@ -10672,8 +10690,14 @@ async function abrirPedidoDev(tr) {
 function devIndicadoPintar() {
   const sel = document.getElementById('devIndicado')
   if(!sel) return
-  const ordenados = [...PED_ANALISTAS].sort((a, b) =>
-    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+  // ⚠️ O PROPRIO NOME SAI DA LISTA (26/10/2026). O campo pergunta quem JA ANALISAVA a TR
+  // ANTES de quem esta pedindo; escolher a si mesmo pede para transferir a TR de alguem para
+  // essa mesma pessoa, o que nao e nada — e a aprovacao recusa com
+  // "o analista indicado e o proprio solicitante". Aconteceu duas vezes em 25/10, com a
+  // mesma pessoa, e os dois pedidos ficaram travados na fila: o coordenador via o botao
+  // Aprovar aceso e ele nunca funcionava. Tirar a opcao da lista resolve na origem.
+  const ordenados = [...PED_ANALISTAS].filter(u => String(u.id) !== String(U.id))
+    .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
   sel.innerHTML = `<option value="">Selecione o analista</option>`
     + ordenados.map(u => `<option value="${u.id}">${escHtml(u.nome)}</option>`).join('')
   sel.value = ''
