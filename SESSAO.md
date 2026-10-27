@@ -3,14 +3,174 @@
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **26/10**, logo abaixo: o Estoque passou a avisar
-> quais TRs já têm baixa no SIGEF. O de **23/10** vem em seguida (as cinco TRs e o relatório de
-> TRs do analista, **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre
-> refeito, e o de **19/10** com a causa da divergência com a CGE.
+> **não como estado**. O estado são os DOIS blocos de **26/10**, nesta ordem: o da **noite** —
+> as 221 PCs que a importação do SIGEF baixou sem o parecer, as 29 com dono resolvidas e a
+> importação consertada — e o da **manhã**, em que o Estoque passou a avisar quais TRs já têm
+> baixa no SIGEF. O de **23/10** vem depois (as cinco TRs e o relatório de TRs do analista,
+> **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre refeito, e o de
+> **19/10** com a causa da divergência com a CGE.
 
 ---
 
-## ▶ 26/10/2026 — O ESTOQUE PASSOU A AVISAR O QUE O SERVIDOR JÁ SABIA
+## ▶ 26/10/2026 (noite) — A BAIXA QUE A IMPORTAÇÃO GRAVOU SEM O PARECER
+
+**Uma analista escreveu dizendo que não conseguia "fazer a anotação devida"** e pedindo desculpas,
+achando que estava fazendo algo errado. Não estava: **221 prestações** foram marcadas como baixadas
+pela importação do SIGEF de 30/08 **sem o parecer**, e PC baixada sem parecer é um beco sem saída na
+tela. ✅ **As 29 com dono resolvidas, a importação consertada, tudo publicado.**
+
+---
+
+### 1. O CASO — `2023TR000041` p7, APAE Iporã do Oeste, Geisa
+
+> *"a pc 07 SCC 4895/2026 parecer regular JÁ BAIXADO NO SIGEF, MAS VOU REGISTRAR NÃO ME PERMITE"*
+
+Ela estava certa nos dois pontos, e não tinha como saber o que travava:
+
+| campo | valor |
+|---|---|
+| `baixada` | **true** |
+| `parecer_tipo` | **null** |
+| `origem_baixa` | **`import_sigef_30082026`** |
+| `sigef_status` | **`AV`** = Regular — **bate com o que ela disse** |
+| `codigo_nl` / `valor` | **null** — a parcela 7 não existe no estoque da CGE |
+
+⚠️ **O CAMINHO ESTAVA FECHADO NOS DOIS LADOS.** Na tela, `pa.baixada` manda a parcial para o ramo
+verde de só leitura, e `planBadgeParecer(null)` devolve **string vazia** — ela via "✓ baixada em
+29/08/2026", nenhum selo de parecer, e nada para clicar. Pela rota, `POST /parcela/parecer` responde
+**409 "Parcial já baixada. Estorne antes de registrar novo parecer"**: o único conserto parece um
+desfazer de erro que ela não cometeu.
+
+### 2. NÃO ERA UMA — ERAM 221
+
+⚠️ **E NENHUMA DELAS CONTAVA PRODUTIVIDADE.** `SQL_BASE_PRODUTIVIDADE` é
+`(p.baixada = true AND p.parecer_tipo IS NOT NULL)`: sem o parecer, a baixa existe e não conta para
+ninguém. O defeito não era cosmético — era trabalho feito que não aparecia.
+
+| | |
+|---|---|
+| baixadas sem parecer no acervo | 232 |
+| **da importação de 30/08** | **221** — todas parciais, sem NL, sem valor |
+| **com analista** | **29** |
+| sem analista | 192, em 101 TRs |
+| `AV` (Regular) · `SV` (c/ Ressalvas) | 78 · 143 |
+
+### 3. POR QUE AS CONFERÊNCIAS DE 30/08 NÃO PEGARAM
+
+⚠️ **ELAS PROVAVAM O CONJUNTO, NUNCA O CONTEÚDO DA LINHA.** As cinco eram: total bateu, inseridas ==
+previstas, nenhuma preexistente alterada, nenhuma sumida, nenhum `(TR,parcial_num)` duplicado.
+**Todas passaram, e 221 linhas entraram erradas.** Contar linha não prova o que há dentro dela.
+
+✅ **DUAS TRAVAS NOVAS NO SCRIPT DA IMPORTAÇÃO:**
+- **Conferência 0** — aborta **antes de ler o banco** se o `MAPA` do script e o `lib/sigef.js`
+  discordarem sobre o que é baixa. Não é condição de dado, é contradição entre dois arquivos.
+- **"baixadas SEM parecer_tipo"** — pergunta ao **BANCO** depois do INSERT, dentro da transação.
+  ⚠️ **Ao banco, e não ao `aInserir`:** conferir o array provaria que o script calculou certo; o que
+  se quer provar é que a **linha gravada** está certa. Coluna fora de `COLS` existe no objeto e não
+  chega na tabela — só a consulta percebe.
+
+### 4. A FONTE ÚNICA DA TRADUÇÃO
+
+`lib/sigef.js` ganhou `PARECER_SIGEF` e `parecerDeSigef()`: `AV`/`AT`/`AS` → Parecer Regular,
+`SV`/`ST`/`SS` → com Ressalvas, mais os textos longos da CGE.
+
+⚠️ **SÓ CÓDIGO DE BAIXA ENTRA NO MAPA.** `VA`, `IC`, `ED` devolvem `null`. É a mesma razão do
+`parecer_tipo = NULL` em `SQL_TIRAR_DA_PRODUTIVIDADE`: parecer pendurado em PC **não** baixada faz o
+`pPasso` da tela ler passo 2 e oferecer o C.I. numa parcial aberta. **Irregular não entra** — é
+decisão desfavorável com a PC aberta.
+
+✅ **O teste prova que o mapa é EXATAMENTE `SIGEF_BAIXA`**, nada a mais nem a menos, e que todo valor
+produzido é um dos `PARECERES_VALIDOS`. **`teste_sigef.js`: 213 passaram, 0 falharam.**
+
+### 5. COMO AS 29 FORAM RESOLVIDAS — e por que pelo caminho pior
+
+⚠️ **O CAMINHO CERTO NÃO RODOU.** `migracao_parecer_sigef_20261026.js` faz um `UPDATE` só em
+`parecer_tipo`, sem tocar em `data_baixa` nem em `origem_baixa`, com trilha e **12 conferências** —
+uma delas um `md5` das outras **76 colunas na tabela inteira**. Provado contra um dublê do Postgres,
+inclusive com quatro defeitos injetados: **cada um reprovou a conferência certa e abortou**.
+**Não rodou: o CLI do Railway estava sem credencial nesta máquina.**
+
+⚠️ **E O ERRO QUE APARECEU ESCONDIA A CAUSA.** Sem `DATABASE_URL`, o `pg` **não falha** — vai sozinho
+para `localhost:5432`. A mensagem foi *"The server does not support SSL connections"*, que parece
+problema de certificado; **consertar o SSL faria o script conectar no banco errado e rodar**. O
+script ganhou a trava que faltava em toda a pasta: sem a variável, ou apontando para `localhost` ou
+`railway.internal`, ele **para antes de qualquer consulta**.
+
+✅ **O QUE RODOU FOI PELA API** (`aplicar_parecer_sigef_via_api_20261026.js`): as mesmas rotas da
+tela, `corrigir_situacao` + `parecer`, sem precisar de banco.
+
+⚠️ **A CONFERÊNCIA QUE IMPEDIU O PIOR:** `POST /parcela/parecer` baixa a **PARCELA INTEIRA**, não a
+PC. Se houvesse outra PC na mesma `(tr, parcial_num)`, ela seria baixada junto com parecer que
+ninguém leu — **a opção (c) recusada de manhã**. Medido nas **272 PCs das 16 TRs**, *sem* filtro de
+baixada: **zero parcelas com irmã**. ⚠️ **A primeira medição perguntou só pelas baixadas e teria
+escondido justamente a irmã ABERTA, que é o caso perigoso.**
+
+⚠️ **O QUE ESSE CAMINHO CUSTOU:** as 28 ficaram com `data_baixa` de hoje e `origem_baixa =
+'sistema'`, em vez da marca da importação. **A trilha ficou menos fiel, e nada mais.**
+
+### 6. ⚠️ A PRODUTIVIDADE NÃO MUDOU DE MÊS — e isso foi conferido, não presumido
+
+`data_efetiva` sai da `data_baixa_sigef`, que **nenhum dos dois passos toca**. Conferido PC a PC,
+lendo de volta da produção depois de gravar:
+
+| | |
+|---|---|
+| baixadas sem parecer no acervo | 232 → **203** |
+| da importação, **com dono** | 29 → **0** |
+| contam produtividade | 5.096 → **5.125** |
+| pré-GT: ganharam parecer, **seguem fora** | **13** |
+
+| trimestre | entraram |
+|---|---:|
+| 2025-T3 · 2025-T4 · 2026-T1 | +1 cada |
+| **2026-T2** | **+9** |
+| **2026-T3** | **+3** |
+| **2026-T4 (corrente)** | **0** |
+
+✅ **O 4º trimestre refeito em 20/10 NÃO MUDA.** O 2º e o 3º passam a divergir do informado à CGE —
+em 15 baixas que **sempre existiram** e não estavam sendo contadas.
+
+⚠️ **A 29ª SAIU DO ALVO NO MEIO DO CAMINHO.** A da Geisa foi resolvida pela tela às 23h09, antes da
+rodada, e o alvo caiu para 28 — o script **parou e acusou** em vez de gravar número errado. O
+resultado dela ficou certo: parecer Regular, `data_efetiva` 29/08/2026, produtividade em agosto.
+
+### ✅ O SGPe ESTÁ LENDO A TRAMITAÇÃO, E FUNCIONA
+
+Medido na própria `2023TR000041` p7: `GET /parcela/acoes` devolve
+`ci_no_sgpe = { processo: "SCC 4895/2026", setor: "FCEE/CONIN", dias: 58, desde: 29/08/2026,
+lido_em: 26/10/2026 05:07 }`. **O job lê o SGPe todo dia e o dado chega na tela.**
+
+⚠️ **E É JUSTAMENTE POR FUNCIONAR QUE O DEFEITO APARECE:** nessa mesma PC, `enviado_ci = false` aqui
+dentro, e o arquivamento recusa dizendo *"a parcial ainda não foi encaminhada ao Controle Interno"*
+— **contradizendo o dado que a própria tela mostra ao lado**. A analista escreveu *"já está com
+encaminhamento ao conin no sgpe tbm"*, e tinha razão. **Pendência, não defeito do SGPe.**
+
+### ⚠️ O QUE FICA ABERTO
+
+- **As 192 PCs SEM dono**, ainda baixadas sem parecer. ⚠️ **NÃO ENTRARAM DE PROPÓSITO:** ninguém
+  pode confirmar o que elas dizem. Opções postas, nenhuma escolhida.
+- **`enviado_ci` contra o SGPe** — quando a tramitação diz que o processo está no CONIN e aqui está
+  `false`, oferecer registrar o encaminhamento em vez de só bloquear o arquivamento.
+- **Rodar `migracao_parecer_sigef_20261026.js`** quando houver conexão, para as próximas rodadas.
+- **A trava de conexão** existe só nesse script. ⚠️ **Todos os outros desta pasta ainda caem em
+  `localhost` sem avisar.**
+- Pendências antigas: o 5º relatório do CGE pelo sistema · a tela de Relatórios · a trilha
+  retroativa das 341 PCs · o caso Juliana · as 82 PCs `livre` com dono · as 52 parciais.
+
+### O QUE FOI PUBLICADO (26/10, noite)
+
+| repositório | commit | o quê |
+|---|---|---|
+| `sigpc-api` | `533151a` | a tradução, as duas travas da importação, os dois scripts, a reversão |
+| `sigpc-gt` | `b61a4fe` | o rótulo `📝 Parecer vindo do SIGEF`, nas duas cópias do mapa |
+
+⚠️ **O rótulo do front ainda não aparece em lugar nenhum:** a rodada foi pela API, que grava o evento
+`parecer` comum. Ele vale para quando o script do banco rodar.
+
+---
+
+
+## ▶ 26/10/2026 (manhã) — O ESTOQUE PASSOU A AVISAR O QUE O SERVIDOR JÁ SABIA
 
 **Começou com uma reclamação no grupo do WhatsApp** e terminou num achado de produto: havia
 **255 prestações em 120 TRs** no Estoque com a baixa **já registrada no SIGEF**, e o analista só
