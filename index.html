@@ -7784,7 +7784,10 @@ const bgBadge = (sit) => {
 const bgData = (d) => d ? new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR') : null
 
 /** O ponto do ciclo do C.I., em português. Espelha lib/ci.js — SITUACOES. */
-const BG_CI = { na_fila: 'Na fila do C.I.', com_analista: 'Devolvida ao analista', encerrado: 'Encerrada no C.I.' }
+// ⚠️ `no_ci_sgpe` entrou em 26/10/2026 — ver CI_ESTADOS. Sem ela a busca global mostraria a
+// chave crua no lugar da frase.
+const BG_CI = { na_fila: 'Na fila do C.I.', com_analista: 'Devolvida ao analista', encerrado: 'Encerrada no C.I.',
+                no_ci_sgpe: 'No C.I. (pelo SGPe)' }
 
 // O QUE O CADASTRO DIZ SOBRE O DONO — e o que ele NÃO diz.
 //
@@ -17168,6 +17171,10 @@ const AC_EV_LABEL = {
   // importação de 30/08 deixou de gravar — a baixa é de agosto e a linha é de outubro, e sem
   // o rótulo próprio pareceria uma segunda baixa dois meses depois.
   parecer_do_sigef:'📝 Parecer vindo do SIGEF',
+  // ⚠️ TRÊS FATOS DIFERENTES, TRÊS RÓTULOS: `ci` é o encaminhamento feito aqui dentro,
+  // `ci_pelo_sgpe` é a DEVOLUTIVA provada pela tramitação, e este é a IDA provada pela
+  // situação. Quem varre a trilha atrás de um não pode esbarrar no outro.
+  ci_ida_pelo_sgpe:'🏛 Ida ao C.I. pelo SGPe',
 };
 
 // ══════════════════════════════════════
@@ -17956,6 +17963,14 @@ const CI_ESTADOS = {
   na_fila:      { rot:'Na fila',                  fundo:'#EAF1F9', texto:'#1A4E8A', borda:'#C7D9EC' },
   com_analista: { rot:'Devolvido com ressalvas',  fundo:'#FFF3D6', texto:'#8A6100', borda:'#F0DDB0' },
   encerrado:    { rot:'C.I. de acordo',           fundo:'#F1F8E9', texto:'#2E7D32', borda:'#C5E1A5' },
+  // ⚠️ A IDA PROVADA PELO SGPe (26/10/2026) — E SEM ELA O BLOCO INTEIRO SOME: `pCiBloco`
+  // faz `if(!est) return ''`, então situação que não está neste mapa não desaparece com
+  // aviso, desaparece calada. São 68 parcelas que passam a ter esta situação.
+  //
+  // ⚠️ O MESMO AZUL DA FILA, DE PROPÓSITO: para quem olha, o estado é o mesmo — o processo
+  // está com o C.I. e não voltou. O que muda é COMO se soube, e isso o rótulo diz. Cor nova
+  // sugeriria um terceiro estado de fluxo, que não existe.
+  no_ci_sgpe:   { rot:'No C.I. (pelo SGPe)',      fundo:'#EAF1F9', texto:'#1A4E8A', borda:'#C7D9EC' },
 }
 
 let _pciMsgs = new Map()   // 'tr|parcela' -> mensagens já buscadas
@@ -19082,8 +19097,9 @@ async function pVerParecer(tr, num) {
       // Os três da fila de trabalho do C.I. — ver AC_EV_LABEL, que é a outra cópia deste mapa.
       ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
       ci_passou:'🏛 C.I. passou a demanda',
-      // A outra cópia é o `AC_EV_LABEL` — o porquê do rótulo próprio está lá.
-      parecer_do_sigef:'📝 Parecer vindo do SIGEF'}
+      // A outra cópia é o `AC_EV_LABEL` — o porquê dos rótulos próprios está lá.
+      parecer_do_sigef:'📝 Parecer vindo do SIGEF',
+      ci_ida_pelo_sgpe:'🏛 Ida ao C.I. pelo SGPe'}
     const hist = (j.data||[]).map(h => `
       <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--cb);font-size:11px;">
         <span style="font-weight:700;white-space:nowrap;">${evLabel[h.evento]||escHtml(h.evento)}</span>
