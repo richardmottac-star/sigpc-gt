@@ -332,7 +332,18 @@ foto, não contra o esperado.
 Foto no banco: `_backup_pre_inalcancaveis_20261027`. Registro:
 `reverter_inalcancaveis_20261027.json`, com o status anterior de cada uma das 1.471.
 
-**Restam as 16 `DV`** — sem decisão, de propósito. São 16, dá para olhar uma a uma.
+✅ **E AS 16 `DV` FORAM JUNTO, NO MESMO DIA.** Eu as separei por cautela e ofereci uma lista;
+o Richard perguntou para que serviria, e a medição respondeu: **não serviria para nada**. A
+diligência existia só no código do SIGEF — **0** com prazo definido, **0** com situação
+registrada, **0** com documento recebido, **0** em TR com dono. E cada uma estava numa TR que
+já fora inteira ao estoque (11 a 23 PCs livres cada): quem assumisse levaria tudo **menos**
+aquela, que ficaria para trás presa — o mesmo defeito, em miniatura, criado por mim.
+
+⚠️ **A LIÇÃO É SOBRE A CAUTELA VAZIA:** separar um caso "para o Richard decidir" sem antes
+medir o que há dentro dele não é prudência, é empurrar a medição para quem pediu o trabalho.
+O certo era medir primeiro e vir com a recomendação — foi o que a pergunta dele forçou.
+
+**Fim do dia: livres 5.861 → 7.348 · inalcançáveis 1.487 → 0 · produtividade 5.146, intacta.**
 
 ⚠️ **E A SENHA DO BANCO FICOU EXPOSTA** num print desta sessão. Trocar no Railway: projeto do
 `sigpc-api` → bloco Postgres → Settings → rotacionar. O serviço pega a nova sozinho, porque lê
