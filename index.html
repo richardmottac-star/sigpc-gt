@@ -17163,6 +17163,11 @@ const AC_EV_LABEL = {
   // em 17/09/2026, quando a linha do tempo da Gestão passou a mostrar a TR inteira.
   arquivamento:'📁 Arquivada', arquivamento_desfeito:'↩ Desarquivada',
   ci_decidiu:'🏛 C.I. decidiu', ci_reabriu:'🏛 C.I. reabriu',
+  // ⚠️ RÓTULO PRÓPRIO, E NÃO `parecer` (26/10/2026). Quem lê a linha do tempo precisa
+  // distinguir o parecer que a analista REGISTROU do rótulo que o SIGEF já afirmava e que a
+  // importação de 30/08 deixou de gravar — a baixa é de agosto e a linha é de outubro, e sem
+  // o rótulo próprio pareceria uma segunda baixa dois meses depois.
+  parecer_do_sigef:'📝 Parecer vindo do SIGEF',
 };
 
 // ══════════════════════════════════════
@@ -19076,7 +19081,9 @@ async function pVerParecer(tr, num) {
       transferencia_dispensa:'👥 PC transferida',
       // Os três da fila de trabalho do C.I. — ver AC_EV_LABEL, que é a outra cópia deste mapa.
       ci_assumiu:'🏛 C.I. assumiu a demanda', ci_devolveu:'🏛 C.I. devolveu à fila',
-      ci_passou:'🏛 C.I. passou a demanda'}
+      ci_passou:'🏛 C.I. passou a demanda',
+      // A outra cópia é o `AC_EV_LABEL` — o porquê do rótulo próprio está lá.
+      parecer_do_sigef:'📝 Parecer vindo do SIGEF'}
     const hist = (j.data||[]).map(h => `
       <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--cb);font-size:11px;">
         <span style="font-weight:700;white-space:nowrap;">${evLabel[h.evento]||escHtml(h.evento)}</span>
