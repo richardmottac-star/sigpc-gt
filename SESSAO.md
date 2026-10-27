@@ -3,8 +3,9 @@
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **27/10**, logo abaixo: o acervo de quem saiu
-> e a tela que falta publicar. Depois vêm os DOIS blocos de **26/10**: o da **noite** —
+> **não como estado**. O estado é o bloco de **27/10**, logo abaixo: o acervo de quem saiu,
+> a tela **já publicada** e a primeira TR que ela levantou. Depois vêm os DOIS blocos de
+> **26/10**: o da **noite** —
 > as 221 PCs que a importação do SIGEF baixou sem o parecer, as 29 com dono resolvidas e a
 > importação consertada — e o da **manhã**, em que o Estoque passou a avisar quais TRs já têm
 > baixa no SIGEF. O de **23/10** vem depois (as cinco TRs e o relatório de TRs do analista,
@@ -17,8 +18,9 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 **Um analista escreveu dizendo que uma prestação "não aparece na minha planilha para tratar"** —
 atualizou a página, deslogou, relogou, pesquisou, nada. Não era a tela. Eram **118 PCs abertas em
-25 TRs** no nome de analistas dispensados, invisíveis para todo mundo. ⏳ **A tela está escrita e
-provada; falta publicar.**
+25 TRs** no nome de analistas dispensados, invisíveis para todo mundo. ✅ **A tela está no ar**
+(`8a0afe4` na API, `e3068dc` no front), e **a primeira TR que ela levantou já foi resolvida** —
+ver a seção 7.
 
 ---
 
@@ -110,12 +112,95 @@ dispensado recriaria o problema que a tela existe para resolver.
 
 **`teste_acervo_saida.js`: 47 passaram, 0 falharam.**
 
+### 7. A PRIMEIRA COLHEITA DA TELA — `2021TR001610`, e o C.I. pedia o parecer
+
+A TR que a tela pôs em primeiro lugar. **O alarme estava certo, e a causa era mais simples do que
+o alarme sugeria.**
+
+| | |
+|---|---|
+| parcial 1 | `2021PC002087`, SCC13039/2022, R$ 123.490,00 |
+| baixada no SIGEF | **23/02/2026**, código `Baixa Regular Ressalva` |
+| `parecer_tipo` | **NULO** — a recarga de 05/08 gravou a baixa e não o parecer |
+| ao C.I. | 30/06/2026 |
+| o C.I. devolveu | **26/08/2026**, Atemilson, `ci_mensagem` 93 — texto: **"Com Parecer"** |
+
+⚠️ **A PENDÊNCIA DO C.I. ERA O PARECER QUE FALTAVA.** Não era análise nova nem documento novo: o
+técnico abriu a PC, viu baixa sem parecer na tela e pediu o parecer. É o **mesmo defeito das 221**,
+por outra carga (`recarga_parcial_20260805`, e não a importação de 30/08).
+
+⚠️ **E O HIGOR SAIU EM 12/06 — 75 DIAS ANTES DA DEVOLUÇÃO.** O C.I. devolveu para quem já não
+estava no GT, e a PC ficou **61 dias** esperando resposta de quem não ia responder. Nenhum número
+do sistema mostrava isso sozinho; foi a tela nova que levantou.
+
+✅ **RESOLVIDO** por `resolver_tr001610_20261027.js` — `corrigir_situacao` + `parecer`, o caminho
+das 28. **10 conferências, 0 falhas.** O parecer saiu da tradução do SIGEF
+(`Baixa Regular Ressalva` → **Parecer Regular com Ressalvas**), e **nada foi decidido aqui**.
+
+⚠️ **O CICLO DO C.I. SOBREVIVEU AO ESTORNO, E ERA O RISCO DESTE CONSERTO.**
+`SQL_TIRAR_DA_PRODUTIVIDADE` não menciona `enviado_ci`, `ci_situacao`, `ci_rodada` nem
+`dt_envio_ci` — conferido no código ANTES de rodar, e provado depois: a PC continua
+`com_analista`, rodada 2. **A produtividade ficou em 02/2026, no nome do Higor**, porque
+`data_efetiva` deriva da `data_baixa_sigef`, que nenhuma das duas rotas toca.
+
+⚠️ **O QUE EU AVISEI E NÃO ACONTECEU:** disse que a PC ficaria `estornada = true`. Não fica. Eu li
+o `SQL_TIRAR_DA_PRODUTIVIDADE`, que marca o estorno, e parei ali — o UPDATE do `POST
+/parcela/parecer` traz `estornada = false, data_estorno = NULL` no mesmo SET do parecer. **Ler
+metade do caminho e descrever o estado final pela metade lida** é o erro; as 28 passaram por aqui
+antes e ninguém mediu as duas colunas.
+
+⚠️ **E O REGISTRO DA REVERSÃO SAIU NO REPOSITÓRIO ERRADO** — `fs.writeFileSync` com caminho
+relativo resolve contra o **cwd**, não contra o arquivo, e o comando foi chamado de dentro do
+`sigpc-gt`. Corrigido para `__dirname`. A prova do que se gravou no banco não pode depender de
+onde o comando foi digitado.
+
+### 8. ⚠️ A DECISÃO DO RICHARD — correção que cai em trimestre JÁ INFORMADO à CGE
+
+O Richard parou a frente e perguntou, porque **"qualquer alteração mexe na produtividade do
+técnico e também nos relatórios que já foram encaminhados à CGE e não pode ter alteração"**.
+Medido antes de responder, e o que a medição mostrou:
+
+| | |
+|---|---|
+| o que mudou | **1 baixa**: `2021PC002087`, Higor, data efetiva **23/02/2026** |
+| antes | baixada **sem parecer** → não contava para ninguém |
+| a data | **não mudou** — `data_baixa_sigef` não é tocada por nenhuma das duas rotas |
+| o dono | **não mudou** — continua Higor |
+| 4º relatório (mai–jul/2026) | **não muda** — o recusado pela CGE e refeito em 20/10 |
+| 5º relatório (ago–out/2026) | **não muda** |
+| onde cai | **3º relatório (fev–abr/2026)**, já encaminhado |
+
+⚠️ **E A DIREÇÃO É A FAVOR, NÃO CONTRA.** Pela auditoria de 23/10 contra o Anexo Único, naquele
+período **nós contávamos 1.354 e a CGE apurou 1.372** — estávamos **18 ABAIXO**. A baixa existe no
+SIGEF desde fevereiro e a CGE a enxerga lá; o que faltava era o rótulo do nosso lado. **+1
+aproxima o nosso número do dela.**
+
+⚠️ **DOCUMENTO ENCAMINHADO NÃO SE ALTERA** — é ofício assinado, com o número que tinha no dia.
+Nada no banco reescreve um PDF que já saiu. O que muda é o número que o sistema devolve **se
+alguém gerar aquele trimestre de novo**. Eram 15 baixas nessa situação depois das 29 de 26/10;
+com esta, **16**.
+
+✅ **DECISÃO, 27/10/2026: "mantém, não desfaz".** Vale como precedente para as **202 PCs sem
+parecer** que restam: correção que apenas põe o rótulo numa baixa que o SIGEF já registrou entra,
+mesmo caindo em período já informado. ⚠️ **O que NÃO está decidido** é o que fazer quando a
+correção for para o outro lado — tirar baixa de um trimestre já informado. Essa ainda não
+apareceu, e quando aparecer **para e pergunta**.
+
 ### ⚠️ O QUE FICA ABERTO
 
-- **As 117 PCs**, intactas. A triagem é pela tela, depois de publicada.
-- **A `2021TR001610`** é a primeira da fila: o C.I. espera resposta há meses.
+- **A `2021TR001610` não acabou.** O parecer entrou, mas a parcial **continua `com_analista`,
+  rodada 2** — alguém precisa **responder ao C.I.**, e a TR precisa de dono: `donos_ativos` é
+  vazio. A **PC final** segue aberta, "Em análise", com prazo vencido em **28/09/2022** — 1.490
+  dias. A tela já mostra `sem_parecer: 0`, e o alarme do C.I. continua aceso, corretamente.
+- **As 116 PCs restantes**, intactas. A triagem é pela tela.
+- ⚠️ **UM DEFEITO MEU, AINDA DE PÉ:** `acervo-saida.js` conta `ci_esperando_resposta` por
+  `ci_situacao = 'com_analista'` **sem distinguir `ci_reabriu`**, como o `arquivamento.js:751`
+  faz. Numa PC reaberta pelo C.I., a frase "o C.I. devolveu com pendência" mente. Hoje não
+  aparece — é a única `com_analista` do acervo de quem saiu, e nela o evento foi decisão de
+  verdade (mensagem rodada 1) — mas o defeito existe.
 - **A causa:** nada hoje obriga o acervo aberto de um dispensado a ir a algum lugar. O sistema sabe
-  a `data_saida` e poderia avisar o coordenador no dia da dispensa.
+  a `data_saida` e poderia avisar o coordenador no dia da dispensa. ⚠️ **E nada avisa o C.I. de que
+  o analista para quem ele devolveu saiu** — foi isso que custou 61 dias aqui.
 
 ---
 
