@@ -3181,6 +3181,14 @@ const SB_ITENS = [
   { id:'transf', bloco:'coordenacao', rotulo:'Transferir prestações de contas', acao:'irTransferir()',
     pode:(u)=>u.perfil === 'superadmin',
     icone:'M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z' },
+  // ⚠️ O ACERVO DE QUEM SAIU (26/10/2026). Nasceu de um chamado: o analista Rafael não
+  // achava uma prestação na planilha dele — ela estava no nome do Guilherme, dispensado em
+  // agosto. Eram 118 PCs abertas em 25 TRs no nome de dois ex-analistas, e não havia UMA tela
+  // onde elas aparecessem. Só do superadmin, como o Transferir, porque decide destino de
+  // acervo alheio.
+  { id:'acsaida', bloco:'coordenacao', rotulo:'Acervo de quem saiu', acao:'irAcervoSaida()',
+    pode:(u)=>u.perfil === 'superadmin', badge:'sbAcSaidaBadge',
+    icone:'M16 17v-3H9v-4h7V7l5 5-5 5M14 2a2 2 0 0 1 2 2v2h-2V4H5v16h9v-2h2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9z' },
   { id:'aprov', bloco:'coordenacao', rotulo:'Aprovações', acao:'irAprovacoes()', pode:eCoord,
     badge:'sbAprovBadge',
     icone:'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z' },
@@ -17176,6 +17184,270 @@ const AC_EV_LABEL = {
   // situação. Quem varre a trilha atrás de um não pode esbarrar no outro.
   ci_ida_pelo_sgpe:'🏛 Ida ao C.I. pelo SGPe',
 };
+
+
+// ══════════════════════════════════════
+//  ACERVO DE QUEM SAIU — a triagem antes de decidir o destino  (26/10/2026)
+//
+//  ⚠️ ELA NÃO DECIDE NADA SOZINHA, e é esse o pedido do Richard: *"vai para essa tela e
+//  depois analisamos e encaminhamos para o estoque ou para um analista direto"*, com
+//  *"descrição completa para entender o que fazer, porque alguém irá assumir então precisa
+//  saber como estão"*. Por isso cada TR vem com o diagnóstico inteiro, e a recomendação
+//  aparece com o PORQUÊ ao lado — nunca sozinha.
+//
+//  ⚠️ QUEM CLASSIFICA É O SERVIDOR (`lib/acervo-saida.js`). Esta tela não decide o que é
+//  setor do C.I., nem o que trava, nem o destino: ela desenha o que vem pronto. Repetir a
+//  regra aqui faria as duas divergirem no primeiro ajuste — é a lição do mapa de nomes
+//  curtos, que chegou a ter três cópias.
+// ══════════════════════════════════════
+
+let _acSaida = null
+
+// As três saídas, com a cor e a palavra. O texto do porquê vem do servidor.
+const AC_DESTINOS = {
+  estoque:     { rot:'Estoque',             fundo:'#F1F8E9', texto:'#2E7D32', borda:'#C5E1A5' },
+  analista:    { rot:'Entregar a alguém',   fundo:'#EAF1F9', texto:'#1A4E8A', borda:'#C7D9EC' },
+  resolver_ci: { rot:'Resolver o C.I.',     fundo:'#FFF3D6', texto:'#8A6100', borda:'#F0DDB0' },
+}
+
+async function irAcervoSaida() {
+  if(perfilEfetivo(U) !== 'superadmin') { toast('Esta tela é do técnico do sistema.','err'); return }
+  ativarMenu('acsaida')
+  document.getElementById('BODY').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;">Acervo de quem saiu</div>
+        <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">
+          Prestações abertas no nome de analistas dispensados. Elas não aparecem na planilha
+          de ninguém — decida aqui para onde vão.</div>
+      </div>
+      <button onclick="irAcervoSaida()" class="btn-buscar" style="height:30px;font-size:11px;">↻ Atualizar</button>
+    </div>
+    <div id="acSaidaCont"><div class="loading"><div class="spin"></div>Carregando...</div></div>`
+  await acSaidaCarregar()
+}
+
+async function acSaidaCarregar() {
+  try {
+    const r = await fetch(`${API_URL}/acervo_saida?usuario_id=${U.id}`)
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    _acSaida = j.data
+    acSaidaPintar()
+  } catch(e) {
+    document.getElementById('acSaidaCont').innerHTML =
+      `<div style="color:var(--r);padding:16px;">Erro: ${escHtml(e.message)}</div>`
+  }
+}
+
+function acSaidaPintar() {
+  const d = _acSaida
+  const cont = document.getElementById('acSaidaCont')
+  if(!cont) return
+  if(!d || !d.trs.length) {
+    cont.innerHTML = `<div style="text-align:center;padding:36px;color:var(--ct);">
+      <div style="font-size:15px;font-weight:700;color:var(--v);">Nada pendente.</div>
+      <div style="margin-top:6px;font-size:12px;">Nenhuma prestação aberta no nome de quem saiu.</div>
+    </div>`
+    return
+  }
+
+  /* ⚠️ O TOPO DIZ O TAMANHO DO PROBLEMA ANTES DA LISTA. Quem abre esta tela precisa saber
+     se são 3 TRs ou 25 sem rolar — e quantas estão com o C.I. esperando resposta, que é o
+     único número aqui que significa alguém parado esperando. */
+  const alarme = d.trs.filter(t => t.alerta).length
+  const topo = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      ${acSaidaCaixa(d.total_trs, d.total_trs===1?'TR':'TRs', '#1A4E8A', '#EAF1F9')}
+      ${acSaidaCaixa(d.total_pcs, 'PCs abertas', '#1A4E8A', '#EAF1F9')}
+      ${Object.entries(d.por_destino||{}).map(([k,v]) =>
+        acSaidaCaixa(v, (AC_DESTINOS[k]||{}).rot||k, (AC_DESTINOS[k]||{}).texto||'#333',
+                     (AC_DESTINOS[k]||{}).fundo||'#F5F5F5')).join('')}
+      ${alarme ? acSaidaCaixa(alarme, 'com o C.I. esperando', '#B3261E', '#FDE8EA') : ''}
+    </div>
+    <div style="font-size:11.5px;color:var(--ct);margin-bottom:10px;">
+      Ex-analistas: <b>${d.ex_analistas.map(escHtml).join(' · ')}</b></div>`
+
+  cont.innerHTML = topo + d.trs.map(acSaidaCard).join('')
+}
+
+const acSaidaCaixa = (n, rot, cor, fundo) => `
+  <div style="background:${fundo};border:1px solid ${cor}33;border-radius:9px;padding:9px 14px;min-width:92px;">
+    <div style="font-size:20px;font-weight:800;color:${cor};line-height:1;">${n}</div>
+    <div style="font-size:10.5px;color:${cor};margin-top:3px;">${escHtml(rot)}</div>
+  </div>`
+
+function acSaidaCard(t) {
+  const dest = AC_DESTINOS[t.destino] || { rot:t.destino, fundo:'#F5F5F5', texto:'#333', borda:'#DDD' }
+  const h = t.heranca
+  const chave = `${t.tr}|${t.ex_dono.id}`
+
+  /* ⚠️ AS PÍLULAS SÃO O "COMO ESTÁ" EM UMA OLHADA, e só aparecem quando há o que dizer:
+     pílula de zero vira ruído e some com o que importa. */
+  const pil = (txt, fundo, cor, borda, title) => `<span title="${escHtml(title||'')}" style="display:inline-block;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;background:${fundo};color:${cor};border:1px solid ${borda};">${txt}</span>`
+  const pils = []
+  if(h.ci_esperando_resposta) pils.push(pil(`⚠ C.I. espera resposta (${h.ci_esperando_resposta})`, '#FDE8EA', '#B3261E', '#F5C2C7', 'O Controle Interno devolveu com pendência e espera resposta de quem saiu'))
+  else if(h.no_ci) pils.push(pil(`🏛 ${h.no_ci} no C.I.`, '#EAF1F9', '#1A4E8A', '#C7D9EC', h.ci_codigos.join(' · ')))
+  if(h.diligencias) pils.push(pil(`📨 ${h.diligencias} em diligência`, '#FFF3D6', '#8A6100', '#F0DDB0', h.diligencias_codigos.join(' · ')))
+  if(h.prazo_diligencia_vencido) pils.push(pil(`⏰ ${h.prazo_diligencia_vencido} com prazo de diligência vencido`, '#FDE8EA', '#B3261E', '#F5C2C7'))
+  if(h.vencidas) pils.push(pil(`${h.vencidas} com prazo vencido${h.atraso_dias?` — ${h.atraso_dias} dias`:''}`, '#FAEEDA', '#8A5A00', '#E8D5B0', h.prazo_mais_antigo ? `o mais antigo venceu em ${planData(h.prazo_mais_antigo)}` : ''))
+  if(h.sem_parecer) pils.push(pil(`${h.sem_parecer} baixada sem parecer`, '#FDF6E7', '#8A6100', '#EFDCA6'))
+  if(t.sgpe) pils.push(pil(`📍 ${escHtml(t.sgpe.setor)}${t.sgpe.dias!=null?` — ${t.sgpe.dias} dias`:''}`, t.sgpe.no_ci?'#EAF1F9':'#F5F5F5', t.sgpe.no_ci?'#1A4E8A':'#555', t.sgpe.no_ci?'#C7D9EC':'#DDD', 'Onde o processo está no SGPe agora'))
+
+  return `
+  <div style="border:1.5px solid ${t.alerta?'#F5C2C7':'var(--cb)'};border-radius:11px;margin-bottom:11px;background:#fff;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 15px;background:${t.alerta?'#FFF7F7':'#FCFDFC'};flex-wrap:wrap;">
+      <div style="min-width:240px;flex:1;">
+        <div style="font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;">${escHtml(t.tr)}</div>
+        <div style="font-size:11.5px;color:var(--ct);margin-top:2px;">${escHtml(t.entidade||'—')}</div>
+        <div style="font-size:11px;color:var(--ct);margin-top:4px;">
+          Era de <b>${escHtml(t.ex_dono.nome)}</b>, que saiu em ${planData(t.ex_dono.saiu_em)}
+          ${t.ex_dono.ha_dias!=null?` — há ${t.ex_dono.ha_dias} dias`:''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:21px;font-weight:800;color:var(--v);line-height:1;">${t.abertas}</div>
+        <div style="font-size:10px;color:var(--ct);">PC${t.abertas>1?'s':''} aberta${t.abertas>1?'s':''}</div>
+        <div style="font-size:10.5px;color:var(--ct);margin-top:3px;">${planMoeda(t.valor_aberto)}</div>
+      </div>
+    </div>
+
+    ${pils.length ? `<div style="padding:10px 15px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--cl);">${pils.join('')}</div>` : ''}
+
+    ${/* ⚠️ A RECOMENDAÇÃO NUNCA APARECE SOZINHA. O selo sem o porquê viraria uma ordem que
+          ninguém sabe de onde veio — e o Richard pediu justamente o contrário. */''}
+    <div style="padding:11px 15px;border-top:1px solid var(--cl);background:${dest.fundo};">
+      <div style="display:flex;gap:9px;align-items:flex-start;">
+        <span style="flex-shrink:0;display:inline-block;font-size:10.5px;font-weight:800;padding:4px 11px;border-radius:20px;background:#fff;color:${dest.texto};border:1px solid ${dest.borda};">${escHtml(dest.rot)}</span>
+        <div style="font-size:11.5px;color:${dest.texto};line-height:1.5;">${escHtml(t.por_que)}</div>
+      </div>
+    </div>
+
+    <div style="padding:10px 15px;border-top:1px solid var(--cl);display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-acao" onclick="acSaidaVerPcs('${escHtml(t.tr)}')" ${vcOff()}>👁 Ver as PCs</button>
+      <button class="btn-acao" onclick="acSaidaEntregar('${escHtml(chave)}')" ${vcOff()}>👤 Entregar a um analista</button>
+      ${/* ⚠️ O BOTÃO DO ESTOQUE SÓ EXISTE QUANDO O ESTOQUE ACEITA. Botão aceso que a rota
+            recusa é a armadilha 12 — e aqui o servidor já disse qual é o caso. */''}
+      ${t.destino === 'estoque'
+        ? `<button class="btn-acao" onclick="acSaidaEstoque('${escHtml(chave)}')" ${vcOff()}>📦 Mandar ao estoque</button>`
+        : `<span style="font-size:10.5px;color:var(--ct);">O estoque não aceita esta TR — veja o motivo acima.</span>`}
+      <span style="margin-left:auto;font-size:10.5px;color:var(--ct);">${escHtml(t.resumo)}</span>
+    </div>
+  </div>`
+}
+
+/* ⚠️ VAI PELA BUSCA GLOBAL, e nao desenha uma segunda lista de PCs aqui: ela ja mostra a
+   TR inteira, com as parciais, o dono de cada uma e o C.I. Uma segunda copia divergiria. */
+function acSaidaVerPcs(tr) {
+  irBuscaGlobal()
+  // o campo da TR e preenchido depois do innerHTML da busca, por isso o setTimeout
+  setTimeout(() => {
+    const c = document.getElementById('bgTr'); if(c) { c.value = tr; bgBuscar() }
+  }, 60)
+}
+
+function acSaidaEntregar(chave) {
+  const [tr, exId] = String(chave).split('|')
+  const t = (_acSaida?.trs||[]).find(x => x.tr===tr && String(x.ex_dono.id)===String(exId))
+  if(!t) { toast('TR não encontrada nesta lista.','err'); return }
+  /* ⚠️ A SUGESTÃO VEM MARCADA, mas a lista é a inteira: quem já responde pelo resto da TR é
+     o caminho natural, e não uma obrigação. */
+  const sugerido = (t.donos_ativos||[])[0] || ''
+  acSaidaModal(t, sugerido)
+}
+
+async function acSaidaEstoque(chave) {
+  const [tr, exId] = String(chave).split('|')
+  const t = (_acSaida?.trs||[]).find(x => x.tr===tr && String(x.ex_dono.id)===String(exId))
+  if(!t) return
+  if(!confirm(`Mandar a TR ${tr} ao estoque?\n\n${t.abertas} PC(s) voltam a ficar sem dono e `
+    + `aparecem no Estoque para qualquer analista assumir.\n\nAs já baixadas NÃO voltam: a `
+    + `produtividade continua de quem analisou.`)) return
+  try {
+    const r = await fetch(`${API_URL}/tr/devolver`, { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tr, usuario_id: U.id, motivo:'Redistribuição de carga',
+        detalhe:`Acervo aberto de ${t.ex_dono.nome}, que saiu em ${planData(t.ex_dono.saiu_em)}.` }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    toast(`${tr} foi ao estoque.`,'ok')
+    await acSaidaCarregar()
+  } catch(e) { toast(e.message,'err') }
+}
+
+/* O modal da entrega. ⚠️ A LISTA É A DE ANALISTAS ATIVOS, do cadastro — e o sugerido vem
+   marcado, mas nada impede escolher outro: quem já responde pelo resto da TR é o caminho
+   natural, não uma regra. */
+async function acSaidaModal(t, sugerido) {
+  if(!PED_ANALISTAS.length) {
+    try {
+      const ru = await fetch(`${API_URL}/usuarios?ativo=true`)
+      const ju = await ru.json()
+      PED_ANALISTAS = (ju.data || []).filter(u => u.perfil === 'analista' && u.nome)
+    } catch(_) { toast('Não consegui carregar a lista de analistas.','err'); return }
+  }
+  /* ⚠️ QUEM SAIU NÃO ENTRA NA LISTA: entregar o acervo de um dispensado a outro dispensado
+     recriaria o problema que esta tela existe para resolver. `data_saida` é quem responde. */
+  const opcoes = PED_ANALISTAS.filter(u => !u.data_saida)
+    .sort((a,b) => String(a.nome).localeCompare(String(b.nome),'pt-BR'))
+  const h = t.heranca
+  const avisos = []
+  if(h.ci_esperando_resposta) avisos.push(`<b>${h.ci_esperando_resposta}</b> PC com o Controle Interno esperando resposta — quem assumir precisa responder.`)
+  if(h.diligencias) avisos.push(`<b>${h.diligencias}</b> em diligência aberta${h.prazo_diligencia_vencido?`, ${h.prazo_diligencia_vencido} com o prazo já vencido`:``}.`)
+  if(h.vencidas) avisos.push(`<b>${h.vencidas}</b> com prazo vencido${h.atraso_dias?`, o mais antigo há ${h.atraso_dias} dias`:``}.`)
+  if(h.no_ci && !h.ci_esperando_resposta) avisos.push(`<b>${h.no_ci}</b> no ciclo do C.I., aguardando a devolutiva.`)
+
+  document.getElementById('moNLT').textContent = `Entregar ${t.tr}`
+  document.getElementById('moNLB').innerHTML = `
+    <div class="mci" style="margin-bottom:12px;">
+      <div style="font-size:12px;"><b>${escHtml(t.entidade||'—')}</b></div>
+      <div style="font-size:11.5px;color:var(--ct);margin-top:3px;">
+        <b>${t.abertas}</b> PC${t.abertas>1?'s':''} aberta${t.abertas>1?'s':''} · ${planMoeda(t.valor_aberto)}
+        · era de ${escHtml(t.ex_dono.nome)}</div>
+    </div>
+    ${/* ⚠️ O QUE A PESSOA VAI HERDAR, ANTES DE ELA ESCOLHER — é o pedido do Richard:
+          "alguém irá assumir então precisa saber como estão". Pôr isto depois do botão
+          seria informar quem já decidiu. */''}
+    ${avisos.length ? `<div style="background:#FFF7F7;border:1px solid #F5C2C7;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#B3261E;margin-bottom:5px;">O que quem assumir vai herdar</div>
+      <ul style="margin:0;padding-left:17px;font-size:11.5px;color:#7A2E2E;line-height:1.7;">
+        ${avisos.map(a => `<li>${a}</li>`).join('')}</ul></div>` : 
+      `<div style="font-size:11.5px;color:var(--v);background:var(--vbg);border-radius:8px;padding:9px 12px;margin-bottom:12px;">Acervo limpo: nada em diligência nem no C.I.</div>`}
+    <label style="font-size:11px;font-weight:700;display:block;margin-bottom:4px;">Entregar a</label>
+    <select id="acSaidaPara" style="width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:8px;font-size:13px;font-family:Barlow,sans-serif;">
+      <option value="">— escolha o analista —</option>
+      ${opcoes.map(u => `<option value="${u.id}" ${u.nome===sugerido?'selected':''}>${escHtml(u.nome)}${u.nome===sugerido?' — já responde pelo resto desta TR':''}</option>`).join('')}
+    </select>
+    <div style="font-size:10.5px;color:var(--ct);margin-top:6px;">
+      As PCs já baixadas não são transferidas: a produtividade delas continua de quem analisou.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button class="btn-acao" onclick="jfFechar('moNL')">Cancelar</button>
+      <button class="btn-acao" style="background:var(--v);color:#fff;"
+        onclick="acSaidaConfirmar('${escHtml(t.tr)}', ${t.ex_dono.id})">Entregar</button>
+    </div>`
+  document.getElementById('moNL').classList.add('open')
+  jfAbrir('moNL')
+}
+
+async function acSaidaConfirmar(tr, exId) {
+  const sel = document.getElementById('acSaidaPara')
+  const para = sel && sel.value
+  if(!para) { toast('Escolha o analista.','err'); return }
+  const nome = sel.options[sel.selectedIndex].text.split(' — ')[0]
+  const t = (_acSaida?.trs||[]).find(x => x.tr===tr && String(x.ex_dono.id)===String(exId))
+  try {
+    const r = await fetch(`${API_URL}/transferencia`, { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ usuario_id: U.id, de_id: exId, para_id: parseInt(para),
+        setorial_id: U.setorialFiltro || 'FCEE', trs: [tr],
+        motivo: `Acervo aberto de ${t?.ex_dono?.nome||'analista dispensado'}, que saiu em `
+          + `${planData(t?.ex_dono?.saiu_em)}. Entregue a ${nome} pela tela de acervo de quem saiu.` }) })
+    const j = await r.json()
+    if(j.error) throw new Error(j.error.message || JSON.stringify(j.error))
+    jfFechar('moNL')
+    toast(`${tr} entregue a ${nome}.`,'ok')
+    await acSaidaCarregar()
+  } catch(e) { toast(e.message,'err') }
+}
 
 // ══════════════════════════════════════
 //  A — CORRIGIR SITUAÇÃO

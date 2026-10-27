@@ -1,14 +1,121 @@
-# SIGPC-GT — ESTADO EM 26/10/2026
+# SIGPC-GT — ESTADO EM 27/10/2026
 
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado são os DOIS blocos de **26/10**, nesta ordem: o da **noite** —
+> **não como estado**. O estado é o bloco de **27/10**, logo abaixo: o acervo de quem saiu
+> e a tela que falta publicar. Depois vêm os DOIS blocos de **26/10**: o da **noite** —
 > as 221 PCs que a importação do SIGEF baixou sem o parecer, as 29 com dono resolvidas e a
 > importação consertada — e o da **manhã**, em que o Estoque passou a avisar quais TRs já têm
 > baixa no SIGEF. O de **23/10** vem depois (as cinco TRs e o relatório de TRs do analista,
 > **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre refeito, e o de
 > **19/10** com a causa da divergência com a CGE.
+
+---
+
+## ▶ 27/10/2026 — O ACERVO DE QUEM SAIU, E A TELA QUE FALTAVA
+
+**Um analista escreveu dizendo que uma prestação "não aparece na minha planilha para tratar"** —
+atualizou a página, deslogou, relogou, pesquisou, nada. Não era a tela. Eram **118 PCs abertas em
+25 TRs** no nome de analistas dispensados, invisíveis para todo mundo. ⏳ **A tela está escrita e
+provada; falta publicar.**
+
+---
+
+### 1. O CASO DO RAFAEL — e a causa não era o login
+
+`2020TR001198`, APAE de Itapoá, 2 PCs:
+
+| PC | dono | estado |
+|---|---|---|
+| parcial 1 | **Rafael** | baixada, Parecer Regular, no C.I. |
+| **FINAL** | **Guilherme** | **aberta, sem parecer** |
+
+O Guilherme saiu em **11/08/2026**. ⚠️ **PC de quem saiu não aparece na planilha de ninguém
+ativo** — e o Rafael, que tem o resto da TR e precisa fechá-la, não a enxergava.
+
+✅ **Resolvida por transferência:** a final passou para ele, e só ela — `SQL_MOVER` filtra
+`AND NOT baixada`, então a parcial 1 não foi tocada.
+
+### 2. ⚠️ NÃO ERA UM CASO — ERAM 118
+
+| ex-analista | saiu em | PCs abertas | TRs |
+|---|---|---:|---:|
+| Guilherme | 11/08/2026 | **91** | 10 |
+| Higor | 12/06/2026 | **27** | 15 |
+| | | **118** | **25** |
+
+**116 com prazo vencido · 43 com diligência aberta.** ⚠️ **SÓ A DO RAFAEL APARECEU** porque ele
+tinha o resto da TR e foi atrás. As outras 117 não têm quem pergunte por elas.
+
+⚠️ **E HÁ 21 PCs JÁ BAIXADAS** no mesmo caso. Elas ficam: a produtividade é de quem analisou.
+
+### 3. A DECISÃO MUDOU NO MEIO — e a segunda é melhor
+
+O primeiro desenho mandava as 118 direto ao estoque, com o script pronto e o dry-run rodado. O
+Richard parou: *"deveríamos ter uma tela dessas TR (…) aí vai para essa tela e depois analisamos e
+encaminhamos para o estoque ou para um analista direto"*, e completou com o requisito que mandou no
+desenho: *"com detalhe e situações de cada TR, descrição completa para entender o que fazer, porque
+alguém irá assumir então precisa saber como estão"*.
+
+⚠️ **NADA FOI PARA O ESTOQUE.** As 117 continuam como estavam, à espera da triagem.
+
+### 4. O QUE A REGRA JÁ BARRAVA — e que o lote esconderia
+
+⚠️ **3 TRs NÃO IAM AO ESTOQUE DE QUALQUER FORMA.** `devolucao.impedimento` recusa TR com PC no
+ciclo do C.I., porque devolver deixaria a resposta do Controle Interno sem dono:
+
+- `2020TR001198` — a do Rafael (resolvida por transferência)
+- `2021TR002087` — parcial 1 `na_fila`
+- ⚠️ **`2021TR001610` — A PIOR:** a parcial 1 está **`com_analista`**, ou seja, **o C.I. devolveu
+  com pendência e espera resposta do Higor, que saiu em 12/06**. Ninguém vai responder, e nada no
+  sistema dizia isso.
+
+### 5. A TELA — `Acervo de quem saiu`, no menu do superadmin
+
+`GET /acervo_saida` + `lib/acervo-saida.js`. **Ela não decide nada sozinha:** devolve um
+DIAGNÓSTICO por TR e uma recomendação **com o porquê ao lado**.
+
+| o que a linha mostra | |
+|---|---|
+| o ex-dono | nome, data de saída, há quantos dias |
+| o acervo | PCs abertas, parcelas, valor |
+| **a herança** | diligências (e quais), prazo de diligência vencido, prazo mais antigo e o atraso em dias, PCs no C.I. e em que estado, baixadas sem parecer |
+| o SGPe | onde o processo está agora, há quantos dias |
+| o destino | Estoque · Entregar a alguém · Resolver o C.I., **com a frase do motivo** |
+
+⚠️ **A RECOMENDAÇÃO NUNCA DISCORDA DA REGRA QUE MANDA.** Quem decide de verdade é
+`devolucao.impedimento`; recomendar "estoque" para uma TR que o estoque recusa seria mandar o
+coordenador num clique que falha — a armadilha 12. **A seção 4 do teste compara as duas em 5
+casos.** E o botão do estoque **só existe** quando o estoque aceita.
+
+⚠️ **O BOTÃO "ENTREGAR" MOSTRA A HERANÇA ANTES DA ESCOLHA**, não depois: pôr isso embaixo do botão
+seria informar quem já decidiu.
+
+⚠️ **E QUEM SAIU NÃO ENTRA NA LISTA DE DESTINOS** — entregar o acervo de um dispensado a outro
+dispensado recriaria o problema que a tela existe para resolver.
+
+### 6. ⚠️ OS ERROS DESTE BLOCO, PARA NÃO SE REPETIREM
+
+- **`HOJE_BR` É UMA STRING SQL, NÃO UMA FUNÇÃO.** Chamei `datas.HOJE_BR()`. O `hoje` agora vem do
+  BANCO, com a mesma expressão do resto do sistema — e **o fuso não é detalhe**: o Postgres do
+  Railway roda em UTC, e depois das 21h o `CURRENT_DATE` dele já virou. Os dias de atraso sairiam
+  um a mais todas as noites.
+- ⚠️ **CRASE DENTRO DE ASPAS DUPLAS NO BASH É SUBSTITUIÇÃO DE COMANDO.** Um patch escrito assim
+  **apagou a consulta inteira** (`cli.query()` sem argumento) e o `node --check` passou, porque é
+  sintaticamente válido. É a armadilha 10 por outra porta — a do shell, não a do template literal.
+- **`sbMarcar` e `bgAbrir` não existem** — são `ativarMenu` e `irBuscaGlobal`. Chamar função
+  inexistente é erro de runtime, e `node --check` não pega: por isso o `checar_tela.js`, que prova
+  que a tela não chama nada que não exista e define tudo que promete.
+
+**`teste_acervo_saida.js`: 47 passaram, 0 falharam.**
+
+### ⚠️ O QUE FICA ABERTO
+
+- **As 117 PCs**, intactas. A triagem é pela tela, depois de publicada.
+- **A `2021TR001610`** é a primeira da fila: o C.I. espera resposta há meses.
+- **A causa:** nada hoje obriga o acervo aberto de um dispensado a ir a algum lugar. O sistema sabe
+  a `data_saida` e poderia avisar o coordenador no dia da dispensa.
 
 ---
 
