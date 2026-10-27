@@ -92,9 +92,14 @@ console.log('\n═══ 3. O CASO REAL — como o acervo esta gravado ═══
 
 console.log('\n═══ 4. QUEM BUSCA NA API, QUEM BUSCA NO CLIENTE ═══');
 {
-  // Tres telas mandam `busca` para a API e NAO filtram localmente.
+  // Quatro telas mandam `busca` para a API e NAO filtram localmente.
+  //
+  // ⚠️ ERAM TRES ATE A TELA DE TRANSFERENCIA ENTRAR: `buscar` (Estoque de TRs), `relBuscar`
+  // (Relatorios), `buscarPlan` (Minha Planilha) e `trfCarregarTrs` (Transferir prestacoes).
+  // O numero sobe aqui quando uma tela nova delegar a busca ao servidor — que e o que se quer.
+  // Se ele parar de bater, a pergunta e "quem passou a filtrar no cliente?", nao "mude o numero".
   const mandam = (html.match(/(params|p)\.set\('busca',/g) || []).length;
-  conf(mandam === 3, `${mandam} telas mandam busca para a API (Estoque de TRs, Relatorios, Minha Planilha)`);
+  conf(mandam === 4, `${mandam} telas mandam busca para a API (Estoque, Relatorios, Minha Planilha, Transferir)`);
 
   // Minha Planilha: o filtro de cliente saiu.
   conf(!/pcs = pcs\.filter\(p => \(p\.tr\|\|''\)\.toLowerCase\(\)/.test(html), 'Minha Planilha nao filtra mais no cliente');
@@ -186,7 +191,12 @@ console.log('\n═══ 4c. ADMIN — CPF com e sem mascara, e nome nulo ══
     const els = {};
     const doc = { getElementById: (id) => els[id] || null };
     const ctxA = {
+      // ⚠️ `perfilEfetivo` ENTROU NO DUBLE em 27/10/2026: o `adminFiltrar` passou a desenhar o
+      // botao Excluir sob `perfilEfetivo(U)`, e sem ele no contexto o teste INTEIRO morria de
+      // ReferenceError — nem chegava a medir a busca. Dubla o que a funcao faz de verdade:
+      // fora do modo "agir pela conta de", o papel efetivo e o proprio perfil.
       console, document: doc, _admUsers: users, U: { perfil: 'superadmin' },
+      perfilEfetivo: (u) => (u && u.perfil) || null,
       termoBusca: ctx.termoBusca, soDigitos: ctx.soDigitos,
       perfilLabel: () => 'x', admPodeGerenciar: () => true,
       // Desde 12/08 o `adminFiltrar` também alimenta a seleção em bloco: guarda os ids

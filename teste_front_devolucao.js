@@ -72,8 +72,12 @@ conf(/no Controle Interno/.test(abrir), 'o quadro mostra quantas estao no C.I.')
 // ─────────────────────────────────────────────────────────────
 secao('6. A GUARDA DA TELA E CONVENIENCIA, NAO GARANTIA');
 
-conf(/U\.perfil !== 'superadmin'[\s\S]{0,80}?Ação restrita ao superadmin/.test(abrir),
-     'a tela recusa quem nao e superadmin');
+// ⚠️ `perfilEfetivo(U)`, E NAO `U.perfil`. A guarda passou a ler o papel EFETIVO, que e o
+// que vale no modo "agir pela conta de" — um superadmin agindo como analista nao e
+// superadmin para efeito de decisao. O teste casava a forma antiga e ficou vermelho sobre
+// codigo que tinha MELHORADO; casar `U.perfil` de novo seria pedir a volta do furo.
+conf(/perfilEfetivo\(U\) !== 'superadmin'[\s\S]{0,80}?Ação restrita ao superadmin/.test(abrir),
+     'a tela recusa quem nao e superadmin — pelo papel EFETIVO');
 // ⚠️ Devolver TR é uma das QUATRO que continuam travadas: é decisão de coordenação SOBRE o
 // trabalho do analista, não o trabalho dele. O texto deixou de dizer "modo leitura" em 14/08,
 // porque o modo passou a escrever — o que se prova aqui é a RECUSA, não a palavra.
@@ -92,7 +96,7 @@ const iCard = html.indexOf('const baixadaTr = planTrConcluida(r)');
 const fCard = html.indexOf('function planRenderPag()', iCard);
 const cartao = html.slice(iCard, fCard > iCard ? fCard : iCard + 9000);
 conf(/abrirDevM\('\$\{escHtml\(r\.tr\)\}'\)/.test(cartao), 'o cartao tem o botao Devolver');
-conf(/U\.perfil === 'superadmin' && !baixadaTr && !verComoAtivo\(\)/.test(cartao),
+conf(/perfilEfetivo\(U\) === 'superadmin' && !baixadaTr && !verComoAtivo\(\)/.test(cartao),
      'so superadmin, so em TR nao concluida, e nao no modo leitura');
 conf(/event\.stopPropagation\(\);abrirDevM/.test(cartao),
      'e o clique nao expande a TR junto');

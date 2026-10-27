@@ -489,8 +489,24 @@ console.log('\n═══ O SINO NO MODO: LE do alvo(), ESCREVE no U.id (24/08/20
        'e um erro do servidor nao zera o sino em silencio');
 
   // ── as duas ESCRITAS continuam no U.id
+  // ⚠️ SAO TRES DESDE QUE O `sinoMarcarVistas` NASCEU: marcar-uma (`notifMarcarLida`),
+  // marcar-as-vistas-ao-abrir (`sinoMarcarVistas`) e marcar-todas (`sinoMarcarTodas`). O
+  // numero subiu, a REGRA nao mudou — e a regra e a linha de baixo: nenhuma usa o `alvo()`.
   const escritas = (html.match(/destinatario_id: U\.id/g) || []).length;
-  conf(escritas === 2, 'marcar-uma e marcar-todas continuam com U.id', String(escritas));
+  conf(escritas === 3, 'as TRES escritas continuam com U.id', String(escritas));
+  // ⚠️ E CADA UMA TEM A SUA TRAVA, que e o que de fato protege — o numero acima so conta.
+  // As duas que varrem em lote recusam o modo ligado; a de UMA recusa pela POSSE, que e mais
+  // forte: ela nem depende de o modo estar ligado para nao marcar o aviso de outro.
+  for (const fn of ['sinoMarcarVistas', 'sinoMarcarTodas']) {
+    const i = html.indexOf(`function ${fn}(`);
+    conf(i > 0 && /verComoAtivo\(\)/.test(html.slice(i, i + 700)),
+         `${fn} recusa o modo "agir pela conta de"`);
+  }
+  {
+    const i = html.indexOf('function notifMarcarLida(');
+    conf(i > 0 && /Number\(n\.destinatario_id\) === Number\(U\.id\)/.test(html.slice(i, i + 500)),
+         'e o marcar-uma trava pela POSSE, que vale com o modo desligado tambem');
+  }
   conf(!/destinatario_id: alvo\(\)/.test(html), 'e NENHUMA escrita usa o alvo()');
 
   // ⚠️ O MOTIVO DA ASSIMETRIA, escrito no codigo para nao se perder: notificacao lida e
@@ -524,8 +540,9 @@ console.log('\n═══ O SINO NO MODO: LE do alvo(), ESCREVE no U.id (24/08/20
   const iAg = html.indexOf('async function notifAgir');
   conf(/await notifMarcarLida\(notifId\)/.test(html.slice(iAg, iAg + 300)),
        'e os botoes do aviso de repasse, tambem');
-  conf((html.match(/destinatario_id: U\.id/g) || []).length === 2,
-       'e continuam sendo DUAS as escritas com U.id');
+  // (a secao de cima ja conta as TRES e prova a trava de cada uma; aqui e o fecho da regra)
+  conf((html.match(/destinatario_id: U\.id/g) || []).length === 3,
+       'e continuam sendo TRES as escritas com U.id');
 
   // ── marcar-todas tem trava propria, alem de sumir da tela
   const iM = html.indexOf('async function sinoMarcarTodas');

@@ -267,6 +267,12 @@ console.log('\n═══ 9. O INDICADO DO MOTIVO 1 E LISTA FECHADA (03/09/2026) 
     PED_PREVIA: { pode: true, motivo_bloqueio: null,
                   motivos: [{ id: 'analise_anterior', exigeIndicado: true }, { id: 'outro' }] },
     _motivo: '',
+    // ⚠️ `U` ENTROU NO DUBLE em 27/10/2026, por causa da regra de 26/10: o `devIndicadoPintar`
+    // tira o PROPRIO SOLICITANTE da lista de indicados, e para isso le `U.id`. Sem `U` no
+    // contexto o teste morria de ReferenceError antes de medir qualquer coisa. O id 99 e de
+    // proposito: nao e nenhum dos analistas da lista, entao a ordenacao continua sendo medida
+    // sobre os quatro — e logo abaixo ha um caso que prova a regra em si.
+    U: { id: 99, nome: 'Quem pede', perfil: 'analista' },
     document: { getElementById: (id) => els[id] || null, querySelector: () => null },
   };
   vm.createContext(c2);
@@ -286,6 +292,27 @@ function _setMotivo(m){ _motivo = m }
   c2.devIndicadoPintar();
 
   const opts = [...els.devIndicado.innerHTML.matchAll(/<option value="(\d+)">([^<]+)</g)];
+  // ⚠️ A REGRA DE 26/10/2026, provada aqui e nao so dublada: o proprio solicitante SAI da
+  // lista. Escolher a si mesmo pede para transferir a TR de alguem para essa mesma pessoa, e
+  // a aprovacao recusa com "o analista indicado e o proprio solicitante" — aconteceu duas
+  // vezes em 25/10, com a mesma pessoa, e os dois pedidos ficaram travados na fila.
+  {
+    const comigo = [{ id: 45, nome: 'Juliana de Souza' }, { id: 99, nome: 'Quem pede' }];
+    c2._setAnalistas(comigo);
+    c2.devIndicadoPintar();
+    const nomes = [...els.devIndicado.innerHTML.matchAll(/<option value="(\d+)">([^<]+)</g)]
+      .map((m) => m[2]);
+    conf(JSON.stringify(nomes) === JSON.stringify(['Juliana de Souza']),
+         'o PROPRIO solicitante nao aparece entre os indicados', JSON.stringify(nomes));
+    // e a lista volta ao que era, senao os testes seguintes medem outra coisa
+    c2._setAnalistas([
+      { id: 45, nome: 'Juliana de Souza' },
+      { id: 46, nome: 'Marlene Teodoro Ramos da Silva' },
+      { id: 19, nome: 'Ândrea Zamboni' },
+      { id: 22, nome: 'Ana Claudia' },
+    ]);
+    c2.devIndicadoPintar();
+  }
   conf(JSON.stringify(opts.map((m) => m[2]))
        === JSON.stringify(['Ana Claudia', 'Ândrea Zamboni', 'Juliana de Souza', 'Marlene Teodoro Ramos da Silva']),
        'ordenada por nome, e o acento no lugar certo (pt-BR)', JSON.stringify(opts.map((m) => m[2])));

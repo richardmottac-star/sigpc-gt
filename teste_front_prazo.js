@@ -179,7 +179,16 @@ console.log('\n═══ 9. AS FAIXAS SAO UMA SO — cor, balao e filtro ══�
   conf(!/pa\.maxDias >= -30/.test(html), 'a borda -30 solta do filtro sumiu');
 
   // e a terceira copia da conta de dias tambem
-  conf(!/const diasDe = /.test(html), 'a copia local `diasDe` foi removida');
+  //
+  // ⚠️ O QUE NAO PODE EXISTIR E A CONTA, NAO O NOME. Este teste procurava a string
+  // `const diasDe = ` e passou a acusar dois HOMONIMOS que nao contam prazo nenhum: o do
+  // painel admin (dias desde o ultimo acesso) e o do acervo (dias no setor do SGPe, que nem
+  // calcula — le um numero pronto). Medir o nome e vermelho sobre codigo certo; o que a
+  // regra guarda e que ninguem refaca a conta de `dt_limite_pc` a mao em vez de chamar
+  // `prazoDias`, e e isso que se mede agora.
+  const contaAMao = (html.match(/dt_limite_pc[^\n]{0,120}?(86400000|Date\.parse|getTime\(\))/g) || []);
+  conf(contaAMao.length === 0, 'ninguem refaz a conta de dt_limite_pc a mao',
+       contaAMao.join(' | ').slice(0, 160));
   conf(/prazoDias\(x\.dt_limite_pc\)/.test(html), 'o resumo da parcial usa prazoDias');
 }
 
