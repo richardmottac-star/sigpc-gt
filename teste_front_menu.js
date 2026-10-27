@@ -145,8 +145,13 @@ console.log('\n═══ 2b. O PAPEL ATIVO MANDA NO MENU ═══');
   // exatamente o que esta secao existe para provar.
   // ⚠️ E SAO 18 DESDE 13/09/2026: 'arquiv' (PCs e TRs arquivadas), da coordenacao — `pode:eCoord`,
   // e no papel analista o superadmin nao e coordenador.
+  // ⚠️ E SAO 19 DESDE 26/10/2026: 'acsaida' (Acervo de quem saiu), tambem so-superadmin. Como
+  // as de 26-31/08, ela NAO precisou de excecao escrita a mao — cai pela mesma regra do papel
+  // efetivo. E e por isso que ela entra nesta lista em vez de o numero ser afrouxado: o que
+  // esta secao prova e que toda tela de coordenacao some no papel analista, inclusive a ultima.
   const SOMEM = ['board','rel','vercomo','coord','aprov','afast','estlog','ci','faixa','recado',
-                 'admin','bglobal','prior','config','estornar','transf','acomp','arquiv'];
+                 'admin','bglobal','prior','config','estornar','transf','acomp','arquiv',
+                 'acsaida'];
   const comoTec = idsDe(superad);
   const comoAn  = idsDe(superAn);
 
@@ -226,12 +231,20 @@ console.log('\n═══ 3b. RELATORIOS: VOLTOU PARA A COORDENACAO, COM GUARDA �
   conf(idsDe(superad).includes('rel'), 'e para o superadmin');
   // ⚠️ O que importa: tirar do menu SEM por a guarda deixaria a tela alcancavel por quem
   // soubesse o caminho — a mesma incoerencia que a reorganizacao veio corrigir.
-  conf(/function irRel\(\)\s*\{[\s\S]{0,400}?if\(!\['coordenador','superadmin'\]\.includes\(U\.perfil\)\)[\s\S]{0,120}?return \}/.test(html),
+  // ⚠️ A GUARDA LE `perfilEfetivo(U)`, E NAO `U.perfil` — e tem de ser assim: no modo "agir
+  // pela conta de", um superadmin agindo como analista NAO entra na tela de Relatorios. O
+  // teste casava a forma antiga e ficou vermelho sobre codigo que tinha melhorado.
+  conf(/function irRel\(\)\s*\{[\s\S]{0,400}?if\(!\['coordenador','superadmin'\]\.includes\(perfilEfetivo\(U\)\)\)[\s\S]{0,120}?return \}/.test(html),
        'IR REL TEM GUARDA DE ENTRADA — nao basta sumir do menu');
   // E a guarda vem antes de qualquer coisa que a tela desenhe.
+  //
+  // ⚠️ O QUE SE MEDE E A GUARDA, NAO A PALAVRA "U.perfil". Dentro de `irRel` o `U.perfil`
+  // aparece DEPOIS do `ativarMenu`, nos rotulos `isAdmin`/`isCoordi` — que nao sao guarda
+  // nenhuma. Casar o primeiro `U.perfil` media o rotulo e dizia que a guarda estava atrasada.
   const i = html.indexOf('function irRel()');
   const bloco = html.slice(i, i + 700);
-  conf(bloco.indexOf('U.perfil') < bloco.indexOf('ativarMenu'),
+  conf(bloco.indexOf('perfilEfetivo(U)') >= 0
+    && bloco.indexOf('perfilEfetivo(U)') < bloco.indexOf('ativarMenu'),
        'e a guarda vem ANTES de a tela comecar a montar');
 }
 

@@ -47,8 +47,11 @@ ativo** — e o Rafael, que tem o resto da TR e precisa fechá-la, não a enxerg
 | Higor | 12/06/2026 | **27** | 15 |
 | | | **118** | **25** |
 
-**116 com prazo vencido · 43 com diligência aberta.** ⚠️ **SÓ A DO RAFAEL APARECEU** porque ele
-tinha o resto da TR e foi atrás. As outras 117 não têm quem pergunte por elas.
+**43 com diligência aberta.** ⚠️ **SÓ A DO RAFAEL APARECEU** porque ele tinha o resto da TR e
+foi atrás. As outras 117 não têm quem pergunte por elas.
+
+⚠️ **O "116 COM PRAZO VENCIDO" QUE ESTAVA AQUI ERA DEFEITO MEU** — corrigido em 27/10/2026, ver
+a seção 9.
 
 ⚠️ **E HÁ 21 PCs JÁ BAIXADAS** no mesmo caso. Elas ficam: a produtividade é de quem analisou.
 
@@ -186,12 +189,166 @@ mesmo caindo em período já informado. ⚠️ **O que NÃO está decidido** é 
 correção for para o outro lado — tirar baixa de um trimestre já informado. Essa ainda não
 apareceu, e quando aparecer **para e pergunta**.
 
+### 9. ⚠️ A TELA MOSTRAVA URGÊNCIA QUE NÃO EXISTE — o prazo que não era prazo
+
+O Richard perguntou o que, dos três passos que restavam na 1610, mexeria na produtividade ou nos
+relatórios da CGE. **Nenhum.** Medido coluna por coluna:
+
+| ação | o que grava | produtividade | relatório CGE |
+|---|---|:-:|:-:|
+| responder ao C.I. | só `ci_situacao`: `com_analista` → `na_fila`, e a mensagem | não | não |
+| entregar a TR | `analista_id`, `analista_nome`, `dt_assumida` — **com `AND NOT baixada`** | não | não |
+| a PC final | nada hoje: `baixada = false`, sem parecer, sem baixa no SIGEF | não conta | não |
+
+⚠️ **O `AND NOT baixada` DO `SQL_MOVER` É O QUE GARANTE A LINHA 2** (`lib/transferencia.js:174`):
+a parcial 1 está baixada, então a transferência **não a toca** — a produtividade de 23/02 fica com
+o Higor mesmo que a TR passe para outra pessoa. Só a PC final, aberta, troca de dono.
+
+**Mas a medição achou outra coisa.** Eu havia escrito "PC final com prazo vencido desde
+28/09/2022". **Aquilo não é prazo.**
+
+⚠️ **O `CORTE_PRAZO` É `2026-08-01`** (`lib/datas.js`), por decisão do Richard de 10/08/2026:
+`dt_limite_pc` anterior ao corte é **carimbo de carga em lote**, não prazo. A `lib/gestao.js`
+devolve essas PCs como `'importado'` e **nunca** como vencidas, e o sino cala sobre elas pela
+mesma razão. **A minha `lib/acervo-saida.js` não respeitava o corte** — comparava a data crua com
+hoje.
+
+| nas 117 PCs abertas do acervo | |
+|---|---:|
+| a tela chamava de "prazo vencido" | **115** |
+| prazo de verdade (posterior ao corte) | **0** |
+| carimbo de carga | **115** |
+
+⚠️ **E AS DATAS PROVAM O LOTE:** 36 PCs "vencendo" no mesmo 28/07/2024, 27 no mesmo 28/09/2022 —
+a PC final da 1610 é uma dessas 27. Processos diferentes não vencem no mesmo dia por coincidência.
+É a mesma distribuição que levou à decisão de 10/08.
+
+✅ **CONSERTADO EM 27/10/2026.** A lib importa o `CORTE_PRAZO` e só conta como vencida a PC com
+prazo posterior a ele. ⚠️ **E NASCEU O `sem_prazo_definido` JUNTO, porque "não há prazo" não é
+"está em dia":** some o número e a tela mente pelo outro lado — quem assume precisa saber que o
+relógio dessas PCs nunca foi ligado. Na tela a pílula é **cinza**, não vermelha: não é urgência.
+
+⚠️ **ISSO NÃO TOCOU NENHUM NÚMERO DA CGE NEM DA PRODUTIVIDADE** — prazo não entra em nenhum dos
+dois. O que mudou foi **a triagem**: a tela mostrava urgência inexistente, e é pela urgência que o
+coordenador escolhe o que tratar primeiro.
+
+⚠️ **E A PC FINAL DA 1610 TEM `dt_recebimento_pc` NULO:** a entidade nunca entregou a prestação
+final. O que falta ali é **cobrança da entidade**, não trabalho de analista.
+
+**`teste_acervo_saida.js`: 54 passaram, 0 falharam** (eram 47; os 7 novos cercam o corte, inclusive
+as duas bordas — o próprio dia do corte já é prazo, a véspera ainda é carimbo).
+
+### 10. ⚠️ O ESTOQUE DIZIA 16 E ENTREGAVA 3 — 1.487 PCs que ninguém alcançava
+
+O Richard viu o Estoque anunciar **16 PCs** na `2024TR000656` e o "Assumir" levar **3**. Na
+`2024TR000714`: **20** anunciadas, **3** levadas.
+
+**Nenhum dos dois números está errado.** A coluna PCS é `COUNT(*)` da TR inteira (inclui as
+baixadas); o modal mostra o que o botão vai levar, que é `assumir.PC_LIVRE_SQL`. O que estava
+no meio é que era o problema.
+
+| `2024TR000656` | |
+|---|---:|
+| total de PCs | 16 |
+| baixadas | 3 |
+| `status = 'livre'` — o que o Assumir leva | 3 |
+| **sem dono, com `status` fora de 'livre'** | **10** |
+
+⚠️ **MEDIDO EM TODA A FCEE: 1.487 PCs em 152 TRs.** Elas não estão em lugar nenhum — o Estoque
+exige `status = 'livre'` e não as entrega; sem `analista_id`, não entram na planilha de
+ninguém.
+
+⚠️ **E O BOTÃO NUNCA FALHA.** Em **0 das 152** o Assumir recusa por completo: sempre sobra ao
+menos uma livre. A pessoa clica, leva menos do que a tabela anunciou, e nada avisa. Por isso
+isto durou dois meses sem ninguém reclamar.
+
+#### A origem — e o script não errou
+
+Todas têm `registrado_por = 'import_sigef_30082026'` e nasceram em **30/08/2026**. Nenhuma
+teve dono um dia: **zero** `dt_assumida`, `analista_nome`, `dt_inicio_analise`, parecer, C.I.
+
+| código do SIGEF | | → status | |
+|---|---|---|---:|
+| VA | Em Análise | `analise` | 1.354 |
+| VR | Em Reanálise | `reanalise` | 101 |
+| VT | Em Análise - Técnico | `analise` | 16 |
+| DV | Diligência | `diligencia` | 16 |
+
+O `MAPA` do `importar_sigef_30082026.js` fez **exatamente** o que a regra de 30/08 mandava:
+*"Em Análise, Diligência e Reanálise entram no estado correspondente."* O defeito não está no
+mapa nem na regra — está no que ninguém cruzou: o `status` com o `analista_id`.
+
+⚠️ **EM TODO O RESTO DO SISTEMA, `status = 'analise'` SÓ É ESCRITO JUNTO DE UM DONO** —
+`assumir.SQL_ASSUMIR` e `transferencia.SQL_MOVER`/`SQL_MOVER_ESTOQUE`, e mais nada. A carga
+foi o único lugar do servidor que gravou um sem o outro.
+
+⚠️ **E É A MESMA CLASSE DAS 221 BAIXADAS SEM PARECER.** Outra dupla de campos que só se pega
+olhando PARA DENTRO da linha gravada. As cinco conferências originais provavam o CONJUNTO
+(quantas entraram, que nada preexistente mudou) e passam nas duas. `baixada + parecer_tipo`
+custou 221 PCs e dois meses; `status + analista_id` custou 1.487 e dois meses.
+
+✅ **A SÉTIMA CONFERÊNCIA ENTROU NO SCRIPT DE IMPORTAÇÃO** — `INALCANÇÁVEIS (sem dono e fora de
+'livre')`, com a condição lida da `lib/assumir`, não copiada. É o que impede a próxima carga.
+
+#### O conserto do dado — pronto, em dry-run
+
+`consertar_inalcancaveis_20261027.js`. ⚠️ **O UPDATE É O `devolucao.SQL_DEVOLVER`, e não um SQL
+escrito no script:** pôr PC no estoque já tem uma definição, e ela mora num lugar só —
+reescrevê-la à mão seria recriar, pela outra ponta, a armadilha que criou este defeito.
+
+| o que o conserto **não** toca | por quê |
+|---|---|
+| produtividade | `SQL_BASE_PRODUTIVIDADE` é `baixada = true AND parecer_tipo IS NOT NULL`; o alvo é `baixada = false` |
+| relatórios da CGE | saem da produtividade |
+| a situação do SIGEF | `sigef_status` e `data_baixa_sigef` ficam byte a byte iguais, e a conferência prova contra a foto |
+
+⚠️ **AS 16 `DV` FICAM DE FORA POR PADRÃO** — só entram com `--incluir-dv`. Nelas o SIGEF diz
+que há diligência aberta, e pô-las no estoque é dizer que a diligência é de quem assumir.
+Defensável, mas é **regra**, e regra não se decide no script. **Sem decisão do Richard.**
+
+#### ✅ RODADO EM 27/10/2026 — 1.471 PCs voltaram ao estoque
+
+Dry-run primeiro, depois `--gravar`. **Todas as conferências passaram**, e o resultado foi
+medido no BANCO depois, não lido da saída do script:
+
+| | antes | depois |
+|---|---:|---:|
+| PCs livres (assumíveis) | 5.861 | **7.332** |
+| presas | 1.487 | **16** (só as `DV`) |
+| produtividade, base crua | 5.146 | **5.146** |
+| `2024TR000656` — o Assumir leva | 3 | **13** |
+| `2024TR000714` — o Assumir leva | 3 | **17** |
+
+⚠️ **A PRODUTIVIDADE FOI CONFERIDA DOS DOIS LADOS:** 5.146 dentro da transação, depois do
+UPDATE, e 5.146 de fora dela, no estado final. Não se moveu, como tinha de ser — o alvo é
+`baixada = false`. (Esse 5.146 é a base crua `baixada AND parecer_tipo`; o **4.948** da seção 8
+é com os filtros do GT — tags que descontam, pré-GT, engenharia. Números diferentes por
+construção, não divergência.)
+
+⚠️ **E O `sigef_status` CONTINUA INTACTO** nas 1.471: `VA`, `VR` e `VT` seguem na linha. O que
+mudou foi só ONDE a PC aparece dentro do SIGPC-GT. A conferência provou os 11 campos contra a
+foto, não contra o esperado.
+
+Foto no banco: `_backup_pre_inalcancaveis_20261027`. Registro:
+`reverter_inalcancaveis_20261027.json`, com o status anterior de cada uma das 1.471.
+
+**Restam as 16 `DV`** — sem decisão, de propósito. São 16, dá para olhar uma a uma.
+
+⚠️ **E A SENHA DO BANCO FICOU EXPOSTA** num print desta sessão. Trocar no Railway: projeto do
+`sigpc-api` → bloco Postgres → Settings → rotacionar. O serviço pega a nova sozinho, porque lê
+a variável.
+
+Alvo sem a flag: **1.471 PCs em 152 TRs**, com os cinco campos de rastro nulos em todas —
+conferido antes de rodar, a trava passou.
+
 ### ⚠️ O QUE FICA ABERTO
 
 - **A `2021TR001610` não acabou.** O parecer entrou, mas a parcial **continua `com_analista`,
   rodada 2** — alguém precisa **responder ao C.I.**, e a TR precisa de dono: `donos_ativos` é
-  vazio. A **PC final** segue aberta, "Em análise", com prazo vencido em **28/09/2022** — 1.490
-  dias. A tela já mostra `sem_parecer: 0`, e o alarme do C.I. continua aceso, corretamente.
+  vazio. A **PC final** segue aberta, "Em análise". ⚠️ **O "prazo vencido em 28/09/2022" que eu
+  escrevi aqui NÃO É PRAZO** — é carimbo de carga, e `dt_recebimento_pc` é nulo: a entidade
+  nunca entregou a prestação final. O que falta ali é cobrança da entidade, não análise. A tela
+  já mostra `sem_parecer: 0`, e o alarme do C.I. continua aceso, corretamente.
 - **As 116 PCs restantes**, intactas. A triagem é pela tela.
 - ⚠️ **UM DEFEITO MEU, AINDA DE PÉ:** `acervo-saida.js` conta `ci_esperando_resposta` por
   `ci_situacao = 'com_analista'` **sem distinguir `ci_reabriu`**, como o `arquivamento.js:751`

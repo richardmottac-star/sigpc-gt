@@ -17291,6 +17291,12 @@ function acSaidaCard(t) {
   if(h.diligencias) pils.push(pil(`📨 ${h.diligencias} em diligência`, '#FFF3D6', '#8A6100', '#F0DDB0', h.diligencias_codigos.join(' · ')))
   if(h.prazo_diligencia_vencido) pils.push(pil(`⏰ ${h.prazo_diligencia_vencido} com prazo de diligência vencido`, '#FDE8EA', '#B3261E', '#F5C2C7'))
   if(h.vencidas) pils.push(pil(`${h.vencidas} com prazo vencido${h.atraso_dias?` — ${h.atraso_dias} dias`:''}`, '#FAEEDA', '#8A5A00', '#E8D5B0', h.prazo_mais_antigo ? `o mais antigo venceu em ${planData(h.prazo_mais_antigo)}` : ''))
+  /* ⚠️ "SEM PRAZO" É CINZA, E NÃO VERMELHO: não é urgência, é relógio que nunca foi ligado.
+     Até 27/10/2026 estas PCs vinham como "prazo vencido" — `dt_limite_pc` anterior ao
+     `CORTE_PRAZO` é carimbo de carga, e a lib comparava com hoje assim mesmo. Eram 115 falsas
+     de 117. Some a pílula de vez e a tela mente pelo outro lado: quem assume precisa saber
+     que o prazo dessas não existe, não que elas estão em dia. */
+  if(h.sem_prazo_definido) pils.push(pil(`${h.sem_prazo_definido} sem prazo definido`, '#F2F2F2', '#666', '#DDD', 'Prestações do acervo antigo: a data que veio na carga é carimbo de lote, não prazo. O prazo real só passa a existir quando alguém o define no sistema.'))
   if(h.sem_parecer) pils.push(pil(`${h.sem_parecer} baixada sem parecer`, '#FDF6E7', '#8A6100', '#EFDCA6'))
   if(t.sgpe) pils.push(pil(`📍 ${escHtml(t.sgpe.setor)}${t.sgpe.dias!=null?` — ${t.sgpe.dias} dias`:''}`, t.sgpe.no_ci?'#EAF1F9':'#F5F5F5', t.sgpe.no_ci?'#1A4E8A':'#555', t.sgpe.no_ci?'#C7D9EC':'#DDD', 'Onde o processo está no SGPe agora'))
 
@@ -17394,6 +17400,7 @@ async function acSaidaModal(t, sugerido) {
   if(h.ci_esperando_resposta) avisos.push(`<b>${h.ci_esperando_resposta}</b> PC com o Controle Interno esperando resposta — quem assumir precisa responder.`)
   if(h.diligencias) avisos.push(`<b>${h.diligencias}</b> em diligência aberta${h.prazo_diligencia_vencido?`, ${h.prazo_diligencia_vencido} com o prazo já vencido`:``}.`)
   if(h.vencidas) avisos.push(`<b>${h.vencidas}</b> com prazo vencido${h.atraso_dias?`, o mais antigo há ${h.atraso_dias} dias`:``}.`)
+  if(h.sem_prazo_definido) avisos.push(`<b>${h.sem_prazo_definido}</b> sem prazo definido no sistema — acervo antigo, o relógio nunca foi ligado.`)
   if(h.no_ci && !h.ci_esperando_resposta) avisos.push(`<b>${h.no_ci}</b> no ciclo do C.I., aguardando a devolutiva.`)
 
   document.getElementById('moNLT').textContent = `Entregar ${t.tr}`

@@ -176,8 +176,12 @@ S('7. NA TELA: A LIGACAO DAS CINCO');
 // Cada janela tem de CHAMAR o gerenciador na abertura — sem isso ela abre como modal comum,
 // no meio da tela e com o fundo escuro, e nada acusa.
 conf(/jfAbrir\('moTR'\)/.test(semComent), 'o Detalhe da TR chama o gerenciador');
-conf((semComent.match(/jfAbrir\('moNL'\)/g) || []).length === 3,
-     'e as TRES telas que dividem o moNL tambem',
+// ⚠️ ERAM TRES ATE 26/10/2026: `pHistoricoPc`, `pVerParecer` e `verProdDetalhe`. A quarta e o
+// `acSaidaModal`, da tela do acervo de quem saiu — ela divide o mesmo `moNL`, e por isso tem de
+// chamar o gerenciador como as outras. O numero sobe aqui quando uma tela nova entrar no moNL:
+// se ele parar de bater, a pergunta e "a tela nova chama o jfAbrir?", nao "mude o numero".
+conf((semComent.match(/jfAbrir\('moNL'\)/g) || []).length === 4,
+     'e as QUATRO telas que dividem o moNL tambem',
      (semComent.match(/jfAbrir\('moNL'\)/g) || []).length);
 conf(/jfAbrir\('moNovImg'\)/.test(semComent), 'a imagem da novidade tambem');
 conf(/jfAbrir\('sgpeMo', el\)/.test(semComent), 'o SGPe passa o elemento que acabou de criar');
