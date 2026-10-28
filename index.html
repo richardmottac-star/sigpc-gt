@@ -12635,10 +12635,33 @@ function irRel() {
     </div>
     <!-- PAINEL CGE -->
     <div id="relPainelCGE" style="display:none;">
-      <div style="background:#FCFDFC;border-radius:10px;padding:16px;box-shadow:var(--sombra);margin-bottom:12px;border-left:5px solid var(--verde-escuro);">
-        <div style="font-size:13px;font-weight:800;color:var(--te);margin-bottom:4px;">Parâmetros do Relatório CGE</div>
-        <div style="font-size:11px;color:var(--ct);margin-bottom:12px;">Selecione a setorial e o período de apuração. Metas e estoque são calculados a partir dos dados atuais do sistema.</div>
-        <div class="filtros" style="gap:10px;flex-wrap:wrap;padding:0;background:none;border-radius:0;box-shadow:none;">
+      ${/* ⚠️ A TELA EM TRÊS PASSOS (27/10/2026). A anterior pedia "Data Inicial", já preenchida
+      com 01/08/2025, e "Data e hora de corte" — sem uma linha dizendo o que cada uma faz. E o
+      relatório da CGE precisa de DUAS leituras: o período e o acumulado.
+
+      ⚠️ O MOTOR SEMPRE SOUBE FAZER AS DUAS. \`noPeriodo\` usa as datas informadas e
+      \`noAcumulado\` IGNORA a inicial — conta tudo até o fim do período. Quem não sabia era
+      quem preenchia: com 01/08/2025 no primeiro campo o "período" virava o acumulado, e os
+      dois números saíam iguais. O conserto foi dizer isso na tela, e não mexer na conta de um
+      relatório que a CGE já conferiu. */''}
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px 16px;box-shadow:var(--sombra);margin-bottom:10px;border-left:5px solid var(--verde-escuro);">
+        <div style="font-size:13px;font-weight:800;color:var(--te);">Relatório para a Controladoria-Geral do Estado</div>
+        <div style="font-size:11.5px;color:var(--ct);line-height:1.55;margin-top:3px;">
+          Escolha o período e gere. O acumulado desde o início do Grupo sai junto, sempre.
+        </div>
+      </div>
+
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px 16px;box-shadow:var(--sombra);margin-bottom:10px;">
+        <div style="display:flex;align-items:center;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--v);color:#fff;font-size:11px;font-weight:800;margin-right:7px;flex:none;">1</span><span style="font-size:13px;font-weight:800;color:var(--te);">Período do relatório</span></div>
+        <div style="font-size:11.5px;color:var(--ct);line-height:1.55;margin:4px 0 10px 27px;">Os trimestres do Grupo já vêm prontos. Para outro recorte &mdash; o que a coordenação pedir &mdash; digite as duas datas.</div>
+        <div id="cgeAtalhos" style="margin-left:27px;display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px;"></div>
+        <div class="filtros" style="gap:10px;flex-wrap:wrap;padding:0 0 0 27px;background:none;border-radius:0;box-shadow:none;">
+          <div class="fg"><label>Primeiro dia</label>
+            <input type="date" id="cgeDtInicio" value="2026-08-01" oninput="cgeResumoPeriodo()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
+          <div class="fg"><label>Último dia</label>
+            <input type="date" id="cgeDtCorte" value="2026-10-31" oninput="cgeResumoPeriodo()" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
+          </div>
           <div class="fg"><label>Setorial</label>
             <select id="cgeSetorial" style="min-width:110px;">
               <option value="FCEE">FCEE</option><option value="FCC">FCC</option>
@@ -12646,19 +12669,30 @@ function irRel() {
               <option value="SIE">SIE</option><option value="SES">SES</option><option value="SAS">SAS</option>
             </select>
           </div>
-          <div class="fg"><label>Data Inicial</label>
-            <input type="date" id="cgeDtInicio" value="2025-08-01" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-          </div>
-          <div class="fg"><label>Data e hora de corte</label>
-            <input type="datetime-local" id="cgeDtCorte" value="${dtCorteLocalDefault}" style="border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:12px;font-family:Barlow,sans-serif;">
-          </div>
-          <div style="display:flex;align-items:flex-end;">
-            <button class="btn-buscar" onclick="cgeGerar()" style="height:32px;">📊 Gerar Relatório CGE</button>
-          </div>
-          <div style="display:flex;align-items:flex-end;">
-            <button class="btn-buscar" onclick="cgeAbrirTextos()" style="height:32px;background:#fff;color:var(--v);border:1.5px solid var(--v);">✎ Editar textos</button>
-          </div>
         </div>
+        <div id="cgeResumo" style="margin:11px 0 0 27px;background:#EAF3EC;border:1px solid #BBD6C4;border-radius:8px;padding:9px 12px;font-size:11.5px;color:var(--te);line-height:1.7;"></div>
+      </div>
+
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px 16px;box-shadow:var(--sombra);margin-bottom:10px;">
+        <div style="display:flex;align-items:center;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--v);color:#fff;font-size:11px;font-weight:800;margin-right:7px;flex:none;">2</span><span style="font-size:13px;font-weight:800;color:var(--te);">Textos e assinaturas</span></div>
+        <div style="font-size:11.5px;color:var(--ct);line-height:1.55;margin:4px 0 10px 27px;">Contextualização, justificativas, conclusão, a seção sobre o desenvolvimento do sistema e quem assina. Já vêm preenchidos &mdash; revise o que mudou neste período.</div>
+        <div style="margin-left:27px;">
+          <button class="btn-buscar" onclick="cgeAbrirTextos()" style="height:32px;background:#fff;color:var(--v);border:1.5px solid var(--v);">✎ Revisar os textos</button>
+        </div>
+      </div>
+
+      <div style="background:#FCFDFC;border-radius:10px;padding:14px 16px;box-shadow:var(--sombra);margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn-buscar" onclick="cgeGerar()" style="height:36px;font-size:13px;">Gerar o relatório</button>
+        <span style="font-size:11.5px;color:var(--ct);">Depois de gerado você confere na tela e baixa em PDF.</span>
+      </div>
+
+      ${/* ⚠️ OS OITO PARÂMETROS DE EXCEÇÃO FICAM AQUI DENTRO, OCULTOS, E NÃO FORAM APAGADOS.
+            Decisão do Richard em 27/10: "não foram usados porque muito confuso" — oito caixas
+            de número no alto da tela, sem uma linha explicando o que cada uma sobrescreve.
+            Continuam no HTML porque \`cgeLerParams()\` os lê e devolve NULO para cada um, que
+            é exatamente o valor "calcule você". Apagá-los exigiria mexer no caminho de geração
+            de um relatório já validado pela CGE, e isso não se faz por arrumação de tela. */''}
+      <div style="display:none;">
         <div style="margin-top:14px;border-top:1px dashed var(--cb);padding-top:12px;">
           <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="cgeToggleParams()">
             <span id="cgeParamSeta" style="font-size:11px;color:var(--ct);">▶</span>
@@ -12702,6 +12736,8 @@ function irRel() {
   relCarregarAnalistas()
 }
 
+// ⚠️ O RESUMO PRECISA NASCER PINTADO, e não só reagir ao `oninput`: quem abre a aba e clica
+// direto em "Gerar" nunca disparou evento nenhum, e veria a caixa vazia.
 let _relAbaAtual = 'geral'
 function relMudaAba(aba) {
   _relAbaAtual = aba
@@ -12710,6 +12746,9 @@ function relMudaAba(aba) {
   const pGer = document.getElementById('relPainelGer')
   if(pGer) pGer.style.display = aba==='ger' ? '' : 'none'
   if(pGer && aba==='ger') gerCarregarIntegrantes()
+  // ⚠️ Pinta o resumo das duas leituras ao ABRIR a aba, e nao so no oninput: quem clica
+  // direto em Gerar nunca disparou evento, e veria a caixa vazia no lugar da explicacao.
+  if(aba==='cge') cgeResumoPeriodo()
   const bG = document.getElementById('relAbaGeral')
   const bC = document.getElementById('relAbaCGE')
   const bX = document.getElementById('relAbaGer')
@@ -13286,7 +13325,7 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
     if(contaQ1 && !ehRegular && !ehIrregular) totSemParecer++
 
     if(!p.analista_id || !usuariosPorId[p.analista_id]) return
-    if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, acum:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    if(!mapaAn[p.analista_id]) mapaAn[p.analista_id] = {bxSecretario:0, bxTecnico:0, acum:0, acumSec:0, acumTec:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
     const m = mapaAn[p.analista_id]
     if(p.status==='analise') m.analise++
     else if(p.status==='diligencia') m.dilig++
@@ -13302,13 +13341,23 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
     }
     // ⚠️ O ACUMULADO É CONTADO NA MESMA PASSADA, e não numa varredura à parte: 16 mil linhas
     // percorridas duas vezes para responder a mesma pergunta em duas janelas de tempo.
-    if(noAcumulado(p)) m.acum++
+    //
+    // ⚠️ E ELE SEPARA SECRETÁRIO DE TÉCNICO desde 27/10/2026, como o período já fazia. É a
+    // forma como a CGE classifica no Quadro 02 dela, e foi decisão do Richard em 20/10: somada,
+    // a baixa do Titular da Pasta aparece como produção do técnico, que é o que ela não é.
+    // Até hoje a separação existia só no período, e o acumulado trazia uma coluna só — então o
+    // documento de 20/10, que tinha as duas, saiu de um script do scratchpad em vez da tela.
+    if(noAcumulado(p)) {
+      m.acum++
+      if(p.origem_baixa === 'secretario') m.acumSec++
+      else m.acumTec++
+    }
   })
 
   // Coordenadores não aparecem; analista inativo só aparece se teve baixa no período
   const linhas = Object.keys(usuariosPorId).map(id => {
     const u = usuariosPorId[id]
-    const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, acum:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
+    const m = mapaAn[id] || {bxSecretario:0, bxTecnico:0, acum:0, acumSec:0, acumTec:0, analise:0, dilig:0, reanalise:0, ctrl:0, nlsPend:new Set(), trsPend:new Set()}
     const totalBaixadas = m.bxSecretario + m.bxTecnico
     if(!u.ativo && totalBaixadas === 0) return null
     const grupo = u.grupo ? parseInt(u.grupo) : null
@@ -13320,9 +13369,11 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
     const meta = r.meta_periodo != null ? r.meta_periodo : metaAcum
     const pctMeta = meta>0 ? Math.round(totalBaixadas/meta*100) : null
     const acumBaixadas = m.acum || 0
+    const acumSec = m.acumSec || 0
+    const acumTec = m.acumTec || 0
     const pctAcum = metaAcum>0 ? Math.round(acumBaixadas/metaAcum*100) : null
     return { u, grupo, coord: COORD_GRUPO[grupo]||'—', meta, metaAcum, totalBaixadas,
-             acumBaixadas, pctMeta, pctAcum, ...m }
+             acumBaixadas, acumSec, acumTec, pctMeta, pctAcum, ...m }
   }).filter(Boolean).sort((a,b) => (a.grupo||99) - (b.grupo||99) || a.u.nome.localeCompare(b.u.nome))
 
   // ⚠️ AS DUAS CONTAGENS QUE A NOTA DE RODAPÉ EXPLICA, e elas mudaram de sentido em 19/10/2026.
@@ -13341,6 +13392,8 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
   const metaTotal = linhas.reduce((s,d)=>s+d.meta,0)
   const metaTotalAcum = linhas.reduce((s,d)=>s+d.metaAcum,0)
   const totAcum = linhas.reduce((s,d)=>s+d.acumBaixadas,0)
+  const totAcumSec = linhas.reduce((s,d)=>s+d.acumSec,0)
+  const totAcumTec = linhas.reduce((s,d)=>s+d.acumTec,0)
   const totBx    = linhas.reduce((s,d)=>s+d.totalBaixadas,0)
   const totBxSec = linhas.reduce((s,d)=>s+d.bxSecretario,0)
   const totBxTec = linhas.reduce((s,d)=>s+d.bxTecnico,0)
@@ -13353,10 +13406,74 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
 
   return {
     linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-    metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef,
+    metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec,
+    semDataNoPeriodo, recuperadasPeloSigef,
     totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
     estoqueRemanescente, estoqueBase, estoque: estoqueBase, cargaHistoricaNoPeriodo
   }
+}
+
+// ══════════════════════════════════════
+//  O PERÍODO DO RELATÓRIO — atalhos e o resumo das duas leituras  (27/10/2026)
+// ══════════════════════════════════════
+//
+// ⚠️ OS TRIMESTRES DO GT NÃO SÃO OS CIVIS, e é por isso que esta lista existe escrita. O 3º é
+// fev–abr/2026, o 4º mai–jul/2026, o 5º ago–out/2026 — contados a partir de 01/08/2025, quando
+// o Grupo começou. Quem digita "1º de julho a 30 de setembro" achando que é um trimestre erra
+// em três meses de produção, e o número vai para a Controladoria.
+//
+// ⚠️ E A LISTA NÃO FECHA A TELA. Decisão do Richard, 27/10: "fecha quando a coordenação
+// solicitar, não fica exatamente 31/10, mas tem que calcular o que for solicitado". Os atalhos
+// são conveniência; os dois campos de data continuam valendo qualquer período.
+const CGE_TRIMESTRES = [
+  { n:'3º tri', de:'2026-02-01', ate:'2026-04-30', rot:'fev–abr/2026' },
+  { n:'4º tri', de:'2026-05-01', ate:'2026-07-31', rot:'mai–jul/2026' },
+  { n:'5º tri', de:'2026-08-01', ate:'2026-10-31', rot:'ago–out/2026' },
+]
+
+function cgeAtalhosPintar() {
+  const box = document.getElementById('cgeAtalhos')
+  if(!box) return
+  const de  = document.getElementById('cgeDtInicio')?.value || ''
+  const ate = document.getElementById('cgeDtCorte')?.value  || ''
+  box.innerHTML = CGE_TRIMESTRES.map(t => {
+    const on = t.de === de && t.ate === ate
+    return `<button onclick="cgePorPeriodo('${t.de}','${t.ate}')" title="${t.de} a ${t.ate}"
+      style="padding:5px 11px;font-size:11.5px;font-weight:700;font-family:Barlow,sans-serif;border-radius:6px;cursor:pointer;
+      ${on?'background:var(--v);color:#fff;border:1.5px solid var(--v);':'background:#fff;color:var(--ct);border:1.5px solid var(--cb);'}">${t.n} · ${t.rot}</button>`
+  }).join('')
+}
+
+function cgePorPeriodo(de, ate) {
+  const a = document.getElementById('cgeDtInicio'), b = document.getElementById('cgeDtCorte')
+  if(a) a.value = de
+  if(b) b.value = ate
+  cgeResumoPeriodo()
+}
+
+// ⚠️ ESTE RESUMO É O CORAÇÃO DA TELA NOVA, e não enfeite: ele diz, ANTES de gerar, quais são
+// as duas janelas de tempo que vão para o documento. Sem ele a pessoa preenche duas datas e
+// não tem como saber que o acumulado é outra coisa — que foi o que fez o período virar o
+// acumulado inteiro na tela anterior.
+function cgeResumoPeriodo() {
+  const box = document.getElementById('cgeResumo')
+  if(!box) return
+  cgeAtalhosPintar()
+  const de  = document.getElementById('cgeDtInicio')?.value || ''
+  const ate = document.getElementById('cgeDtCorte')?.value  || ''
+  if(!de || !ate) { box.innerHTML = '<b>Informe os dois dias</b> para ver o que vai ser apurado.'; return }
+  if(de > ate) {
+    box.innerHTML = '<b style="color:var(--r);">O primeiro dia é depois do último.</b> Confira as duas datas.'
+    return
+  }
+  const fmt = (d) => planData(d)
+  const hoje = new Date(); hoje.setHours(12,0,0,0)
+  const futuro = new Date(ate+'T12:00:00') > hoje
+  box.innerHTML =
+    `O documento vai trazer <b>duas leituras</b>:<br>`
+    + `&nbsp;&nbsp;Do período — <b>${fmt(de)} a ${fmt(ate)}</b>, pela data da baixa no SIGEF<br>`
+    + `&nbsp;&nbsp;Acumulada — <b>01/08/2025 a ${fmt(ate)}</b>, desde o início do Grupo`
+    + (futuro ? `<br><span style="color:#8A5A00;">⚠ O último dia ainda não chegou. O que foi feito depois de hoje não entra — gere de novo quando o período fechar.</span>` : '')
 }
 
 async function cgeGerar() {
@@ -13384,7 +13501,8 @@ async function cgeGerar() {
     _cgeDados = A.linhas
     const {
       totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
-      metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef,
+      metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec,
+      semDataNoPeriodo, recuperadasPeloSigef,
       totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
       estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
     } = A
@@ -13396,7 +13514,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, semDataNoPeriodo, recuperadasPeloSigef, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec, semDataNoPeriodo, recuperadasPeloSigef, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -13406,7 +13524,17 @@ async function cgeGerar() {
     _cgeParams.metaMinManual  = PM.metaMin
     _cgeParams.tecnicosManual = PM.tecnicos
     _cgeParams.coordsManual   = PM.coords
-    _cgeParams.dtCorteHora    = dtCorte
+    // ⚠️ O CARIMBO E O INSTANTE DA APURACAO, E NAO A DATA DE CORTE (27/10/2026).
+    //
+    // Enquanto o campo recebia a data de corte, a linha "Dados extraidos em" repetia o fim
+    // do periodo — que ja esta no cabecalho, duas linhas acima. E o numero MUDA depois do
+    // fim do periodo: medido em 27/10, o 4o trimestre ganhou 43 baixas depois de informado,
+    // porque a baixa aconteceu no SIGEF em junho e so foi registrada aqui em outubro.
+    //
+    // ⚠️ COM O INSTANTE, A DIFERENCA SE EXPLICA SOZINHA. Se a CGE conferir semanas depois e
+    // achar mais, o documento ja diz de quando e a foto — em vez de virar divergencia, que e
+    // o que a Informacao CGE 275/2026 recusou.
+    _cgeParams.dtCorteHora    = new Date().toISOString()
 
     // Renderizar quadros — Quadro 2 e Quadro 4 sempre ordenados por nome
     const q2Sorted = [..._cgeDados].sort((a,b) => a.u.nome.localeCompare(b.u.nome))
@@ -13435,107 +13563,39 @@ async function cgeGerar() {
         <td style="text-align:right;">${d.trs}</td>
       </tr>`).join('')
 
+    // ⚠️ A TELA MOSTRA O DOCUMENTO COMPLETO, E PELA MESMA FUNÇÃO DO PDF  (27/10/2026)
+    //
+    // Até aqui havia DUAS montagens do mesmo papel: esta, que desenhava uma cópia reduzida
+    // direto no \`cgeCont\`, e a \`cgeMontarDocumento\`, que montava o documento inteiro só na
+    // hora de imprimir. O que a pessoa conferia na tela não era o que saía no PDF — faltavam a
+    // ficha, as seções de texto, as justificativas, a conclusão, a seção do desenvolvimento e
+    // as assinaturas. O Richard viu e disse: "na tela ele não gera todo".
+    //
+    // ⚠️ DUAS MONTAGENS DO MESMO DOCUMENTO É O DEFEITO, não o sintoma. Enquanto existirem, toda
+    // mudança no documento tem de ser feita duas vezes, e a segunda é esquecida — foi assim que
+    // as colunas do acumulado existiram no PDF de 20/10 e nunca na tela.
+    //
+    // ⚠️ E O IFRAME NÃO É ENFEITE: o CSS do documento usa seletores de elemento (\`p\`, \`table\`,
+    // \`td\`, \`h2\`) com medidas de impressão em pt. Injetado direto na página, ele reformataria
+    // a tela do sistema inteira. Dentro do iframe o documento fica isolado, e é renderizado
+    // pelo navegador exatamente como vai para o papel.
+    const docHtml = await cgeMontarDocumento()
     cont.innerHTML = `
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">
         <button onclick="cgeExportExcel()" style="background:var(--verde-escuro);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📥 Excel</button>
-        <button onclick="(async()=>{ await cgeExportPDF() })()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
+        <button onclick="cgeImprimir()" style="background:var(--az);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;font-family:Barlow,sans-serif;cursor:pointer;">📄 PDF CGE</button>
       </div>
-      <div class="cge-doc-wrap"><div class="cge-doc">
-        <!-- Cabeçalho institucional -->
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
-          <div style="width:200px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-            <img src="${LOGO_SC}" alt="Governo de Santa Catarina" style="height:60px;width:auto;">
-          </div>
-          <div style="flex:1;text-align:center;">
-            <div style="font-size:11px;font-weight:700;letter-spacing:1px;">ESTADO DE SANTA CATARINA</div>
-            <div class="cge-verde" style="font-size:12px;font-weight:800;">FUNDAÇÃO CATARINENSE DE EDUCAÇÃO ESPECIAL — GABINETE DA PRESIDÊNCIA</div>
-            <div style="font-size:11px;">SETOR DE PRESTAÇÃO DE CONTAS</div>
-          </div>
-        </div>
-        <div style="border-top:2px solid #000;margin-bottom:8px;"></div>
-        <div style="text-align:center;border:1px solid #000;padding:10px;margin:8px 0;">
-          <div style="font-size:14px;font-weight:800;">RELATÓRIO DE MONITORAMENTO DAS METAS DO PLANO DE AÇÃO</div>
-          <div style="font-size:12px;font-weight:700;">ANÁLISE DE PRESTAÇÕES DE CONTAS</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-top:8px;">
-          <div><strong>Órgão/Entidade:</strong> FCEE - Fundação Catarinense de Educação Especial - UG 450021</div>
-          <div><strong>Grupo de Trabalho:</strong> GT de Prestação de Contas – Decreto nº 1.008/2025</div>
-          <div><strong>Processo:</strong> CGE nº 727/2025</div>
-          <div><strong>Período de Monitoramento:</strong> ${periodoTxt}</div>
-          <div><strong>Meta do Período:</strong> ${metaTotal.toLocaleString('pt-BR')} PCs (soma das metas vigentes por analista)</div>
-          <div><strong>Servidores GT-PC:</strong> ${_cgeDados.length} servidores</div>
-        </div>
-
-        <!-- Quadro 1 -->
-        <div style="margin-top:18px;">
-          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">1. QUADRO GERAL DE METAS</div>
-          <!-- AS DUAS LEITURAS (itens C1, D1 e E1 da resposta de 17/09/2026): o trimestre, que é
-               o foco do relatório, e o acumulado desde 01/08/2025, que é o começo do GT. -->
-          <table><thead><tr>
-            <th>Leitura</th><th>Período</th><th>Meta</th>
-            <th>PCs Baixadas</th>
-            <th>Execução (%)</th>
-            <th>Estoque base</th>
-            <th>Remanescente</th>
-          </tr></thead><tbody><tr>
-            <td style="font-weight:700;text-align:left;">Período do relatório</td>
-            <td style="font-weight:700;text-align:left;">${periodoTxt}</td>
-            <td style="text-align:right;font-weight:700;">${metaTotal||'—'}</td>
-            <td style="text-align:right;font-weight:800;">${totBx}</td>
-            <td style="text-align:right;font-weight:800;">${totPctMeta}%</td>
-            <td style="text-align:right;font-weight:700;">${estoqueBase.toLocaleString('pt-BR')}</td>
-            <td style="text-align:right;">${estoqueRemanescente.toLocaleString('pt-BR')}</td>
-          </tr><tr>
-            <td style="font-weight:700;text-align:left;">Acumulado do GT</td>
-            <td style="font-weight:700;text-align:left;">01/08/2025 a ${periodoFimTxt}</td>
-            <td style="text-align:right;font-weight:700;">${metaTotalAcum||'—'}</td>
-            <td style="text-align:right;font-weight:800;">${totAcum}</td>
-            <td style="text-align:right;font-weight:800;">${totPctAcum}%</td>
-            <td style="text-align:right;color:var(--ct);">—</td>
-            <td style="text-align:right;color:var(--ct);">—</td>
-          </tr></tbody></table>
-          <div style="font-size:9px;font-style:italic;margin-top:4px;">
-            ${recuperadasPeloSigef ? `Nota 1: ${recuperadasPeloSigef} baixas entram no período pela DATA DE REGISTRO NO SIGEF, e não pela data em que o arquivo foi carregado no sistema — é a mesma data que a CGE usa para conferir. ` : ''}${semDataNoPeriodo ? `Nota 2: ${semDataNoPeriodo} baixas não têm data de trabalho em nenhuma das duas fontes e aparecem apenas no acumulado, conforme o item D2 da regra de produtividade. ` : ''}Gerado em ${dt} via SIGPC-GT v2.1.
-          </div>
-        </div>
-
-        <!-- Quadro 2 -->
-        <div style="margin-top:18px;">
-          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">2. DESEMPENHO INDIVIDUAL DOS SERVIDORES DO GT-PC</div>
-          <table><thead><tr>
-            <th>#</th><th>Servidor</th><th>Coordenador</th>
-            <th>Meta</th>
-            <th>Bx. Secretário</th>
-            <th>Bx. Técnico</th>
-            <th>Total Baixas</th>
-            <th>% Meta</th>
-          </tr></thead>
-          <tbody>${q2linhas}</tbody>
-          <tfoot><tr>
-            <td colspan="3" style="text-align:left;">TOTAL GERAL — ${_cgeDados.length} servidores</td>
-            <td style="text-align:right;">${metaTotal||'—'}</td>
-            <td style="text-align:right;">${totBxSec}</td>
-            <td style="text-align:right;">${totBxTec}</td>
-            <td style="text-align:right;">${totBx}</td>
-            <td style="text-align:right;">${totPctMeta}%</td>
-          </tr></tfoot></table>
-        </div>
-
-        <!-- Quadro 4 -->
-        <div style="margin-top:18px;">
-          <div style="font-weight:700;font-size:11px;margin-bottom:4px;">4. PROCESSOS POR TÉCNICO — EM ANÁLISE, DILIGÊNCIA E REANÁLISE <span style="font-weight:400;font-size:9px;">(Data de corte: ${dtCorte ? new Date(dtCorte).toLocaleDateString('pt-BR') : 'Atual'})</span></div>
-          <table><thead><tr>
-            <th>#</th><th>Servidor</th><th>PCs</th><th>NLs</th><th>TRs</th>
-          </tr></thead>
-          <tbody>${q4linhas||'<tr><td colspan="5" style="text-align:center;padding:16px;">Todos os processos estão concluídos.</td></tr>'}</tbody>
-          <tfoot><tr>
-            <td colspan="2" style="text-align:left;">TOTAL GERAL</td>
-            <td style="text-align:right;">${totAn+totDil+totRean+totCtrl}</td>
-            <td></td>
-            <td></td>
-          </tr></tfoot></table>
-        </div>
-      </div></div>`
+      <iframe id="cgeDocFrame" title="Relatório CGE" style="width:100%;min-height:600px;border:1.5px solid var(--cb);border-radius:8px;background:#E8E8E8;display:block;"></iframe>`
+    const fr = document.getElementById('cgeDocFrame')
+    // ⚠️ A ALTURA SEGUE O CONTEÚDO, para a página rolar e não o quadro: um documento de nove
+    // páginas dentro de uma caixa com barra de rolagem própria é pior de conferir que o papel.
+    fr.addEventListener('load', () => {
+      try {
+        const h = fr.contentDocument.body.scrollHeight
+        if(h > 300) fr.style.height = (h + 40) + 'px'
+      } catch(e) { /* documento ainda desenhando: fica a altura mínima */ }
+    })
+    fr.srcdoc = docHtml
 
   } catch(e) { cont.innerHTML=`<p style="color:var(--r);padding:20px;">Erro: ${e.message}</p>` }
 }
@@ -13581,6 +13641,11 @@ async function cgeMontarDocumento() {
     if(!_P.estoque)       _P.estoque = NUM.estoque
     if(!_P.totalGeralPCs) _P.totalGeralPCs = NUM.totalGeralPCs
   }
+  // ⚠️ O QUE O QUADRO 2 PRECISA TEM DE SER DESEMPACOTADO AQUI. Em 27/10 acrescentei as quatro
+  // colunas do acumulado ao rodape do Quadro 2 e nao conferi se os numeros chegavam a esta
+  // funcao: a tela gerava e parava em "metaTotalAcum is not defined". Variavel que falta nao
+  // e pega pelo checar_tela, que so olha FUNCAO — quem pega e abrir e gerar.
+  const { metaTotalAcum=0, totAcum=0, totAcumSec=0, totAcumTec=0 } = _P
   const { sid='FCEE', dtInicio='', dtCorte='', meses=1, metaTotal=0, estoque=0, totalGeralPCs=0, totBxSec=0, totBxTec=0, totParcReg=0, totParcIrr=0, totFinReg=0, totFinIrr=0, totCI=0, totSemParecer=0, metaMinManual=null, tecnicosManual=null, coordsManual=null, dtCorteHora='' } = _P
 
   const semDados = !_cgeDados.length
@@ -13721,8 +13786,16 @@ async function cgeMontarDocumento() {
 
   // Quadro 2 — tabela única, uma linha por servidor, ordenada por nome
   const q2Sorted = [..._cgeDados].sort((a,b)=>a.u.nome.localeCompare(b.u.nome))
+  // ⚠️ AS DUAS LEITURAS LADO A LADO, e é por isso que a tabela tem doze colunas (27/10/2026).
+  // O relatório de 20/10 já as trazia, mas vinham de um script do scratchpad; a tela mostrava
+  // só o período. As duas respondem a perguntas diferentes e a CGE pede as duas: o trimestre é
+  // o que se compara com a meta do trimestre, o acumulado é o que ela confere no Quadro 05.
+  //
+  // ⚠️ E O ACUMULADO SEPARA SECRETÁRIO DE TÉCNICO pela mesma razão do período — decisão do
+  // Richard, 20/10: somada, a baixa do Titular da Pasta aparece como produção do técnico.
   const q2rows = q2Sorted.map((d,i)=>{
     const pct = d.pctMeta===null?'—':d.pctMeta+'%'
+    const pctAc = d.pctAcum===null?'—':d.pctAcum+'%'
     return `<tr>
       <td class="tc">${i+1}</td>
       <td style="text-align:left;">${d.u.nome}</td>
@@ -13732,6 +13805,10 @@ async function cgeMontarDocumento() {
       <td style="text-align:right;">${d.bxTecnico}</td>
       <td style="text-align:right;" class="fw">${d.totalBaixadas}</td>
       <td style="text-align:right;" class="fw">${pct}</td>
+      <td style="text-align:right;" class="q2ac">${d.metaAcum||'—'}</td>
+      <td style="text-align:right;">${d.acumSec}</td>
+      <td style="text-align:right;">${d.acumTec}</td>
+      <td style="text-align:right;" class="fw">${d.acumBaixadas}</td>
     </tr>`
   }).join('')
   const pctTotQ2 = metaAcum>0 ? (totBx/metaAcum*100).toFixed(1).replace('.',',')+'%' : '—'
@@ -13744,9 +13821,9 @@ async function cgeMontarDocumento() {
   const q4rows = q4Sorted.map((d,i)=>`<tr>
       <td class="tc">${i+1}</td>
       <td style="text-align:left;">${d.nome}</td>
-      <td style="text-align:right;" class="fw">${d.emAnd}</td>
-      <td style="text-align:right;">${d.nls}</td>
-      <td style="text-align:right;">${d.trs}</td>
+      <td style="text-align:center;" class="fw">${d.emAnd}</td>
+      <td style="text-align:center;">${d.nls}</td>
+      <td style="text-align:center;">${d.trs}</td>
     </tr>`).join('')
   const totEmAndFmt = totEmAnd
 
@@ -13757,7 +13834,11 @@ async function cgeMontarDocumento() {
 @page { size:A4 portrait; margin:1.2cm 1.4cm 1.2cm 1.4cm; }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{background:#E8E8E8;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;line-height:1.6;}
+/* ⚠️ ARIAL 12 E ENTRELINHA 1,50 — decisão do Richard em 20/10/2026, depois de ver as duas
+   versões: "deixe em nove páginas e mais espaçado para não ficar muito amontoado". Cheguei a
+   espremer a entrelinha para 1,38 e devolvi. O documento vai à Controladoria e é lido inteiro;
+   economizar papel atrapalha quem lê. Nove páginas com folga, e não oito apertadas. */
+body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;color:#000;line-height:1.50;}
 .paper{max-width:900px;margin:0 auto;background:#fff;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,.15);}
 .hdr-tbl{width:100%;border-collapse:collapse;margin-bottom:4px;}
 .hdr-logo{width:150px;vertical-align:middle;text-align:center;padding-right:12px;}
@@ -13767,26 +13848,40 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;line-heigh
 .hdr-fcee{font-size:12px;font-weight:900;color:#006B3C;letter-spacing:.5px;white-space:nowrap;}
 .hdr-sub{font-size:10px;color:#000;font-weight:600;}
 .hdr-linha{border-top:2px solid #006B3C;margin:4px 0 10px;}
-h2{font-size:12px;font-weight:900;text-align:center;text-transform:uppercase;margin:8px 0 6px;line-height:1.4;}
-.ficha{border:1px solid #000;padding:8px 12px;margin:8px 0 12px;font-size:10px;}
+h2{font-size:13pt;font-weight:900;text-align:center;text-transform:uppercase;margin:8pt 0 6pt;line-height:1.3;hyphens:none;-webkit-hyphens:none;}
+.ficha{border:1px solid #000;padding:9pt 12pt;margin:9pt 0 12pt;font-size:10.5pt;hyphens:none;-webkit-hyphens:none;}
 .ficha p{margin:1px 0;text-align:left;}
-.sec{font-size:11px;font-weight:900;margin:10px 0 4px;}
-p{text-align:justify;margin-bottom:6px;font-size:10px;}
-ul{margin:4px 0 6px 18px;font-size:10px;}
+.sec{font-size:12pt;font-weight:900;margin:12pt 0 5pt;hyphens:none;-webkit-hyphens:none;}
+/* ⚠️ A FAIXA DO ACUMULADO É CINZA, E NÃO COLORIDA: o documento é impresso em preto e branco
+   na Controladoria, e cor que vira cinza-claro na impressão não separa nada. O fundo tênue
+   sobrevive à impressão e é o que diz onde termina o trimestre e começa o acumulado. */
+.q2ac{background:#F2F2F2;}
+/* ⚠️ JUSTIFICADO SEM HÍFEN ABRE RIOS DE ESPAÇO numa linha de 18 cm — foi medido em 20/10.
+   A hifenização precisa do "lang=pt-BR", que está no <html> logo acima; sem ele o navegador
+   não sabe onde pode quebrar a palavra e a propriedade não faz nada.
+
+   ⚠️ E ELA NÃO ALCANÇA TABELA, TÍTULO NEM ASSINATURA: nome de pessoa partido ao meio por um
+   hífen é erro de documento, e número de tabela não se quebra. Cada um desses tem
+   hyphens:none declarado abaixo. */
+p{text-align:justify;margin-bottom:6pt;font-size:12pt;hyphens:auto;-webkit-hyphens:auto;}
+ul{margin:4pt 0 6pt 18pt;font-size:12pt;hyphens:auto;-webkit-hyphens:auto;}
 ul li{margin-bottom:2px;}
-table{width:100%;border-collapse:collapse;font-size:9px;margin:4px 0 8px;page-break-inside:auto;}
+/* ⚠️ TABELA EM 9pt, E NÃO EM 12: o Quadro 1 tem doze colunas e o Quadro 2 passou a ter doze
+   também (27/10). Em 12pt nenhum dos dois cabe em A4 retrato. A decisão de 20/10 fixou 9pt
+   para tabela com o corpo em 12 — e é por isso que o tamanho não se herda do body. */
+table{width:100%;border-collapse:collapse;font-size:9pt;margin:5pt 0 9pt;page-break-inside:auto;hyphens:none;-webkit-hyphens:none;}
 thead{display:table-header-group;}
 tfoot{display:table-footer-group;}
-th{background:#E8E8E8;color:#000;padding:4px 5px;text-align:center;border:1px solid #000;font-size:9px;font-weight:700;line-height:1.3;}
+th{background:#E8E8E8;color:#000;padding:4px 5px;text-align:center;border:1px solid #000;font-size:8.5pt;font-weight:700;line-height:1.25;}
 th.th2{background:#F0F0F0;}
-td{padding:3px 5px;border:1px solid #000;font-size:9px;vertical-align:middle;}
+td{padding:3px 5px;border:1px solid #000;font-size:9pt;vertical-align:middle;}
 tr{page-break-inside:avoid;}
 tr:nth-child(even) td{background:#F5F5F5;}
 .tft td{background:#E8E8E8!important;font-weight:700;color:#000;}
 .tc{text-align:center;}
 .fw{font-weight:700;}
-.nota{font-size:9px;color:#000;margin-top:3px;text-align:justify;font-style:italic;}
-.qtit{font-size:10.5px;font-weight:700;margin:8px 0 3px;}
+.nota{font-size:9pt;color:#000;margin-top:4pt;text-align:justify;font-style:italic;hyphens:auto;-webkit-hyphens:auto;}
+.qtit{font-size:10.5pt;font-weight:700;margin:9pt 0 4pt;hyphens:none;-webkit-hyphens:none;}
 .keep{page-break-inside:avoid;}
 .new-page{page-break-before:always;}
 .ass{margin-top:28px;}
@@ -13795,14 +13890,36 @@ tr:nth-child(even) td{background:#F5F5F5;}
 .sec-anchor{scroll-margin-top:8px;}
 .cge-foco{background:#FFF6C4;box-shadow:0 0 0 4px #FFF6C4;border-radius:3px;}
 @media print{.cge-foco{background:none;box-shadow:none;}}
-.ass-row{display:flex;justify-content:space-between;margin-bottom:24px;}
-.ass-col{width:31%;text-align:center;}
-.ass-linha{border-top:1px solid #000;padding-top:4px;margin-top:36px;}
+/* ⚠️ GRADE 2x2, E NÃO TRÊS EM LINHA — decisão do Richard, 20/10/2026. Em duas colunas as
+   quatro assinaturas cabem na mesma página da conclusão; em três, a quarta descia sozinha.
+
+   ⚠️ E break-inside:avoid EM CADA UMA: sem isso o nome fica numa página e o cargo na
+   seguinte, que é o jeito mais fácil de um documento assinado parecer errado.
+
+   ⚠️ A ASSINATURA É DIGITAL: NÃO SE RESERVA ESPAÇO PARA A CANETA. Os 36px de respiro que a
+   versão impressa precisava viraram 22 — o [assinado digitalmente] ocupa o lugar. */
+/* ⚠️ AS TRES COORDENACOES LADO A LADO, E A PRESIDENCIA CENTRADA EMBAIXO — decisao do Richard
+   em 27/10/2026, olhando o documento gerado. Eu havia posto grade 2x2 seguindo o registro de
+   20/10, e ele corrigiu: as tres assinam o mesmo ato, na mesma condicao, e lado a lado isso
+   se le de uma vez; em 2x2 a terceira descia sozinha e parecia de outra natureza.
+
+   ⚠️ E CABEM AS TRES PORQUE A ASSINATURA E DIGITAL: nao se reserva espaco para a caneta, so
+   o "[assinado digitalmente]" acima do nome. Em papel com rubrica a mao, tres em 18 cm
+   ficariam estreitas demais. */
+.ass-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10pt 16pt;margin-bottom:18pt;}
+.ass-col{text-align:center;break-inside:avoid;page-break-inside:avoid;hyphens:none;-webkit-hyphens:none;}
+.ass-linha{border-top:1px solid #000;padding-top:4pt;margin-top:22pt;}
 .ass-dig{font-size:8pt;font-style:italic;color:#444;margin-bottom:2px;}
-.ass-nome{font-size:10.5px;font-weight:700;}
-.ass-cargo{font-size:9.5px;color:#000;}
-.ass-center{text-align:center;margin:0 auto;width:50%;}
-.rodape{text-align:center;font-size:8px;color:#000;font-style:italic;border-top:1px solid #000;padding-top:5px;margin-top:16px;}
+.ass-nome{font-size:10.5pt;font-weight:700;}
+.ass-cargo{font-size:9.5pt;color:#000;}
+/* ⚠️ A ASSINATURA ÚNICA TEM REGRA PRÓPRIA, e isso foi um defeito de 20/10: a grade dá a cada
+   nome 84% de MEIA página, e sozinha a mesma regra virava uma linha de ponta a ponta colada na
+   data. Meia largura, centrada, e o respiro de volta. */
+/* ⚠️ A PRESIDENCIA FICA SOZINHA E CENTRADA, com regra propria — e foi um defeito de 20/10: a
+   grade da a cada nome uma fracao da largura, e sozinha a mesma regra virava uma linha de
+   ponta a ponta colada na data. Um terco da largura, no meio, alinhada com a do meio de cima. */
+.ass-center{text-align:center;margin:16pt auto 0;width:33%;break-inside:avoid;page-break-inside:avoid;hyphens:none;-webkit-hyphens:none;}
+.rodape{text-align:center;font-size:8pt;color:#000;font-style:italic;border-top:1px solid #000;padding-top:5pt;margin-top:18pt;hyphens:none;-webkit-hyphens:none;}
 </style></head><body><div class="paper">
 
 ${HDR}
@@ -13816,7 +13933,7 @@ ${HDR}
   <p><strong>Período de Monitoramento:</strong> ${cabPeriodo}</p>
   <p><strong>Número PCs Total:</strong> ${totalGeralPCsFmt} PCs (total geral de prestações de contas no sistema)</p>
   <p><strong>Número de servidores GT-PC:</strong> ${numTec+numCoords} servidores (${numTec} técnicos + ${numCoords} coordenadores) &nbsp;|&nbsp; <strong>Meta mínima:</strong> ${cabMetaMin} PCs/servidor/mês</p>
-  <p><strong>Dados extraídos em:</strong> ${cabDataCorte}</p>
+  <p><strong>Dados apurados em:</strong> ${cabDataCorte} &nbsp;|&nbsp; <span style="font-size:9px;">A apuração é uma fotografia desta data e hora: baixas registradas no SIGEF dentro do período e lançadas no sistema depois desta apuração integrarão o relatório seguinte.</span></p>
 </div>
 </div>
 
@@ -13879,14 +13996,22 @@ ${q1Nota ? `<p class="nota">Nota: ${q1Nota}</p>` : ''}
 ${semDados ? quadroVazio(2) : `<table>
   <thead>
     <tr>
-      <th>#</th>
-      <th style="text-align:left;">Servidor</th>
-      <th>Coordenador</th>
-      <th>Meta<br>(1)</th>
-      <th>Bx.<br>Secretário (2)</th>
-      <th>Bx.<br>Técnico (3)</th>
-      <th>Total<br>Baixas (4)</th>
-      <th>%<br>Meta (5)</th>
+      <th rowspan="2">#</th>
+      <th rowspan="2" style="text-align:left;">Servidor</th>
+      <th rowspan="2">Coordenador</th>
+      <th colspan="5">No período — ${periodoLong}</th>
+      <th colspan="4" class="q2ac">Acumulado — desde 01/08/2025</th>
+    </tr>
+    <tr>
+      <th class="th2">Meta<br>(1)</th>
+      <th class="th2">Bx.<br>Secret. (2)</th>
+      <th class="th2">Bx.<br>Técnico (3)</th>
+      <th class="th2">Total<br>(4)</th>
+      <th class="th2">%<br>Meta (5)</th>
+      <th class="th2 q2ac">Meta<br>(6)</th>
+      <th class="th2 q2ac">Bx.<br>Secret. (7)</th>
+      <th class="th2 q2ac">Bx.<br>Técnico (8)</th>
+      <th class="th2 q2ac">Total<br>(9)</th>
     </tr>
   </thead>
   <tbody>${q2rows}</tbody>
@@ -13898,10 +14023,18 @@ ${semDados ? quadroVazio(2) : `<table>
       <td style="text-align:right;">${totBxTec}</td>
       <td style="text-align:right;font-weight:700;">${totBxFmt}</td>
       <td style="text-align:right;font-weight:700;">${pctTotQ2}</td>
+      <td style="text-align:right;font-weight:700;" class="q2ac">${(metaTotalAcum||0).toLocaleString('pt-BR')}</td>
+      <td style="text-align:right;" class="q2ac">${totAcumSec}</td>
+      <td style="text-align:right;" class="q2ac">${totAcumTec}</td>
+      <td style="text-align:right;font-weight:700;" class="q2ac">${(totAcum||0).toLocaleString('pt-BR')}</td>
     </tr>
   </tfoot>
 </table>`}
-<p class="nota">(1) A Meta por Técnico Acumulada corresponde ao somatório das metas individuais no período (${periodoLong}).${q2Notas?`<br>\n${q2Notas}`:''}</p>
+<p class="nota">(1) Meta do período: somatório das metas individuais em ${periodoLong}.
+(6) Meta acumulada: somatório desde 01/08/2025, início do monitoramento.
+As colunas 2 a 5 contam a baixa pela data em que o SIGEF a registrou, dentro do período;
+as colunas 7 a 9 contam toda a produção até o fim do período, e por isso incluem baixas cuja
+data de trabalho não pôde ser determinada.${q2Notas?`<br>\n${q2Notas}`:''}</p>
 </div>
 
 <div class="sec-anchor" data-sec="ingressantes">${R('ingressantes')}</div>
@@ -13965,7 +14098,10 @@ ${semDados ? quadroVazio(4) : `<table>
 
 <div class="sec-anchor" data-sec="afast">${R('afast')}</div>
 
-<div class="sec">1.4 Conclusão</div>
+<div class="sec">1.4 Atuação do servidor responsável pelo desenvolvimento e manutenção do sistema</div>
+<div class="sec-anchor" data-sec="desenv">${R('desenv')}</div>
+
+<div class="sec">1.5 Conclusão</div>
 <div class="sec-anchor" data-sec="concl">${conclusaoHtml}</div>
 
 <div class="ass">
@@ -13976,7 +14112,12 @@ ${semDados ? quadroVazio(4) : `<table>
   </div>
 </div>
 
-<div class="rodape">Relatório gerado automaticamente pelo SIGPC-GT v2.1 em ${dtGerado} | Dados extraídos do sistema em tempo real<br>Sistema desenvolvido pelo técnico Richard Motta Coelho — Copyright © 2026</div>
+${/* ⚠️ O RODAPÉ É SÓ ISTO — decisão do Richard, 20/10/2026. O anterior repetia a data de
+      geração (que já está no cabeçalho), anunciava a versão do sistema e trazia uma linha de
+      crédito com nome e copyright. Num documento que vai à Controladoria, crédito de autoria
+      no rodapé de toda página desloca a atenção do que está sendo relatado — e a atuação do
+      servidor tem seção própria, a 1.4, onde ela é assunto e não assinatura. */''}
+<div class="rodape">SIGPC-GT · Relatório Sistema</div>
 
 </div></body></html>`
 
@@ -13994,6 +14135,13 @@ ${semDados ? quadroVazio(4) : `<table>
  * imagem. Só então imprime. O `Promise.race` com 8 s é a rede ruim: melhor imprimir o que está
  * pronto do que deixar a pessoa olhando uma janela parada.
  */
+function cgeImprimir() {
+  const fr = document.getElementById('cgeDocFrame')
+  if(!fr || !fr.contentWindow) { toast('Gere o relatorio primeiro.','err'); return }
+  try { fr.contentWindow.focus(); fr.contentWindow.print() }
+  catch(e) { toast('Nao consegui abrir a impressao. Clique no documento e use Ctrl+P.','err') }
+}
+
 async function cgeExportPDF() {
   if(!_cgeDados.length) { toast('Gere o relatório primeiro.','err'); return }
   const html = await cgeMontarDocumento()
@@ -24858,6 +25006,55 @@ let _cgeTextoSid = null
 let _cgeAnterior = null
 let _cgeSecoes = {}
 
+// ⚠️ A SEÇÃO DO DESENVOLVIMENTO — o que ela NÃO diz foi decidido uma linha de cada vez.
+//
+// Ela existe porque o trabalho de construir e manter o sistema não cabe em quadro de análise
+// nenhum: não é prestação de contas analisada, e somá-lo ao Quadro 2 seria declarar à CGE uma
+// produção sem trilha. O lugar dele é aqui, em texto, com números que se conferem.
+//
+// ⚠️ NÃO DATA O INÍCIO DA ATUAÇÃO — correção do Richard em 20/10: não foi desde a instituição
+// do Grupo, e escrever "desde" seria afirmar o que não houve.
+//
+// ⚠️ NÃO FALA EM "adequação às mudanças do SIGEF e do SGPe" — mesma correção. Não há mudanças
+// a que se adequar: o trabalho foi CONSTRUIR o mecanismo de consulta ao SGPe, que não oferece
+// interface de integração.
+//
+// ⚠️ NÃO MENCIONA a separação das baixas de Secretário: elas aparecem na coluna certa do
+// Quadro 2, e isso basta.
+//
+// ⚠️ SEM CAIXAS DE DESTAQUE, texto corrido, cinco parágrafos, com o acúmulo de função
+// integrado ao parágrafo em vez de anunciado à parte.
+//
+// ⚠️ E O ÚLTIMO PARÁGRAFO É DELIBERADAMENTE INDIRETO. Em 20/10 o Richard leu duas versões: uma
+// que amarrava a dedicação à recomendação da CGE e esta, que deixa a conclusão por conta de
+// quem lê. Ele escolheu esta.
+//
+// ⚠️ OS NÚMEROS SÃO DO PERÍODO E SÃO EDITÁVEIS, como todo o resto do documento — este é o
+// texto que a tela semeia, não um valor apurado. Levantados em 27/10/2026 a partir do registro
+// de alterações dos dois repositórios e dos arquivos de reversão em disco, um por correção.
+const CGE_DESENV_PADRAO =
+  '<p>O Sistema Integrado de Gestão de Prestações de Contas do Grupo de Trabalho (SIGPC-GT) é a '
+  + 'ferramenta pela qual as análises aqui relatadas são registradas, distribuídas, acompanhadas '
+  + 'e apuradas. A concepção, o desenvolvimento e a manutenção do sistema são de responsabilidade '
+  + 'de servidor integrante do próprio Grupo, que acumula essa atribuição com as demais funções '
+  + 'que lhe competem.</p><p>'
+  + 'No período abrangido por este relatório foram implantadas 572 alterações no sistema, '
+  + 'distribuídas entre a interface de uso e os serviços de retaguarda. O sistema conta hoje com '
+  + '161 serviços de dados, 42 módulos de regra de negócio e 76 conjuntos de verificação '
+  + 'automatizada, executados a cada alteração para assegurar que uma correção não introduza '
+  + 'defeito em outra parte.</p><p>'
+  + 'Foram ainda executadas 49 correções de base de dados em caráter corretivo, cada uma '
+  + 'precedida de simulação sem gravação, submetida a conferência automática na mesma transação '
+  + 'e acompanhada de registro de reversão com a relação explícita dos lançamentos alterados. '
+  + 'Entre elas está a conciliação das datas de baixa com os registros do SIGEF, que é a base da '
+  + 'apuração apresentada nos quadros deste relatório.</p><p>'
+  + 'Também foi construído o mecanismo de consulta à situação dos processos no SGPe, que não '
+  + 'disponibiliza interface própria de integração, permitindo ao Grupo localizar onde cada '
+  + 'processo se encontra sem consulta manual processo a processo.</p><p>'
+  + 'E a demanda não é transitória: enquanto o sistema estiver em operação, haverá regra a '
+  + 'atualizar, dado a conciliar e integrante a atender — de modo que a continuidade dos '
+  + 'resultados aqui apresentados pressupõe a permanência dessa dedicação.</p>';
+
 const CGE_TXT_PADRAO = {
   contextualizacao: 'O presente relatório tem por objetivo registrar os resultados do monitoramento da execução das metas estabelecidas no Plano de Ação da unidade, referentes às análises de prestações de contas sob responsabilidade do Grupo de Trabalho instituído pelas Portarias FCEE nº 170/2025 e nº 227/2025.',
   analise_grupo1: '',
@@ -24964,7 +25161,7 @@ async function cgeCarregarTextos() {
 const CGE_ORDEM = [
   'cab',
   'ctx','cron','desemp_intro','ingressantes','aval','motivos','pos_motivos',
-  'g1','g2','g3','qual_intro','just','pos_just','q4_abre','consol','afast','concl',
+  'g1','g2','g3','qual_intro','just','pos_just','q4_abre','consol','afast','desenv','concl',
   'q1','q2','q3','afast_tab',
   'local','sign'
 ]
@@ -25029,6 +25226,12 @@ function cgeChavesOrdenadas() {
 // cab e sign chegam do banco com v nulo — semeia com o que o PDF já usava,
 // para o documento sair idêntico ao de hoje e ficar editável na tela
 function cgeSemearSecoes() {
+  // ⚠️ ESTA SEÇÃO PODE NÃO EXISTIR NO RASCUNHO, e as outras sempre existem — por isso ela é
+  // CRIADA aqui, e não só preenchida. Os rascunhos gravados antes de 27/10/2026 não a têm, e
+  // sem esta linha o documento sairia com o título "1.4" e nada embaixo.
+  if(!_cgeSecoes.desenv) _cgeSecoes.desenv = { t:'Atuação do servidor (desenvolvimento)', g:'Texto corrido', orig:'oficial' }
+  const dv = _cgeSecoes.desenv
+  if(dv.v === null || dv.v === undefined || dv.v === '') dv.v = CGE_DESENV_PADRAO
   const cab = _cgeSecoes.cab
   if(cab && (cab.v === null || cab.v === undefined)) cab.v = Object.assign({}, CGE_CAB_PADRAO)
   const sg = _cgeSecoes.sign

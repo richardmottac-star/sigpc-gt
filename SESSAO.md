@@ -3,7 +3,8 @@
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado é o bloco de **27/10**, logo abaixo: o acervo de quem saiu,
+> **não como estado**. O estado são os blocos de **27/10**, logo abaixo: o relatório da CGE saindo
+> do sistema, o acervo de quem saiu,
 > a tela **já publicada** e a primeira TR que ela levantou. Depois vêm os DOIS blocos de
 > **26/10**: o da **noite** —
 > as 221 PCs que a importação do SIGEF baixou sem o parecer, as 29 com dono resolvidas e a
@@ -11,6 +12,128 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 > baixa no SIGEF. O de **23/10** vem depois (as cinco TRs e o relatório de TRs do analista,
 > **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre refeito, e o de
 > **19/10** com a causa da divergência com a CGE.
+
+---
+
+## ▶ 27/10/2026 (noite) — O RELATÓRIO DA CGE SAI DO SISTEMA
+
+**Decisão do Richard, 20/10, cumprida hoje:** *"vamos colocar isso para dentro do sistema que no
+próximo relatório é só colocar as datas de corte do último trimestre e realizar o relatório direto
+pelo sistema"*. O quadro daquele dia listava cinco coisas; as cinco entraram.
+
+⚠️ **E A INTENÇÃO MUDOU NO MEIO, PARA MELHOR.** O plano previa ler o Anexo Único da CGE por
+upload. O Richard cortou: *"a intenção agora é não ter o relatório da CGE o SIGEF, porque eles só
+mandam se houver divergência e depois da emissão do nosso relatório. O correto é o nosso relatório
+estar correto sem precisar deles."* O upload saiu do desenho.
+
+### 1. ⚠️ O QUE IMPEDIA O RELATÓRIO DE FECHAR SOZINHO — as 202 sem parecer
+
+Medido antes de desenhar qualquer tela: **202 PCs baixadas com `parecer_tipo` nulo**, 192 da
+`import_sigef_30082026` e 10 da `recarga_parcial_20260805`. São baixas **reais** — o SIGEF registra
+cada uma, com código `SV` (134) ou `AV` (58) —, mas sem o rótulo elas não contam como regulares.
+
+| onde caem | |
+|---|---:|
+| 3º trimestre (fev–abr) — já informado | **+18** |
+| 4º trimestre (mai–jul) — já informado | **+39** |
+| **5º trimestre (ago–out) — o que ia ser gerado** | **+34** |
+| fora desses períodos | +25 |
+| pré-GT, seguem sem contar | 76 |
+
+⚠️ **AS 34 ERAM A DIVERGÊNCIA ANTES DE ELA ACONTECER.** O Quadro 1 as mandaria para a linha "sem
+parecer"; a CGE, conferindo no SIGEF, acharia 34 a mais. **É a mesma espécie de divergência da
+Informação CGE 275/2026** — só que desta vez a causa era conhecida antes de emitir.
+
+✅ **`migracao_parecer_sigef_todas_20261027.js`** — cópia do script de 26/10, com as 12
+conferências dele, inclusive a que prova por `md5`, coluna por coluna na tabela inteira, que **só**
+`parecer_tipo` mudou. Três mudanças, cada uma com motivo:
+- o alvo deixou de exigir dono (**192 das 202 não têm**);
+- entraram as duas origens;
+- ⚠️ **a conferência 2 inverteu de pergunta.** Antes exigia "nenhuma sem tradução", o que reprovava
+  as 10 sem `sigef_status`. Agora reprova **PC COM código que não traduziu** — se aparecer um
+  código novo que a `lib/sigef` não conheça, a rodada para. Baixar a exigência para "ignore as sem
+  tradução" esconderia justamente esse caso.
+
+**Gravado: 192 PCs. Base de produtividade 5.147 → 5.339.** Restaram as 10 sem código, declaradas.
+
+⚠️ **E A ATRIBUIÇÃO QUE NÃO FOI FEITA.** O Richard levantou pôr as 34 sem dono no nome dele, pelo
+trabalho de parametrização e de consulta ao SIGEF e ao SGPe, pedindo que o critério não fosse
+mencionado. **Medido e recusado:** nelas não há `dt_assumida`, `dt_inicio_analise`, parecer
+registrado nem histórico — a CGE confere a trilha e não acha nada, e quem assina é ele. Levantei o
+que ele de fato analisou: **6 PCs com trilha completa, nenhuma no 5º trimestre**. Ele concordou:
+*"acho que não fiz nenhuma, sem tempo, vivo no sistema aprovando coisas, ajustando sistema"*. O
+trabalho dele entrou na seção 1.4, com números verificáveis.
+
+### 2. O DOCUMENTO — o que faltava, e entrou
+
+- **Quadro 2 com as duas leituras**, de 8 para 12 colunas: período e acumulado, com `Bx.
+  Secretário` separado de `Bx. Técnico` **nos dois**. Até aqui a separação existia só no período —
+  e por isso o documento de 20/10, que tinha as duas, saiu de um script do scratchpad.
+- **Seção 1.4, a atuação no desenvolvimento** (a Conclusão virou 1.5). Cinco parágrafos, editável,
+  respeitando cada decisão de 20/10: não data o início, não fala em "adequação a mudanças" (fala em
+  **construir** o mecanismo de consulta ao SGPe), não menciona a separação das baixas de
+  Secretário, sem caixas, e fecha com a frase indireta da dedicação continuada.
+- **O papel:** Arial 12, entrelinha 1,50, tabelas 9pt, justificado com hifenização — que **não**
+  alcança tabela, título nem assinatura. Rodapé reduzido a `SIGPC-GT · Relatório Sistema`.
+- ⚠️ **AS ASSINATURAS SÃO 3 + 1, E NÃO 2×2.** Eu havia posto grade 2×2 seguindo o registro de
+  20/10; o Richard corrigiu vendo o documento: as três coordenações assinam o mesmo ato, na mesma
+  condição, e lado a lado isso se lê de uma vez. A presidência fica centrada embaixo, com regra
+  própria. **Cabem as três porque a assinatura é digital** — não se reserva espaço para caneta.
+- **Quadro 4 com os números centralizados**, pedido dele.
+- **O carimbo passou a ser o instante da apuração**, não a data de corte. ⚠️ Tem motivo medido: o
+  4º trimestre **ganhou 43 baixas depois de informado**, porque a baixa aconteceu no SIGEF em junho
+  e só foi registrada aqui em outubro. Com o instante, a diferença se explica sozinha.
+
+### 3. A TELA — três passos, e o que ela escondia
+
+⚠️ **O MOTOR SEMPRE SOUBE FAZER AS DUAS LEITURAS.** `noPeriodo` usa as datas informadas,
+`noAcumulado` ignora a inicial. Quem não sabia era quem preenchia: o campo vinha com `01/08/2025`,
+então o "período" virava o acumulado e os dois números saíam iguais. **O conserto foi dizer isso na
+tela, e não mexer na conta de um relatório que a CGE já conferiu.**
+
+Atalhos dos trimestres do GT (que **não** são os civis), "Último dia" em vez de "data e hora de
+corte", e um resumo verde que diz as duas janelas antes de gerar — com aviso quando o último dia
+ainda não chegou, porque **o período fecha quando a coordenação pedir**, não numa data fixa.
+
+⚠️ **OS 8 PARÂMETROS DE EXCEÇÃO SAÍRAM DA VISTA, E NÃO FORAM APAGADOS** — *"não foram usados porque
+muito confuso"*. Ficam ocultos porque `cgeLerParams()` os lê e devolve nulo, que é "calcule você".
+
+### 4. ⚠️ O DEFEITO DE RAIZ — havia DUAS montagens do mesmo documento
+
+A tela desenhava uma cópia reduzida; a `cgeMontarDocumento` montava o documento inteiro só ao
+imprimir. **O que se conferia não era o que saía** — faltavam a ficha, as seções de texto, as
+justificativas, a conclusão, a 1.4 e as assinaturas. Foi assim que as colunas do acumulado
+existiram no PDF de 20/10 e **nunca** na tela.
+
+✅ **Agora há uma montagem só**, num iframe — que isola o CSS de impressão, em pt e com seletores
+de elemento, do resto do sistema. **E o PDF imprime esse iframe**: o `window.open` anterior era
+bloqueado pelo navegador e não funcionava em arquivo local.
+
+### 5. ⚠️ OS ERROS DESTE BLOCO
+
+- **Crase dentro de template literal.** Escrevi comentários CSS com `` ` `` dentro do
+  `const html = \`...\`` do documento — e crase **fecha a string**. É a armadilha 10 por mais uma
+  porta. Pegou no `checar_tela.js`.
+- ⚠️ **Acrescentei colunas sem conferir se os números chegavam lá.** `metaTotalAcum is not
+  defined`, e depois `totAcumSec is not defined`: o caminho tem **duas pontas** — a `cgeGerar`
+  apura e guarda, a `cgeMontarDocumento` lê e desenha. Consertei uma e o erro voltou pela outra.
+- ⚠️ **E O TESTE QUE ESCREVI PARA PEGAR ISSO ESTAVA ERRADO.** O `checar_documento.js` juntava as
+  duas funções num corpo só, então uma declaração numa "cobria" o uso na outra — **ficava verde
+  sobre o erro que existe para pegar**. Descobri tentando provar que funcionava: removi a
+  declaração e ele aprovou. Reescrito conferindo **cada função contra o próprio escopo**, e provado
+  removendo de verdade. **Escopo somado é escopo nenhum.**
+- **Ele também olha o atalho de objeto** — `_cgeParams = { sid, totAcumSec, ... }` não tem `${}`
+  nenhum, e foi assim que o erro apareceu da segunda vez.
+- **Duas gravações falharam por arquivo travado** (`UNKNOWN: open`), com o `index.html` aberto no
+  navegador. Numa delas a mudança se perdeu sem aviso.
+
+### ⚠️ O QUE FICA ABERTO
+
+- **As 10 PCs sem código do SIGEF**, que seguem baixadas sem parecer: sem código não há o que
+  traduzir, e inventar o parecer seria decidir análise.
+- **O comparativo com o Anexo Único** — fora do desenho por decisão do Richard, mas é o que prova
+  prestação por prestação **quando** a CGE mandar anexo.
+- **O 1º e o 2º trimestres** continuam sem conferência: não há anexo para eles.
 
 ---
 
