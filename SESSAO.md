@@ -3,7 +3,8 @@
 Cole no início do chat novo. Este arquivo é o que basta para retomar.
 
 > ⚠️ **Os blocos anteriores ficaram para trás.** Continuam úteis como registro do que se mediu —
-> **não como estado**. O estado são os blocos de **27/10**, logo abaixo: o relatório da CGE saindo
+> **não como estado**. O estado começa no bloco de **10/11**: o 5º trimestre vai até DEZEMBRO e
+> o GT encerra. Depois dele, o de 27/10 — o relatório da CGE saindo
 > do sistema, o acervo de quem saiu,
 > a tela **já publicada** e a primeira TR que ela levantou. Depois vêm os DOIS blocos de
 > **26/10**: o da **noite** —
@@ -12,6 +13,74 @@ Cole no início do chat novo. Este arquivo é o que basta para retomar.
 > baixa no SIGEF. O de **23/10** vem depois (as cinco TRs e o relatório de TRs do analista,
 > **os dois já publicados**), o de **20/10** com o relatório do 4º trimestre refeito, e o de
 > **19/10** com a causa da divergência com a CGE.
+
+---
+
+## ▶ 10/11/2026 — ⚠️ O 5º TRIMESTRE VAI ATÉ DEZEMBRO, E O GT ENCERRA
+
+**Informação do Richard, 10/11/2026, e ela reposiciona tudo que vem adiante:**
+
+> *"o quinto trimestre foi estendido até dezembro, quando aparentemente será finalizado o grupo
+> GT, pois finda o programa. O que será feito com as TRs ainda a serem analisadas não sabemos.
+> Por isso o relatório em dezembro tem que ser muito bem fundamentado, com dados reais e
+> corretos, e mostrar o que ainda falta ser analisado que está em estoque."*
+
+| o que muda | |
+|---|---|
+| **o 5º trimestre** | não é mais ago–out. Vai de **01/08 a 31/12/2026**, por decisão em reunião com a CGE |
+| **o relatório dele** | ⚠️ **NÃO FOI ENTREGUE.** O que foi gerado em 06/11 era prévia, não documento informado |
+| **o GT** | **encerra em dezembro** — o programa finda |
+| **o relatório de dezembro** | é o de **ENCERRAMENTO**, e tem de sair certo na primeira vez |
+| **o estoque** | o documento precisa **mostrar o que falta analisar** — é o passivo que fica |
+
+⚠️ **PERÍODOS INFORMADOS À CGE SÃO DOIS, E NÃO TRÊS:** o 3º (fev–abr/2026) e o 4º (mai–jul/2026,
+o retificado de 20/10). **O período de agosto a dezembro ainda é corrigível** — e é melhor que
+seja corrigido, porque o número dele vai ao documento de encerramento.
+
+⚠️ **E ISSO MUDOU UM SCRIPT NO MEIO DO CAMINHO.** O conserto das baixas de Secretário estava
+recortado para excluir três trimestres; com a informação, passou a excluir dois, e o alvo foi de
+**23 para 25**. As 2 do 5º entraram porque aquele período não está fechado.
+
+---
+
+### O QUE FOI RESOLVIDO EM 10/11
+
+| frente | |
+|---|---|
+| **o acervo do Higor** | 27 PCs em 15 TRs para o **Eduardo Pizolati** — ver bloco próprio |
+| **as 62 `livre` com dono** | 55 voltaram ao Estoque, 7 viraram "em análise" |
+| **as 3 finais da Juliana** | a final passou a acompanhar a TR (Tanimeri +1, Marlene +2) |
+| **a parcial da `2023TR000039`** | voltou para a Juliana, com base no print do SIGEF |
+| **as baixas de Secretário** | **25 de 52** desvinculadas; **27 ficam**, em período informado |
+
+### ⚠️ O ERRO QUE CRIOU METADE DISSO
+
+Em **20/10** desvinculei **93 baixas de Secretário** do acervo do Richard — e **não medi se
+restavam outras**. Restavam **52**, no nome de 11 analistas. Uma consulta de dez segundos.
+
+**Se eu tivesse medido naquele dia, as 52 teriam saído antes de o 4º trimestre ser informado.**
+Hoje **27 estão presas em período fechado por causa disso**, e a Janaína perde 19 de uma vez numa
+correção que poderia ter sido silenciosa há três semanas.
+
+⚠️ **E O MESMO PADRÃO EM 13/10:** diagnostiquei as 82 `livre` com dono e as 4 TRs da Juliana,
+escrevi *"espera decisão"* e repeti isso em bloco após bloco **sem nunca trazer de volta**.
+Ficaram um mês paradas. Quando o Richard mandou resolver em 10/11, **refiz a análise inteira do
+zero** em vez de ler o que já estava escrito — ele teve de dizer *"veja se tem porque já mandei
+várias vezes aqui"*.
+
+**"Corrigi as que apareceram" não é "corrigi as que existem".** E diagnóstico que fica esperando
+decisão sem voltar para a mesa é diagnóstico que não serviu.
+
+### ⚠️ O QUE FICA ABERTO PARA O RELATÓRIO DE DEZEMBRO
+
+1. **As 27 baixas de Secretário em período informado** — adiadas, **não resolvidas**. Continuam
+   sendo produção do Titular contada como produção de analista. Janaína 7, Graciane 5, e mais.
+2. **O relatório precisa mostrar o ESTOQUE** — o que fica por analisar quando o GT encerrar. Hoje
+   o Quadro 1 traz "Estoque" e "Total/Estoque %", mas não **o que** está lá: quantas TRs, de
+   quais entidades, em que situação, há quanto tempo.
+3. **O período do relatório vira 01/08 a 31/12/2026** — o atalho da tela ainda diz ago–out.
+4. **As 10 PCs sem código do SIGEF**, que seguem baixadas sem parecer.
+5. **O texto da seção 1.1** continua sendo o do 3º trimestre.
 
 ---
 

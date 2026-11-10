@@ -68,7 +68,12 @@ S('3. O BOARD: "PCs recebidas", e a meta em linha propria');
   const cards = entre('${[1,2,3].map(g => {', '<!-- Gráficos lado a lado -->');
   conf(cards.includes('PCs recebidas:'), 'o rotulo do card do grupo diz PCs recebidas');
   conf(!/>Total: <strong>\$\{gr\.total\}/.test(cards), 'e nao diz mais "Total"');
-  conf(cards.includes('Meta do período'), 'a meta aparece em linha propria');
+  // ⚠️ O ROTULO MUDOU EM 03/11/2026, E A REGRA NAO. Era "Meta do período", que fazia ler
+  // "deste mês" — e o numero e o ACUMULADO desde 01/08/2025. Duas analistas perguntaram no
+  // grupo por que a meta "subiu" de 100 para 150 e depois 160: ninguem a aumentou, ela soma
+  // 10 por mes. O que este teste guarda continua sendo que a meta tem LINHA PROPRIA no card;
+  // o que mudou e o texto dela, e agora ele diz desde quando conta.
+  conf(cards.includes('Meta acumulada (desde 08/2025)'), 'a meta aparece em linha propria, dizendo desde quando');
   conf(cards.includes('metaGrupo[g]'), 'e o numero vem da regua, por grupo');
   // ⚠️ A TELA NAO SOMA META. O servidor manda `meta_por_grupo` pronto; somar aqui seria refazer
   // a conta dele, e e assim que dois numeros da mesma coisa comecam a divergir.
@@ -93,7 +98,7 @@ S('5. O "FONTE" DO BOARD EXPLICA AS DUAS LINHAS');
   // ⚠️ E DIZ O QUE O NUMERO NAO E. Foi justamente ler "Total" como meta que gerou a duvida da
   // coordenacao — a linha que a pessoa procura e a que diz o que NAO conta.
   conf(/NÃO é meta/.test(fonte), 'e diz, com todas as letras, que aquilo nao e meta');
-  conf(fonte.includes('Meta:'), 'a fonte descreve tambem a meta');
+  conf(fonte.includes('Meta acumulada:'), 'a fonte descreve tambem a meta acumulada');
   conf(/régua de produtividade/.test(fonte), 'apontando a regua como origem');
   conf(/mesmo número da tela Produtividade/.test(fonte), 'e dizendo que o numero e o mesmo da outra tela');
 }

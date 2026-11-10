@@ -11418,7 +11418,17 @@ function prodCardGrande(d) {
           font-family="Barlow,sans-serif">da meta</text>
       </svg>
       <div style="flex:1;min-width:230px;">
-        <div style="font-size:13px;color:var(--te);font-weight:600;">Meta do período</div>
+        ${/* ⚠️ "META ACUMULADA", E NÃO "META DO PERÍODO" — 03/11/2026, e o rótulo era a causa de
+              uma dúvida que voltava todo mês. Duas analistas escreveram no grupo: "a meta passou
+              para 160? não era 150?" / "era 100, foi para 150 e agora 160, quem aumenta a meta?".
+
+              ⚠️ NINGUÉM AUMENTOU NADA. A meta MENSAL é a mesma desde fevereiro: 10. O número da
+              tela é o ACUMULADO desde 01/08/2025, e por isso sobe 10 a cada mês que entra —
+              100 em maio, 150 em outubro, 160 em novembro, conferido na régua.
+
+              ⚠️ E "DO PERÍODO" FAZIA PENSAR EM "DESTE MÊS", que é justamente a leitura errada.
+              O rótulo que não diz desde quando conta obriga a explicar a conta toda vez. */''}
+        <div style="font-size:13px;color:var(--te);font-weight:600;">Meta acumulada (desde 08/2025)</div>
         <div style="margin-top:5px;font-size:13px;color:var(--ct);">
           <span style="font-size:30px;font-weight:500;color:#3B6D11;" data-conta="${conta}">0</span>
           de ${meta || '—'} PCs conferidas</div>
@@ -11685,7 +11695,9 @@ function prodRender(dados) {
       <div class="tbl-wrap"><div style="overflow-x:auto;">
       <table id="prodTabela"><thead><tr>
         <th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
-        <th style="text-align:center;">Meta</th>
+        ${/* ⚠️ Em coluna estreita o rótulo vai abreviado, mas a data FICA: é ela que responde
+              "desde quando". Sem ela o número volta a parecer meta do mês. */''}
+        <th style="text-align:center;">Meta acum.<br><span style="font-weight:400;font-size:9.5px;">desde 08/2025</span></th>
         <th style="text-align:center;">Total</th>
         <th style="text-align:center;color:var(--v);">Baixadas ✓</th>
         <th style="text-align:center;color:var(--az);">Análise</th>
@@ -11746,7 +11758,7 @@ function prodExportPDF() {
     <h2>SIGPC-GT — Produtividade por Analista</h2>
     <p>Gerado em ${dt} | ${dados.length} analistas | ${totBx}/${totMeta||'—'} baixadas sobre a meta</p>
     <table><thead><tr><th>#</th><th>Analista</th><th>Grupo</th><th>Coordenador</th>
-    <th>Meta</th><th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Reanálise</th><th>% Meta</th></tr></thead>
+    <th>Meta acum.<br>desde 08/2025</th><th>Total</th><th>Baixadas</th><th>Análise</th><th>Diligência</th><th>Reanálise</th><th>% Meta</th></tr></thead>
     <tbody>${linhas}</tbody>
     <tfoot><tr><td colspan="4">TOTAL</td><td>${totMeta||'—'}</td><td>${totTotal}</td><td>${totBx}</td><td>${dados.reduce((a,d)=>a+d.analise,0)}</td>
     <td>${dados.reduce((a,d)=>a+d.dilig,0)}</td><td>${dados.reduce((a,d)=>a+d.reanalise,0)}</td>
@@ -11782,7 +11794,10 @@ const BOARD_FONTES = [
     extra:'As PCs sem dono ficam fora da conta da equipe e aparecem no card cinza.' },
   { id:'boardFonteGrupos', itens:[
       'PCs recebidas: as PCs com dono, pelo grupo do analista no cadastro. NÃO é meta e não mede produção.',
-      'Meta: a soma das metas do grupo, calculada pela régua de produtividade (18/09/2026) — o mesmo número da tela Produtividade.',
+      'Meta acumulada: a soma das metas do grupo DESDE 01/08/2025, calculada pela '
+      + 'régua de produtividade (18/09/2026) — o mesmo número da tela Produtividade. A meta mensal é 12 de '
+      + 'ago a dez/2025, ZERO em jan/2026 e 10 de fev/2026 em diante; o total sobe 10 por mês '
+      + 'porque acumula, e não porque alguém a aumentou.',
       '✓: as que contam produtividade.',
       '⚠: as que estão em diligência.',
       'Percentual: ✓ ÷ Total.' ],
@@ -11980,7 +11995,7 @@ async function boardCarregar() {
                  primeiro se chamava "Total", os dois pareciam a mesma coisa. -->
             ${metaGrupo[g] ? `<div style="border-top:1px solid #E8EEEB;margin-top:8px;padding-top:6px;
                  display:flex;justify-content:space-between;font-size:11px;">
-              <span style="color:var(--ct);">Meta do período</span>
+              <span style="color:var(--ct);" title="Soma das metas do grupo desde 01/08/2025, início do Grupo de Trabalho. A meta mensal é 10 por analista desde fevereiro de 2026 — o total cresce porque acumula, não porque foi aumentada.">Meta acumulada (desde 08/2025)</span>
               <span><strong>${gr.conta}</strong> / ${metaGrupo[g]}
                 <strong style="color:${gr.conta*100/metaGrupo[g]>=70?'var(--v)':gr.conta*100/metaGrupo[g]>=40?'var(--am)':'var(--r)'};">
                   ${Math.round(gr.conta*100/metaGrupo[g])}%</strong></span>
@@ -13307,6 +13322,10 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
 
   // Agrega por analista_id: baixas do período (técnico/secretário) e situação atual (Quadro 4)
   let totParcReg = 0, totParcIrr = 0, totFinReg = 0, totFinIrr = 0, totCI = 0, totSemParecer = 0
+  // ⚠️ O SECRETARIO POR TIPO, porque no Quadro 1 "Tecnico" e "Secretario" sao colunas
+  // EXCLUSIVAS: a baixa do Titular da Pasta sai da coluna do tecnico e entra na dele. Sem
+  // separar por tipo nao da para descontar, e a mesma baixa seria contada duas vezes.
+  let totBxSecParc = 0, totBxSecFin = 0
   const mapaAn = {}
   todosPcs.forEach(p => {
     const t  = (p.tipo||'').toLowerCase()
@@ -13321,6 +13340,7 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
     // CI virou INFORMATIVO: a PC ja conta pelo parecer dela nas colunas 4/5/6/7.
     // Antes esta linha era o "resto" (nem Regular nem Irregular), o que somava o CI
     // como se fosse um parecer proprio.
+    if(contaQ1 && p.origem_baixa === 'secretario') { if(t === 'parcial') totBxSecParc++; else if(t === 'final') totBxSecFin++ }
     if(contaQ1 && p.enviado_ci === true) totCI++
     if(contaQ1 && !ehRegular && !ehIrregular) totSemParecer++
 
@@ -13406,6 +13426,7 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
 
   return {
     linhas, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
+    totBxSecParc, totBxSecFin,
     metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec,
     semDataNoPeriodo, recuperadasPeloSigef,
     totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
@@ -13502,6 +13523,7 @@ async function cgeGerar() {
     const {
       totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer,
       metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec,
+      totBxSecParc, totBxSecFin,
       semDataNoPeriodo, recuperadasPeloSigef,
       totBx, totBxSec, totBxTec, totAn, totDil, totRean, totCtrl,
       estoqueRemanescente, estoqueBase, estoque, cargaHistoricaNoPeriodo
@@ -13514,7 +13536,7 @@ async function cgeGerar() {
     const dt = new Date().toLocaleDateString('pt-BR')
     const periodoTxt = `${new Date(String(dtInicio).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})} a ${new Date(String(dtCorte).slice(0,10)+'T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}`
 
-    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec, semDataNoPeriodo, recuperadasPeloSigef, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
+    _cgeParams = { sid, dtInicio, dtCorte, meses, metaTotal, metaTotalAcum, totAcum, totAcumSec, totAcumTec, totBxSecParc, totBxSecFin, semDataNoPeriodo, recuperadasPeloSigef, totBx, totBxSec, totBxTec, totParcReg, totParcIrr, totFinReg, totFinIrr, totCI, totSemParecer, estoque, estoqueRemanescente, estoqueBase, cargaHistoricaNoPeriodo, totalGeralPCs }
 
     if(PM.totalPCs !== null) _cgeParams.totalGeralPCs = PM.totalPCs
     if(PM.estoque  !== null) { _cgeParams.estoque = PM.estoque; _cgeParams.estoqueBase = PM.estoque }
@@ -13686,7 +13708,20 @@ async function cgeMontarDocumento() {
   const totEmAnd = totAn+totDil+totRean+totCtrl
   // Compatibilidade com o texto fixo do relatório (metodologia antiga de meta por técnico/mês) —
   // metaMes/numTec/totalPlano saíram do formulário; aproximados aqui a partir da meta real por analista.
-  const numTec   = tecnicosManual !== null ? tecnicosManual : (NUM ? NUM.numTec : _cgeDados.length)
+  // ⚠️ A BAIXA DO SECRETÁRIO SAI DA COLUNA DO TÉCNICO E ENTRA NA DELE, e por isso ela é
+  // contada por TIPO aqui: no Quadro 1 as duas famílias de colunas são exclusivas.
+  const totBxSecParc = _P.totBxSecParc || 0
+  const totBxSecFin  = _P.totBxSecFin  || 0
+  // ⚠️ AS 34 SEM DONO, declaradas na nota do Quadro 1: é a diferença entre o total do órgão e
+  // a soma das linhas de servidor do Quadro 2.
+  const semDono = Math.max(0, (totParcReg + totParcIrr + totFinReg + totFinIrr) - totBx)
+  // ⚠️ O CABEÇALHO CONTA SÓ QUEM ESTÁ EM EXERCÍCIO — decisão do Richard, 06/11/2026: "contar só
+  // os ativos agora, mas na relação ficar os inativos". São coisas diferentes: a COMPOSIÇÃO do
+  // Grupo é quem está hoje; a PRODUÇÃO do período inclui quem saiu no meio dele, e a linha
+  // dessa pessoa tem de continuar no Quadro 2 — tirá-la faria a soma da tabela cair sem
+  // explicação. A nota do Quadro 2 declara as duas contagens.
+  const numTec   = tecnicosManual !== null ? tecnicosManual
+    : (NUM ? NUM.numTec : _cgeDados.filter(d => !(d.u && d.u.data_saida)).length)
   const numCoords = coordsManual !== null ? coordsManual : 3
   const metaMes  = metaMinManual !== null ? metaMinManual : (meses>0 && numTec>0 ? Math.round(metaTotal/numTec/meses) : 0)
   const totalPlano = estoque
@@ -13974,17 +14009,30 @@ ${semDados ? quadroVazio(1) : `<table>
       <td style="font-weight:700;">Resultado até o período — ${periodoLong}</td>
       <td class="tc fw">${metaAcumFmt}</td>
       <td class="tc fw">${pctMeta}</td>
-      <td class="tc">${totParcReg}</td><td class="tc">${totParcIrr}</td>
-      <td class="tc">${totFinReg}</td><td class="tc">${totFinIrr}</td>
+      ${/* ⚠️ O QUADRO 1 SOMA AS PRÓPRIAS LINHAS — corrigido em 06/11/2026, horas antes de uma
+            reunião. Ele mostrava no Total (10) o \`totBx\`, que é a soma do QUADRO 2, e o Quadro 2
+            só conta PC COM DONO. Resultado: as colunas diziam 1281 + 123 e o Total dizia 1.370.
+            **A tabela não fechava com ela mesma**, e quem somasse a linha acharia 1.404.
+
+            ⚠️ A DIFERENÇA SÃO AS 34 BAIXAS SEM DONO — as que o conserto de 27/10 recuperou do
+            SIGEF. Elas são produção do órgão e entram no total; não são produção de servidor
+            nenhum, e por isso não têm linha no Quadro 2. A nota abaixo declara os dois números,
+            como a nota das 93 do Secretário fez em 20/10.
+
+            ⚠️ E AS COLUNAS DE SECRETÁRIO SAÍAM ZERADAS À MÃO. "Técnico" e "Secretário" são
+            exclusivas no Quadro 1: a baixa do Titular da Pasta sai da coluna do técnico e entra
+            na dele. Somar as duas sem descontar contaria a mesma baixa duas vezes. */''}
+      <td class="tc">${totParcReg - totBxSecParc}</td><td class="tc">${totParcIrr}</td>
+      <td class="tc">${totFinReg - totBxSecFin}</td><td class="tc">${totFinIrr}</td>
       <td class="tc">${totCI}</td>
-      <td class="tc">0</td><td class="tc">0</td>
-      <td class="tc fw">${totBxFmt}</td>
+      <td class="tc">${totBxSec}</td><td class="tc">0</td>
+      <td class="tc fw">${(totParcReg + totParcIrr + totFinReg + totFinIrr).toLocaleString('pt-BR')}</td>
       <td class="tc">${totalPlanoFmt}</td>
       <td class="tc fw">${pctEst}</td>
     </tr>
   </tbody>
 </table>`}
-<p class="nota">* A coluna (7a) Controle Interno é <b>informativa</b> e não soma no total (10): cada PC encaminhada ao CI já é contada pelo parecer do técnico nas colunas (4) a (7).${totSemParecer ? ` Há ${totSemParecer} PC${totSemParecer>1?'s':''} baixada${totSemParecer>1?'s':''} no período sem parecer registrado.` : ''}</p>
+<p class="nota">* A coluna (7a) Controle Interno é <b>informativa</b> e não soma no total (10): cada PC encaminhada ao CI já é contada pelo parecer do técnico nas colunas (4) a (7).${semDono > 0 ? ` O total (10) é a soma das colunas (4) a (9) e corresponde à produção do órgão no período. O Quadro 2, a seguir, soma ${totBx.toLocaleString('pt-BR')}: a diferença de ${semDono} corresponde a baixas registradas no SIGEF que não estão vinculadas a servidor identificado no sistema — integram o resultado do órgão e, por isso, não figuram em linha individual.` : ''}${totSemParecer ? ` Há ${totSemParecer} PC${totSemParecer>1?'s':''} baixada${totSemParecer>1?'s':''} no período sem parecer registrado.` : ''}</p>
 ${q1Nota ? `<p class="nota">Nota: ${q1Nota}</p>` : ''}
 </div>
 
@@ -14032,6 +14080,7 @@ ${semDados ? quadroVazio(2) : `<table>
 </table>`}
 <p class="nota">(1) Meta do período: somatório das metas individuais em ${periodoLong}.
 (6) Meta acumulada: somatório desde 01/08/2025, início do monitoramento.
+${_cgeDados.filter(d => d.u && d.u.data_saida).length > 0 ? `O quadro relaciona ${_cgeDados.length} servidores: os ${numTec} em exercício e ${_cgeDados.filter(d => d.u && d.u.data_saida).length} desligados no decorrer do monitoramento, cuja produção integra o resultado apurado e por isso permanece demonstrada.` : ''}
 As colunas 2 a 5 contam a baixa pela data em que o SIGEF a registrou, dentro do período;
 as colunas 7 a 9 contam toda a produção até o fim do período, e por isso incluem baixas cuja
 data de trabalho não pôde ser determinada.${q2Notas?`<br>\n${q2Notas}`:''}</p>
