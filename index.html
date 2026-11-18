@@ -13449,7 +13449,10 @@ function cgeAgregar(todosPcs, regua, usuariosLista, dtInicio, dtCorte) {
 const CGE_TRIMESTRES = [
   { n:'3º tri', de:'2026-02-01', ate:'2026-04-30', rot:'fev–abr/2026' },
   { n:'4º tri', de:'2026-05-01', ate:'2026-07-31', rot:'mai–jul/2026' },
-  { n:'5º tri', de:'2026-08-01', ate:'2026-10-31', rot:'ago–out/2026' },
+  // ⚠️ ATÉ DEZEMBRO, e não outubro: o 5º trimestre foi ESTENDIDO por decisão em reunião com a
+  // CGE, e é o último — o GT encerra quando o programa finda. O relatório dele é o de
+  // encerramento. O atalho dizia ago–out e levaria quem clicasse a gerar o período errado.
+  { n:'5º tri', de:'2026-08-01', ate:'2026-12-31', rot:'ago–dez/2026' },
 ]
 
 function cgeAtalhosPintar() {
@@ -18457,7 +18460,16 @@ function pCiBloco(r, pa) {
   if(!est) return ''
   const chave = `${r.tr}|${pa.num}`
   const msgs = _pciMsgs.get(chave)
-  const podeResponder = pa.ci_situacao === 'com_analista'
+  // ⚠️ E NÃO RESPONDE O QUE JÁ ESTÁ ARQUIVADO. Ver o bloco acima: responder devolve a parcela
+  // à fila do C.I., e devolver um processo arquivado cria trabalho para o C.I. sobre o que já
+  // foi concluído e com o que ele já concordou.
+  // ⚠️ O CAMPO E `pa.arquivamento.estado`, E NAO `pa.arquivada` — que NAO EXISTE no objeto da
+  // parcela. A primeira versao desta correcao usou `!pa.arquivada`: sempre verdadeiro, o botao
+  // continuaria aceso, e eu teria dito ao Richard que estava consertado. `undefined` nao da
+  // erro nenhum — so mente. E a mesma classe do "metaTotalAcum is not defined" de 06/11, so que
+  // esta nem estouraria na tela.
+  const arquivadaAqui = pa.arquivamento?.estado === 'arquivada'
+  const podeResponder = pa.ci_situacao === 'com_analista' && !arquivadaAqui
   const pcRef = pa.pcs[0]?.codigo_pc || ''
   // A opção do C.I. e o complemento vêm prontos do servidor, com o estado do arquivamento.
   const opCi = CI_OPCOES.find(o => o.id === pa.arquivamento?.ci_opcao)
@@ -18681,9 +18693,10 @@ function arqFaixaCi(r, pa) {
           : '<b>Voltou do C.I. com ressalva, sem decisão registrada no sistema.</b> A situação veio da carga de 16/08/2026 — confira o processo no SGPe, tome as providências e arquive, ou responda ao C.I. se precisar de mais documentos da entidade.')
       : a.ci_opcao === 'de_acordo'
       ? '<b>O C.I. está de acordo.</b> Confira o registro no SGPe e arquive esta parcial.'
+      : pa.arquivamento?.estado === 'arquivada' ? '<b>Esta parcial já está arquivada.</b> O trabalho está concluído e não há o que responder ao C.I. — a pendência abaixo é registro antigo do sistema, e não exige ação sua.'
       : pend ? '<b>Há pendência a resolver.</b> Confira o processo no SGPe e tome as providências. Depois, arquive se resolveu, ou responda ao C.I. se precisar de mais documentos da entidade.'
       : '<b>Esta parcial está pronta para arquivar.</b> O C.I. devolveu — arquive se você já resolveu, ou responda ao C.I. se precisar de mais documentos.'
-    const responde = pend && pa.ci_situacao === 'com_analista'
+    const responde = pend && pa.ci_situacao === 'com_analista' && pa.arquivamento?.estado !== 'arquivada'
     return `
     <div style="margin:0 13px 9px;background:#fff;border:0.5px solid #E8C88A;border-radius:6px;padding:10px 13px;
                 display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
