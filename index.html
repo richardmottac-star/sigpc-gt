@@ -3097,6 +3097,28 @@ const contaProdutividade = (u) => !!u && !FORA_DA_PRODUTIVIDADE.includes(u.perfi
 // Ficam de pé o Dashboard, o Controle Interno (a tela de trabalho dele) e o Meu Perfil.
 const naoEhCI = (u) => u.perfil !== 'controle_interno'
 
+// ⚠️ O ENDEREÇO DOS NÚCLEOS MORA AQUI, E SÓ AQUI — 19/11/2026, pedido do Richard.
+//
+// O diretório dos 21 Núcleos de Gestão de Convênios da SCC (295 municípios) é consulta
+// diária de quem abre diligência: é o Núcleo que fala com a entidade na ponta, e vários dos
+// técnicos listados lá são do próprio GT. Até aqui o endereço circulava no WhatsApp — quem
+// não estava no grupo não tinha.
+//
+// ⚠️ UMA CONSTANTE, DOIS USOS: o item do menu (abaixo) e o card do Dashboard (`irDash`). É
+// site de terceiro e pode mudar de lugar; com a URL escrita nos dois pontos, o dia da
+// mudança deixaria um dos dois apontando para o vazio — e o que ninguém clica é o que
+// ninguém descobre que quebrou.
+const URL_NUCLEOS = 'https://ngcnucleos.abacusai.app/'
+
+// ⚠️ `noopener` NÃO É ENFEITE: sem ele a página aberta recebe `window.opener` e pode navegar
+// a aba do sistema para onde quiser. É destino externo — a regra vale mesmo confiando nele.
+//
+// ⚠️ E NÃO CHAMA `ativarMenu`: o item não é uma tela deste sistema, então não fica marcado
+// como atual. Marcá-lo deixaria o menu dizendo que você está num lugar onde não está.
+function irNucleos() {
+  window.open(URL_NUCLEOS, '_blank', 'noopener')
+}
+
 const SB_ITENS = [
   // ── Bloco do analista: o que todo mundo usa ─────────────────────────────────
   { id:'dash',  bloco:'analista', rotulo:'Dashboard',      acao:'irDash()',      pode:()=>true,
@@ -3130,6 +3152,18 @@ const SB_ITENS = [
   // sem os botões de ação, e a trava de escrita é do SERVIDOR.
   { id:'repo',  bloco:'analista', rotulo:'Repositório',    acao:'irRepo()',      pode:()=>true,
     icone:'M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z' },
+  // ⚠️ LOGO DEPOIS DO REPOSITÓRIO, e de propósito: os dois são material de CONSULTA, não
+  // acervo de trabalho. Quem procura "onde acho isto?" olha para esta parte do menu.
+  //
+  // ⚠️ `pode:()=>true` — INCLUSIVE O CONTROLE INTERNO, que fica de fora de quase tudo no
+  // bloco Principal. Ele também precisa falar com o Núcleo da região, e a regra `naoEhCI`
+  // existe para telas que só lhe ofereceriam ações que não são dele. Esta não oferece ação
+  // nenhuma: é um endereço.
+  //
+  // ⚠️ E É O ÚNICO ITEM QUE SAI DO SISTEMA. Por isso o rótulo diz "Contatos dos Núcleos" e
+  // não "Núcleos": quem lê precisa saber o que vai encontrar antes de perder a aba de vista.
+  { id:'nucleos', bloco:'analista', rotulo:'Contatos dos Núcleos', acao:'irNucleos()', pode:()=>true,
+    icone:'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z' },
   // A tela recusa quem não for analista, coordenador ou superadmin — a mesma regra, aqui.
   // ⚠️ SÓ SUPERADMIN, desde 18/08/2026 — decisão do Richard. Era
   // `['analista','coordenador','superadmin']`, e o estorno em lote virou **o caminho sem
@@ -4130,6 +4164,35 @@ function irDash() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px;margin-bottom:16px;">
       <div id="dashPrecisa"></div>
       <div id="dashCi"></div>
+    </div>
+    ${/* ⚠️ OS CONTATOS DOS NÚCLEOS — 19/11/2026, pedido do Richard. A explicação de por que
+          existe está em `URL_NUCLEOS`, junto da constante; aqui ficam as decisões de LUGAR.
+
+          ⚠️ NO DASHBOARD porque é a única tela que TODO perfil abre — inclusive o Controle
+          Interno, que não vê Estoque, Planilha nem Produtividade. O item de menu alcança o
+          mesmo endereço, mas o menu só responde a quem já sabe que aquilo existe; o card é
+          o que faz alguém descobrir.
+
+          ⚠️ E ACIMA DO MANUAL, não abaixo: o manual se lê uma vez e o endereço se consulta
+          toda semana. Abaixo dele, o card cairia fora da primeira dobra.
+
+          ⚠️ REUSA `.mn` E `.mn-top` — zero CSS novo. O card nasce com o mesmo gradiente, o
+          mesmo ícone de 22px e o mesmo botão translúcido do Manual, e o dia em que o verde
+          do sistema mudar os dois mudam juntos. Sem `id`: `manualCardTg` procura o
+          `#manualCard` pelo id, e um segundo elemento com a mesma classe não o confunde
+          porque este não tem `mn-list` para abrir.
+
+          ⚠️ `target="_blank"` COM `rel="noopener"`: destino externo não leva embora a aba do
+          sistema, e não recebe `window.opener`. */''}
+    <div class="mn" style="margin-top:16px;">
+      <div class="mn-top">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+        <div>
+          <h3>Precisa falar com o Núcleo da região?</h3>
+          <p>Contatos dos 21 Núcleos de Gestão de Convênios — técnico responsável, telefone e e-mail. Busque pelo município ou pelo nome do técnico.</p>
+        </div>
+        <a class="btn-guia" href="${URL_NUCLEOS}" target="_blank" rel="noopener" style="text-decoration:none;">Clique aqui →</a>
+      </div>
     </div>
     <div class="mn" id="manualCard">
       <div class="mn-top" onclick="manualCardTg(event)">
